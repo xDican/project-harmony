@@ -1,8 +1,8 @@
 import { supabase } from "./supabaseClient";
-import type { Appointment, AppointmentStatus, AppointmentWithRelations } from "../types/appointment";
+import type { Appointment, AppointmentStatus } from "../types/appointment";
 import type { Patient } from "../types/patient";
-import type { Doctor } from "../types/doctor";
-import type { Specialty } from "../types/specialty";
+import type { Doctor, Specialty } from "../types/doctor";
+import type { AppointmentWithDetails } from "./api";
 import { DateTime } from "luxon";
 
 // --------------------------
@@ -34,7 +34,7 @@ function mapAppointment(appointment: any): Appointment {
   };
 }
 
-async function fetchAppointmentWithRelations(row: any): Promise<AppointmentWithRelations> {
+async function fetchAppointmentWithRelations(row: any): Promise<AppointmentWithDetails> {
   return {
     ...mapAppointment(row),
     patient: {
@@ -59,7 +59,7 @@ async function fetchAppointmentWithRelations(row: any): Promise<AppointmentWithR
 // --------------------------
 // 1. getTodayAppointments
 // --------------------------
-export async function getTodayAppointments(date: string): Promise<AppointmentWithRelations[]> {
+export async function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {
   // Carga las citas del día con relations anidadas (doctor, patient)
   const { data, error } = await supabase
     .from("appointments")
@@ -82,13 +82,13 @@ export async function getTodayAppointments(date: string): Promise<AppointmentWit
     throw error;
   }
 
-  return (data as any[]).map(fetchAppointmentWithRelations);
+  return Promise.all((data as any[]).map(fetchAppointmentWithRelations));
 }
 
 // --------------------------
 // 2. getTodayAppointmentsByDoctor
 // --------------------------
-export async function getTodayAppointmentsByDoctor(doctorId: string, date: string): Promise<AppointmentWithRelations[]> {
+export async function getTodayAppointmentsByDoctor(doctorId: string, date: string): Promise<AppointmentWithDetails[]> {
   const { data, error } = await supabase
     .from("appointments")
     .select(
@@ -111,7 +111,7 @@ export async function getTodayAppointmentsByDoctor(doctorId: string, date: strin
     throw error;
   }
 
-  return (data as any[]).map(fetchAppointmentWithRelations);
+  return Promise.all((data as any[]).map(fetchAppointmentWithRelations));
 }
 
 // --------------------------
