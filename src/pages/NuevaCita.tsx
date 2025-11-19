@@ -16,9 +16,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { doctors } from '@/lib/data';
-import { getAvailableSlots, createPatient } from '@/lib/api';
+import { getAvailableSlots, createPatient, getSpecialties, getDoctorsBySpecialty } from '@/lib/api';
 import type { Patient } from '@/types/patient';
+import type { Specialty, Doctor } from '@/types/doctor';
 
 /**
  * NuevaCita - New appointment creation page
@@ -26,6 +26,9 @@ import type { Patient } from '@/types/patient';
  */
 export default function NuevaCita() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('');
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -37,6 +40,31 @@ export default function NuevaCita() {
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+
+  // Load specialties on mount
+  useEffect(() => {
+    getSpecialties().then(setSpecialties).catch(console.error);
+  }, []);
+
+  // Load doctors when specialty changes
+  useEffect(() => {
+    if (selectedSpecialtyId) {
+      getDoctorsBySpecialty(selectedSpecialtyId)
+        .then(setDoctors)
+        .catch(error => {
+          console.error('Error loading doctors:', error);
+          setDoctors([]);
+        });
+      
+      // Reset dependent selections
+      setSelectedDoctorId('');
+      setSelectedDate(undefined);
+      setSelectedSlot(null);
+      setAvailableSlots([]);
+    } else {
+      setDoctors([]);
+    }
+  }, [selectedSpecialtyId]);
 
   // Fetch available slots when doctor and date are selected
   useEffect(() => {
@@ -61,6 +89,13 @@ export default function NuevaCita() {
       setSelectedSlot(null);
     }
   }, [selectedDoctorId, selectedDate]);
+
+  // Reset slots when doctor changes
+  useEffect(() => {
+    setSelectedDate(undefined);
+    setSelectedSlot(null);
+    setAvailableSlots([]);
+  }, [selectedDoctorId]);
 
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
@@ -132,7 +167,7 @@ export default function NuevaCita() {
 
   const handleCreateAppointment = () => {
     // Validate all fields are filled
-    if (!selectedPatient || !selectedDoctorId || !selectedDate || !selectedSlot) {
+    if (!selectedPatient || !selectedSpecialtyId || !selectedDoctorId || !selectedDate || !selectedSlot) {
       toast({
         variant: "destructive",
         title: "Campos incompletos",
@@ -160,13 +195,15 @@ export default function NuevaCita() {
 
     // Reset form
     setSelectedPatient(null);
+    setSelectedSpecialtyId('');
+    setDoctors([]);
     setSelectedDoctorId('');
     setSelectedDate(undefined);
     setSelectedSlot(null);
     setAvailableSlots([]);
   };
 
-  const isFormValid = selectedPatient && selectedDoctorId && selectedDate && selectedSlot;
+  const isFormValid = selectedPatient && selectedSpecialtyId && selectedDoctorId && selectedDate && selectedSlot;
 
   return (
     <MainLayout>
@@ -205,14 +242,45 @@ export default function NuevaCita() {
             )}
           </section>
 
-          {/* Step 2: Doctor Selection */}
+          {/* Step 2: Specialty Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              2. Seleccionar Doctor
+              2. Seleccionar Especialidad
             </Label>
-            <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+            <Select value={selectedSpecialtyId} onValueChange={setSelectedSpecialtyId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona un doctor" />
+                <SelectValue placeholder="Selecciona una especialidad" />
+              </SelectTrigger>
+              <SelectContent>
+                {specialties.map((specialty) => (
+                  <SelectItem key={specialty.id} value={specialty.id}>
+                    {specialty.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </section>
+
+          {/* Step 3: Doctor Selection */}
+          <section>
+            <Label className="text-lg font-semibold text-foreground mb-3 block">
+              3. Seleccionar Doctor
+            </Label>
+            <Select 
+              value={selectedDoctorId} 
+              onValueChange={setSelectedDoctorId}
+              disabled={!selectedSpecialtyId}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue 
+                  placeholder={
+                    !selectedSpecialtyId 
+                      ? "Selecciona una especialidad primero" 
+                      : doctors.length === 0 
+                      ? "No hay médicos para esta especialidad" 
+                      : "Selecciona un doctor"
+                  } 
+                />
               </SelectTrigger>
               <SelectContent>
                 {doctors.map((doctor) => (
@@ -224,10 +292,10 @@ export default function NuevaCita() {
             </Select>
           </section>
 
-          {/* Step 3: Date Selection */}
+          {/* Step 4: Date Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              3. Seleccionar Fecha
+              4. Seleccionar Fecha
             </Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -259,10 +327,10 @@ export default function NuevaCita() {
             </Popover>
           </section>
 
-          {/* Step 4: Time Slot Selection */}
+          {/* Step 5: Time Slot Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              4. Seleccionar Horario
+              5. Seleccionar Horario
             </Label>
             
             {!selectedDoctorId || !selectedDate ? (
