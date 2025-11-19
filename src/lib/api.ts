@@ -58,6 +58,13 @@ export function searchPatients(query: string): Promise<Patient[]> {
 }
 
 /**
+ * Get all patients
+ */
+export function getAllPatients(): Promise<Patient[]> {
+  return Promise.resolve(patients);
+}
+
+/**
  * Generate available time slots for a doctor on a specific date
  * Returns array of time strings like ["08:00", "08:30", "09:00"]
  */
