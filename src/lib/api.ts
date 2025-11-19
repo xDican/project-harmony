@@ -18,7 +18,7 @@ import type { Patient } from '@/types/patient';
 import type { Doctor, Specialty } from '@/types/doctor';
 
 // Determine which backend to use based on environment variable
-const USE_DUMMY_DATA = import.meta.env.VITE_USE_DUMMY_DATA === 'true';
+const USE_DUMMY_DATA = import.meta.env.VITE_USE_DUMMY_DATA === 'false';
 
 // Re-export the AppointmentWithDetails interface for backward compatibility
 // This interface is used by all hooks and components
