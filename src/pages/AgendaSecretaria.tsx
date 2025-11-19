@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -42,10 +43,11 @@ export default function AgendaSecretaria() {
 
   // Group appointments by status
   const pending = appointments.filter(apt => apt.status === 'pending');
-  const confirmedOrCompleted = appointments.filter(
+  const active = appointments.filter(
     apt => apt.status === 'confirmed' || apt.status === 'completed'
   );
   const canceled = appointments.filter(apt => apt.status === 'canceled');
+  const all = [...appointments].sort((a, b) => a.time.localeCompare(b.time));
 
   // Handle status change
   const handleStatusChange = async (appointmentId: string, newStatus: AppointmentStatus) => {
@@ -118,71 +120,115 @@ export default function AgendaSecretaria() {
           </Alert>
         )}
 
-        {/* Appointments Grid - Grouped by Status */}
+        {/* Appointments Tabs */}
         {!isLoading && !error && appointments.length > 0 && (
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Pending Appointments */}
-            <AppointmentSection
-              title="Pendientes"
-              appointments={pending}
-              onStatusChange={handleStatusChange}
-              onCancel={handleCancel}
-            />
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="w-full justify-start mb-6">
+              <TabsTrigger value="all">Todas</TabsTrigger>
+              <TabsTrigger value="pending">Pendientes</TabsTrigger>
+              <TabsTrigger value="active">Confirmadas / Completadas</TabsTrigger>
+              <TabsTrigger value="canceled">Canceladas</TabsTrigger>
+            </TabsList>
 
-            {/* Confirmed/Completed Appointments */}
-            <AppointmentSection
-              title="Confirmadas / Completadas"
-              appointments={confirmedOrCompleted}
-              onStatusChange={handleStatusChange}
-              onCancel={handleCancel}
-            />
+            {/* All Appointments */}
+            <TabsContent value="all">
+              <div className="max-w-3xl mx-auto space-y-3">
+                {all.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No hay citas programadas
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  all.map(appointment => (
+                    <AppointmentCard
+                      key={appointment.id}
+                      appointment={appointment}
+                      onStatusChange={handleStatusChange}
+                      onCancel={handleCancel}
+                    />
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Pending Appointments */}
+            <TabsContent value="pending">
+              <div className="max-w-3xl mx-auto space-y-3">
+                {pending.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No hay citas pendientes
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  pending.map(appointment => (
+                    <AppointmentCard
+                      key={appointment.id}
+                      appointment={appointment}
+                      onStatusChange={handleStatusChange}
+                      onCancel={handleCancel}
+                    />
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Active Appointments (Confirmed/Completed) */}
+            <TabsContent value="active">
+              <div className="max-w-3xl mx-auto space-y-3">
+                {active.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No hay citas confirmadas o completadas
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  active.map(appointment => (
+                    <AppointmentCard
+                      key={appointment.id}
+                      appointment={appointment}
+                      onStatusChange={handleStatusChange}
+                      onCancel={handleCancel}
+                    />
+                  ))
+                )}
+              </div>
+            </TabsContent>
 
             {/* Canceled Appointments */}
-            <AppointmentSection
-              title="Canceladas"
-              appointments={canceled}
-              onStatusChange={handleStatusChange}
-              onCancel={handleCancel}
-            />
-          </div>
+            <TabsContent value="canceled">
+              <div className="max-w-3xl mx-auto space-y-3">
+                {canceled.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8">
+                      <p className="text-sm text-muted-foreground text-center">
+                        No hay citas canceladas
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  canceled.map(appointment => (
+                    <AppointmentCard
+                      key={appointment.id}
+                      appointment={appointment}
+                      onStatusChange={handleStatusChange}
+                      onCancel={handleCancel}
+                    />
+                  ))
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </MainLayout>
-  );
-}
-
-interface AppointmentSectionProps {
-  title: string;
-  appointments: AppointmentWithDetails[];
-  onStatusChange: (id: string, status: AppointmentStatus) => void;
-  onCancel: (id: string) => void;
-}
-
-function AppointmentSection({ title, appointments, onStatusChange, onCancel }: AppointmentSectionProps) {
-  return (
-    <div className="flex flex-col">
-      <h2 className="text-xl font-semibold text-foreground mb-4">{title}</h2>
-      <div className="space-y-3">
-        {appointments.length === 0 ? (
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground text-center">
-                No hay citas {title.toLowerCase()}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          appointments.map(appointment => (
-            <AppointmentCard
-              key={appointment.id}
-              appointment={appointment}
-              onStatusChange={onStatusChange}
-              onCancel={onCancel}
-            />
-          ))
-        )}
-      </div>
-    </div>
   );
 }
 
