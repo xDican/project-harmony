@@ -4,18 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Patient } from '@/types/patient';
 import { usePatientsSearch } from '@/hooks/usePatientsSearch';
-import { Search, User, Phone, X } from 'lucide-react';
+import { Search, User, Phone, X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PatientSearchProps {
   onSelect: (patient: Patient) => void;
+  onCreateNew?: (prefill: { nameOrPhone: string }) => void;
 }
 
 /**
  * PatientSearch - Searchable patient selector with dropdown results
  * Uses debounced search and displays matching patients with contact info
  */
-const PatientSearch = ({ onSelect }: PatientSearchProps) => {
+const PatientSearch = ({ onSelect, onCreateNew }: PatientSearchProps) => {
   const { data: patients, isLoading, query, setQuery } = usePatientsSearch();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -117,8 +118,22 @@ const PatientSearch = ({ onSelect }: PatientSearchProps) => {
                     Buscando...
                   </div>
                 ) : patients.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
-                    No se encontraron pacientes
+                  <div className="p-4 space-y-3">
+                    <p className="text-sm text-muted-foreground text-center">
+                      No existe cliente, verifique el número o cree uno nuevo.
+                    </p>
+                    {onCreateNew && query.length >= 3 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onCreateNew({ nameOrPhone: query })}
+                        className="w-full"
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Crear nuevo paciente
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <ul id="patient-results" role="listbox" className="divide-y divide-border">
