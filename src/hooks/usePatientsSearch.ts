@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { searchPatients } from '@/lib/api';
 import { useState } from 'react';
 
 export const usePatientsSearch = () => {
@@ -7,7 +7,7 @@ export const usePatientsSearch = () => {
   
   const { data: patients, isLoading } = useQuery({
     queryKey: ['patients', 'search', query],
-    queryFn: () => api.patients.search(query),
+    queryFn: () => searchPatients(query),
     enabled: query.length > 0,
   });
   

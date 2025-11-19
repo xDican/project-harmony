@@ -1,9 +1,11 @@
+export type AppointmentStatus = "pending" | "confirmed" | "canceled" | "completed";
+
 export interface Appointment {
   id: string;
+  date: string;        // ISO date "2025-11-18"
+  time: string;        // "08:30"
   patientId: string;
   doctorId: string;
-  date: string;
-  time: string;
-  status: 'scheduled' | 'confirmed' | 'cancelled' | 'completed';
+  status: AppointmentStatus;
   notes?: string;
 }
