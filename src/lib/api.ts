@@ -1,7 +1,7 @@
 import { Appointment } from '@/types/appointment';
 import { Patient } from '@/types/patient';
-import { Doctor } from '@/types/doctor';
-import { appointments, patients, doctors, doctorSchedules } from './data';
+import { Doctor, Specialty } from '@/types/doctor';
+import { appointments, patients, doctors, doctorSchedules, specialties } from './data';
 
 /**
  * Create a new patient and add to in-memory data
@@ -76,6 +76,21 @@ export function searchPatients(query: string): Promise<Patient[]> {
  */
 export function getAllPatients(): Promise<Patient[]> {
   return Promise.resolve(patients);
+}
+
+/**
+ * Get all specialties
+ */
+export function getSpecialties(): Promise<Specialty[]> {
+  return Promise.resolve(specialties);
+}
+
+/**
+ * Get doctors filtered by specialty
+ */
+export function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor[]> {
+  const filtered = doctors.filter((d) => d.specialtyId === specialtyId);
+  return Promise.resolve(filtered);
 }
 
 /**

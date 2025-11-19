@@ -1,5 +1,5 @@
 import { Patient } from '@/types/patient';
-import { Doctor } from '@/types/doctor';
+import { Doctor, Specialty } from '@/types/doctor';
 import { DoctorSchedule } from '@/types/schedule';
 import { Appointment } from '@/types/appointment';
 
@@ -46,22 +46,46 @@ export const patients: Patient[] = [
   },
 ];
 
+// Dummy specialties
+export const specialties: Specialty[] = [
+  {
+    id: 'cardiology',
+    name: 'Cardiología',
+  },
+  {
+    id: 'dermatology',
+    name: 'Dermatología',
+  },
+  {
+    id: 'pediatrics',
+    name: 'Pediatría',
+  },
+  {
+    id: 'general',
+    name: 'Medicina General',
+  },
+  {
+    id: 'orthopedics',
+    name: 'Traumatología',
+  },
+];
+
 // Dummy doctors
 export const doctors: Doctor[] = [
   {
     id: 'doc-001',
     name: 'Dr. Roberto Jiménez',
-    specialtyId: 'spec-cardiology',
+    specialtyId: 'cardiology',
   },
   {
     id: 'doc-002',
     name: 'Dra. Elena Morales',
-    specialtyId: 'spec-pediatrics',
+    specialtyId: 'pediatrics',
   },
   {
     id: 'doc-003',
     name: 'Dr. Miguel Ángel Castro',
-    specialtyId: 'spec-general',
+    specialtyId: 'general',
   },
 ];
 
