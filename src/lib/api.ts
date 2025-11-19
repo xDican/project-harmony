@@ -1,44 +1,108 @@
-import { appointments, patients, doctors, schedules } from './data';
 import { Appointment } from '@/types/appointment';
 import { Patient } from '@/types/patient';
 import { Doctor } from '@/types/doctor';
-import { Schedule } from '@/types/schedule';
+import { appointments, patients, doctors, doctorSchedules } from './data';
 
-// Frontend service layer - currently reads from local data
-// Will be replaced with Supabase calls later
+/**
+ * Frontend service layer - simulates backend calls with in-memory data
+ * All functions are synchronous but wrapped in Promise.resolve() for async API shape
+ */
 
-export const api = {
-  appointments: {
-    getAll: (): Promise<Appointment[]> => Promise.resolve([...appointments]),
-    getById: (id: string): Promise<Appointment | undefined> => 
-      Promise.resolve(appointments.find(a => a.id === id)),
-    getByDate: (date: string): Promise<Appointment[]> => 
-      Promise.resolve(appointments.filter(a => a.date === date)),
-    create: (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
-      const newAppointment = { ...appointment, id: `apt-${Date.now()}` };
-      appointments.push(newAppointment);
-      return Promise.resolve(newAppointment);
-    },
-  },
+export interface AppointmentWithDetails extends Appointment {
+  patient: Patient;
+  doctor: Doctor;
+}
+
+/**
+ * Get all appointments for a specific date with patient and doctor details
+ */
+export function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {
+  const filteredAppointments = appointments
+    .filter(apt => apt.date === date)
+    .map(apt => {
+      const patient = patients.find(p => p.id === apt.patientId);
+      const doctor = doctors.find(d => d.id === apt.doctorId);
+      
+      if (!patient || !doctor) {
+        throw new Error(`Missing patient or doctor for appointment ${apt.id}`);
+      }
+      
+      return {
+        ...apt,
+        patient,
+        doctor,
+      };
+    })
+    .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time
   
-  patients: {
-    getAll: (): Promise<Patient[]> => Promise.resolve([...patients]),
-    getById: (id: string): Promise<Patient | undefined> => 
-      Promise.resolve(patients.find(p => p.id === id)),
-    search: (query: string): Promise<Patient[]> => 
-      Promise.resolve(patients.filter(p => 
-        p.name.toLowerCase().includes(query.toLowerCase())
-      )),
-  },
+  return Promise.resolve(filteredAppointments);
+}
+
+/**
+ * Search patients by name or phone (case-insensitive substring match)
+ */
+export function searchPatients(query: string): Promise<Patient[]> {
+  if (!query || query.trim() === '') {
+    return Promise.resolve([]);
+  }
   
-  doctors: {
-    getAll: (): Promise<Doctor[]> => Promise.resolve([...doctors]),
-    getById: (id: string): Promise<Doctor | undefined> => 
-      Promise.resolve(doctors.find(d => d.id === id)),
-  },
+  const searchTerm = query.toLowerCase().trim();
   
-  schedules: {
-    getByDoctor: (doctorId: string): Promise<Schedule[]> => 
-      Promise.resolve(schedules.filter(s => s.doctorId === doctorId)),
-  },
-};
+  const results = patients.filter(patient => {
+    const nameMatch = patient.name.toLowerCase().includes(searchTerm);
+    const phoneMatch = patient.phone.includes(searchTerm);
+    return nameMatch || phoneMatch;
+  });
+  
+  return Promise.resolve(results);
+}
+
+/**
+ * Generate available time slots for a doctor on a specific date
+ * Returns array of time strings like ["08:00", "08:30", "09:00"]
+ */
+export function getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
+  // Get the weekday for the given date (0=Sunday, 1=Monday, etc.)
+  const dateObj = new Date(date + 'T00:00:00');
+  const weekday = dateObj.getDay();
+  
+  // Find the doctor's schedule for this weekday
+  const schedule = doctorSchedules.find(
+    sch => sch.doctorId === doctorId && sch.weekday === weekday
+  );
+  
+  if (!schedule) {
+    // Doctor doesn't work on this day
+    return Promise.resolve([]);
+  }
+  
+  // Generate all possible slots based on schedule
+  const allSlots: string[] = [];
+  const [startHour, startMinute] = schedule.startTime.split(':').map(Number);
+  const [endHour, endMinute] = schedule.endTime.split(':').map(Number);
+  
+  let currentMinutes = startHour * 60 + startMinute;
+  const endMinutes = endHour * 60 + endMinute;
+  
+  while (currentMinutes < endMinutes) {
+    const hour = Math.floor(currentMinutes / 60);
+    const minute = currentMinutes % 60;
+    const timeSlot = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    allSlots.push(timeSlot);
+    currentMinutes += schedule.slotDurationMinutes;
+  }
+  
+  // Get all appointments for this doctor on this date
+  const bookedSlots = appointments
+    .filter(apt => 
+      apt.doctorId === doctorId && 
+      apt.date === date && 
+      apt.status !== 'canceled' // Don't count canceled appointments
+    )
+    .map(apt => apt.time);
+  
+  // Filter out booked slots
+  const availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
+  
+  return Promise.resolve(availableSlots);
+}

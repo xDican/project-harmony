@@ -1,7 +1,8 @@
-export interface Schedule {
+export interface DoctorSchedule {
   id: string;
   doctorId: string;
-  dayOfWeek: number; // 0-6 (Sunday-Saturday)
-  startTime: string; // HH:mm format
-  endTime: string;   // HH:mm format
+  weekday: number;        // 0-6
+  startTime: string;      // "08:00"
+  endTime: string;        // "16:00"
+  slotDurationMinutes: number;
 }
