@@ -93,6 +93,47 @@ export function getTodayAppointmentsByDoctor(
 }
 
 /**
+ * Get admin dashboard metrics
+ */
+export interface AdminMetrics {
+  totalPatients: number;
+  totalDoctors: number;
+  totalAppointments: number;
+  todayAppointments: number;
+  statusBreakdown: {
+    pending: number;
+    confirmed: number;
+    canceled: number;
+    completed: number;
+  };
+}
+
+export function getAdminMetrics(): Promise<AdminMetrics> {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Count today's appointments
+  const todayAppointments = appointments.filter(apt => apt.date === today).length;
+  
+  // Count by status
+  const statusBreakdown = {
+    pending: appointments.filter(apt => apt.status === 'pending').length,
+    confirmed: appointments.filter(apt => apt.status === 'confirmed').length,
+    canceled: appointments.filter(apt => apt.status === 'canceled').length,
+    completed: appointments.filter(apt => apt.status === 'completed').length,
+  };
+  
+  const metrics: AdminMetrics = {
+    totalPatients: patients.length,
+    totalDoctors: doctors.length,
+    totalAppointments: appointments.length,
+    todayAppointments,
+    statusBreakdown,
+  };
+  
+  return Promise.resolve(metrics);
+}
+
+/**
  * Generate available time slots for a doctor on a specific date
  * Returns array of time strings like ["08:00", "08:30", "09:00"]
  */
