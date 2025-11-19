@@ -1,5 +1,6 @@
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
 import AppointmentRow from '@/components/AppointmentRow';
+import MainLayout from '@/components/MainLayout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Calendar, AlertCircle } from 'lucide-react';
@@ -19,7 +20,8 @@ export default function AgendaSecretaria() {
   });
 
   return (
-    <main className="container mx-auto p-6 max-w-4xl">
+    <MainLayout>
+      <div className="container mx-auto p-6 max-w-4xl">
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-foreground mb-2">Agenda de Hoy</h1>
@@ -71,6 +73,7 @@ export default function AgendaSecretaria() {
           ))}
         </div>
       )}
-    </main>
+      </div>
+    </MainLayout>
   );
 }
