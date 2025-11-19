@@ -65,6 +65,34 @@ export function getAllPatients(): Promise<Patient[]> {
 }
 
 /**
+ * Get appointments for a specific doctor on a specific date with patient details
+ */
+export function getTodayAppointmentsByDoctor(
+  doctorId: string, 
+  date: string
+): Promise<AppointmentWithDetails[]> {
+  const filteredAppointments = appointments
+    .filter(apt => apt.date === date && apt.doctorId === doctorId)
+    .map(apt => {
+      const patient = patients.find(p => p.id === apt.patientId);
+      const doctor = doctors.find(d => d.id === apt.doctorId);
+      
+      if (!patient || !doctor) {
+        throw new Error(`Missing patient or doctor for appointment ${apt.id}`);
+      }
+      
+      return {
+        ...apt,
+        patient,
+        doctor,
+      };
+    })
+    .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time
+  
+  return Promise.resolve(filteredAppointments);
+}
+
+/**
  * Generate available time slots for a doctor on a specific date
  * Returns array of time strings like ["08:00", "08:30", "09:00"]
  */
