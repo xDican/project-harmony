@@ -1,13 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
 import { updateAppointmentStatus } from '@/lib/api';
 import MainLayout from '@/components/MainLayout';
-import StatusBadge from '@/components/StatusBadge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -15,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, AlertCircle, Clock, User, Stethoscope } from 'lucide-react';
+import { Calendar, AlertCircle, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
@@ -23,11 +30,12 @@ import { AppointmentWithDetails } from '@/lib/api';
 
 /**
  * AgendaSecretaria - Daily appointment schedule for secretary/administrative staff
- * Displays all appointments for the current day grouped by status with management controls
+ * Displays all appointments for the current day in a searchable table format
  */
 export default function AgendaSecretaria() {
   const { data: fetchedAppointments, isLoading, error, date } = useTodayAppointments();
   const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Initialize local state when data is loaded
   useEffect(() => {
@@ -41,13 +49,39 @@ export default function AgendaSecretaria() {
     locale: es,
   });
 
-  // Group appointments by status
-  const pending = appointments.filter(apt => apt.status === 'pending');
-  const active = appointments.filter(
-    apt => apt.status === 'confirmed' || apt.status === 'completed'
-  );
-  const canceled = appointments.filter(apt => apt.status === 'canceled');
-  const all = [...appointments].sort((a, b) => a.time.localeCompare(b.time));
+  // Status label mapping for search
+  const getStatusLabel = (status: AppointmentStatus): string => {
+    const labels: Record<AppointmentStatus, string> = {
+      pending: 'pendiente',
+      confirmed: 'confirmada',
+      completed: 'completada',
+      canceled: 'cancelada',
+    };
+    return labels[status];
+  };
+
+  // Filter appointments based on search query
+  const filteredAppointments = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return appointments;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    
+    return appointments.filter(apt => {
+      const patientName = apt.patient.name.toLowerCase();
+      const doctorName = apt.doctor.name.toLowerCase();
+      const phone = apt.patient.phone?.toLowerCase() || '';
+      const statusLabel = getStatusLabel(apt.status);
+
+      return (
+        patientName.includes(query) ||
+        doctorName.includes(query) ||
+        phone.includes(query) ||
+        statusLabel.includes(query)
+      );
+    });
+  }, [appointments, searchQuery]);
 
   // Handle status change
   const handleStatusChange = async (appointmentId: string, newStatus: AppointmentStatus) => {
@@ -72,29 +106,56 @@ export default function AgendaSecretaria() {
     }
   };
 
+  // Format date and time for display
+  const formatDateTime = (date: string, time: string): string => {
+    try {
+      const dateObj = new Date(date + 'T' + time);
+      return format(dateObj, "dd/MM/yyyy – h:mm a", { locale: es });
+    } catch {
+      return `${date} – ${time}`;
+    }
+  };
+
   return (
     <MainLayout>
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-6 max-w-5xl">
         {/* Page Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-4xl font-bold text-foreground mb-2">Agenda de Hoy</h1>
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
+          <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
             <p className="capitalize">{formattedDate}</p>
           </div>
           {!isLoading && !error && appointments.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'} programadas
+            <p className="text-sm text-muted-foreground mt-1">
+              {appointments.length} {appointments.length === 1 ? 'cita programada' : 'citas programadas'} hoy
             </p>
           )}
         </div>
 
+        {/* Search Bar */}
+        {!isLoading && !error && appointments.length > 0 && (
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Buscar por nombre, doctor, teléfono o estado..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Loading State */}
         {isLoading && (
-          <div className="grid md:grid-cols-3 gap-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-64 w-full" />
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
           </div>
         )}
 
@@ -120,194 +181,150 @@ export default function AgendaSecretaria() {
           </Alert>
         )}
 
-        {/* Appointments Tabs */}
-        {!isLoading && !error && appointments.length > 0 && (
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList className="w-full justify-start mb-6">
-              <TabsTrigger value="all">Todas</TabsTrigger>
-              <TabsTrigger value="pending">Pendientes</TabsTrigger>
-              <TabsTrigger value="active">Confirmadas / Completadas</TabsTrigger>
-              <TabsTrigger value="canceled">Canceladas</TabsTrigger>
-            </TabsList>
+        {/* No Search Results */}
+        {!isLoading && !error && appointments.length > 0 && filteredAppointments.length === 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Sin resultados</AlertTitle>
+            <AlertDescription>
+              No se encontraron citas para la búsqueda actual.
+            </AlertDescription>
+          </Alert>
+        )}
 
-            {/* All Appointments */}
-            <TabsContent value="all">
-              <div className="max-w-3xl mx-auto space-y-3">
-                {all.length === 0 ? (
-                  <Card>
-                    <CardContent className="p-8">
-                      <p className="text-sm text-muted-foreground text-center">
-                        No hay citas programadas
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  all.map(appointment => (
-                    <AppointmentCard
-                      key={appointment.id}
-                      appointment={appointment}
-                      onStatusChange={handleStatusChange}
-                      onCancel={handleCancel}
-                    />
-                  ))
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Pending Appointments */}
-            <TabsContent value="pending">
-              <div className="max-w-3xl mx-auto space-y-3">
-                {pending.length === 0 ? (
-                  <Card>
-                    <CardContent className="p-8">
-                      <p className="text-sm text-muted-foreground text-center">
-                        No hay citas pendientes
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  pending.map(appointment => (
-                    <AppointmentCard
-                      key={appointment.id}
-                      appointment={appointment}
-                      onStatusChange={handleStatusChange}
-                      onCancel={handleCancel}
-                    />
-                  ))
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Active Appointments (Confirmed/Completed) */}
-            <TabsContent value="active">
-              <div className="max-w-3xl mx-auto space-y-3">
-                {active.length === 0 ? (
-                  <Card>
-                    <CardContent className="p-8">
-                      <p className="text-sm text-muted-foreground text-center">
-                        No hay citas confirmadas o completadas
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  active.map(appointment => (
-                    <AppointmentCard
-                      key={appointment.id}
-                      appointment={appointment}
-                      onStatusChange={handleStatusChange}
-                      onCancel={handleCancel}
-                    />
-                  ))
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Canceled Appointments */}
-            <TabsContent value="canceled">
-              <div className="max-w-3xl mx-auto space-y-3">
-                {canceled.length === 0 ? (
-                  <Card>
-                    <CardContent className="p-8">
-                      <p className="text-sm text-muted-foreground text-center">
-                        No hay citas canceladas
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  canceled.map(appointment => (
-                    <AppointmentCard
-                      key={appointment.id}
-                      appointment={appointment}
-                      onStatusChange={handleStatusChange}
-                      onCancel={handleCancel}
-                    />
-                  ))
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
+        {/* Appointments Table */}
+        {!isLoading && !error && filteredAppointments.length > 0 && (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[200px]">Paciente</TableHead>
+                  <TableHead className="w-[150px]">Doctor</TableHead>
+                  <TableHead className="w-[180px]">Fecha y Hora</TableHead>
+                  <TableHead className="w-[130px]">WhatsApp</TableHead>
+                  <TableHead className="w-[160px]">Estado</TableHead>
+                  <TableHead className="w-[120px] text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredAppointments.map((appointment) => (
+                  <AppointmentTableRow
+                    key={appointment.id}
+                    appointment={appointment}
+                    onStatusChange={handleStatusChange}
+                    onCancel={handleCancel}
+                    formatDateTime={formatDateTime}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
     </MainLayout>
   );
 }
 
-interface AppointmentCardProps {
+interface AppointmentTableRowProps {
   appointment: AppointmentWithDetails;
   onStatusChange: (id: string, status: AppointmentStatus) => void;
   onCancel: (id: string) => void;
+  formatDateTime: (date: string, time: string) => string;
 }
 
-function AppointmentCard({ appointment, onStatusChange, onCancel }: AppointmentCardProps) {
+function AppointmentTableRow({ 
+  appointment, 
+  onStatusChange, 
+  onCancel,
+  formatDateTime 
+}: AppointmentTableRowProps) {
   const isCanceled = appointment.status === 'canceled';
 
+  const getStatusBadgeVariant = (status: AppointmentStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    switch (status) {
+      case 'pending':
+        return 'outline';
+      case 'confirmed':
+        return 'default';
+      case 'completed':
+        return 'secondary';
+      case 'canceled':
+        return 'destructive';
+      default:
+        return 'outline';
+    }
+  };
+
+  const getStatusLabel = (status: AppointmentStatus): string => {
+    const labels: Record<AppointmentStatus, string> = {
+      pending: 'Pendiente',
+      confirmed: 'Confirmada',
+      completed: 'Completada',
+      canceled: 'Cancelada',
+    };
+    return labels[status];
+  };
+
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          {/* Time */}
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-lg">{appointment.time}</span>
-          </div>
+    <TableRow>
+      {/* Patient Name */}
+      <TableCell className="font-medium">
+        {appointment.patient.name}
+      </TableCell>
 
-          {/* Patient */}
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{appointment.patient.name}</span>
-          </div>
+      {/* Doctor Name */}
+      <TableCell className="text-muted-foreground">
+        {appointment.doctor.name}
+      </TableCell>
 
-          {/* Doctor */}
-          <div className="flex items-center gap-2">
-            <Stethoscope className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">{appointment.doctor.name}</span>
-          </div>
+      {/* Date & Time */}
+      <TableCell className="text-sm">
+        {formatDateTime(appointment.date, appointment.time)}
+      </TableCell>
 
-          {/* Notes */}
-          {appointment.notes && (
-            <p className="text-xs text-muted-foreground border-l-2 border-border pl-2">
-              {appointment.notes}
-            </p>
-          )}
+      {/* WhatsApp / Phone */}
+      <TableCell className="text-sm">
+        {appointment.patient.phone || '-'}
+      </TableCell>
 
-          {/* Status Controls */}
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
-            {isCanceled ? (
-              // Canceled appointments only show the badge
-              <StatusBadge status={appointment.status} />
-            ) : (
-              <>
-                {/* Status Dropdown */}
-                <Select
-                  value={appointment.status}
-                  onValueChange={(value: AppointmentStatus) =>
-                    onStatusChange(appointment.id, value)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-full bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="confirmed">Confirmada</SelectItem>
-                    <SelectItem value="completed">Completada</SelectItem>
-                  </SelectContent>
-                </Select>
+      {/* Status */}
+      <TableCell>
+        {isCanceled ? (
+          <Badge variant="destructive" className="whitespace-nowrap">
+            Cancelada
+          </Badge>
+        ) : (
+          <Select
+            value={appointment.status}
+            onValueChange={(value: AppointmentStatus) =>
+              onStatusChange(appointment.id, value)
+            }
+          >
+            <SelectTrigger className="h-8 w-full bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-50">
+              <SelectItem value="pending">Pendiente de cita</SelectItem>
+              <SelectItem value="confirmed">Confirmada</SelectItem>
+              <SelectItem value="completed">Completada</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </TableCell>
 
-                {/* Cancel Button */}
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => onCancel(appointment.id)}
-                  className="whitespace-nowrap"
-                >
-                  Cancelar
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Actions */}
+      <TableCell className="text-right">
+        {!isCanceled && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => onCancel(appointment.id)}
+            className="whitespace-nowrap"
+          >
+            Cancelar
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
   );
 }
