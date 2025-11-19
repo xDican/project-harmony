@@ -7,15 +7,17 @@ import PatientSearch from '@/components/PatientSearch';
 import SlotSelector from '@/components/SlotSelector';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { doctors } from '@/lib/data';
-import { getAvailableSlots } from '@/lib/api';
+import { getAvailableSlots, createPatient } from '@/lib/api';
 import type { Patient } from '@/types/patient';
 
 /**
@@ -29,6 +31,12 @@ export default function NuevaCita() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+
+  // Create patient dialog state
+  const [isCreatePatientOpen, setIsCreatePatientOpen] = useState(false);
+  const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientPhone, setNewPatientPhone] = useState('');
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
   // Fetch available slots when doctor and date are selected
   useEffect(() => {
@@ -56,6 +64,70 @@ export default function NuevaCita() {
 
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
+  };
+
+  const handleCreateNewPatient = ({ nameOrPhone }: { nameOrPhone: string }) => {
+    // Try to detect if it's a phone number (mostly digits) or a name
+    const isPhone = /^\d+[-\s]?\d*$/.test(nameOrPhone);
+    
+    if (isPhone) {
+      setNewPatientName('');
+      setNewPatientPhone(nameOrPhone);
+    } else {
+      setNewPatientName(nameOrPhone);
+      setNewPatientPhone('');
+    }
+    
+    setIsCreatePatientOpen(true);
+  };
+
+  const handleSaveNewPatient = async () => {
+    // Basic validation
+    if (!newPatientName.trim() || !newPatientPhone.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Campos incompletos",
+        description: "Por favor, completa el nombre y teléfono del paciente.",
+      });
+      return;
+    }
+
+    setIsCreatingPatient(true);
+    
+    try {
+      const patient = await createPatient({
+        name: newPatientName.trim(),
+        phone: newPatientPhone.trim(),
+      });
+
+      // Set the new patient as selected
+      setSelectedPatient(patient);
+      
+      // Close dialog and reset form
+      setIsCreatePatientOpen(false);
+      setNewPatientName('');
+      setNewPatientPhone('');
+      
+      toast({
+        title: "Paciente creado",
+        description: `${patient.name} ha sido agregado exitosamente.`,
+      });
+    } catch (error) {
+      console.error('Error creating patient:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo crear el paciente. Intenta nuevamente.",
+      });
+    } finally {
+      setIsCreatingPatient(false);
+    }
+  };
+
+  const handleCancelCreatePatient = () => {
+    setIsCreatePatientOpen(false);
+    setNewPatientName('');
+    setNewPatientPhone('');
   };
 
   const handleCreateAppointment = () => {
@@ -113,7 +185,10 @@ export default function NuevaCita() {
             <Label className="text-lg font-semibold text-foreground mb-3 block">
               1. Seleccionar Paciente
             </Label>
-            <PatientSearch onSelect={handlePatientSelect} />
+            <PatientSearch 
+              onSelect={handlePatientSelect}
+              onCreateNew={handleCreateNewPatient}
+            />
             
             {selectedPatient && (
               <Card className="mt-4 bg-primary/5 border-primary/20">
@@ -229,6 +304,57 @@ export default function NuevaCita() {
           </div>
         </div>
       </div>
+
+      {/* Create Patient Dialog */}
+      <Dialog open={isCreatePatientOpen} onOpenChange={setIsCreatePatientOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Crear nuevo paciente</DialogTitle>
+            <DialogDescription>
+              Ingresa los datos del paciente para agregarlo al sistema.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="patient-name">Nombre completo</Label>
+              <Input
+                id="patient-name"
+                value={newPatientName}
+                onChange={(e) => setNewPatientName(e.target.value)}
+                placeholder="Ej: María García López"
+                autoFocus
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="patient-phone">Teléfono</Label>
+              <Input
+                id="patient-phone"
+                value={newPatientPhone}
+                onChange={(e) => setNewPatientPhone(e.target.value)}
+                placeholder="Ej: 555-0101"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelCreatePatient}
+              disabled={isCreatingPatient}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveNewPatient}
+              disabled={isCreatingPatient}
+            >
+              {isCreatingPatient ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

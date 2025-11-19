@@ -4,6 +4,20 @@ import { Doctor } from '@/types/doctor';
 import { appointments, patients, doctors, doctorSchedules } from './data';
 
 /**
+ * Create a new patient and add to in-memory data
+ */
+export function createPatient(input: { name: string; phone: string }): Promise<Patient> {
+  const newPatient: Patient = {
+    id: `p-${Date.now()}`,
+    name: input.name,
+    phone: input.phone,
+  };
+  
+  patients.push(newPatient);
+  return Promise.resolve(newPatient);
+}
+
+/**
  * Frontend service layer - simulates backend calls with in-memory data
  * All functions are synchronous but wrapped in Promise.resolve() for async API shape
  */
