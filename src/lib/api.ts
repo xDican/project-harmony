@@ -1,238 +1,182 @@
-import { Appointment, AppointmentStatus } from '@/types/appointment';
-import { Patient } from '@/types/patient';
-import { Doctor, Specialty } from '@/types/doctor';
-import { appointments, patients, doctors, doctorSchedules, specialties } from './data';
-
 /**
- * Create a new patient and add to in-memory data
- */
-export function createPatient(input: { name: string; phone: string }): Promise<Patient> {
-  const newPatient: Patient = {
-    id: `p-${Date.now()}`,
-    name: input.name,
-    phone: input.phone,
-  };
-  
-  patients.push(newPatient);
-  return Promise.resolve(newPatient);
-}
-
-/**
- * Frontend service layer - simulates backend calls with in-memory data
- * All functions are synchronous but wrapped in Promise.resolve() for async API shape
+ * API Router
+ * 
+ * This file serves as the main API entry point for the frontend.
+ * It delegates all API calls to either the Supabase backend or dummy/mock data
+ * based on the VITE_USE_DUMMY_DATA environment variable.
+ * 
+ * Configuration:
+ * - VITE_USE_DUMMY_DATA=true  -> Use in-memory dummy data (api.dummy.ts)
+ * - VITE_USE_DUMMY_DATA=false -> Use Supabase backend (api.supabase.ts) [DEFAULT]
+ * 
+ * The router maintains a consistent API surface for the frontend, ensuring
+ * that hooks and components can switch between backends without code changes.
  */
 
+import type { Appointment, AppointmentStatus } from '@/types/appointment';
+import type { Patient } from '@/types/patient';
+import type { Doctor, Specialty } from '@/types/doctor';
+
+// Determine which backend to use based on environment variable
+const USE_DUMMY_DATA = import.meta.env.VITE_USE_DUMMY_DATA === 'true';
+
+// Re-export the AppointmentWithDetails interface for backward compatibility
+// This interface is used by all hooks and components
 export interface AppointmentWithDetails extends Appointment {
   patient: Patient;
   doctor: Doctor;
 }
 
+// Type definition for the API module interface
+interface ApiModule {
+  getTodayAppointments: (date: string) => Promise<AppointmentWithDetails[]>;
+  getTodayAppointmentsByDoctor: (doctorId: string, date: string) => Promise<AppointmentWithDetails[]>;
+  updateAppointmentStatus: (appointmentId: string, newStatus: AppointmentStatus) => Promise<Appointment | null>;
+  createAppointment: (input: {
+    doctorId: string;
+    patientId: string;
+    date: string;
+    time: string;
+    notes?: string;
+    status?: AppointmentStatus;
+  }) => Promise<Appointment>;
+  getAvailableSlots: (doctorId: string, date: string) => Promise<string[]>;
+  searchPatients: (query: string) => Promise<Patient[]>;
+  getAllPatients: () => Promise<Patient[]>;
+  createPatient: (input: { name: string; phone: string }) => Promise<Patient>;
+  getSpecialties: () => Promise<Specialty[]>;
+  getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
+  getDoctors: () => Promise<Doctor[]>;
+  getAdminMetrics?: () => Promise<any>;
+}
+
+// Conditional imports - these are done lazily on first use to avoid top-level await
+let apiModulePromise: Promise<ApiModule> | null = null;
+
+function getApiModule() {
+  if (!apiModulePromise) {
+    if (USE_DUMMY_DATA) {
+      console.log('[API Router] Using DUMMY data (in-memory)');
+      apiModulePromise = import('./api.dummy');
+    } else {
+      console.log('[API Router] Using SUPABASE backend');
+      apiModulePromise = import('./api.supabase');
+    }
+  }
+  return apiModulePromise;
+}
+
 /**
  * Get all appointments for a specific date with patient and doctor details
  */
-export function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {
-  const filteredAppointments = appointments
-    .filter(apt => apt.date === date)
-    .map(apt => {
-      const patient = patients.find(p => p.id === apt.patientId);
-      const doctor = doctors.find(d => d.id === apt.doctorId);
-      
-      if (!patient || !doctor) {
-        throw new Error(`Missing patient or doctor for appointment ${apt.id}`);
-      }
-      
-      return {
-        ...apt,
-        patient,
-        doctor,
-      };
-    })
-    .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time
-  
-  return Promise.resolve(filteredAppointments);
-}
-
-/**
- * Search patients by name or phone (case-insensitive substring match)
- */
-export function searchPatients(query: string): Promise<Patient[]> {
-  if (!query || query.trim() === '') {
-    return Promise.resolve([]);
-  }
-  
-  const searchTerm = query.toLowerCase().trim();
-  
-  const results = patients.filter(patient => {
-    const nameMatch = patient.name.toLowerCase().includes(searchTerm);
-    const phoneMatch = patient.phone.includes(searchTerm);
-    return nameMatch || phoneMatch;
-  });
-  
-  return Promise.resolve(results);
-}
-
-/**
- * Get all patients
- */
-export function getAllPatients(): Promise<Patient[]> {
-  return Promise.resolve(patients);
-}
-
-/**
- * Get all specialties
- */
-export function getSpecialties(): Promise<Specialty[]> {
-  return Promise.resolve(specialties);
-}
-
-/**
- * Get doctors filtered by specialty
- */
-export function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor[]> {
-  const filtered = doctors.filter((d) => d.specialtyId === specialtyId);
-  return Promise.resolve(filtered);
+export async function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getTodayAppointments(date);
 }
 
 /**
  * Get appointments for a specific doctor on a specific date with patient details
  */
-export function getTodayAppointmentsByDoctor(
-  doctorId: string, 
+export async function getTodayAppointmentsByDoctor(
+  doctorId: string,
   date: string
 ): Promise<AppointmentWithDetails[]> {
-  const filteredAppointments = appointments
-    .filter(apt => apt.date === date && apt.doctorId === doctorId)
-    .map(apt => {
-      const patient = patients.find(p => p.id === apt.patientId);
-      const doctor = doctors.find(d => d.id === apt.doctorId);
-      
-      if (!patient || !doctor) {
-        throw new Error(`Missing patient or doctor for appointment ${apt.id}`);
-      }
-      
-      return {
-        ...apt,
-        patient,
-        doctor,
-      };
-    })
-    .sort((a, b) => a.time.localeCompare(b.time)); // Sort by time
-  
-  return Promise.resolve(filteredAppointments);
+  const apiModule = await getApiModule();
+  return await apiModule.getTodayAppointmentsByDoctor(doctorId, date);
 }
 
 /**
- * Get admin dashboard metrics
+ * Update the status of an appointment
  */
-export interface AdminMetrics {
-  totalPatients: number;
-  totalDoctors: number;
-  totalAppointments: number;
-  todayAppointments: number;
-  statusBreakdown: {
-    pending: number;
-    confirmed: number;
-    canceled: number;
-    completed: number;
-  };
-}
-
-export function getAdminMetrics(): Promise<AdminMetrics> {
-  const today = new Date().toISOString().split('T')[0];
-  
-  // Count today's appointments
-  const todayAppointments = appointments.filter(apt => apt.date === today).length;
-  
-  // Count by status
-  const statusBreakdown = {
-    pending: appointments.filter(apt => apt.status === 'pending').length,
-    confirmed: appointments.filter(apt => apt.status === 'confirmed').length,
-    canceled: appointments.filter(apt => apt.status === 'canceled').length,
-    completed: appointments.filter(apt => apt.status === 'completed').length,
-  };
-  
-  const metrics: AdminMetrics = {
-    totalPatients: patients.length,
-    totalDoctors: doctors.length,
-    totalAppointments: appointments.length,
-    todayAppointments,
-    statusBreakdown,
-  };
-  
-  return Promise.resolve(metrics);
-}
-
-/**
- * Update the status of an appointment in-memory
- * Prevents reactivation of canceled appointments
- */
-export function updateAppointmentStatus(
+export async function updateAppointmentStatus(
   appointmentId: string,
   newStatus: AppointmentStatus
 ): Promise<Appointment | null> {
-  const index = appointments.findIndex((a) => a.id === appointmentId);
-  if (index === -1) return Promise.resolve(null);
-
-  // Once an appointment is canceled, it cannot be reactivated
-  if (appointments[index].status === "canceled") {
-    return Promise.resolve(appointments[index]);
-  }
-
-  const updated: Appointment = {
-    ...appointments[index],
-    status: newStatus,
-  };
-
-  appointments[index] = updated;
-  return Promise.resolve(updated);
+  const apiModule = await getApiModule();
+  return await apiModule.updateAppointmentStatus(appointmentId, newStatus);
 }
 
 /**
- * Generate available time slots for a doctor on a specific date
- * Returns array of time strings like ["08:00", "08:30", "09:00"]
+ * Create a new appointment
  */
-export function getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
-  // Get the weekday for the given date (0=Sunday, 1=Monday, etc.)
-  const dateObj = new Date(date + 'T00:00:00');
-  const weekday = dateObj.getDay();
-  
-  // Find the doctor's schedule for this weekday
-  const schedule = doctorSchedules.find(
-    sch => sch.doctorId === doctorId && sch.weekday === weekday
-  );
-  
-  if (!schedule) {
-    // Doctor doesn't work on this day
-    return Promise.resolve([]);
+export async function createAppointment(input: {
+  doctorId: string;
+  patientId: string;
+  date: string;
+  time: string;
+  notes?: string;
+  status?: AppointmentStatus;
+}): Promise<Appointment> {
+  const apiModule = await getApiModule();
+  return await apiModule.createAppointment(input);
+}
+
+/**
+ * Get available time slots for a doctor on a specific date
+ */
+export async function getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getAvailableSlots(doctorId, date);
+}
+
+/**
+ * Search patients by name or phone
+ */
+export async function searchPatients(query: string): Promise<Patient[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.searchPatients(query);
+}
+
+/**
+ * Get all patients
+ */
+export async function getAllPatients(): Promise<Patient[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getAllPatients();
+}
+
+/**
+ * Create a new patient
+ */
+export async function createPatient(input: { name: string; phone: string }): Promise<Patient> {
+  const apiModule = await getApiModule();
+  return await apiModule.createPatient(input);
+}
+
+/**
+ * Get all specialties
+ */
+export async function getSpecialties(): Promise<Specialty[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getSpecialties();
+}
+
+/**
+ * Get doctors filtered by specialty
+ */
+export async function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getDoctorsBySpecialty(specialtyId);
+}
+
+/**
+ * Get all doctors
+ */
+export async function getDoctors(): Promise<Doctor[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getDoctors();
+}
+
+// Re-export AdminMetrics type from dummy API (for backward compatibility)
+export type { AdminMetrics } from './api.dummy';
+
+/**
+ * Get admin dashboard metrics (only available in dummy mode)
+ */
+export async function getAdminMetrics() {
+  const apiModule = await getApiModule();
+  if (apiModule.getAdminMetrics) {
+    return await apiModule.getAdminMetrics();
   }
-  
-  // Generate all possible slots based on schedule
-  const allSlots: string[] = [];
-  const [startHour, startMinute] = schedule.startTime.split(':').map(Number);
-  const [endHour, endMinute] = schedule.endTime.split(':').map(Number);
-  
-  let currentMinutes = startHour * 60 + startMinute;
-  const endMinutes = endHour * 60 + endMinute;
-  
-  while (currentMinutes < endMinutes) {
-    const hour = Math.floor(currentMinutes / 60);
-    const minute = currentMinutes % 60;
-    const timeSlot = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-    allSlots.push(timeSlot);
-    currentMinutes += schedule.slotDurationMinutes;
-  }
-  
-  // Get all appointments for this doctor on this date
-  const bookedSlots = appointments
-    .filter(apt => 
-      apt.doctorId === doctorId && 
-      apt.date === date && 
-      apt.status !== 'canceled' // Don't count canceled appointments
-    )
-    .map(apt => apt.time);
-  
-  // Filter out booked slots
-  const availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
-  
-  return Promise.resolve(availableSlots);
+  throw new Error('getAdminMetrics is only available in dummy mode');
 }
