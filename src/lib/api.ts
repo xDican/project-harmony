@@ -1,4 +1,4 @@
-import { Appointment } from '@/types/appointment';
+import { Appointment, AppointmentStatus } from '@/types/appointment';
 import { Patient } from '@/types/patient';
 import { Doctor, Specialty } from '@/types/doctor';
 import { appointments, patients, doctors, doctorSchedules, specialties } from './data';
@@ -160,6 +160,31 @@ export function getAdminMetrics(): Promise<AdminMetrics> {
   };
   
   return Promise.resolve(metrics);
+}
+
+/**
+ * Update the status of an appointment in-memory
+ * Prevents reactivation of canceled appointments
+ */
+export function updateAppointmentStatus(
+  appointmentId: string,
+  newStatus: AppointmentStatus
+): Promise<Appointment | null> {
+  const index = appointments.findIndex((a) => a.id === appointmentId);
+  if (index === -1) return Promise.resolve(null);
+
+  // Once an appointment is canceled, it cannot be reactivated
+  if (appointments[index].status === "canceled") {
+    return Promise.resolve(appointments[index]);
+  }
+
+  const updated: Appointment = {
+    ...appointments[index],
+    status: newStatus,
+  };
+
+  appointments[index] = updated;
+  return Promise.resolve(updated);
 }
 
 /**
