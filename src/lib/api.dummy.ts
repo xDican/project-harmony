@@ -312,3 +312,24 @@ export function searchDoctors(query: string): Promise<Doctor[]> {
 export function getCurrentUserWithRole(): Promise<CurrentUser | null> {
   return Promise.resolve(null);
 }
+
+/**
+ * Create a new user with a specific role
+ * In dummy mode, this is a no-op
+ */
+export function createUserWithRole(input: {
+  email: string;
+  password: string;
+  role: string;
+  specialtyId?: string;
+}): Promise<{ success: boolean; user?: any; error?: string }> {
+  console.log('[Dummy API] createUserWithRole called with:', input);
+  return Promise.resolve({
+    success: true,
+    user: {
+      id: `user-${Date.now()}`,
+      email: input.email,
+      role: input.role,
+    }
+  });
+}

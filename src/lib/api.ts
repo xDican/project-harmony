@@ -50,6 +50,12 @@ interface ApiModule {
   getDoctors: () => Promise<Doctor[]>;
   searchDoctors: (query: string) => Promise<Doctor[]>;
   getCurrentUserWithRole: () => Promise<CurrentUser | null>;
+  createUserWithRole: (input: {
+    email: string;
+    password: string;
+    role: string;
+    specialtyId?: string;
+  }) => Promise<{ success: boolean; user?: any; error?: string }>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -184,6 +190,19 @@ export async function searchDoctors(query: string): Promise<Doctor[]> {
 export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
   const apiModule = await getApiModule();
   return await apiModule.getCurrentUserWithRole();
+}
+
+/**
+ * Create a new user with a specific role
+ */
+export async function createUserWithRole(input: {
+  email: string;
+  password: string;
+  role: string;
+  specialtyId?: string;
+}): Promise<{ success: boolean; user?: any; error?: string }> {
+  const apiModule = await getApiModule();
+  return await apiModule.createUserWithRole(input);
 }
 
 // Re-export AdminMetrics type from dummy API (for backward compatibility)
