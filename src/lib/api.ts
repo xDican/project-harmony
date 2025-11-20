@@ -41,7 +41,7 @@ interface ApiModule {
     notes?: string;
     status?: AppointmentStatus;
   }) => Promise<Appointment>;
-  getAvailableSlots: (doctorId: string, date: string) => Promise<string[]>;
+  getAvailableSlots: (params: { doctorId: string; date: string }) => Promise<string[]>;
   searchPatients: (query: string) => Promise<Patient[]>;
   getAllPatients: () => Promise<Patient[]>;
   createPatient: (input: { name: string; phone: string }) => Promise<Patient>;
@@ -125,9 +125,9 @@ export async function createAppointment(input: {
 /**
  * Get available time slots for a doctor on a specific date
  */
-export async function getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
+export async function getAvailableSlots(params: { doctorId: string; date: string }): Promise<string[]> {
   const apiModule = await getApiModule();
-  return await apiModule.getAvailableSlots(doctorId, date);
+  return await apiModule.getAvailableSlots(params);
 }
 
 /**
