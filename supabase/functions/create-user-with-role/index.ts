@@ -19,10 +19,19 @@ serve(async (req) => {
       throw new Error("No authorization header");
     }
 
+    // Get Supabase environment variables
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      console.error("Missing SUPABASE_URL or SERVICE_ROLE_KEY env");
+      throw new Error("Server configuration error");
+    }
+
     // Create Supabase client with service role key for admin operations
     const supabaseAdmin = createClient(
-      "https://soxrlxvivuplezssgssq.supabase.co",
-      "sb_secret_3kbn1FikXfOrACUGIMcEiw_jR9aqmqC",
+      supabaseUrl,
+      supabaseServiceRoleKey,
       {
         auth: {
           autoRefreshToken: false,
