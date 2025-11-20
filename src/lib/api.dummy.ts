@@ -271,6 +271,41 @@ export function getDoctors(): Promise<Doctor[]> {
 }
 
 /**
+ * Search doctors by name or specialty
+ */
+export function searchDoctors(query: string): Promise<Doctor[]> {
+  const lowerQuery = query.toLowerCase();
+  
+  const filtered = doctors.filter(doctor => {
+    // Search by doctor name
+    if (doctor.name.toLowerCase().includes(lowerQuery)) {
+      return true;
+    }
+    
+    // Search by specialty name
+    if (doctor.specialtyId) {
+      const specialty = specialties.find(s => s.id === doctor.specialtyId);
+      if (specialty && specialty.name.toLowerCase().includes(lowerQuery)) {
+        return true;
+      }
+    }
+    
+    return false;
+  });
+  
+  // Add specialty name to each doctor
+  const withSpecialty = filtered.map(doctor => {
+    const specialty = specialties.find(s => s.id === doctor.specialtyId);
+    return {
+      ...doctor,
+      specialtyName: specialty?.name,
+    };
+  });
+  
+  return Promise.resolve(withSpecialty);
+}
+
+/**
  * Get current user with role information
  * In dummy mode, returns null (no authentication)
  */
