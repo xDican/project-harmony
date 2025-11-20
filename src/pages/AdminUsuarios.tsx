@@ -18,6 +18,8 @@ export default function AdminUsuarios() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole | ''>('');
   const [specialtyId, setSpecialtyId] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSpecialties, setLoadingSpecialties] = useState(false);
@@ -56,6 +58,16 @@ export default function AdminUsuarios() {
       return;
     }
 
+    if (role === 'doctor' && !fullName) {
+      setError('El nombre es obligatorio para el rol de doctor');
+      return;
+    }
+
+    if (role === 'doctor' && !phone) {
+      setError('El teléfono es obligatorio para el rol de doctor');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -64,6 +76,8 @@ export default function AdminUsuarios() {
         password,
         role,
         specialtyId: role === 'doctor' ? specialtyId : undefined,
+        fullName: role === 'doctor' ? fullName : undefined,
+        phone: role === 'doctor' ? phone : undefined,
       });
 
       setSuccess('Usuario creado exitosamente');
@@ -73,6 +87,8 @@ export default function AdminUsuarios() {
       setPassword('');
       setRole('');
       setSpecialtyId('');
+      setFullName('');
+      setPhone('');
     } catch (err: any) {
       setError(err.message || 'Error al crear el usuario');
     } finally {
@@ -154,25 +170,51 @@ export default function AdminUsuarios() {
               </div>
 
               {role === 'doctor' && (
-                <div className="space-y-2">
-                  <Label htmlFor="specialty">Especialidad *</Label>
-                  <Select
-                    value={specialtyId}
-                    onValueChange={setSpecialtyId}
-                    disabled={loading || loadingSpecialties}
-                  >
-                    <SelectTrigger id="specialty">
-                      <SelectValue placeholder={loadingSpecialties ? 'Cargando...' : 'Selecciona una especialidad'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {specialties.map((specialty) => (
-                        <SelectItem key={specialty.id} value={specialty.id}>
-                          {specialty.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Nombre completo *</Label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Dr. Juan Pérez"
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Teléfono *</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+1234567890"
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="specialty">Especialidad *</Label>
+                    <Select
+                      value={specialtyId}
+                      onValueChange={setSpecialtyId}
+                      disabled={loading || loadingSpecialties}
+                    >
+                      <SelectTrigger id="specialty">
+                        <SelectValue placeholder={loadingSpecialties ? 'Cargando...' : 'Selecciona una especialidad'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {specialties.map((specialty) => (
+                          <SelectItem key={specialty.id} value={specialty.id}>
+                            {specialty.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
 
               {error && (

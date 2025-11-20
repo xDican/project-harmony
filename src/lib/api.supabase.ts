@@ -502,6 +502,8 @@ export async function createUserWithRole(input: {
   password: string;
   role: string;
   specialtyId?: string;
+  fullName?: string;
+  phone?: string;
 }): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
     // Get the current session to include the JWT token
