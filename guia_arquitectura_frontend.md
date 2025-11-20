@@ -9,7 +9,7 @@
 | Tipo            | Nombre               | Archivo                         | Descripción corta                                             |
 | --------------- | -------------------- | ------------------------------- | ------------------------------------------------------------- |
 | Página          | Agenda de Hoy        | `pages/AgendaSecretaria.tsx`    | Lista del día, buscador global, cambiar estado, cancelar cita |
-| Página          | Nueva Cita           | `pages/NuevaCita.tsx`           | Wizard: paciente → doctor → fecha → horario                   |
+| Página          | Nueva Cita           | `pages/NuevaCita.tsx`           | Wizard: paciente → doctor → fecha → horario (backend-driven)  |
 | Página          | Pacientes            | `pages/Pacientes.tsx`           | Listado de pacientes + buscador                               |
 | Página          | Agenda Médico        | `pages/AgendaMedico.tsx`        | Citas del día filtradas por médico                            |
 | Página          | Admin Dashboard      | `pages/AdminDashboard.tsx`      | Métricas globales (dummy)                                     |
@@ -18,7 +18,7 @@
 | Componente      | MainLayout           | `components/MainLayout.tsx`     | Layout + navegación principal (role-based)                    |
 | Componente      | PatientSearch        | `components/PatientSearch.tsx`  | Buscar/crear paciente inline                                  |
 | Componente      | DoctorSearch         | `components/DoctorSearch.tsx`   | Buscar doctor por nombre o especialidad                       |
-| Componente      | SlotSelector         | `components/SlotSelector.tsx`   | Selección de horario                                          |
+| Componente      | SlotSelector         | `components/SlotSelector.tsx`   | Selección de horario (slots desde backend)                    |
 | Componente      | AppointmentRow       | `components/AppointmentRow.tsx` | Renderizado compacto de cita                                  |
 | Componente      | StatusBadge          | `components/StatusBadge.tsx`    | Etiqueta visual de estado                                     |
 | Hook            | useTodayAppointments | `hooks/useTodayAppointments.ts` | Cargar/gestionar citas del día (con filtro por doctor)        |
@@ -28,6 +28,9 @@
 | API (servicios) | api.ts               | `lib/api.ts`                    | Router hacia Supabase real o dummy por flag/env               |
 | Dummy data      | data.ts, api.dummy.ts| `lib/data.ts`, `lib/api.dummy.ts`| Fuente de data temporal/fallback                             |
 | Supabase        | supabaseClient.ts    | `lib/supabaseClient.ts`         | Config inicial (conecta a la BD)                              |
+| Edge Function   | get-available-slots  | `supabase/functions/get-available-slots/index.ts` | Calcula slots disponibles desde BD      |
+| Edge Function   | create-appointment   | `supabase/functions/create-appointment/index.ts` | Crea citas validando disponibilidad      |
+| Edge Function   | create-user-with-role| `supabase/functions/create-user-with-role/index.ts` | Crea usuarios con roles específicos  |
 | Tipos           | Appointment          | `types/appointment.ts`          | Modelo de cita                                                |
 | Tipos           | Patient              | `types/patient.ts`              | Modelo de paciente                                            |
 | Tipos           | Doctor               | `types/doctor.ts`               | Médico + especialidad                                         |
@@ -42,61 +45,108 @@
 - **Servicios/capa API**: `src/lib/api.ts` es el único entrypoint. NO accedas directo a `api.supabase.ts`.
 - **Hooks**: Siempre usan funciones expuestas por `api.ts`.
 - **Componentes:** UI mínima, sin fetch, sin lógica de negocio.
-- **Tipos:** Definidos en `src/types/`, uno por entidad.
+- **Edge Functions**: Lógica backend crítica (validaciones, cálculos complejos, llamadas externas).
+- Toda promesa (aunque sea síncrona) debe envolverse en `Promise.resolve()`.
+- No invoques `api.supabase.ts` ni `api.dummy.ts` directamente desde hooks/páginas.
 
 ---
 
-# 🗂️ 2. Capa de Servicios (lib/api.ts, api.supabase.ts, api.dummy.ts)
+# 🗂️ 2. Estructura de Carpetas
 
-## 2.1 api.ts (router público frontend)
+```
+src/
+├─ components/          // Componentes UI sin estado ni fetch
+├─ hooks/               // Custom hooks (state + API calls)
+├─ pages/               // Páginas del router (ej. AgendaSecretaria, NuevaCita)
+├─ lib/
+│  ├─ api.ts            // Router principal (usa dummy o supabase)
+│  ├─ api.dummy.ts      // Implementación con data.ts (dev o fallback)
+│  ├─ api.supabase.ts   // Implementación real con supabaseClient
+│  ├─ data.ts           // Datos en memoria para dummy
+│  └─ supabaseClient.ts // Configuración cliente Supabase
+├─ types/               // Interfaces y tipos compartidos
+└─ context/             // React contexts globales (UserContext)
 
-- Expone funciones:  
-  `getTodayAppointments`, `getTodayAppointmentsByDoctor`,  
-  `updateAppointmentStatus`, `createAppointment`,  
-  `getAvailableSlots`, `searchPatients`, `getAllPatients`,  
-  `createPatient`, `getSpecialties`, `getDoctorsBySpecialty`, `getDoctors`,  
-  `searchDoctors`, `getCurrentUserWithRole`
-- Por defecto usa Supabase real (`api.supabase.ts`).
-- Permite swap a dummy data (`api.dummy.ts`) por flag/env (`USE_DUMMY_DATA`).
-- Los hooks y páginas solo deben importar de aquí.
-
-## 2.2 api.supabase.ts
-
-- Implementación real, usa `supabaseClient`.
-- Hace queries reales y aplica lógica de negocio (signalado en la guía backend).
-
-## 2.3 api.dummy.ts
-
-- Implementación paralela de las mismas firmas, retorna dummy data para pruebas/local/demo.
-- Nunca deberías acceder directo a esto, salvo para tests o si se activa en el router vía flag.
-
----
-
-# 🔌 3. Integración actual Supabase
-
-- `.env` contiene claves y URL de Supabase.
-- Debes reiniciar Vite si cambias `.env`.
-- El frontend ahora consume directamente de la base real por el router de `api.ts`.
-- Acceso a datos reales depende también de permisos RLS en Supabase (ver guía backend).
+supabase/
+└─ functions/           // Edge Functions (serverless backend)
+   ├─ get-available-slots/    // Calcula horarios disponibles
+   ├─ create-appointment/     // Crea citas con validación
+   └─ create-user-with-role/  // Gestión de usuarios
+```
 
 ---
 
-# 🧪 4. Hooks
+# 🎨 3. Arquitectura de la Capa API
 
-Los hooks de negocio (ej: `useTodayAppointments`, `usePatientsSearch`):
+```
+┌──────────────────────────────────────┐
+│   Hooks / Componentes / Páginas      │
+│         (useTodayAppointments,       │
+│         PatientSearch, etc.)         │
+└──────────┬───────────────────────────┘
+           │
+           │ import { getTodayAppointments, ... } from 'lib/api'
+           v
+┌──────────────────────────────────────┐
+│         lib/api.ts (Router)          │
+│  ┌───────────────────────────────┐   │
+│  │ if (USE_DUMMY_DATA)          │   │
+│  │   -> api.dummy.ts             │   │
+│  │ else                          │   │
+│  │   -> api.supabase.ts          │   │
+│  └───────────────────────────────┘   │
+└──────────┬───────────────────────────┘
+           │
+           ├─────────────────┬──────────────────┐
+           v                 v                  v
+  ┌─────────────────┐  ┌──────────────┐  ┌─────────────────┐
+  │  api.dummy.ts   │  │api.supabase.ts│  │ Edge Functions  │
+  │  + data.ts      │  │+ supabaseClient│ │ (Backend Logic) │
+  └─────────────────┘  └──────┬────────┘ └─────────────────┘
+                              │
+                              v
+                    ┌────────────────────┐
+                    │  Supabase Backend  │
+                    │  (DB + Auth)       │
+                    └────────────────────┘
+```
 
-- Usan siempre las funciones públicas expuestas por `api.ts`.
-- No deben importar directo de `api.supabase.ts`.
-- Controlan estado (loading, error, data) y reaccionan a cambios del backend.
+### Patrón de llamada a Edge Functions
+
+Cuando la lógica es compleja o requiere validación en servidor:
+
+```typescript
+// En api.supabase.ts
+export async function getAvailableSlots(params: { doctorId: string; date: string }) {
+  const { data, error } = await supabase.functions.invoke('get-available-slots', {
+    body: { doctorId: params.doctorId, date: params.date }
+  });
+  
+  if (error) throw new Error(error.message || 'Error fetching slots');
+  return data?.slots || [];
+}
+```
 
 ---
 
-# 🧩 5. Dependencias internas y reglas de oro
+# 🔀 4. Flujo de datos típico
 
-- Actualiza/crea cualquier función nueva siempre primero en `api.supabase.ts` (implementación real), luego expónla en el router (`api.ts`).
-- Los componentes y hooks nunca acceden directo a Supabase ni a dummy; siempre al router `api.ts`.
-- Si necesitas lógica fuera de lo ya documentado, debes agregarla en el router y documentarla aquí.
-- Apóyate en los tipos de `src/types/`.
+1. **Página** (ej. `NuevaCita.tsx`) importa `getAvailableSlots` de `lib/api.ts`.
+2. **api.ts** enruta a `api.supabase.ts` o `api.dummy.ts`.
+3. **api.supabase.ts** llama a Edge Function `get-available-slots` si la lógica es compleja.
+4. **Edge Function** consulta `doctor_schedules`, `appointments`, calcula disponibilidad.
+5. Retorna array de strings de horarios disponibles.
+6. **Página** actualiza estado local con los slots y los muestra en `SlotSelector`.
+
+---
+
+# ⚙️ 5. Cambio de backend (dummy ↔ Supabase)
+
+- En **`.env`**:
+  - `VITE_USE_DUMMY_DATA=true` → usa `api.dummy.ts` (data en memoria)
+  - `VITE_USE_DUMMY_DATA=false` (o vacío) → usa `api.supabase.ts` (BD real)
+
+- Toda la app debe funcionar igual sin importar el backend seleccionado.
 
 ---
 
@@ -135,7 +185,10 @@ Los hooks de negocio (ej: `useTodayAppointments`, `usePatientsSearch`):
 - `PatientSearch` con creación inline de paciente
 - `DoctorSearch` para buscar por nombre o especialidad
 - Selector de fecha y `SlotSelector` para horario
-- Validación antes de crear cita
+- **Horarios obtenidos desde backend**: Llama a `getAvailableSlots({ doctorId, date })` que invoca Edge Function
+- **Creación de cita**: Llama a `createAppointment()` que invoca Edge Function `create-appointment`
+- Validación de slots ocupados en servidor antes de crear cita
+- Estados de loading, éxito y error con mensajes toast
 - Solo accesible para admin y secretary
 
 ## 8.4 Agenda Médico (`pages/AgendaMedico.tsx`)
@@ -275,7 +328,7 @@ Los hooks de negocio (ej: `useTodayAppointments`, `usePatientsSearch`):
 
 Todas las rutas (excepto `/login`) están protegidas y redirigen según el rol:
 
-```tsx
+```
 /login                    → Login (público, accesible sin autenticación)
 /                        → HomeRedirect (redirige según rol del usuario)
 
@@ -322,7 +375,121 @@ Todas las rutas (excepto `/login`) están protegidas y redirigen según el rol:
 
 ---
 
-# 📝 12. Changelog (para sincronización interna)
+# 📝 12. Edge Functions (Backend Serverless)
+
+## 12.1 get-available-slots
+
+**Ubicación**: `supabase/functions/get-available-slots/index.ts`
+
+**Propósito**: Calcular slots de tiempo disponibles para un doctor en una fecha específica.
+
+**Input** (POST JSON):
+```typescript
+{
+  doctorId: string;  // UUID del doctor
+  date: string;      // Formato YYYY-MM-DD
+}
+```
+
+**Proceso**:
+1. Determina día de la semana de la fecha (0=Domingo, 6=Sábado)
+2. Consulta `doctor_schedules` para obtener horarios del doctor ese día
+3. Si no hay horario configurado, retorna array vacío
+4. Genera slots de 30 minutos entre `start_time` y `end_time`
+5. Consulta `appointments` para obtener citas existentes (no canceladas)
+6. Filtra slots ocupados
+7. Retorna array de strings con horarios disponibles
+
+**Output**:
+```typescript
+{
+  slots: string[];  // Ej: ["09:00", "09:30", "10:00", ...]
+}
+```
+
+**Uso desde frontend**:
+```typescript
+// En api.supabase.ts
+const { data, error } = await supabase.functions.invoke('get-available-slots', {
+  body: { doctorId, date }
+});
+return data?.slots || [];
+```
+
+## 12.2 create-appointment
+
+**Ubicación**: `supabase/functions/create-appointment/index.ts`
+
+**Propósito**: Crear una nueva cita médica con validación de disponibilidad.
+
+**Input** (POST JSON):
+```typescript
+{
+  doctorId: string;
+  patientId: string;
+  date: string;      // YYYY-MM-DD
+  time: string;      // HH:MM o HH:MM:SS
+  notes?: string;
+}
+```
+
+**Proceso**:
+1. Valida campos requeridos
+2. Verifica que el slot no esté ocupado (query a `appointments`)
+3. Si está ocupado, retorna error 409 (Conflict)
+4. Si está disponible, inserta en `appointments` con status='pending'
+5. Retorna la cita creada
+
+**Output**:
+```typescript
+{
+  appointment: Appointment;  // Objeto de la cita creada
+}
+```
+
+**Manejo de errores**:
+- 400: Campos faltantes
+- 409: Slot ya ocupado
+- 500: Error de servidor
+
+## 12.3 create-user-with-role
+
+**Ubicación**: `supabase/functions/create-user-with-role/index.ts`
+
+**Propósito**: Crear usuarios del sistema con roles específicos.
+
+**Input** (POST JSON):
+```typescript
+{
+  email: string;
+  password: string;
+  role: 'admin' | 'secretary' | 'doctor';
+  specialtyId?: string;  // Requerido si role='doctor'
+  fullName?: string;     // Requerido si role='doctor'
+  phone?: string;        // Requerido si role='doctor'
+}
+```
+
+**Proceso**:
+1. Valida campos según rol
+2. Crea usuario en `auth.users`
+3. Si role='doctor', crea registro en tabla `doctors`
+4. Crea registro en tabla `users` vinculando con doctor_id si aplica
+5. Retorna éxito o error
+
+---
+
+# 📝 13. Changelog (para sincronización interna)
+
+- **2025-11-20**  
+  - **Integración completa de Edge Functions en Nueva Cita**:
+    - `getAvailableSlots()` ahora llama a Edge Function `get-available-slots`
+    - Slots disponibles se calculan en servidor considerando `doctor_schedules` y `appointments`
+    - `createAppointment()` ahora llama a Edge Function `create-appointment`
+    - Validación de slots ocupados en servidor antes de crear cita
+    - Mensajes de error específicos (ej: "El horario ya está ocupado")
+    - Estados de loading mejorados en UI
+    - Edge Function con credenciales del proyecto hardcodeadas (sin env vars)
 
 - **2025-11-20**  
   - **Sidebar Admin Colapsable**:
