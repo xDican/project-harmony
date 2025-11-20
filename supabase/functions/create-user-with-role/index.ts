@@ -2,68 +2,71 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     // Get the authorization header from the request
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error('No authorization header');
+      throw new Error("No authorization header");
     }
 
     // Create Supabase client with service role key for admin operations
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      Deno.env.get("VITE_SUPABASE_URL") ?? "",
+      Deno.env.get("VITE_SERVICE_ROLE_KEY") ?? "",
       {
         auth: {
           autoRefreshToken: false,
-          persistSession: false
-        }
-      }
+          persistSession: false,
+        },
+      },
     );
 
     // Create Supabase client with user's JWT to verify they're admin
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("VITE_SUPABASE_URL") ?? "",
+      Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY") ?? "",
       {
         auth: {
           autoRefreshToken: false,
-          persistSession: false
+          persistSession: false,
         },
         global: {
           headers: {
             Authorization: authHeader,
           },
         },
-      }
+      },
     );
 
     // Verify the user is authenticated and is an admin
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseClient.auth.getUser();
+
     if (userError || !user) {
-      throw new Error('Unauthorized');
+      throw new Error("Unauthorized");
     }
 
     // Check if user is admin
     const { data: userData, error: roleError } = await supabaseClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
       .single();
 
-    if (roleError || userData?.role !== 'admin') {
-      throw new Error('Only admins can create users');
+    if (roleError || userData?.role !== "admin") {
+      throw new Error("Only admins can create users");
     }
 
     // Get request body
@@ -71,16 +74,16 @@ serve(async (req) => {
 
     // Validate required fields
     if (!email || !password || !role) {
-      throw new Error('Email, password, and role are required');
+      throw new Error("Email, password, and role are required");
     }
 
-    if (role === 'doctor' && !specialtyId) {
-      throw new Error('Specialty is required for doctor role');
+    if (role === "doctor" && !specialtyId) {
+      throw new Error("Specialty is required for doctor role");
     }
 
     // Validate role
-    if (!['admin', 'secretary', 'doctor'].includes(role)) {
-      throw new Error('Invalid role');
+    if (!["admin", "secretary", "doctor"].includes(role)) {
+      throw new Error("Invalid role");
     }
 
     // Create the auth user with admin client
@@ -95,16 +98,16 @@ serve(async (req) => {
     }
 
     if (!newUser.user) {
-      throw new Error('Failed to create user');
+      throw new Error("Failed to create user");
     }
 
     // If role is doctor, create the doctor record first
     let doctorId = null;
-    if (role === 'doctor') {
+    if (role === "doctor") {
       const { data: doctorData, error: doctorError } = await supabaseAdmin
-        .from('doctors')
+        .from("doctors")
         .insert({
-          name: email.split('@')[0], // Use email prefix as default name
+          name: email.split("@")[0], // Use email prefix as default name
           email: email,
           specialty_id: specialtyId,
         })
@@ -121,51 +124,48 @@ serve(async (req) => {
     }
 
     // Insert into users table with the role
-    const { error: insertError } = await supabaseAdmin
-      .from('users')
-      .insert({
-        id: newUser.user.id,
-        email: email,
-        role: role,
-        doctor_id: doctorId,
-      });
+    const { error: insertError } = await supabaseAdmin.from("users").insert({
+      id: newUser.user.id,
+      email: email,
+      role: role,
+      doctor_id: doctorId,
+    });
 
     if (insertError) {
       // Rollback: delete the auth user and doctor if created
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
       if (doctorId) {
-        await supabaseAdmin.from('doctors').delete().eq('id', doctorId);
+        await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
       }
       throw insertError;
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         user: {
           id: newUser.user.id,
           email: newUser.user.email,
           role: role,
           doctorId: doctorId,
-        }
+        },
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
-      }
+      },
     );
-
   } catch (error) {
-    console.error('Error creating user:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error("Error creating user:", error);
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return new Response(
-      JSON.stringify({ 
-        error: errorMessage
+      JSON.stringify({
+        error: errorMessage,
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
-      }
+      },
     );
   }
 });
