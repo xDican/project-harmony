@@ -16,6 +16,7 @@
 import type { Appointment, AppointmentStatus } from '@/types/appointment';
 import type { Patient } from '@/types/patient';
 import type { Doctor, Specialty } from '@/types/doctor';
+import type { CurrentUser } from '@/types/user';
 
 // Determine which backend to use based on environment variable
 const USE_DUMMY_DATA = import.meta.env.VITE_USE_DUMMY_DATA === 'false';
@@ -47,6 +48,7 @@ interface ApiModule {
   getSpecialties: () => Promise<Specialty[]>;
   getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
   getDoctors: () => Promise<Doctor[]>;
+  getCurrentUserWithRole: () => Promise<CurrentUser | null>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -165,6 +167,14 @@ export async function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor
 export async function getDoctors(): Promise<Doctor[]> {
   const apiModule = await getApiModule();
   return await apiModule.getDoctors();
+}
+
+/**
+ * Get current user with role information
+ */
+export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
+  const apiModule = await getApiModule();
+  return await apiModule.getCurrentUserWithRole();
 }
 
 // Re-export AdminMetrics type from dummy API (for backward compatibility)

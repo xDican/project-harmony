@@ -3,6 +3,7 @@ import type { Appointment, AppointmentStatus } from "../types/appointment";
 import type { Patient } from "../types/patient";
 import type { Doctor, Specialty } from "../types/doctor";
 import type { AppointmentWithDetails } from "./api";
+import type { CurrentUser } from "../types/user";
 import { DateTime } from "luxon";
 
 // --------------------------
@@ -372,6 +373,43 @@ export async function getDoctors(): Promise<Doctor[]> {
     specialtyId: row.specialty_id,
     createdAt: row.created_at,
   }));
+}
+
+// --------------------------
+// 12. getCurrentUserWithRole
+// --------------------------
+export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
+  // 1. Obtener el usuario autenticado
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    console.error("Error getCurrentUserWithRole:auth", authError);
+    return null;
+  }
+
+  // 2. Consultar la tabla public.users
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, role, doctor_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error getCurrentUserWithRole:users", error);
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // 3. Mapear a CurrentUser
+  return {
+    id: data.id,
+    email: data.email,
+    role: data.role as CurrentUser["role"],
+    doctorId: data.doctor_id ?? null,
+  };
 }
 
 // --------------------------

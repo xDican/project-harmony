@@ -1,6 +1,7 @@
 import { Appointment, AppointmentStatus } from '@/types/appointment';
 import { Patient } from '@/types/patient';
 import { Doctor, Specialty } from '@/types/doctor';
+import { CurrentUser } from '@/types/user';
 import { appointments, patients, doctors, doctorSchedules, specialties } from './data';
 
 /**
@@ -267,4 +268,12 @@ export function createAppointment(input: {
  */
 export function getDoctors(): Promise<Doctor[]> {
   return Promise.resolve(doctors);
+}
+
+/**
+ * Get current user with role information
+ * In dummy mode, returns null (no authentication)
+ */
+export function getCurrentUserWithRole(): Promise<CurrentUser | null> {
+  return Promise.resolve(null);
 }
