@@ -192,7 +192,9 @@ export function updateAppointmentStatus(
  * Generate available time slots for a doctor on a specific date
  * Returns array of time strings like ["08:00", "08:30", "09:00"]
  */
-export function getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
+export function getAvailableSlots(params: { doctorId: string; date: string }): Promise<string[]> {
+  const { doctorId, date } = params;
+  
   // Get the weekday for the given date (0=Sunday, 1=Monday, etc.)
   const dateObj = new Date(date + 'T00:00:00');
   const weekday = dateObj.getDay();

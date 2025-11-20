@@ -182,59 +182,22 @@ export async function createAppointment(input: {
 // 5. getAvailableSlots
 // --------------------------
 /**
- * Obtiene los slots disponibles de un doctor en una fecha:
- * - Genera slots de 30min desde el horario de doctor_schedules para ese día.
- * - Excluye aquellos ya reservados en appointments (que no están canceladas).
+ * Obtiene los slots disponibles de un doctor en una fecha llamando a la Edge Function
  */
-export async function getAvailableSlots(doctorId: string, dateStr: string): Promise<string[]> {
-  const date = DateTime.fromISO(dateStr, { zone: "utc" });
+export async function getAvailableSlots(params: { doctorId: string; date: string }): Promise<string[]> {
+  const { data, error } = await supabase.functions.invoke('get-available-slots', {
+    body: {
+      doctorId: params.doctorId,
+      date: params.date,
+    },
+  });
 
-  // 1. Busca el/los horarios disponibles para ese doctor y ese día
-  const dayOfWeek = date.weekday; // 1 (lunes) - 7 (domingo)
-  const { data: schedules, error: scheduleError } = await supabase
-    .from("doctor_schedules")
-    .select("*")
-    .eq("doctor_id", doctorId)
-    .eq("day_of_week", dayOfWeek);
-
-  if (scheduleError) {
-    console.error("Error getAvailableSlots:schedules", scheduleError);
-    throw scheduleError;
+  if (error) {
+    console.error('Error calling get-available-slots:', error);
+    throw new Error(error.message || 'Error fetching available slots');
   }
 
-  if (!schedules || schedules.length === 0) return [];
-
-  // Asumimos un solo bloque horario por día
-  const slots: string[] = [];
-  for (const sched of schedules) {
-    // 2. Genera intervalos de 30min entre start_time y end_time
-    let start = DateTime.fromISO(`${dateStr}T${sched.start_time}`);
-    const end = DateTime.fromISO(`${dateStr}T${sched.end_time}`);
-    while (start < end) {
-      slots.push(start.toFormat("HH:mm"));
-      start = start.plus({ minutes: 30 });
-    }
-  }
-
-  // 3. Busca citas ya agendadas para ese doctor en esa fecha (que no estén canceladas)
-  const { data: appointments, error: apptErr } = await supabase
-    .from("appointments")
-    .select("time, status")
-    .eq("doctor_id", doctorId)
-    .eq("date", dateStr)
-    .not("status", "eq", "cancelled");
-
-  if (apptErr) {
-    console.error("Error getAvailableSlots:appointments", apptErr);
-    throw apptErr;
-  }
-
-  const takenTimes = (appointments || []).map(a => a.time);
-
-  // 4. Excluye slots ocupados
-  const availableSlots = slots.filter(slot => !takenTimes.includes(slot));
-
-  return availableSlots;
+  return data?.slots || [];
 }
 
 // --------------------------

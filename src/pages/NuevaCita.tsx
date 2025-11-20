@@ -48,7 +48,7 @@ export default function NuevaCita() {
       setSelectedSlot(null); // Reset selected slot when date/doctor changes
       
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      getAvailableSlots(selectedDoctor.id, dateString)
+      getAvailableSlots({ doctorId: selectedDoctor.id, date: dateString })
         .then(slots => {
           setAvailableSlots(slots);
         })
