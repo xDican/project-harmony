@@ -14,6 +14,7 @@
 | Página          | Agenda Médico        | `pages/AgendaMedico.tsx`        | Citas del día filtradas por médico                            |
 | Página          | Admin Dashboard      | `pages/AdminDashboard.tsx`      | Métricas globales (dummy)                                     |
 | Página          | Gestión de Usuarios  | `pages/AdminUsuarios.tsx`       | Formulario para crear usuarios del sistema (solo admin)       |
+| Página          | Página 404           | `pages/NotFound.tsx`            | Página de error/en construcción para rutas no implementadas   |
 | Componente      | MainLayout           | `components/MainLayout.tsx`     | Layout + navegación principal (role-based)                    |
 | Componente      | PatientSearch        | `components/PatientSearch.tsx`  | Buscar/crear paciente inline                                  |
 | Componente      | DoctorSearch         | `components/DoctorSearch.tsx`   | Buscar doctor por nombre o especialidad                       |
@@ -198,12 +199,36 @@ Los hooks de negocio (ej: `useTodayAppointments`, `usePatientsSearch`):
   - Secretary o Admin → `/agenda-secretaria`
 - Garantiza que cada usuario llegue a su página principal correcta
 
-## 9.3 MainLayout con navegación por roles
-- Navegación dinámica que se adapta al rol del usuario:
+## 9.3 MainLayout con navegación por roles y sidebar colapsable
+
+- **Navegación dinámica basada en roles:**
   - **Secretary**: Solo ve Agenda de Hoy, Nueva Cita, Pacientes
   - **Doctor**: Solo ve Agenda Médico
-  - **Admin**: Ve todo (Agenda de Hoy, Nueva Cita, Pacientes, Dashboard Admin, Usuarios, Agenda Médico)
-- Implementado con lógica condicional en `getNavigationItems()`
+  - **Admin**: Ve todo + grupo Admin colapsable con submenú
+
+- **Grupo Admin colapsable** (solo visible para admins):
+  - El grupo "Admin" reemplaza el botón directo "Dashboard Admin"
+  - Ubicado al final del menú lateral
+  - Click en "Admin" solo expande/colapsa, no navega
+  - Se mantiene expandido automáticamente si la ruta actual es `/admin/*`
+  - **Submenú Admin**:
+    - **Resumen** → `/admin` (usa página AdminDashboard existente)
+    - **Usuarios** → `/admin/users` (renombrado de `/admin/usuarios`)
+    - **Especialidades** → `/admin/specialties` (en construcción)
+    - **Reportes** → `/admin/reports` (en construcción)
+    - **Archivos** → `/admin/files` (en construcción)
+    - **Configuración** → `/admin/settings` (en construcción)
+
+- **Componentes usados:**
+  - `Collapsible` de shadcn/ui para el grupo expandible
+  - `ChevronDown` icon con rotación cuando está expandido
+  - Items del submenú visualmente indentados (`pl-12`)
+  
+- **Implementación:**
+  - `useState` para `adminMenuOpen`
+  - `useEffect` que auto-expande si `location.pathname.startsWith('/admin')`
+  - `getNavigationItems()` construye dinámicamente según rol
+
 - Botón "Cerrar sesión" con `supabase.auth.signOut()`
 - Muestra "Cargando menú…" mientras se verifica el rol
 
@@ -219,11 +244,21 @@ Los hooks de negocio (ej: `useTodayAppointments`, `usePatientsSearch`):
 # 📝 10. Componentes de Búsqueda
 
 ## 10.1 PatientSearch
+
+- **Componente controlado con prop `value`**
 - Input con búsqueda debounced (300ms)
 - Muestra dropdown con resultados
-- Al seleccionar: muestra nombre en el input
-- Botón "Crear nuevo paciente" si no hay resultados
-- Creación inline de paciente con dialog/sheet
+- **Sincronización automática**: Al seleccionar, se muestra card con información del paciente
+- **Creación inline de paciente**:
+  - Botón "Crear nuevo paciente" si no hay resultados
+  - Dialog/sheet para ingresar nombre y teléfono
+  - **Al crear**: paciente se selecciona automáticamente sin recargar página
+  - Transición suave mediante control externo del estado
+- **Props**:
+  - `onSelect`: callback cuando se selecciona un paciente
+  - `onCreateNew`: callback para abrir dialog de creación
+  - `value`: paciente seleccionado (para control externo)
+- **Evita duplicados**: No muestra card adicional fuera del componente
 
 ## 10.2 DoctorSearch
 - Similar a PatientSearch
@@ -253,8 +288,15 @@ Todas las rutas (excepto `/login`) están protegidas y redirigen según el rol:
 /agenda-medico          → AgendaMedico (doctor, admin)
 
 // Rutas de Admin (solo admin)
-/admin                  → AdminDashboard (admin)
-/admin/usuarios         → AdminUsuarios (admin)
+/admin                  → AdminDashboard (admin) - Resumen
+/admin/users            → AdminUsuarios (admin) - Gestión de usuarios
+/admin/specialties      → NotFound (admin) - En construcción
+/admin/reports          → NotFound (admin) - En construcción
+/admin/files            → NotFound (admin) - En construcción
+/admin/settings         → NotFound (admin) - En construcción
+
+// Catch-all
+*                       → NotFound (404)
 ```
 
 ## Restricciones de Acceso
@@ -267,10 +309,46 @@ Todas las rutas (excepto `/login`) están protegidas y redirigen según el rol:
   
 - **Admin**: Puede acceder a todas las rutas del sistema
   - Tiene privilegios completos de navegación
+  - Rutas en construcción muestran página 404 envuelta en MainLayout
+
+## Página 404 / En Construcción
+
+- Componente: `NotFound.tsx`
+- Muestra: "404 - Página no encontrada" + "Esta sección todavía está en construcción"
+- Botón para volver al dashboard admin (`/admin`)
+- Se usa para:
+  - Rutas del admin no implementadas aún
+  - Rutas desconocidas/inexistentes del proyecto
 
 ---
 
 # 📝 12. Changelog (para sincronización interna)
+
+- **2025-11-20**  
+  - **Sidebar Admin Colapsable**:
+    - Convertido "Dashboard Admin" en grupo colapsable "Admin"
+    - Grupo ubicado al final del menú lateral
+    - Click en "Admin" solo expande/colapsa, no navega
+    - Se mantiene expandido automáticamente si ruta actual es `/admin/*`
+    - Submenú con 6 opciones: Resumen, Usuarios, Especialidades, Reportes, Archivos, Configuración
+    - Eliminadas opciones "Doctores" y "Secretarias" del plan inicial
+    - Rutas no implementadas muestran página 404 con MainLayout
+
+- **2025-11-20**  
+  - **Página 404 / En Construcción**:
+    - Componente `NotFound.tsx` actualizado
+    - Mensaje: "404 - Página no encontrada" + "Esta sección todavía está en construcción"
+    - Botón para volver al admin dashboard
+    - Usado para rutas admin pendientes y rutas inexistentes
+    - Envuelto en MainLayout para rutas admin (mantiene sidebar visible)
+
+- **2025-11-20**  
+  - **Mejora en PatientSearch**:
+    - Componente ahora es controlado con prop `value`
+    - Sincronización automática al crear nuevo paciente
+    - Transición suave sin recargar página
+    - Eliminada duplicación visual del paciente seleccionado
+    - `useEffect` sincroniza estado interno con valor externo
 
 - **2025-11-20**  
   - **Control de Acceso por Roles refinado**:
