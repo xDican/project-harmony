@@ -58,7 +58,7 @@ serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, role, specialtyId } = await req.json();
+    const { email, password, role, specialtyId, fullName, phone } = await req.json();
 
     // Validate required fields
     if (!email || !password || !role) {
@@ -67,6 +67,14 @@ serve(async (req) => {
 
     if (role === "doctor" && !specialtyId) {
       throw new Error("Specialty is required for doctor role");
+    }
+
+    if (role === "doctor" && !fullName) {
+      throw new Error("Full name is required for doctor role");
+    }
+
+    if (role === "doctor" && !phone) {
+      throw new Error("Phone is required for doctor role");
     }
 
     // Validate role
@@ -95,8 +103,9 @@ serve(async (req) => {
       const { data: doctorData, error: doctorError } = await supabaseAdmin
         .from("doctors")
         .insert({
-          name: email.split("@")[0], // Use email prefix as default name
+          name: fullName,
           email: email,
+          phone: phone,
           specialty_id: specialtyId,
         })
         .select()

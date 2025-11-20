@@ -55,6 +55,8 @@ interface ApiModule {
     password: string;
     role: string;
     specialtyId?: string;
+    fullName?: string;
+    phone?: string;
   }) => Promise<{ success: boolean; user?: any; error?: string }>;
   getAdminMetrics?: () => Promise<any>;
 }
@@ -200,6 +202,8 @@ export async function createUserWithRole(input: {
   password: string;
   role: string;
   specialtyId?: string;
+  fullName?: string;
+  phone?: string;
 }): Promise<{ success: boolean; user?: any; error?: string }> {
   const apiModule = await getApiModule();
   return await apiModule.createUserWithRole(input);
