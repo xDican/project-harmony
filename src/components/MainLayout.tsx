@@ -44,6 +44,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
       items.push({ to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope });
     }
 
+    // Admin can see: Crear Usuario
+    if (isAdmin) {
+      items.push({ to: '/admin/usuarios/nuevo', label: 'Crear Usuario', icon: PlusCircle });
+    }
+
     return items;
   };
 
