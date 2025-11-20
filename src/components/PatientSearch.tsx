@@ -10,17 +10,25 @@ import { cn } from '@/lib/utils';
 interface PatientSearchProps {
   onSelect: (patient: Patient) => void;
   onCreateNew?: (prefill: { nameOrPhone: string }) => void;
+  value?: Patient | null;
 }
 
 /**
  * PatientSearch - Searchable patient selector with dropdown results
  * Uses debounced search and displays matching patients with contact info
  */
-const PatientSearch = ({ onSelect, onCreateNew }: PatientSearchProps) => {
+const PatientSearch = ({ onSelect, onCreateNew, value }: PatientSearchProps) => {
   const { data: patients, isLoading, query, setQuery } = usePatientsSearch();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(value || null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Update internal state when external value changes
+  useEffect(() => {
+    if (value !== undefined) {
+      setSelectedPatient(value);
+    }
+  }, [value]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -45,6 +53,7 @@ const PatientSearch = ({ onSelect, onCreateNew }: PatientSearchProps) => {
     setSelectedPatient(null);
     setQuery('');
     setIsOpen(false);
+    onSelect(null as any); // Notify parent of deselection
   };
 
   const handleInputChange = (value: string) => {

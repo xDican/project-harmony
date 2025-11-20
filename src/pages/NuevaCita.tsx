@@ -197,6 +197,7 @@ export default function NuevaCita() {
             <PatientSearch 
               onSelect={handlePatientSelect}
               onCreateNew={handleCreateNewPatient}
+              value={selectedPatient}
             />
           </section>
 
