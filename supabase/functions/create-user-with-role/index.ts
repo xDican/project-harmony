@@ -21,8 +21,8 @@ serve(async (req) => {
 
     // Create Supabase client with service role key for admin operations
     const supabaseAdmin = createClient(
-      Deno.env.get("VITE_SUPABASE_URL") ?? "",
-      Deno.env.get("VITE_SERVICE_ROLE_KEY") ?? "",
+      "https://soxrlxvivuplezssgssq.supabase.co",
+      "sb_secret_3kbn1FikXfOrACUGIMcEiw_jR9aqmqC",
       {
         auth: {
           autoRefreshToken: false,
@@ -33,8 +33,8 @@ serve(async (req) => {
 
     // Create Supabase client with user's JWT to verify they're admin
     const supabaseClient = createClient(
-      Deno.env.get("VITE_SUPABASE_URL") ?? "",
-      Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY") ?? "",
+      "https://soxrlxvivuplezssgssq.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNveHJseHZpdnVwbGV6c3Nnc3NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MTMyMTEsImV4cCI6MjA3OTA4OTIxMX0.1w7xGqP6GBi7NcP6a5vDGwTZQWCvZ5wsykIwLz6hk9U",
       {
         auth: {
           autoRefreshToken: false,
