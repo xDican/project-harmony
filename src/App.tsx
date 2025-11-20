@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
 import { UserRole } from "./types/user";
+import MainLayout from "./components/MainLayout";
 import AgendaSecretaria from "./pages/AgendaSecretaria";
 import NuevaCita from "./pages/NuevaCita";
 import Pacientes from "./pages/Pacientes";
@@ -154,34 +155,32 @@ const App = () => (
                 <AdminUsuarios />
               </RoleBasedRoute>
             } />
-            <Route path="/admin/doctors" element={
-              <RoleBasedRoute allowedRoles={['admin']}>
-                <NotFound />
-              </RoleBasedRoute>
-            } />
-            <Route path="/admin/secretaries" element={
-              <RoleBasedRoute allowedRoles={['admin']}>
-                <NotFound />
-              </RoleBasedRoute>
-            } />
             <Route path="/admin/specialties" element={
               <RoleBasedRoute allowedRoles={['admin']}>
-                <NotFound />
+                <MainLayout>
+                  <NotFound />
+                </MainLayout>
               </RoleBasedRoute>
             } />
             <Route path="/admin/reports" element={
               <RoleBasedRoute allowedRoles={['admin']}>
-                <NotFound />
+                <MainLayout>
+                  <NotFound />
+                </MainLayout>
               </RoleBasedRoute>
             } />
             <Route path="/admin/files" element={
               <RoleBasedRoute allowedRoles={['admin']}>
-                <NotFound />
+                <MainLayout>
+                  <NotFound />
+                </MainLayout>
               </RoleBasedRoute>
             } />
             <Route path="/admin/settings" element={
               <RoleBasedRoute allowedRoles={['admin']}>
-                <NotFound />
+                <MainLayout>
+                  <NotFound />
+                </MainLayout>
               </RoleBasedRoute>
             } />
             

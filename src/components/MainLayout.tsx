@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
@@ -18,14 +18,20 @@ interface MainLayoutProps {
  */
 export default function MainLayout({ children }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { loading, isAdmin, isSecretary, isDoctor, isAdminOrSecretary } = useCurrentUser();
 
   // Keep admin menu open if current route is an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
-  const shouldAdminBeOpen = adminMenuOpen || isAdminRoute;
+  const [adminMenuOpen, setAdminMenuOpen] = useState(isAdminRoute);
+
+  // Auto-open admin menu when navigating to admin routes
+  useEffect(() => {
+    if (isAdminRoute) {
+      setAdminMenuOpen(true);
+    }
+  }, [isAdminRoute]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -77,8 +83,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
     const adminSubmenuItems = [
       { to: '/admin', label: 'Resumen', icon: BarChart3 },
       { to: '/admin/users', label: 'Usuarios', icon: UserPlus },
-      { to: '/admin/doctors', label: 'Doctores', icon: Stethoscope },
-      { to: '/admin/secretaries', label: 'Secretarias', icon: Users },
       { to: '/admin/specialties', label: 'Especialidades', icon: Shield },
       { to: '/admin/reports', label: 'Reportes', icon: FileText },
       { to: '/admin/files', label: 'Archivos', icon: Folder },
@@ -102,11 +106,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
         {/* Admin collapsible menu */}
         {isAdmin && (
-          <Collapsible open={shouldAdminBeOpen} onOpenChange={setAdminMenuOpen}>
+          <Collapsible open={adminMenuOpen} onOpenChange={setAdminMenuOpen}>
             <CollapsibleTrigger className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors w-full">
               <Settings className="h-5 w-5" />
               <span className="flex-1 text-left">Admin</span>
-              <ChevronDown className={`h-4 w-4 transition-transform ${shouldAdminBeOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} />
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1">
               {adminSubmenuItems.map((item) => (
