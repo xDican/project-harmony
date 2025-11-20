@@ -31,41 +31,29 @@ serve(async (req) => {
       },
     );
 
-    // Create Supabase client with user's JWT to verify they're admin
-    const supabaseClient = createClient(
-      "https://soxrlxvivuplezssgssq.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNveHJseHZpdnVwbGV6c3Nnc3NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MTMyMTEsImV4cCI6MjA3OTA4OTIxMX0.1w7xGqP6GBi7NcP6a5vDGwTZQWCvZ5wsykIwLz6hk9U",
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-        global: {
-          headers: {
-            Authorization: authHeader,
-          },
-        },
-      },
-    );
-
-    // Verify the user is authenticated and is an admin
+    // Extract JWT token from Authorization header
+    const jwt = authHeader.replace("Bearer ", "");
+    
+    // Verify the user's JWT token using the admin client
     const {
       data: { user },
       error: userError,
-    } = await supabaseClient.auth.getUser();
+    } = await supabaseAdmin.auth.getUser(jwt);
 
     if (userError || !user) {
+      console.error("Auth error:", userError);
       throw new Error("Unauthorized");
     }
 
-    // Check if user is admin
-    const { data: userData, error: roleError } = await supabaseClient
+    // Check if user is admin using admin client (bypasses RLS)
+    const { data: userData, error: roleError } = await supabaseAdmin
       .from("users")
       .select("role")
       .eq("id", user.id)
       .single();
 
     if (roleError || userData?.role !== "admin") {
+      console.error("Role check failed:", roleError, userData);
       throw new Error("Only admins can create users");
     }
 
