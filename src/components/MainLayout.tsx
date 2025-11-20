@@ -29,23 +29,29 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const getNavigationItems = () => {
     const items = [];
 
-    // Admin and Secretary can see: Agenda, Nueva Cita, Pacientes, Admin
-    if (isAdminOrSecretary) {
+    // Secretary can see: Agenda, Nueva Cita, Pacientes (no Admin)
+    if (isSecretary) {
+      items.push(
+        { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
+        { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
+        { to: '/pacientes', label: 'Pacientes', icon: Users }
+      );
+    }
+
+    // Admin can see: Agenda, Nueva Cita, Pacientes, Admin Dashboard
+    if (isAdmin) {
       items.push(
         { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
         { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
         { to: '/pacientes', label: 'Pacientes', icon: Users },
-        { to: '/admin', label: 'Admin', icon: Settings }
+        { to: '/admin', label: 'Dashboard Admin', icon: Settings },
+        { to: '/admin/usuarios', label: 'Usuarios', icon: UserPlus },
+        { to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope }
       );
     }
 
-    // Admin-only: User management
-    if (isAdmin) {
-      items.push({ to: '/admin/usuarios', label: 'Usuarios', icon: UserPlus });
-    }
-
-    // Admin and Doctor can see: Agenda Médico
-    if (isAdmin || isDoctor) {
+    // Doctor can see: only Agenda Médico
+    if (isDoctor) {
       items.push({ to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope });
     }
 
