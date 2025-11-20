@@ -1,9 +1,10 @@
 import { ReactNode, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -17,8 +18,14 @@ interface MainLayoutProps {
  */
 export default function MainLayout({ children }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { loading, isAdmin, isSecretary, isDoctor, isAdminOrSecretary } = useCurrentUser();
+
+  // Keep admin menu open if current route is an admin route
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const shouldAdminBeOpen = adminMenuOpen || isAdminRoute;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -44,8 +51,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
         { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
         { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
         { to: '/pacientes', label: 'Pacientes', icon: Users },
-        { to: '/admin', label: 'Dashboard Admin', icon: Settings },
-        { to: '/admin/usuarios', label: 'Usuarios', icon: UserPlus },
         { to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope }
       );
     }
@@ -69,6 +74,17 @@ export default function MainLayout({ children }: MainLayoutProps) {
       );
     }
 
+    const adminSubmenuItems = [
+      { to: '/admin', label: 'Resumen', icon: BarChart3 },
+      { to: '/admin/users', label: 'Usuarios', icon: UserPlus },
+      { to: '/admin/doctors', label: 'Doctores', icon: Stethoscope },
+      { to: '/admin/secretaries', label: 'Secretarias', icon: Users },
+      { to: '/admin/specialties', label: 'Especialidades', icon: Shield },
+      { to: '/admin/reports', label: 'Reportes', icon: FileText },
+      { to: '/admin/files', label: 'Archivos', icon: Folder },
+      { to: '/admin/settings', label: 'Configuración', icon: Settings },
+    ];
+
     return (
       <nav className="flex flex-col gap-2">
         {navigationItems.map((item) => (
@@ -83,6 +99,32 @@ export default function MainLayout({ children }: MainLayoutProps) {
             <span>{item.label}</span>
           </NavLink>
         ))}
+
+        {/* Admin collapsible menu */}
+        {isAdmin && (
+          <Collapsible open={shouldAdminBeOpen} onOpenChange={setAdminMenuOpen}>
+            <CollapsibleTrigger className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors w-full">
+              <Settings className="h-5 w-5" />
+              <span className="flex-1 text-left">Admin</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${shouldAdminBeOpen ? 'rotate-180' : ''}`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-1">
+              {adminSubmenuItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className="flex items-center gap-3 pl-12 pr-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  activeClassName="bg-primary/10 text-primary font-medium"
+                  onClick={onClick}
+                  end={item.to === '/admin'}
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </nav>
     );
   };

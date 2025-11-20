@@ -149,9 +149,39 @@ const App = () => (
                 <AdminDashboard />
               </RoleBasedRoute>
             } />
-            <Route path="/admin/usuarios" element={
+            <Route path="/admin/users" element={
               <RoleBasedRoute allowedRoles={['admin']}>
                 <AdminUsuarios />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/doctors" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <NotFound />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/secretaries" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <NotFound />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/specialties" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <NotFound />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/reports" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <NotFound />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/files" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <NotFound />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/settings" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <NotFound />
               </RoleBasedRoute>
             } />
             
