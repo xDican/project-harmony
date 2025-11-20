@@ -1,6 +1,7 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
+import { useCurrentUser } from '@/context/UserContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user, loading: userLoading } = useCurrentUser();
+
+  // Redirigir si el usuario ya está autenticado
+  useEffect(() => {
+    if (!userLoading && user) {
+      navigate('/agenda-secretaria', { replace: true });
+    }
+  }, [user, userLoading, navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,9 +35,8 @@ export default function Login() {
 
       if (error) {
         setError(error.message);
-      } else {
-        navigate('/agenda-secretaria');
       }
+      // La redirección se maneja automáticamente por el useEffect
     } catch (err) {
       setError('Error al iniciar sesión. Por favor, intenta de nuevo.');
     } finally {
