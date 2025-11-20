@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { getAvailableSlots, createPatient } from '@/lib/api';
+import { getAvailableSlots, createPatient, createAppointment } from '@/lib/api';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
 
@@ -37,6 +37,9 @@ export default function NuevaCita() {
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+  
+  // Create appointment loading state
+  const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
 
   // Fetch available slots when doctor and date are selected
   useEffect(() => {
@@ -141,7 +144,7 @@ export default function NuevaCita() {
     setNewPatientPhone('');
   };
 
-  const handleCreateAppointment = () => {
+  const handleCreateAppointment = async () => {
     // Validate all fields are filled
     if (!selectedPatient || !selectedDoctor || !selectedDate || !selectedSlot) {
       toast({
@@ -152,30 +155,53 @@ export default function NuevaCita() {
       return;
     }
 
-    const dateString = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+    setIsCreatingAppointment(true);
 
-    // Show success message
-    toast({
-      title: "¡Cita creada exitosamente!",
-      description: (
-        <div className="mt-2 space-y-1">
-          <p><strong>Paciente:</strong> {selectedPatient.name}</p>
-          <p><strong>Doctor:</strong> {selectedDoctor.name}</p>
-          <p><strong>Fecha:</strong> {dateString}</p>
-          <p><strong>Hora:</strong> {selectedSlot}</p>
-        </div>
-      ),
-    });
+    try {
+      const dateString = format(selectedDate, 'yyyy-MM-dd');
+      
+      await createAppointment({
+        doctorId: selectedDoctor.id,
+        patientId: selectedPatient.id,
+        date: dateString,
+        time: selectedSlot,
+        notes: undefined,
+      });
 
-    // Reset form
-    setSelectedPatient(null);
-    setSelectedDoctor(null);
-    setSelectedDate(undefined);
-    setSelectedSlot(null);
-    setAvailableSlots([]);
+      const displayDate = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+
+      // Show success message
+      toast({
+        title: "¡Cita creada exitosamente!",
+        description: (
+          <div className="mt-2 space-y-1">
+            <p><strong>Paciente:</strong> {selectedPatient.name}</p>
+            <p><strong>Doctor:</strong> {selectedDoctor.name}</p>
+            <p><strong>Fecha:</strong> {displayDate}</p>
+            <p><strong>Hora:</strong> {selectedSlot}</p>
+          </div>
+        ),
+      });
+
+      // Reset form
+      setSelectedPatient(null);
+      setSelectedDoctor(null);
+      setSelectedDate(undefined);
+      setSelectedSlot(null);
+      setAvailableSlots([]);
+    } catch (error: any) {
+      console.error('Error creating appointment:', error);
+      toast({
+        variant: "destructive",
+        title: "Error al crear la cita",
+        description: error.message || "Ocurrió un error al intentar crear la cita. Por favor, intenta nuevamente.",
+      });
+    } finally {
+      setIsCreatingAppointment(false);
+    }
   };
 
-  const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot;
+  const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
 
   return (
     <MainLayout>
@@ -278,7 +304,7 @@ export default function NuevaCita() {
               className="w-full"
             >
               <CheckCircle className="mr-2 h-5 w-5" />
-              Crear Cita
+              {isCreatingAppointment ? 'Creando cita...' : 'Crear Cita'}
             </Button>
             
             {!isFormValid && (
