@@ -491,6 +491,53 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
 }
 
 // --------------------------
+// 13. createUserWithRole
+// --------------------------
+/**
+ * Create a new user with a specific role
+ * This calls a Supabase Edge Function to handle user creation with admin privileges
+ */
+export async function createUserWithRole(input: {
+  email: string;
+  password: string;
+  role: string;
+  specialtyId?: string;
+}): Promise<{ success: boolean; user?: any; error?: string }> {
+  try {
+    // Get the current session to include the JWT token
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('No active session');
+    }
+
+    // Call the edge function
+    const response = await fetch(
+      `https://soxrlxvivuplezssgssq.supabase.co/functions/v1/create-user-with-role`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(input),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to create user');
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error('[API] Error creating user with role:', error);
+    throw error;
+  }
+}
+
+// --------------------------
 // Export helpers for testing or internal use
 // --------------------------
 export const __test_helpers = {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -37,6 +37,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
         { to: '/pacientes', label: 'Pacientes', icon: Users },
         { to: '/admin', label: 'Admin', icon: Settings }
       );
+    }
+
+    // Admin-only: User management
+    if (isAdmin) {
+      items.push({ to: '/admin/usuarios', label: 'Usuarios', icon: UserPlus });
     }
 
     // Admin and Doctor can see: Agenda Médico
