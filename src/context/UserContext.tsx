@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { getCurrentUserWithRole } from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
 import type { CurrentUser, UserRole } from '../types/user';
+import type { Session } from '@supabase/supabase-js';
 
 /**
  * User context value type
@@ -32,21 +34,57 @@ interface UserProviderProps {
  */
 export function UserProvider({ children }: UserProviderProps) {
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch current user with role on mount
-    getCurrentUserWithRole()
-      .then((currentUser) => {
-        setUser(currentUser);
-      })
-      .catch((error) => {
-        console.error('Error fetching current user:', error);
-        setUser(null);
-      })
-      .finally(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        
+        // Fetch user with role when session changes
+        if (session?.user) {
+          getCurrentUserWithRole()
+            .then((currentUser) => {
+              setUser(currentUser);
+            })
+            .catch((error) => {
+              console.error('Error fetching current user:', error);
+              setUser(null);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    // Check for existing session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      
+      if (session?.user) {
+        getCurrentUserWithRole()
+          .then((currentUser) => {
+            setUser(currentUser);
+          })
+          .catch((error) => {
+            console.error('Error fetching current user:', error);
+            setUser(null);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      } else {
         setLoading(false);
-      });
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Calculate role flags based on user.role
