@@ -9,6 +9,7 @@ import NuevaCita from "./pages/NuevaCita";
 import Pacientes from "./pages/Pacientes";
 import AgendaMedico from "./pages/AgendaMedico";
 import AdminDashboard from "./pages/AdminDashboard";
+import CreateUser from "./pages/admin/CreateUser";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -72,6 +73,11 @@ const App = () => (
             <Route path="/admin" element={
               <ProtectedRoute>
                 <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/usuarios/nuevo" element={
+              <ProtectedRoute>
+                <CreateUser />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
