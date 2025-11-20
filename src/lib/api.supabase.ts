@@ -146,29 +146,36 @@ export async function createAppointment(input: {
   notes?: string;
   status?: AppointmentStatus;
 }): Promise<Appointment> {
-  const dbStatus = input.status ? appStatusToDbStatus(input.status) : "pending";
-
-  const { data, error } = await supabase
-    .from("appointments")
-    .insert([
-      {
-        doctor_id: input.doctorId,
-        patient_id: input.patientId,
+  try {
+    // Llamar a la Edge Function create-appointment
+    const { data, error } = await supabase.functions.invoke('create-appointment', {
+      body: {
+        doctorId: input.doctorId,
+        patientId: input.patientId,
         date: input.date,
         time: input.time,
-        status: dbStatus,
         notes: input.notes,
       },
-    ])
-    .select()
-    .single();
+    });
 
-  if (error) {
-    console.error("Error createAppointment:", error);
+    if (error) {
+      console.error('Error calling create-appointment edge function:', error);
+      throw new Error(error.message || 'Error al crear la cita');
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    if (!data?.success || !data?.appointment) {
+      throw new Error('Respuesta inválida del servidor');
+    }
+
+    return mapAppointment(data.appointment);
+  } catch (error: any) {
+    console.error('Error createAppointment:', error);
     throw error;
   }
-
-  return mapAppointment(data);
 }
 
 // --------------------------
