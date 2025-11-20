@@ -4,11 +4,11 @@ import { es } from 'date-fns/locale';
 import { CalendarIcon, CheckCircle } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
+import DoctorSearch from '@/components/DoctorSearch';
 import SlotSelector from '@/components/SlotSelector';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,9 +16,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { getAvailableSlots, createPatient, getSpecialties, getDoctorsBySpecialty } from '@/lib/api';
+import { getAvailableSlots, createPatient } from '@/lib/api';
 import type { Patient } from '@/types/patient';
-import type { Specialty, Doctor } from '@/types/doctor';
+import type { Doctor } from '@/types/doctor';
 
 /**
  * NuevaCita - New appointment creation page
@@ -26,10 +26,7 @@ import type { Specialty, Doctor } from '@/types/doctor';
  */
 export default function NuevaCita() {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [specialties, setSpecialties] = useState<Specialty[]>([]);
-  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('');
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -41,39 +38,14 @@ export default function NuevaCita() {
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // Load specialties on mount
-  useEffect(() => {
-    getSpecialties().then(setSpecialties).catch(console.error);
-  }, []);
-
-  // Load doctors when specialty changes
-  useEffect(() => {
-    if (selectedSpecialtyId) {
-      getDoctorsBySpecialty(selectedSpecialtyId)
-        .then(setDoctors)
-        .catch(error => {
-          console.error('Error loading doctors:', error);
-          setDoctors([]);
-        });
-      
-      // Reset dependent selections
-      setSelectedDoctorId('');
-      setSelectedDate(undefined);
-      setSelectedSlot(null);
-      setAvailableSlots([]);
-    } else {
-      setDoctors([]);
-    }
-  }, [selectedSpecialtyId]);
-
   // Fetch available slots when doctor and date are selected
   useEffect(() => {
-    if (selectedDoctorId && selectedDate) {
+    if (selectedDoctor && selectedDate) {
       setIsLoadingSlots(true);
       setSelectedSlot(null); // Reset selected slot when date/doctor changes
       
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      getAvailableSlots(selectedDoctorId, dateString)
+      getAvailableSlots(selectedDoctor.id, dateString)
         .then(slots => {
           setAvailableSlots(slots);
         })
@@ -88,17 +60,21 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setSelectedSlot(null);
     }
-  }, [selectedDoctorId, selectedDate]);
+  }, [selectedDoctor, selectedDate]);
 
-  // Reset slots when doctor changes
+  // Reset date and slots when doctor changes
   useEffect(() => {
     setSelectedDate(undefined);
     setSelectedSlot(null);
     setAvailableSlots([]);
-  }, [selectedDoctorId]);
+  }, [selectedDoctor]);
 
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
+  };
+
+  const handleDoctorSelect = (doctor: Doctor) => {
+    setSelectedDoctor(doctor);
   };
 
   const handleCreateNewPatient = ({ nameOrPhone }: { nameOrPhone: string }) => {
@@ -167,7 +143,7 @@ export default function NuevaCita() {
 
   const handleCreateAppointment = () => {
     // Validate all fields are filled
-    if (!selectedPatient || !selectedSpecialtyId || !selectedDoctorId || !selectedDate || !selectedSlot) {
+    if (!selectedPatient || !selectedDoctor || !selectedDate || !selectedSlot) {
       toast({
         variant: "destructive",
         title: "Campos incompletos",
@@ -176,8 +152,6 @@ export default function NuevaCita() {
       return;
     }
 
-    // Get doctor name
-    const doctor = doctors.find(d => d.id === selectedDoctorId);
     const dateString = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
 
     // Show success message
@@ -186,7 +160,7 @@ export default function NuevaCita() {
       description: (
         <div className="mt-2 space-y-1">
           <p><strong>Paciente:</strong> {selectedPatient.name}</p>
-          <p><strong>Doctor:</strong> {doctor?.name}</p>
+          <p><strong>Doctor:</strong> {selectedDoctor.name}</p>
           <p><strong>Fecha:</strong> {dateString}</p>
           <p><strong>Hora:</strong> {selectedSlot}</p>
         </div>
@@ -195,15 +169,13 @@ export default function NuevaCita() {
 
     // Reset form
     setSelectedPatient(null);
-    setSelectedSpecialtyId('');
-    setDoctors([]);
-    setSelectedDoctorId('');
+    setSelectedDoctor(null);
     setSelectedDate(undefined);
     setSelectedSlot(null);
     setAvailableSlots([]);
   };
 
-  const isFormValid = selectedPatient && selectedSpecialtyId && selectedDoctorId && selectedDate && selectedSlot;
+  const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot;
 
   return (
     <MainLayout>
@@ -242,60 +214,18 @@ export default function NuevaCita() {
             )}
           </section>
 
-          {/* Step 2: Specialty Selection */}
+          {/* Step 2: Doctor Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              2. Seleccionar Especialidad
+              2. Seleccionar Médico
             </Label>
-            <Select value={selectedSpecialtyId} onValueChange={setSelectedSpecialtyId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona una especialidad" />
-              </SelectTrigger>
-              <SelectContent>
-                {specialties.map((specialty) => (
-                  <SelectItem key={specialty.id} value={specialty.id}>
-                    {specialty.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <DoctorSearch onSelect={handleDoctorSelect} />
           </section>
 
-          {/* Step 3: Doctor Selection */}
+          {/* Step 3: Date Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              3. Seleccionar Doctor
-            </Label>
-            <Select 
-              value={selectedDoctorId} 
-              onValueChange={setSelectedDoctorId}
-              disabled={!selectedSpecialtyId}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue 
-                  placeholder={
-                    !selectedSpecialtyId 
-                      ? "Selecciona una especialidad primero" 
-                      : doctors.length === 0 
-                      ? "No hay médicos para esta especialidad" 
-                      : "Selecciona un doctor"
-                  } 
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {doctors.map((doctor) => (
-                  <SelectItem key={doctor.id} value={doctor.id}>
-                    {doctor.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </section>
-
-          {/* Step 4: Date Selection */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              4. Seleccionar Fecha
+              3. Seleccionar Fecha
             </Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -327,16 +257,16 @@ export default function NuevaCita() {
             </Popover>
           </section>
 
-          {/* Step 5: Time Slot Selection */}
+          {/* Step 4: Time Slot Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              5. Seleccionar Horario
+              4. Seleccionar Horario
             </Label>
             
-            {!selectedDoctorId || !selectedDate ? (
+            {!selectedDoctor || !selectedDate ? (
               <Alert>
                 <AlertDescription>
-                  Selecciona un doctor y una fecha para ver los horarios disponibles.
+                  Selecciona un médico y una fecha para ver los horarios disponibles.
                 </AlertDescription>
               </Alert>
             ) : isLoadingSlots ? (

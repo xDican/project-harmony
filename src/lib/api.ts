@@ -48,6 +48,7 @@ interface ApiModule {
   getSpecialties: () => Promise<Specialty[]>;
   getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
   getDoctors: () => Promise<Doctor[]>;
+  searchDoctors: (query: string) => Promise<Doctor[]>;
   getCurrentUserWithRole: () => Promise<CurrentUser | null>;
   getAdminMetrics?: () => Promise<any>;
 }
@@ -167,6 +168,14 @@ export async function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor
 export async function getDoctors(): Promise<Doctor[]> {
   const apiModule = await getApiModule();
   return await apiModule.getDoctors();
+}
+
+/**
+ * Search doctors by name or specialty
+ */
+export async function searchDoctors(query: string): Promise<Doctor[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.searchDoctors(query);
 }
 
 /**

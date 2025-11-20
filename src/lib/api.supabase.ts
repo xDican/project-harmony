@@ -376,6 +376,84 @@ export async function getDoctors(): Promise<Doctor[]> {
 }
 
 // --------------------------
+// 11b. searchDoctors
+// --------------------------
+export async function searchDoctors(query: string): Promise<Doctor[]> {
+  // Busca por nombre de doctor o nombre de especialidad
+  const { data, error } = await supabase
+    .from("doctors")
+    .select(`
+      *,
+      specialty:specialty_id (
+        id, name
+      )
+    `)
+    .or(`name.ilike.%${query}%`)
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Error searchDoctors:", error);
+    throw error;
+  }
+
+  // También buscar por nombre de especialidad
+  const { data: specialtyData, error: specialtyError } = await supabase
+    .from("specialties")
+    .select("id")
+    .ilike("name", `%${query}%`);
+
+  if (specialtyError) {
+    console.error("Error searching specialties:", specialtyError);
+  }
+
+  const specialtyIds = specialtyData?.map(s => s.id) || [];
+
+  // Si hay especialidades que coinciden, buscar doctores con esas especialidades
+  if (specialtyIds.length > 0) {
+    const { data: doctorsBySpecialty, error: doctorError } = await supabase
+      .from("doctors")
+      .select(`
+        *,
+        specialty:specialty_id (
+          id, name
+        )
+      `)
+      .in("specialty_id", specialtyIds)
+      .order("name", { ascending: true });
+
+    if (doctorError) {
+      console.error("Error searching doctors by specialty:", doctorError);
+    } else if (doctorsBySpecialty) {
+      // Combinar resultados y eliminar duplicados
+      const allDoctors = [...(data || []), ...doctorsBySpecialty];
+      const uniqueDoctors = Array.from(
+        new Map(allDoctors.map(d => [d.id, d])).values()
+      );
+      
+      return uniqueDoctors.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        email: row.email ?? undefined,
+        specialtyId: row.specialty_id,
+        specialtyName: row.specialty?.name,
+        createdAt: row.created_at,
+      }));
+    }
+  }
+
+  return (data as any[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    email: row.email ?? undefined,
+    specialtyId: row.specialty_id,
+    specialtyName: row.specialty?.name,
+    createdAt: row.created_at,
+  }));
+}
+
+// --------------------------
 // 12. getCurrentUserWithRole
 // --------------------------
 export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
