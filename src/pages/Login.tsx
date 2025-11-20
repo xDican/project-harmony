@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -18,6 +19,11 @@ export default function Login() {
   // Redirigir si el usuario ya está autenticado
   useEffect(() => {
     if (!userLoading && user) {
+      // Mostrar notificación con el rol del usuario
+      toast.info(`Login exitoso - Rol: ${user.role}`, {
+        description: `Usuario: ${user.email}`,
+        duration: 4000,
+      });
       navigate('/agenda-secretaria', { replace: true });
     }
   }, [user, userLoading, navigate]);
