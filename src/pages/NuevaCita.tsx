@@ -198,6 +198,20 @@ export default function NuevaCita() {
               onSelect={handlePatientSelect}
               onCreateNew={handleCreateNewPatient}
             />
+            
+            {selectedPatient && (
+              <Card className="mt-4 bg-primary/5 border-primary/20">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">{selectedPatient.name}</p>
+                      <p className="text-sm text-muted-foreground">{selectedPatient.phone}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </section>
 
           {/* Step 2: Doctor Selection */}
