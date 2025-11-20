@@ -3,18 +3,11 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings } from 'lucide-react';
+import { useCurrentUser } from '@/context/UserContext';
 
 interface MainLayoutProps {
   children: ReactNode;
 }
-
-const navigationItems = [
-  { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
-  { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
-  { to: '/pacientes', label: 'Pacientes', icon: Users },
-  { to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope },
-  { to: '/admin', label: 'Admin', icon: Settings },
-];
 
 /**
  * MainLayout - Responsive layout wrapper with navigation
@@ -22,23 +15,58 @@ const navigationItems = [
  */
 export default function MainLayout({ children }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { loading, isAdmin, isSecretary, isDoctor, isAdminOrSecretary } = useCurrentUser();
 
-  const NavigationLinks = ({ onClick }: { onClick?: () => void }) => (
-    <nav className="flex flex-col gap-2">
-      {navigationItems.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          activeClassName="bg-primary/10 text-primary font-medium"
-          onClick={onClick}
-        >
-          <item.icon className="h-5 w-5" />
-          <span>{item.label}</span>
-        </NavLink>
-      ))}
-    </nav>
-  );
+  // Define navigation items based on user role
+  const getNavigationItems = () => {
+    const items = [];
+
+    // Admin and Secretary can see: Agenda, Nueva Cita, Pacientes, Admin
+    if (isAdminOrSecretary) {
+      items.push(
+        { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
+        { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
+        { to: '/pacientes', label: 'Pacientes', icon: Users },
+        { to: '/admin', label: 'Admin', icon: Settings }
+      );
+    }
+
+    // Admin and Doctor can see: Agenda Médico
+    if (isAdmin || isDoctor) {
+      items.push({ to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope });
+    }
+
+    return items;
+  };
+
+  const navigationItems = getNavigationItems();
+
+  const NavigationLinks = ({ onClick }: { onClick?: () => void }) => {
+    if (loading) {
+      return (
+        <div className="flex flex-col gap-2 px-4">
+          <p className="text-sm text-muted-foreground">Cargando menú…</p>
+        </div>
+      );
+    }
+
+    return (
+      <nav className="flex flex-col gap-2">
+        {navigationItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            activeClassName="bg-primary/10 text-primary font-medium"
+            onClick={onClick}
+          >
+            <item.icon className="h-5 w-5" />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">

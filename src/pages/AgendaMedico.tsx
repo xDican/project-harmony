@@ -7,56 +7,72 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar, AlertCircle, Stethoscope } from 'lucide-react';
-import { doctors } from '@/lib/data';
-import { getTodayAppointmentsByDoctor } from '@/lib/api';
-import type { AppointmentWithDetails } from '@/lib/api';
+import { useCurrentUser } from '@/context/UserContext';
+import { useTodayAppointments } from '@/hooks/useTodayAppointments';
+import { useDoctors } from '@/hooks/useDoctors';
+import StatusBadge from '@/components/StatusBadge';
 
 /**
  * AgendaMedico - Doctor's daily agenda view
  * Shows appointments for a selected doctor for the current day
+ * Admin can view all doctors, Doctor can only view their own
  */
 export default function AgendaMedico() {
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
-  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
+  const { user, loading, isAdmin, isDoctor } = useCurrentUser();
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
+  
   // Get today's date in ISO format
   const today = new Date().toISOString().split('T')[0];
   const formattedDate = format(new Date(today + 'T00:00:00'), "EEEE, d 'de' MMMM 'de' yyyy", {
     locale: es,
   });
 
-  // Fetch appointments when doctor is selected
-  useEffect(() => {
-    if (!selectedDoctorId) {
-      setAppointments([]);
-      return;
-    }
+  // Fetch doctors list (only for admin)
+  const { data: doctors, isLoading: loadingDoctors } = useDoctors();
 
-    setIsLoading(true);
-    setError(null);
+  // Determine the doctorId to use for fetching appointments
+  const doctorIdToFetch = isDoctor 
+    ? user?.doctorId || undefined 
+    : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
 
-    getTodayAppointmentsByDoctor(selectedDoctorId, today)
-      .then(data => {
-        setAppointments(data);
-      })
-      .catch(err => {
-        console.error('Error loading appointments:', err);
-        setError(err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [selectedDoctorId, today]);
+  // Fetch appointments based on role and selection
+  const { data: appointments, isLoading: loadingAppointments } = useTodayAppointments({
+    doctorId: doctorIdToFetch,
+  });
 
-  // Get selected doctor name
-  const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+  // Loading state
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="container mx-auto p-6 max-w-4xl">
+          <p className="text-muted-foreground">Cargando…</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Permission check
+  if (!isAdmin && !isDoctor) {
+    return (
+      <MainLayout>
+        <div className="container mx-auto p-6 max-w-4xl">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Acceso denegado</AlertTitle>
+            <AlertDescription>
+              No tienes permisos para ver esta página.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
-      <div className="container mx-auto p-6 max-w-4xl">
+      <div className="container mx-auto p-6 max-w-5xl">
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2">Agenda del Médico</h1>
@@ -66,41 +82,38 @@ export default function AgendaMedico() {
           </div>
         </div>
 
-        {/* Doctor Selection */}
-        <div className="mb-8">
-          <Label className="text-base font-semibold text-foreground mb-3 block">
-            Médico
-          </Label>
-          <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Selecciona un médico" />
-            </SelectTrigger>
-            <SelectContent>
-              {doctors.map((doctor) => (
-                <SelectItem key={doctor.id} value={doctor.id}>
+        {/* Doctor Selection (only for admin) */}
+        {isAdmin && (
+          <div className="mb-8">
+            <Label className="text-base font-semibold text-foreground mb-3 block">
+              Médico
+            </Label>
+            <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+              <SelectTrigger className="w-full max-w-md">
+                <SelectValue placeholder="Selecciona un médico" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
                   <div className="flex items-center gap-2">
                     <Stethoscope className="h-4 w-4" />
-                    {doctor.name}
+                    Todos los médicos
                   </div>
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* No Doctor Selected State */}
-        {!selectedDoctorId && (
-          <Alert>
-            <Stethoscope className="h-4 w-4" />
-            <AlertTitle>Selecciona un médico</AlertTitle>
-            <AlertDescription>
-              Selecciona un médico del menú desplegable para ver su agenda de hoy.
-            </AlertDescription>
-          </Alert>
+                {doctors.map((doctor) => (
+                  <SelectItem key={doctor.id} value={doctor.id}>
+                    <div className="flex items-center gap-2">
+                      <Stethoscope className="h-4 w-4" />
+                      {doctor.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         {/* Loading State */}
-        {isLoading && selectedDoctorId && (
+        {(loadingAppointments || loadingDoctors) && (
           <div className="space-y-4">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
@@ -108,45 +121,52 @@ export default function AgendaMedico() {
           </div>
         )}
 
-        {/* Error State */}
-        {error && !isLoading && selectedDoctorId && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>
-              No se pudieron cargar las citas. Por favor, intenta nuevamente.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && !error && selectedDoctorId && appointments.length === 0 && (
-          <Alert>
-            <Calendar className="h-4 w-4" />
-            <AlertTitle>Sin citas programadas</AlertTitle>
-            <AlertDescription>
-              {selectedDoctor?.name} no tiene citas programadas para hoy.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Appointments List */}
-        {!isLoading && !error && selectedDoctorId && appointments.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-muted-foreground">
-                {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'} programadas
-              </p>
-              {selectedDoctor && (
-                <p className="text-sm font-medium text-foreground">
-                  {selectedDoctor.name}
-                </p>
-              )}
-            </div>
-            {appointments.map((appointment) => (
-              <AppointmentRow key={appointment.id} appointment={appointment} />
-            ))}
-          </div>
+        {/* Appointments Table */}
+        {!loadingAppointments && !loadingDoctors && (
+          <>
+            {appointments.length === 0 ? (
+              <Alert>
+                <Calendar className="h-4 w-4" />
+                <AlertTitle>No hay citas programadas</AlertTitle>
+                <AlertDescription>
+                  No se encontraron citas para hoy.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Hora</TableHead>
+                      <TableHead>Paciente</TableHead>
+                      {isAdmin && <TableHead>Médico</TableHead>}
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Notas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {appointments.map((appointment) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell className="font-medium">
+                          {appointment.time}
+                        </TableCell>
+                        <TableCell>{appointment.patient.name}</TableCell>
+                        {isAdmin && (
+                          <TableCell>{appointment.doctor.name}</TableCell>
+                        )}
+                        <TableCell>
+                          <StatusBadge status={appointment.status} />
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {appointment.notes || '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
         )}
       </div>
     </MainLayout>
