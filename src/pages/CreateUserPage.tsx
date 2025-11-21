@@ -20,6 +20,7 @@ export default function CreateUserPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole | ''>('');
   const [specialtyId, setSpecialtyId] = useState('');
+  const [prefix, setPrefix] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
@@ -60,6 +61,11 @@ export default function CreateUserPage() {
       return;
     }
 
+    if (role === 'doctor' && !prefix) {
+      setError('El prefijo es obligatorio para el rol de doctor');
+      return;
+    }
+
     if (role === 'doctor' && !fullName) {
       setError('El nombre es obligatorio para el rol de doctor');
       return;
@@ -78,7 +84,7 @@ export default function CreateUserPage() {
         password,
         role,
         specialtyId: role === 'doctor' ? specialtyId : undefined,
-        fullName: role === 'doctor' ? fullName : undefined,
+        fullName: role === 'doctor' ? `${prefix} ${fullName}` : undefined,
         phone: role === 'doctor' ? phone : undefined,
       });
 
@@ -89,6 +95,7 @@ export default function CreateUserPage() {
       setPassword('');
       setRole('');
       setSpecialtyId('');
+      setPrefix('');
       setFullName('');
       setPhone('');
 
@@ -170,6 +177,9 @@ export default function CreateUserPage() {
                     setRole(value as UserRole);
                     if (value !== 'doctor') {
                       setSpecialtyId('');
+                      setPrefix('');
+                      setFullName('');
+                      setPhone('');
                     }
                   }}
                   disabled={loading}
@@ -188,13 +198,30 @@ export default function CreateUserPage() {
               {role === 'doctor' && (
                 <>
                   <div className="space-y-2">
+                    <Label htmlFor="prefix">Prefijo *</Label>
+                    <Select
+                      value={prefix}
+                      onValueChange={setPrefix}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="prefix">
+                        <SelectValue placeholder="Selecciona un prefijo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="el Dr.">el Dr.</SelectItem>
+                        <SelectItem value="la Dra.">la Dra.</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="fullName">Nombre completo *</Label>
                     <Input
                       id="fullName"
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Dr. Juan Pérez"
+                      placeholder="Juan Pérez"
                       disabled={loading}
                     />
                   </div>
