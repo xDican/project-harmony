@@ -31,6 +31,11 @@ export interface UserWithRelations {
     specialtyId: string | null;
     specialtyName?: string;
   };
+  secretary?: {
+    id: string;
+    name: string;
+    phone: string | null;
+  };
 }
 
 // Determine which backend to use based on environment variable
