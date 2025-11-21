@@ -682,21 +682,34 @@ export async function updateUser(
     return { success: false, error: 'Usuario no encontrado' };
   }
 
-  // If user is a doctor, update the doctor record
+  // If user is a doctor, update via edge function
   if (userData.role === 'doctor' && userData.doctor_id) {
-    const updateData: any = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.specialtyId !== undefined) updateData.specialty_id = data.specialtyId;
+    try {
+      const { data: updateResult, error: functionError } = await supabase.functions.invoke('update-doctor', {
+        body: {
+          doctorId: userData.doctor_id,
+          name: data.name,
+          phone: data.phone,
+          specialtyId: data.specialtyId,
+        },
+      });
 
-    const { error: doctorError } = await supabase
-      .from('doctors')
-      .update(updateData)
-      .eq('id', userData.doctor_id);
+      if (functionError) {
+        console.error('[updateUser] Error calling update-doctor:', functionError);
+        return { success: false, error: functionError.message || 'Error al actualizar el doctor' };
+      }
 
-    if (doctorError) {
-      console.error('[updateUser] Error updating doctor:', doctorError);
-      return { success: false, error: 'Error al actualizar el doctor' };
+      if (updateResult?.error) {
+        console.error('[updateUser] Error from update-doctor:', updateResult.error);
+        return { success: false, error: updateResult.error };
+      }
+
+      if (!updateResult?.success) {
+        return { success: false, error: 'Error al actualizar el doctor' };
+      }
+    } catch (err: any) {
+      console.error('[updateUser] Exception calling update-doctor:', err);
+      return { success: false, error: err.message || 'Error al actualizar el doctor' };
     }
   }
 
