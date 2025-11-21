@@ -13,7 +13,9 @@
 | Página          | Pacientes            | `pages/Pacientes.tsx`           | Listado de pacientes + buscador                               |
 | Página          | Agenda Médico        | `pages/AgendaMedico.tsx`        | Citas del día filtradas por médico                            |
 | Página          | Admin Dashboard      | `pages/AdminDashboard.tsx`      | Métricas globales (dummy)                                     |
-| Página          | Gestión de Usuarios  | `pages/AdminUsuarios.tsx`       | Formulario para crear usuarios del sistema (solo admin)       |
+| Página          | Crear Usuario        | `pages/CreateUserPage.tsx`      | Formulario para crear usuarios del sistema (solo admin)       |
+| Página          | Lista de Usuarios    | `pages/UsersList.tsx`           | Listado y gestión de todos los usuarios del sistema           |
+| Página          | Editar Usuario       | `pages/EditUserPage.tsx`        | Formulario para editar información de usuarios existentes     |
 | Página          | Página 404           | `pages/NotFound.tsx`            | Página de error/en construcción para rutas no implementadas   |
 | Componente      | MainLayout           | `components/MainLayout.tsx`     | Layout + navegación principal (role-based)                    |
 | Componente      | PatientSearch        | `components/PatientSearch.tsx`  | Buscar/crear paciente inline                                  |
@@ -31,6 +33,7 @@
 | Edge Function   | get-available-slots  | `supabase/functions/get-available-slots/index.ts` | Calcula slots disponibles desde BD      |
 | Edge Function   | create-appointment   | `supabase/functions/create-appointment/index.ts` | Crea citas validando disponibilidad      |
 | Edge Function   | create-user-with-role| `supabase/functions/create-user-with-role/index.ts` | Crea usuarios con roles específicos  |
+| Edge Function   | update-doctor        | `supabase/functions/update-doctor/index.ts` | Actualiza información de doctores (solo admins)  |
 | Tipos           | Appointment          | `types/appointment.ts`          | Modelo de cita                                                |
 | Tipos           | Patient              | `types/patient.ts`              | Modelo de paciente                                            |
 | Tipos           | Doctor               | `types/doctor.ts`               | Médico + especialidad                                         |
@@ -202,10 +205,11 @@ export async function getAvailableSlots(params: { doctorId: string; date: string
 - Breakdown por estado de cita
 - Solo accesible para admin
 
-## 8.6 Gestión de Usuarios (`pages/AdminUsuarios.tsx`)
+## 8.6 Crear Usuario (`pages/CreateUserPage.tsx`)
 - Formulario para crear usuarios del sistema
 - Campos: email, password, role (admin/secretary/doctor)
 - Si role === 'doctor': 
+  - Dropdown para seleccionar prefijo (el Dr. / la Dra.)
   - Dropdown para seleccionar especialidad médica
   - Campo de texto: Nombre del doctor (fullName)
   - Campo de texto: Teléfono del doctor (phone)
@@ -214,6 +218,34 @@ export async function getAvailableSlots(params: { doctorId: string; date: string
 - Validación de campos requeridos (incluyendo fullName y phone para doctores)
 - Mensajes de éxito/error con estados visuales
 - Deshabilita botón durante envío y limpia formulario tras éxito
+
+## 8.7 Lista de Usuarios (`pages/UsersList.tsx`)
+- Tabla con todos los usuarios del sistema
+- Columnas: Nombre/Email, Rol (con badge coloreado), Especialidad (solo doctores), Teléfono
+- Buscador por nombre o email
+- Filtro por rol: Todos, Doctores, Secretarias, Administradores
+- Botón "Crear usuario" que navega a `/admin/users/create`
+- Acciones por usuario:
+  - **Editar**: Navega a `/admin/users/:id/edit`
+  - **Configurar horarios** (solo doctores): Navega a `/admin/doctors/:doctorId/schedule`
+- Llamada a `getAllUsers()` del API que trae joins con doctors y specialties
+- Solo accesible para admin
+
+## 8.8 Editar Usuario (`pages/EditUserPage.tsx`)
+- Formulario para editar información de usuarios existentes
+- Campos de solo lectura: email, role
+- Campos editables (según rol):
+  - **Doctor**: nombre, teléfono, especialidad
+  - **Secretary**: nombre, teléfono
+  - **Admin**: sin campos editables adicionales
+- Botón "Configurar horarios" (solo para doctores) → `/admin/doctors/:doctorId/schedule`
+- **Actualización segura**:
+  - Llama a `updateUser(userId, data)` del API
+  - Para doctores: invoca Edge Function `update-doctor` con JWT del usuario
+  - La Edge Function usa el JWT (NO service role key) para validar que es admin
+  - Política RLS `doctors_update_admin` verifica permisos
+- Botones: "Guardar cambios" y "Cancelar" (vuelve a lista)
+- Solo accesible para admin
 
 ---
 
@@ -341,12 +373,14 @@ Todas las rutas (excepto `/login`) están protegidas y redirigen según el rol:
 /agenda-medico          → AgendaMedico (doctor, admin)
 
 // Rutas de Admin (solo admin)
-/admin                  → AdminDashboard (admin) - Resumen
-/admin/users            → AdminUsuarios (admin) - Gestión de usuarios
-/admin/specialties      → NotFound (admin) - En construcción
-/admin/reports          → NotFound (admin) - En construcción
-/admin/files            → NotFound (admin) - En construcción
-/admin/settings         → NotFound (admin) - En construcción
+/admin                       → AdminDashboard (admin) - Resumen
+/admin/users                 → UsersList (admin) - Lista de usuarios
+/admin/users/create          → CreateUserPage (admin) - Crear usuario
+/admin/users/:id/edit        → EditUserPage (admin) - Editar usuario
+/admin/specialties           → NotFound (admin) - En construcción
+/admin/reports               → NotFound (admin) - En construcción
+/admin/files                 → NotFound (admin) - En construcción
+/admin/settings              → NotFound (admin) - En construcción
 
 // Catch-all
 *                       → NotFound (404)
@@ -467,6 +501,7 @@ return data?.slots || [];
   specialtyId?: string;  // Requerido si role='doctor'
   fullName?: string;     // Requerido si role='doctor'
   phone?: string;        // Requerido si role='doctor'
+  prefix?: string;       // Opcional para doctor (ej: "el Dr." o "la Dra.")
 }
 ```
 
@@ -477,9 +512,80 @@ return data?.slots || [];
 4. Crea registro en tabla `users` vinculando con doctor_id si aplica
 5. Retorna éxito o error
 
+## 12.4 update-doctor
+
+**Ubicación**: `supabase/functions/update-doctor/index.ts`
+
+**Propósito**: Actualizar información de un doctor existente.
+
+**⚠️ IMPORTANTE - Seguridad**:
+- **NO usa SERVICE_ROLE_KEY** - usa el JWT del usuario autenticado
+- Recibe Authorization header con Bearer token del usuario
+- Crea cliente Supabase con ANON_KEY + JWT del usuario
+- La política RLS `doctors_update_admin` valida que el usuario es admin
+- **NUNCA exponer SERVICE_ROLE_KEY en el frontend**
+
+**Input** (POST JSON):
+```typescript
+{
+  doctorId: string;        // UUID del doctor (también acepta doctor_id)
+  name?: string;           // Nombre actualizado
+  phone?: string;          // Teléfono actualizado
+  specialtyId?: string;    // UUID de especialidad actualizada
+}
+```
+
+**Proceso**:
+1. Valida Authorization header (JWT requerido)
+2. Crea cliente Supabase con ANON_KEY + JWT del usuario
+3. Valida que `doctorId` esté presente
+4. Construye objeto de actualización solo con campos provistos
+5. Ejecuta UPDATE en tabla `doctors`
+6. La política RLS verifica que `current_user_role() = 'admin'`
+7. Retorna doctor actualizado o error
+
+**Output**:
+```typescript
+{
+  success: boolean;
+  doctor?: Doctor;  // Doctor actualizado si éxito
+  error?: string;   // Mensaje de error si falla
+}
+```
+
+**Políticas RLS relacionadas**:
+- `doctors_update_admin`: Permite UPDATE solo si `current_user_role() = 'admin'`
+
+**Uso desde frontend**:
+```typescript
+// En api.supabase.ts
+const { data, error } = await supabase.functions.invoke('update-doctor', {
+  body: {
+    doctorId: userData.doctor_id,
+    name: data.name,
+    phone: data.phone,
+    specialtyId: data.specialtyId,
+  },
+});
+```
+
 ---
 
 # 📝 13. Changelog (para sincronización interna)
+
+- **2025-11-21**  
+  - **Gestión completa de usuarios con edición segura**:
+    - Nueva página `UsersList.tsx` en `/admin/users` con tabla de usuarios
+    - Buscador y filtro por rol (All, Doctors, Secretaries, Admins)
+    - Botones de acción: Editar y Configurar horarios (para doctores)
+    - Nueva página `EditUserPage.tsx` en `/admin/users/:id/edit`
+    - Formulario de edición con campos según rol del usuario
+    - Nueva Edge Function `update-doctor` para actualizar doctores
+    - **Seguridad reforzada**: Edge function usa JWT del usuario (NO service role key)
+    - Política RLS `doctors_update_admin` valida permisos en servidor
+    - Flujo completo: Frontend → Edge Function (con JWT) → RLS valida → UPDATE
+    - `getAllUsers()` y `getUserById()` agregados al API
+    - Función `updateUser()` en API delega a Edge Function para doctores
 
 - **2025-11-20**  
   - **Integración completa de Edge Functions en Nueva Cita**:
