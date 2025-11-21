@@ -123,14 +123,15 @@ export default function DoctorSchedulePage() {
               {/* Cabecera del día */}
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-medium text-foreground">{label}</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleAddSlot(key)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Añadir horario
-                </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleAddSlot(key)}
+                disabled={schedule[key].length >= 6}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Añadir horario
+              </Button>
               </div>
 
               {/* Slots del día */}
