@@ -29,7 +29,10 @@ const StatusBadge = ({ status }: StatusBadgeProps) => {
     },
   };
 
-  const config = statusConfig[status];
+  const config = statusConfig[status] || {
+    label: status || 'Desconocido',
+    variant: 'outline' as const
+  };
   
   return (
     <Badge variant={config.variant} className="whitespace-nowrap">
