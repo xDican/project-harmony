@@ -16,11 +16,11 @@ export type Database = {
     Tables: {
       appointments: {
         Row: {
+          appointment_at: string | null
           confirmation_message_sent: boolean
           created_at: string | null
           date: string
           doctor_id: string
-          hours_until_appointment: number | null
           id: string
           notes: string | null
           patient_id: string
@@ -29,11 +29,11 @@ export type Database = {
           time: string
         }
         Insert: {
+          appointment_at?: string | null
           confirmation_message_sent?: boolean
           created_at?: string | null
           date: string
           doctor_id: string
-          hours_until_appointment?: number | null
           id?: string
           notes?: string | null
           patient_id: string
@@ -42,11 +42,11 @@ export type Database = {
           time: string
         }
         Update: {
+          appointment_at?: string | null
           confirmation_message_sent?: boolean
           created_at?: string | null
           date?: string
           doctor_id?: string
-          hours_until_appointment?: number | null
           id?: string
           notes?: string | null
           patient_id?: string
@@ -143,6 +143,7 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          id_last_appointment: string | null
           name: string
           notes: string | null
           phone: string | null
@@ -151,6 +152,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          id_last_appointment?: string | null
           name: string
           notes?: string | null
           phone?: string | null
@@ -159,6 +161,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          id_last_appointment?: string | null
           name?: string
           notes?: string | null
           phone?: string | null

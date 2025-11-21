@@ -18,6 +18,21 @@ import type { Patient } from '@/types/patient';
 import type { Doctor, Specialty } from '@/types/doctor';
 import type { CurrentUser } from '@/types/user';
 
+// User with relations for admin user management
+export interface UserWithRelations {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  doctor?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    specialtyId: string | null;
+    specialtyName?: string;
+  };
+}
+
 // Determine which backend to use based on environment variable
 const USE_DUMMY_DATA = import.meta.env.VITE_USE_DUMMY_DATA === 'false';
 
@@ -58,6 +73,7 @@ interface ApiModule {
     fullName?: string;
     phone?: string;
   }) => Promise<{ success: boolean; user?: any; error?: string }>;
+  getAllUsers: () => Promise<UserWithRelations[]>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -207,6 +223,14 @@ export async function createUserWithRole(input: {
 }): Promise<{ success: boolean; user?: any; error?: string }> {
   const apiModule = await getApiModule();
   return await apiModule.createUserWithRole(input);
+}
+
+/**
+ * Get all users with their related doctor and specialty information
+ */
+export async function getAllUsers(): Promise<UserWithRelations[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getAllUsers();
 }
 
 // Re-export AdminMetrics type from dummy API (for backward compatibility)
