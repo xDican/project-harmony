@@ -80,7 +80,7 @@ export default function CreateUserPage() {
 
     try {
       // Remove "el " or "la " from prefix and concatenate with name
-      const formattedName = role === "doctor" ? `${prefix.replace(/^(el|la)\s+/, "")} ${fullName}` : undefined;
+      const formattedName = role === "doctor" ? `${fullName}` : undefined;
 
       await createUserWithRole({
         email,
