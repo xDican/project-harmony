@@ -58,6 +58,66 @@ async function fetchAppointmentWithRelations(row: any): Promise<AppointmentWithD
 }
 
 // --------------------------
+// User with relations interface
+// --------------------------
+export interface UserWithRelations {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  doctor?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    specialtyId: string | null;
+    specialtyName?: string;
+  };
+}
+
+// --------------------------
+// Get all users with doctor and specialty info
+// --------------------------
+export async function getAllUsers(): Promise<UserWithRelations[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select(`
+      id,
+      email,
+      role,
+      created_at,
+      doctor:doctor_id (
+        id,
+        name,
+        phone,
+        specialty_id,
+        specialty:specialty_id (
+          name
+        )
+      )
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error getAllUsers:", error);
+    throw error;
+  }
+
+  return (data as any[]).map((user) => ({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    createdAt: user.created_at,
+    doctor: user.doctor ? {
+      id: user.doctor.id,
+      name: user.doctor.name,
+      phone: user.doctor.phone,
+      specialtyId: user.doctor.specialty_id,
+      specialtyName: user.doctor.specialty?.name,
+    } : undefined,
+  }));
+}
+
+// --------------------------
 // 1. getTodayAppointments
 // --------------------------
 export async function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {

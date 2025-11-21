@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '@/context/UserContext';
 import MainLayout from '@/components/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -10,9 +11,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createUserWithRole, getSpecialties } from '@/lib/api';
 import type { Specialty } from '@/types/doctor';
 import type { UserRole } from '@/types/user';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 
-export default function AdminUsuarios() {
+export default function CreateUserPage() {
+  const navigate = useNavigate();
   const { isAdmin } = useCurrentUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -89,6 +91,11 @@ export default function AdminUsuarios() {
       setSpecialtyId('');
       setFullName('');
       setPhone('');
+
+      // Redirect after 1.5 seconds
+      setTimeout(() => {
+        navigate('/admin/users');
+      }, 1500);
     } catch (err: any) {
       setError(err.message || 'Error al crear el usuario');
     } finally {
@@ -113,9 +120,18 @@ export default function AdminUsuarios() {
   return (
     <MainLayout>
       <div className="p-6 max-w-2xl mx-auto">
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/admin/users')}
+          className="mb-4"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Volver a usuarios
+        </Button>
+
         <Card>
           <CardHeader>
-            <CardTitle>Gestión de Usuarios</CardTitle>
+            <CardTitle>Crear Usuario</CardTitle>
             <CardDescription>
               Crear nuevos usuarios del sistema
             </CardDescription>

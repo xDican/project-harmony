@@ -3,6 +3,7 @@ import { Patient } from '@/types/patient';
 import { Doctor, Specialty } from '@/types/doctor';
 import { CurrentUser } from '@/types/user';
 import { appointments, patients, doctors, doctorSchedules, specialties } from './data';
+import type { UserWithRelations } from './api';
 
 /**
  * Create a new patient and add to in-memory data
@@ -334,4 +335,46 @@ export function createUserWithRole(input: {
       role: input.role,
     }
   });
+}
+
+/**
+ * Get all users with their related doctor and specialty information
+ * In dummy mode, returns mock user data
+ */
+export function getAllUsers(): Promise<UserWithRelations[]> {
+  // Return mock users based on existing doctors
+  const mockUsers: UserWithRelations[] = doctors.map((doctor) => {
+    const specialty = specialties.find(s => s.id === doctor.specialtyId);
+    return {
+      id: `user-${doctor.id}`,
+      email: `${doctor.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+      role: 'doctor',
+      createdAt: doctor.createdAt || new Date().toISOString(),
+      doctor: {
+        id: doctor.id,
+        name: doctor.name,
+        phone: doctor.phone || null,
+        specialtyId: doctor.specialtyId || null,
+        specialtyName: specialty?.name,
+      },
+    };
+  });
+
+  // Add some admin and secretary mock users
+  mockUsers.push(
+    {
+      id: 'user-admin-1',
+      email: 'admin@example.com',
+      role: 'admin',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'user-secretary-1',
+      email: 'secretaria@example.com',
+      role: 'secretary',
+      createdAt: new Date().toISOString(),
+    }
+  );
+
+  return Promise.resolve(mockUsers);
 }

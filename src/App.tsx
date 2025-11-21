@@ -11,7 +11,8 @@ import NuevaCita from "./pages/NuevaCita";
 import Pacientes from "./pages/Pacientes";
 import AgendaMedico from "./pages/AgendaMedico";
 import AdminDashboard from "./pages/AdminDashboard";
-import AdminUsuarios from "./pages/AdminUsuarios";
+import UsersList from "./pages/UsersList";
+import CreateUserPage from "./pages/CreateUserPage";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -152,7 +153,26 @@ const App = () => (
             } />
             <Route path="/admin/users" element={
               <RoleBasedRoute allowedRoles={['admin']}>
-                <AdminUsuarios />
+                <UsersList />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/users/create" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <CreateUserPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/users/:userId/edit" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <MainLayout>
+                  <NotFound />
+                </MainLayout>
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/doctors/:doctorId/schedule" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <MainLayout>
+                  <NotFound />
+                </MainLayout>
               </RoleBasedRoute>
             } />
             <Route path="/admin/specialties" element={
