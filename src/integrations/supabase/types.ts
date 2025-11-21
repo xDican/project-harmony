@@ -171,6 +171,30 @@ export type Database = {
         }
         Relationships: []
       }
+      secretaries: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
       specialties: {
         Row: {
           created_at: string | null
@@ -199,6 +223,7 @@ export type Database = {
           email: string
           id: string
           role: string
+          secretary_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -206,6 +231,7 @@ export type Database = {
           email: string
           id?: string
           role: string
+          secretary_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -213,6 +239,7 @@ export type Database = {
           email?: string
           id?: string
           role?: string
+          secretary_id?: string | null
         }
         Relationships: [
           {
@@ -220,6 +247,13 @@ export type Database = {
             columns: ["doctor_id"]
             isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_secretary_id_fkey"
+            columns: ["secretary_id"]
+            isOneToOne: false
+            referencedRelation: "secretaries"
             referencedColumns: ["id"]
           },
         ]

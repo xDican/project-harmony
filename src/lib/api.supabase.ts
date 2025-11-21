@@ -72,6 +72,11 @@ export interface UserWithRelations {
     specialtyId: string | null;
     specialtyName?: string;
   };
+  secretary?: {
+    id: string;
+    name: string;
+    phone: string | null;
+  };
 }
 
 // --------------------------
@@ -93,6 +98,11 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
         specialty:specialty_id (
           name
         )
+      ),
+      secretary:secretary_id (
+        id,
+        name,
+        phone
       )
     `)
     .order("created_at", { ascending: false });
@@ -113,6 +123,11 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
       phone: user.doctor.phone,
       specialtyId: user.doctor.specialty_id,
       specialtyName: user.doctor.specialty?.name,
+    } : undefined,
+    secretary: user.secretary ? {
+      id: user.secretary.id,
+      name: user.secretary.name,
+      phone: user.secretary.phone,
     } : undefined,
   }));
 }
@@ -598,6 +613,11 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
         specialty:specialty_id (
           name
         )
+      ),
+      secretary:secretary_id (
+        id,
+        name,
+        phone
       )
     `)
     .eq('id', userId)
@@ -614,6 +634,7 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
 
   // Handle doctor data - it may come as array or null
   const doctorData: any = Array.isArray(data.doctor) ? data.doctor[0] : data.doctor;
+  const secretaryData: any = Array.isArray(data.secretary) ? data.secretary[0] : data.secretary;
   
   // Transform the data to match UserWithRelations interface
   return {
@@ -630,6 +651,11 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
         ? doctorData.specialty[0].name 
         : undefined,
     } : undefined,
+    secretary: secretaryData ? {
+      id: secretaryData.id,
+      name: secretaryData.name,
+      phone: secretaryData.phone,
+    } : undefined,
   };
 }
 
@@ -644,10 +670,10 @@ export async function updateUser(
     specialtyId?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  // First, get the user to check if they have a doctor record
+  // First, get the user to check their role and related IDs
   const { data: userData, error: userError } = await supabase
     .from('users')
-    .select('role, doctor_id')
+    .select('role, doctor_id, secretary_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -673,6 +699,26 @@ export async function updateUser(
       return { success: false, error: 'Error al actualizar el doctor' };
     }
   }
+
+  // If user is a secretary, update the secretary record
+  if (userData.role === 'secretary' && userData.secretary_id) {
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+
+    const { error: secretaryError } = await supabase
+      .from('secretaries')
+      .update(updateData)
+      .eq('id', userData.secretary_id);
+
+    if (secretaryError) {
+      console.error('[updateUser] Error updating secretary:', secretaryError);
+      return { success: false, error: 'Error al actualizar la secretaria' };
+    }
+  }
+
+  // For admin role, we don't have a separate table yet
+  // Just return success for now
 
   return { success: true };
 }

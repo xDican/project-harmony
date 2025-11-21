@@ -56,11 +56,14 @@ export default function EditUserPage() {
         setUser(userData);
         setSpecialties(specialtiesData);
 
-        // Pre-fill form if user is a doctor
+        // Pre-fill form based on role
         if (userData.role === 'doctor' && userData.doctor) {
           setFullName(userData.doctor.name || '');
           setPhone(userData.doctor.phone || '');
           setSpecialtyId(userData.doctor.specialtyId || '');
+        } else if (userData.role === 'secretary' && userData.secretary) {
+          setFullName(userData.secretary.name || '');
+          setPhone(userData.secretary.phone || '');
         }
       } catch (err: any) {
         console.error('Error loading user:', err);
@@ -80,7 +83,7 @@ export default function EditUserPage() {
 
     if (!user) return;
 
-    // Validation for doctors
+    // Validation based on role
     if (user.role === 'doctor') {
       if (!fullName.trim()) {
         setError('El nombre completo es obligatorio');
@@ -92,6 +95,15 @@ export default function EditUserPage() {
       }
       if (!specialtyId) {
         setError('La especialidad es obligatoria');
+        return;
+      }
+    } else if (user.role === 'secretary') {
+      if (!fullName.trim()) {
+        setError('El nombre completo es obligatorio');
+        return;
+      }
+      if (!phone.trim()) {
+        setError('El teléfono es obligatorio');
         return;
       }
     }
