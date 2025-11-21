@@ -1,33 +1,33 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useCurrentUser } from '@/context/UserContext';
-import MainLayout from '@/components/MainLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { createUserWithRole, getSpecialties } from '@/lib/api';
-import type { Specialty } from '@/types/doctor';
-import type { UserRole } from '@/types/user';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useCurrentUser } from "@/context/UserContext";
+import MainLayout from "@/components/MainLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createUserWithRole, getSpecialties } from "@/lib/api";
+import type { Specialty } from "@/types/doctor";
+import type { UserRole } from "@/types/user";
+import { Loader2, ArrowLeft } from "lucide-react";
 
 export default function CreateUserPage() {
   const navigate = useNavigate();
   const { isAdmin } = useCurrentUser();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole | ''>('');
-  const [specialtyId, setSpecialtyId] = useState('');
-  const [prefix, setPrefix] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole | "">("");
+  const [specialtyId, setSpecialtyId] = useState("");
+  const [prefix, setPrefix] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSpecialties, setLoadingSpecialties] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // Load specialties on mount
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function CreateUserPage() {
         const data = await getSpecialties();
         setSpecialties(data);
       } catch (err) {
-        console.error('Error loading specialties:', err);
+        console.error("Error loading specialties:", err);
       } finally {
         setLoadingSpecialties(false);
       }
@@ -47,32 +47,32 @@ export default function CreateUserPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     // Validation
     if (!email || !password || !role) {
-      setError('Email, contraseña y rol son obligatorios');
+      setError("Email, contraseña y rol son obligatorios");
       return;
     }
 
-    if (role === 'doctor' && !specialtyId) {
-      setError('La especialidad es obligatoria para el rol de doctor');
+    if (role === "doctor" && !specialtyId) {
+      setError("La especialidad es obligatoria para el rol de doctor");
       return;
     }
 
-    if (role === 'doctor' && !prefix) {
-      setError('El prefijo es obligatorio para el rol de doctor');
+    if (role === "doctor" && !prefix) {
+      setError("El prefijo es obligatorio para el rol de doctor");
       return;
     }
 
-    if (role === 'doctor' && !fullName) {
-      setError('El nombre es obligatorio para el rol de doctor');
+    if (role === "doctor" && !fullName) {
+      setError("El nombre es obligatorio para el rol de doctor");
       return;
     }
 
-    if (role === 'doctor' && !phone) {
-      setError('El teléfono es obligatorio para el rol de doctor');
+    if (role === "doctor" && !phone) {
+      setError("El teléfono es obligatorio para el rol de doctor");
       return;
     }
 
@@ -80,37 +80,35 @@ export default function CreateUserPage() {
 
     try {
       // Remove "el " or "la " from prefix and concatenate with name
-      const formattedName = role === 'doctor' 
-        ? `${prefix.replace(/^(el|la)\s+/, '')}${fullName}`
-        : undefined;
+      const formattedName = role === "doctor" ? `${prefix.replace(/^(el|la)\s+/, "")} ${fullName}` : undefined;
 
       await createUserWithRole({
         email,
         password,
         role,
-        specialtyId: role === 'doctor' ? specialtyId : undefined,
+        specialtyId: role === "doctor" ? specialtyId : undefined,
         fullName: formattedName,
-        phone: role === 'doctor' ? phone : undefined,
-        prefix: role === 'doctor' ? prefix : undefined,
+        phone: role === "doctor" ? phone : undefined,
+        prefix: role === "doctor" ? prefix : undefined,
       });
 
-      setSuccess('Usuario creado exitosamente');
-      
+      setSuccess("Usuario creado exitosamente");
+
       // Clear form
-      setEmail('');
-      setPassword('');
-      setRole('');
-      setSpecialtyId('');
-      setPrefix('');
-      setFullName('');
-      setPhone('');
+      setEmail("");
+      setPassword("");
+      setRole("");
+      setSpecialtyId("");
+      setPrefix("");
+      setFullName("");
+      setPhone("");
 
       // Redirect after 1.5 seconds
       setTimeout(() => {
-        navigate('/admin/users');
+        navigate("/admin/users");
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Error al crear el usuario');
+      setError(err.message || "Error al crear el usuario");
     } finally {
       setLoading(false);
     }
@@ -121,9 +119,7 @@ export default function CreateUserPage() {
       <MainLayout>
         <div className="p-6">
           <Alert variant="destructive">
-            <AlertDescription>
-              No tienes permisos para acceder a esta página
-            </AlertDescription>
+            <AlertDescription>No tienes permisos para acceder a esta página</AlertDescription>
           </Alert>
         </div>
       </MainLayout>
@@ -133,11 +129,7 @@ export default function CreateUserPage() {
   return (
     <MainLayout>
       <div className="p-6 max-w-2xl mx-auto">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/admin/users')}
-          className="mb-4"
-        >
+        <Button variant="ghost" onClick={() => navigate("/admin/users")} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver a usuarios
         </Button>
@@ -145,9 +137,7 @@ export default function CreateUserPage() {
         <Card>
           <CardHeader>
             <CardTitle>Crear Usuario</CardTitle>
-            <CardDescription>
-              Crear nuevos usuarios del sistema
-            </CardDescription>
+            <CardDescription>Crear nuevos usuarios del sistema</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -181,11 +171,11 @@ export default function CreateUserPage() {
                   value={role}
                   onValueChange={(value) => {
                     setRole(value as UserRole);
-                    if (value !== 'doctor') {
-                      setSpecialtyId('');
-                      setPrefix('');
-                      setFullName('');
-                      setPhone('');
+                    if (value !== "doctor") {
+                      setSpecialtyId("");
+                      setPrefix("");
+                      setFullName("");
+                      setPhone("");
                     }
                   }}
                   disabled={loading}
@@ -201,15 +191,11 @@ export default function CreateUserPage() {
                 </Select>
               </div>
 
-              {role === 'doctor' && (
+              {role === "doctor" && (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="prefix">Prefijo *</Label>
-                    <Select
-                      value={prefix}
-                      onValueChange={setPrefix}
-                      disabled={loading}
-                    >
+                    <Select value={prefix} onValueChange={setPrefix} disabled={loading}>
                       <SelectTrigger id="prefix">
                         <SelectValue placeholder="Selecciona un prefijo" />
                       </SelectTrigger>
@@ -246,13 +232,9 @@ export default function CreateUserPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="specialty">Especialidad *</Label>
-                    <Select
-                      value={specialtyId}
-                      onValueChange={setSpecialtyId}
-                      disabled={loading || loadingSpecialties}
-                    >
+                    <Select value={specialtyId} onValueChange={setSpecialtyId} disabled={loading || loadingSpecialties}>
                       <SelectTrigger id="specialty">
-                        <SelectValue placeholder={loadingSpecialties ? 'Cargando...' : 'Selecciona una especialidad'} />
+                        <SelectValue placeholder={loadingSpecialties ? "Cargando..." : "Selecciona una especialidad"} />
                       </SelectTrigger>
                       <SelectContent>
                         {specialties.map((specialty) => (
@@ -274,9 +256,7 @@ export default function CreateUserPage() {
 
               {success && (
                 <Alert>
-                  <AlertDescription className="text-green-600">
-                    {success}
-                  </AlertDescription>
+                  <AlertDescription className="text-green-600">{success}</AlertDescription>
                 </Alert>
               )}
 
