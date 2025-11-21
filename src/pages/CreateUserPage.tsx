@@ -79,13 +79,19 @@ export default function CreateUserPage() {
     setLoading(true);
 
     try {
+      // Remove "el " or "la " from prefix and concatenate with name
+      const formattedName = role === 'doctor' 
+        ? `${prefix.replace(/^(el|la)\s+/, '')}${fullName}`
+        : undefined;
+
       await createUserWithRole({
         email,
         password,
         role,
         specialtyId: role === 'doctor' ? specialtyId : undefined,
-        fullName: role === 'doctor' ? `${prefix} ${fullName}` : undefined,
+        fullName: formattedName,
         phone: role === 'doctor' ? phone : undefined,
+        prefix: role === 'doctor' ? prefix : undefined,
       });
 
       setSuccess('Usuario creado exitosamente');

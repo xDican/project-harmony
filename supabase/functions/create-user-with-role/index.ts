@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, role, specialtyId, fullName, phone } = await req.json();
+    const { email, password, role, specialtyId, fullName, phone, prefix } = await req.json();
 
     // Validate required fields
     if (!email || !password || !role) {
@@ -84,6 +84,10 @@ serve(async (req) => {
 
     if (role === "doctor" && !phone) {
       throw new Error("Phone is required for doctor role");
+    }
+
+    if (role === "doctor" && !prefix) {
+      throw new Error("Prefix is required for doctor role");
     }
 
     // Validate role
@@ -116,6 +120,7 @@ serve(async (req) => {
           email: email,
           phone: phone,
           specialty_id: specialtyId,
+          prefix: prefix,
         })
         .select()
         .single();

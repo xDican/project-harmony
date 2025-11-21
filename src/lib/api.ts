@@ -72,6 +72,7 @@ interface ApiModule {
     specialtyId?: string;
     fullName?: string;
     phone?: string;
+    prefix?: string;
   }) => Promise<{ success: boolean; user?: any; error?: string }>;
   getAllUsers: () => Promise<UserWithRelations[]>;
   getUserById: (userId: string) => Promise<UserWithRelations | null>;
@@ -226,6 +227,7 @@ export async function createUserWithRole(input: {
   specialtyId?: string;
   fullName?: string;
   phone?: string;
+  prefix?: string;
 }): Promise<{ success: boolean; user?: any; error?: string }> {
   const apiModule = await getApiModule();
   return await apiModule.createUserWithRole(input);

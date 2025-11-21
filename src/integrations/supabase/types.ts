@@ -110,6 +110,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          prefix: string | null
           specialty_id: string | null
         }
         Insert: {
@@ -118,6 +119,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          prefix?: string | null
           specialty_id?: string | null
         }
         Update: {
@@ -126,6 +128,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          prefix?: string | null
           specialty_id?: string | null
         }
         Relationships: [
