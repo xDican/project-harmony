@@ -13,6 +13,7 @@ import AgendaMedico from "./pages/AgendaMedico";
 import AdminDashboard from "./pages/AdminDashboard";
 import UsersList from "./pages/UsersList";
 import CreateUserPage from "./pages/CreateUserPage";
+import EditUserPage from "./pages/EditUserPage";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -163,9 +164,7 @@ const App = () => (
             } />
             <Route path="/admin/users/:userId/edit" element={
               <RoleBasedRoute allowedRoles={['admin']}>
-                <MainLayout>
-                  <NotFound />
-                </MainLayout>
+                <EditUserPage />
               </RoleBasedRoute>
             } />
             <Route path="/admin/doctors/:doctorId/schedule" element={
