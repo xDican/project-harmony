@@ -12,9 +12,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Use service role key to bypass RLS since doctors table has no UPDATE policy
     const supabaseClient = createClient(
-      'https://soxrlxvivuplezssgssq.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNveHJseHZpdnVwbGV6c3Nnc3NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MTMyMTEsImV4cCI6MjA3OTA4OTIxMX0.1w7xGqP6GBi7NcP6a5vDGwTZQWCvZ5wsykIwLz6hk9U',
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
         global: {
           headers: { Authorization: req.headers.get('Authorization')! },
@@ -52,13 +53,21 @@ Deno.serve(async (req) => {
       .update(updateData)
       .eq('id', doctorId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateError) {
       console.error('[update-doctor] Error updating doctor:', updateError);
       return new Response(
         JSON.stringify({ error: updateError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!doctor) {
+      console.error('[update-doctor] Doctor not found with id:', doctorId);
+      return new Response(
+        JSON.stringify({ error: 'Doctor not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
