@@ -22,13 +22,16 @@ Deno.serve(async (req) => {
       }
     );
 
-    const { doctorId, name, phone, specialtyId } = await req.json();
+    // Parse and normalize body (support both doctorId and doctor_id)
+    const rawBody = await req.json().catch(() => ({}));
+    const doctorId = rawBody.doctorId ?? rawBody.doctor_id;
+    const { name, phone, specialtyId } = rawBody;
 
-    console.log('[update-doctor] Received:', { doctorId, name, phone, specialtyId });
+    console.log('[update-doctor] Received:', { doctorId, name, phone, specialtyId, rawBody });
 
     // Validate required fields
     if (!doctorId) {
-      console.error('[update-doctor] Missing doctor_id');
+      console.error('[update-doctor] Missing doctorId in request body');
       return new Response(
         JSON.stringify({ error: 'Missing doctor_id' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
