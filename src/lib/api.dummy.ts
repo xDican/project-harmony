@@ -378,3 +378,27 @@ export function getAllUsers(): Promise<UserWithRelations[]> {
 
   return Promise.resolve(mockUsers);
 }
+
+/**
+ * Get a single user by ID (dummy implementation)
+ */
+export async function getUserById(userId: string): Promise<UserWithRelations | null> {
+  const users = await getAllUsers();
+  return Promise.resolve(users.find(u => u.id === userId) || null);
+}
+
+/**
+ * Update a user (dummy implementation)
+ */
+export async function updateUser(
+  userId: string,
+  data: {
+    name?: string;
+    phone?: string;
+    specialtyId?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  console.log('[Dummy] updateUser:', userId, data);
+  return Promise.resolve({ success: true });
+}
+

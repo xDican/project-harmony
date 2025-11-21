@@ -74,6 +74,12 @@ interface ApiModule {
     phone?: string;
   }) => Promise<{ success: boolean; user?: any; error?: string }>;
   getAllUsers: () => Promise<UserWithRelations[]>;
+  getUserById: (userId: string) => Promise<UserWithRelations | null>;
+  updateUser: (userId: string, data: {
+    name?: string;
+    phone?: string;
+    specialtyId?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -231,6 +237,26 @@ export async function createUserWithRole(input: {
 export async function getAllUsers(): Promise<UserWithRelations[]> {
   const apiModule = await getApiModule();
   return await apiModule.getAllUsers();
+}
+
+/**
+ * Get a single user by ID with their related doctor and specialty information
+ */
+export async function getUserById(userId: string): Promise<UserWithRelations | null> {
+  const apiModule = await getApiModule();
+  return await apiModule.getUserById(userId);
+}
+
+/**
+ * Update a user's information
+ */
+export async function updateUser(userId: string, data: {
+  name?: string;
+  phone?: string;
+  specialtyId?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const apiModule = await getApiModule();
+  return await apiModule.updateUser(userId, data);
 }
 
 // Re-export AdminMetrics type from dummy API (for backward compatibility)

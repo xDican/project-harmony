@@ -577,3 +577,102 @@ export const __test_helpers = {
   appStatusToDbStatus,
   mapAppointment,
 };
+
+// --------------------------
+// 16. Get User By ID
+// --------------------------
+export async function getUserById(userId: string): Promise<UserWithRelations | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select(`
+      id,
+      email,
+      role,
+      created_at,
+      doctor:doctor_id (
+        id,
+        name,
+        phone,
+        specialty_id,
+        specialty:specialty_id (
+          name
+        )
+      )
+    `)
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getUserById] Error:', error);
+    throw new Error('Error al cargar el usuario');
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // Handle doctor data - it may come as array or null
+  const doctorData: any = Array.isArray(data.doctor) ? data.doctor[0] : data.doctor;
+  
+  // Transform the data to match UserWithRelations interface
+  return {
+    id: data.id,
+    email: data.email,
+    role: data.role,
+    createdAt: data.created_at,
+    doctor: doctorData ? {
+      id: doctorData.id,
+      name: doctorData.name,
+      phone: doctorData.phone,
+      specialtyId: doctorData.specialty_id,
+      specialtyName: Array.isArray(doctorData.specialty) && doctorData.specialty.length > 0 
+        ? doctorData.specialty[0].name 
+        : undefined,
+    } : undefined,
+  };
+}
+
+// --------------------------
+// 17. Update User
+// --------------------------
+export async function updateUser(
+  userId: string,
+  data: {
+    name?: string;
+    phone?: string;
+    specialtyId?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  // First, get the user to check if they have a doctor record
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('role, doctor_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (userError || !userData) {
+    console.error('[updateUser] Error fetching user:', userError);
+    return { success: false, error: 'Usuario no encontrado' };
+  }
+
+  // If user is a doctor, update the doctor record
+  if (userData.role === 'doctor' && userData.doctor_id) {
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.specialtyId !== undefined) updateData.specialty_id = data.specialtyId;
+
+    const { error: doctorError } = await supabase
+      .from('doctors')
+      .update(updateData)
+      .eq('id', userData.doctor_id);
+
+    if (doctorError) {
+      console.error('[updateUser] Error updating doctor:', doctorError);
+      return { success: false, error: 'Error al actualizar el doctor' };
+    }
+  }
+
+  return { success: true };
+}
+
