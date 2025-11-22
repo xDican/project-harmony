@@ -828,7 +828,5 @@ export async function updateDoctorSchedules(
     console.error('[updateDoctorSchedules] Edge Function returned failure:', data);
     throw new Error(data?.error || 'Error al guardar horarios');
   }
-
-  // Operación exitosa - no retorna nada (void)
 }
 
