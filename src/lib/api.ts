@@ -87,7 +87,7 @@ interface ApiModule {
     phone?: string;
     specialtyId?: string;
   }) => Promise<{ success: boolean; error?: string }>;
-  updateDoctorSchedules: (doctorId: string, weekSchedule: WeekSchedule) => Promise<{ success: boolean; error?: string }>;
+  updateDoctorSchedules: (doctorId: string, weekSchedule: WeekSchedule) => Promise<void>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -275,12 +275,13 @@ export type { AdminMetrics } from './api.dummy';
  * Update doctor's weekly schedules
  * Sobrescribe completamente los horarios semanales del doctor en la base de datos.
  * La lógica de validación crítica ocurre en la Edge Function.
+ * Lanza una excepción en caso de error.
  * 
  * @param doctorId - ID del doctor
- * @param weekSchedule - Horarios semanales organizados por día
- * @returns Objeto con success y error opcional
+ * @param weekSchedule - Horarios semanales organizados por día (keys: "sunday", "monday", etc.)
+ * @throws Error si la actualización falla
  */
-export async function updateDoctorSchedules(doctorId: string, weekSchedule: WeekSchedule): Promise<{ success: boolean; error?: string }> {
+export async function updateDoctorSchedules(doctorId: string, weekSchedule: WeekSchedule): Promise<void> {
   const apiModule = await getApiModule();
   return await apiModule.updateDoctorSchedules(doctorId, weekSchedule);
 }
