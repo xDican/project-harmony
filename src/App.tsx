@@ -15,6 +15,7 @@ import UsersList from "./pages/UsersList";
 import CreateUserPage from "./pages/CreateUserPage";
 import EditUserPage from "./pages/EditUserPage";
 import DoctorSchedulePage from "./pages/DoctorSchedulePage";
+import AppointmentsReport from "./pages/AppointmentsReport";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -151,6 +152,11 @@ const App = () => {
             <Route path="/admin/doctors/:doctorId/schedule" element={
               <RoleBasedRoute allowedRoles={['admin']}>
                 <DoctorSchedulePage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/reports/appointments" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <AppointmentsReport />
               </RoleBasedRoute>
             } />
             <Route path="/admin/specialties" element={

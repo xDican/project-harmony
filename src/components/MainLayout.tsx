@@ -84,7 +84,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       { to: '/admin', label: 'Resumen', icon: BarChart3 },
       { to: '/admin/users', label: 'Usuarios', icon: UserPlus },
       { to: '/admin/specialties', label: 'Especialidades', icon: Shield },
-      { to: '/admin/reports', label: 'Reportes', icon: FileText },
+      { to: '/admin/reports/appointments', label: 'Reporte de Citas', icon: FileText },
       { to: '/admin/files', label: 'Archivos', icon: Folder },
       { to: '/admin/settings', label: 'Configuración', icon: Settings },
     ];
