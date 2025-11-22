@@ -86,6 +86,7 @@ interface ApiModule {
     phone?: string;
     specialtyId?: string;
   }) => Promise<{ success: boolean; error?: string }>;
+  updateDoctorSchedules: (doctorId: string, weekSchedule: any) => Promise<{ success: boolean; error?: string }>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -268,6 +269,14 @@ export async function updateUser(userId: string, data: {
 
 // Re-export AdminMetrics type from dummy API (for backward compatibility)
 export type { AdminMetrics } from './api.dummy';
+
+/**
+ * Update doctor's weekly schedules
+ */
+export async function updateDoctorSchedules(doctorId: string, weekSchedule: any): Promise<{ success: boolean; error?: string }> {
+  const apiModule = await getApiModule();
+  return await apiModule.updateDoctorSchedules(doctorId, weekSchedule);
+}
 
 /**
  * Get admin dashboard metrics (only available in dummy mode)

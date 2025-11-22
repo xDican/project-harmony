@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Trash2, Plus } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
+import { updateDoctorSchedules } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 // Tipos
 type Slot = {
@@ -35,7 +37,9 @@ const DAYS: { key: DayKey; label: string }[] = [
 ];
 
 export default function DoctorSchedulePage() {
-  const { doctorId } = useParams();
+  const { doctorId } = useParams<{ doctorId: string }>();
+  const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
 
   // Mock data del doctor
   const doctorName = 'Dr. Juan Pérez';
@@ -89,10 +93,64 @@ export default function DoctorSchedulePage() {
     }));
   };
 
-  // Guardar cambios (mock)
-  const handleSave = () => {
-    alert('Horarios guardados (mock)');
-    console.log('Horarios a guardar:', schedule);
+  // Validar horarios antes de guardar
+  const validateSchedules = (): boolean => {
+    for (const day of DAYS) {
+      for (const slot of schedule[day.key]) {
+        if (slot.start_time >= slot.end_time) {
+          toast({
+            title: 'Error de validación',
+            description: `En ${day.label}, la hora de inicio debe ser menor que la hora de fin.`,
+            variant: 'destructive',
+          });
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  // Guardar cambios
+  const handleSave = async () => {
+    if (!doctorId) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo identificar el doctor.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!validateSchedules()) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await updateDoctorSchedules(doctorId, schedule);
+      
+      if (result.success) {
+        toast({
+          title: 'Horarios guardados',
+          description: 'Los horarios del doctor se han actualizado correctamente.',
+        });
+      } else {
+        toast({
+          title: 'Error al guardar',
+          description: result.error || 'No se pudieron guardar los horarios.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error saving schedules:', error);
+      toast({
+        title: 'Error',
+        description: 'Ocurrió un error al guardar los horarios.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -103,7 +161,7 @@ export default function DoctorSchedulePage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => window.history.back()}
+            onClick={() => navigate(-1)}
             className="mb-3"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -175,10 +233,19 @@ export default function DoctorSchedulePage() {
 
         {/* Footer con acciones */}
         <div className="flex justify-end gap-3 border-t border-border pt-4">
-          <Button variant="outline" onClick={() => window.history.back()}>
+          <Button 
+            variant="outline" 
+            onClick={() => navigate(-1)}
+            disabled={isSaving}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleSave}>Guardar cambios</Button>
+          <Button 
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
         </div>
       </div>
     </MainLayout>

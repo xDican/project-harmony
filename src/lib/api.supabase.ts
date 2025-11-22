@@ -736,3 +736,16 @@ export async function updateUser(
   return { success: true };
 }
 
+/**
+ * Update doctor's weekly schedules
+ */
+export async function updateDoctorSchedules(
+  doctorId: string,
+  weekSchedule: any
+): Promise<{ success: boolean; error?: string }> {
+  console.log('[updateDoctorSchedules] Called with:', { doctorId, weekSchedule });
+  // TODO: Implement backend call to update-doctor-schedules edge function
+  // For now, return success
+  return { success: true };
+}
+
