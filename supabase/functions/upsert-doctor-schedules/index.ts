@@ -275,6 +275,12 @@ Deno.serve(async (req) => {
     }
 
     // 11) Borrar horarios anteriores del doctor
+    // NOTA: Esta operación no está envuelta en una transacción explícita.
+    // Si el insert falla después de un delete exitoso, los horarios se perderán.
+    // Para operaciones críticas, considerar usar una función PostgreSQL que maneje
+    // todo en una transacción SQL. Sin embargo, dado que esta es una operación
+    // administrativa poco frecuente y los horarios se pueden reingresar fácilmente,
+    // se acepta este riesgo menor.
     const { error: deleteError } = await supabaseAdmin
       .from("doctor_schedules")
       .delete()
@@ -291,6 +297,8 @@ Deno.serve(async (req) => {
       );
     }
 
+    console.log("[upsert-doctor-schedules] Old schedules deleted successfully");
+
     // 12) Insertar nuevos horarios si hay alguno
     if (schedules.length > 0) {
       const schedulesToInsert = schedules.map((schedule) => ({
@@ -306,8 +314,12 @@ Deno.serve(async (req) => {
 
       if (insertError) {
         console.error("[upsert-doctor-schedules] Error inserting schedules:", insertError);
+        // IMPORTANTE: Si llegamos aquí, los horarios anteriores ya fueron borrados.
+        // Se recomienda intentar la operación nuevamente desde el frontend.
         return new Response(
-          JSON.stringify({ error: "Error al insertar nuevos horarios" }),
+          JSON.stringify({ 
+            error: "Error al insertar nuevos horarios. Los horarios anteriores fueron borrados. Por favor, intente nuevamente." 
+          }),
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
