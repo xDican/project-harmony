@@ -4,6 +4,7 @@ import type { Patient } from "../types/patient";
 import type { Doctor, Specialty } from "../types/doctor";
 import type { AppointmentWithDetails } from "./api";
 import type { CurrentUser } from "../types/user";
+import type { WeekSchedule, Slot } from "../types/schedule";
 import { DateTime } from "luxon";
 
 // --------------------------
@@ -737,15 +738,92 @@ export async function updateUser(
 }
 
 /**
+ * Mapeo de nombres de días a números (0-6)
+ * Alineado con JavaScript Date.getDay() y la BD
+ * 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+ */
+const DAY_TO_NUMBER: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+/**
+ * Convierte WeekSchedule a formato plano para la base de datos
+ * @param weekSchedule - Horarios organizados por día
+ * @returns Array de objetos con day_of_week, start_time, end_time
+ */
+function flattenWeekSchedule(weekSchedule: WeekSchedule): Array<{
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}> {
+  const schedules: Array<{ day_of_week: number; start_time: string; end_time: string }> = [];
+
+  for (const [dayKey, slots] of Object.entries(weekSchedule)) {
+    const dayLower = dayKey.toLowerCase();
+    const dayOfWeek = DAY_TO_NUMBER[dayLower];
+
+    if (dayOfWeek === undefined) {
+      console.warn(`[flattenWeekSchedule] Unknown day key: ${dayKey}`);
+      continue;
+    }
+
+    for (const slot of slots) {
+      schedules.push({
+        day_of_week: dayOfWeek,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+      });
+    }
+  }
+
+  return schedules;
+}
+
+/**
  * Update doctor's weekly schedules
+ * Invoca la Edge Function 'upsert-doctor-schedules' que valida y actualiza los horarios.
+ * Sobrescribe completamente los horarios del doctor.
+ * 
+ * @param doctorId - ID del doctor
+ * @param weekSchedule - Horarios semanales organizados por día
+ * @throws Error si la operación falla o si hay problemas de validación
  */
 export async function updateDoctorSchedules(
   doctorId: string,
-  weekSchedule: any
-): Promise<{ success: boolean; error?: string }> {
+  weekSchedule: WeekSchedule
+): Promise<void> {
   console.log('[updateDoctorSchedules] Called with:', { doctorId, weekSchedule });
-  // TODO: Implement backend call to update-doctor-schedules edge function
-  // For now, return success
-  return { success: true };
+
+  // Convertir weekSchedule a formato de BD
+  const schedules = flattenWeekSchedule(weekSchedule);
+  
+  console.log('[updateDoctorSchedules] Flattened schedules:', schedules);
+
+  // Llamar a la Edge Function
+  const { data, error } = await supabase.functions.invoke('upsert-doctor-schedules', {
+    body: {
+      doctorId,
+      schedules,
+    },
+  });
+
+  if (error) {
+    console.error('[updateDoctorSchedules] Edge Function error:', error);
+    throw new Error(error.message || 'Error al actualizar los horarios del doctor');
+  }
+
+  // Validar respuesta
+  if (!data || !data.success) {
+    console.error('[updateDoctorSchedules] Invalid response:', data);
+    throw new Error(data?.error || 'Error al actualizar los horarios del doctor');
+  }
+
+  console.log('[updateDoctorSchedules] Schedules updated successfully');
 }
 

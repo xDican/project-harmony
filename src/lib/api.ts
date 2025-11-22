@@ -17,6 +17,7 @@ import type { Appointment, AppointmentStatus } from '@/types/appointment';
 import type { Patient } from '@/types/patient';
 import type { Doctor, Specialty } from '@/types/doctor';
 import type { CurrentUser } from '@/types/user';
+import type { WeekSchedule } from '@/types/schedule';
 
 // User with relations for admin user management
 export interface UserWithRelations {
@@ -86,7 +87,7 @@ interface ApiModule {
     phone?: string;
     specialtyId?: string;
   }) => Promise<{ success: boolean; error?: string }>;
-  updateDoctorSchedules: (doctorId: string, weekSchedule: any) => Promise<{ success: boolean; error?: string }>;
+  updateDoctorSchedules: (doctorId: string, weekSchedule: WeekSchedule) => Promise<void>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -272,8 +273,14 @@ export type { AdminMetrics } from './api.dummy';
 
 /**
  * Update doctor's weekly schedules
+ * Sobrescribe completamente los horarios semanales del doctor en la base de datos.
+ * La lógica de validación crítica ocurre en la Edge Function.
+ * 
+ * @param doctorId - ID del doctor
+ * @param weekSchedule - Horarios semanales organizados por día
+ * @throws Error si la operación falla
  */
-export async function updateDoctorSchedules(doctorId: string, weekSchedule: any): Promise<{ success: boolean; error?: string }> {
+export async function updateDoctorSchedules(doctorId: string, weekSchedule: WeekSchedule): Promise<void> {
   const apiModule = await getApiModule();
   return await apiModule.updateDoctorSchedules(doctorId, weekSchedule);
 }
