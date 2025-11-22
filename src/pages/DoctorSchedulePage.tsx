@@ -127,25 +127,17 @@ export default function DoctorSchedulePage() {
 
     setIsSaving(true);
     try {
-      const result = await updateDoctorSchedules(doctorId, schedule);
+      await updateDoctorSchedules(doctorId, schedule);
       
-      if (result.success) {
-        toast({
-          title: 'Horarios guardados',
-          description: 'Los horarios del doctor se han actualizado correctamente.',
-        });
-      } else {
-        toast({
-          title: 'Error al guardar',
-          description: result.error || 'No se pudieron guardar los horarios.',
-          variant: 'destructive',
-        });
-      }
+      toast({
+        title: 'Horarios guardados',
+        description: 'Los horarios del doctor se han actualizado correctamente.',
+      });
     } catch (error) {
       console.error('Error saving schedules:', error);
       toast({
-        title: 'Error',
-        description: 'Ocurrió un error al guardar los horarios.',
+        title: 'Error al guardar',
+        description: error instanceof Error ? error.message : 'No se pudieron guardar los horarios.',
         variant: 'destructive',
       });
     } finally {

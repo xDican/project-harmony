@@ -406,12 +406,15 @@ export async function updateUser(
 /**
  * Update doctor's weekly schedules (dummy implementation)
  * En modo dummy, solo registra la llamada en consola.
+ * 
+ * @param doctorId - ID del doctor
+ * @param weekSchedule - Horarios semanales organizados por día
  */
 export async function updateDoctorSchedules(
   doctorId: string,
   weekSchedule: WeekSchedule
-): Promise<{ success: boolean; error?: string }> {
+): Promise<void> {
   console.log('[Dummy] updateDoctorSchedules:', doctorId, weekSchedule);
-  return Promise.resolve({ success: true });
+  // En modo dummy, la operación siempre tiene éxito
 }
 
