@@ -310,6 +310,66 @@ export function searchDoctors(query: string): Promise<Doctor[]> {
 }
 
 /**
+ * Get a single doctor by ID
+ */
+export function getDoctorById(doctorId: string): Promise<Doctor | null> {
+  const doctor = doctors.find(d => d.id === doctorId);
+  
+  if (!doctor) {
+    return Promise.resolve(null);
+  }
+
+  const specialty = specialties.find(s => s.id === doctor.specialtyId);
+  
+  return Promise.resolve({
+    ...doctor,
+    specialtyName: specialty?.name,
+  });
+}
+
+/**
+ * Get doctor's weekly schedules
+ */
+export function getDoctorSchedules(doctorId: string): Promise<WeekSchedule> {
+  const DAY_MAP: { [key: number]: string } = {
+    0: 'sunday',
+    1: 'monday',
+    2: 'tuesday',
+    3: 'wednesday',
+    4: 'thursday',
+    5: 'friday',
+    6: 'saturday',
+  };
+
+  // Initialize empty week schedule
+  const weekSchedule: WeekSchedule = {
+    sunday: [],
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+  };
+
+  // Filter schedules for this doctor and map to WeekSchedule format
+  doctorSchedules
+    .filter(schedule => schedule.doctorId === doctorId)
+    .forEach(schedule => {
+      const dayKey = DAY_MAP[schedule.weekday];
+      if (dayKey) {
+        weekSchedule[dayKey].push({
+          id: `${schedule.id}-${schedule.weekday}`,
+          start_time: schedule.startTime,
+          end_time: schedule.endTime,
+        });
+      }
+    });
+
+  return Promise.resolve(weekSchedule);
+}
+
+/**
  * Get current user with role information
  * In dummy mode, returns null (no authentication)
  */
