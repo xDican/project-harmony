@@ -792,38 +792,53 @@ function flattenWeekSchedule(weekSchedule: WeekSchedule): Array<{
  * 
  * @param doctorId - ID del doctor
  * @param weekSchedule - Horarios semanales organizados por día
- * @throws Error si la operación falla o si hay problemas de validación
+ * @returns Objeto con success y error opcional
  */
 export async function updateDoctorSchedules(
   doctorId: string,
   weekSchedule: WeekSchedule
-): Promise<void> {
+): Promise<{ success: boolean; error?: string }> {
   console.log('[updateDoctorSchedules] Called with:', { doctorId, weekSchedule });
 
-  // Convertir weekSchedule a formato de BD
-  const schedules = flattenWeekSchedule(weekSchedule);
-  
-  console.log('[updateDoctorSchedules] Flattened schedules:', schedules);
+  try {
+    // Convertir weekSchedule a formato de BD
+    const schedules = flattenWeekSchedule(weekSchedule);
+    
+    console.log('[updateDoctorSchedules] Flattened schedules:', schedules);
 
-  // Llamar a la Edge Function
-  const { data, error } = await supabase.functions.invoke('upsert-doctor-schedules', {
-    body: {
-      doctorId,
-      schedules,
-    },
-  });
+    // Llamar a la Edge Function
+    const { data, error } = await supabase.functions.invoke('upsert-doctor-schedules', {
+      body: {
+        doctorId,
+        schedules,
+      },
+    });
 
-  if (error) {
-    console.error('[updateDoctorSchedules] Edge Function error:', error);
-    throw new Error(error.message || 'Error al actualizar los horarios del doctor');
+    if (error) {
+      console.error('[updateDoctorSchedules] Edge Function error:', error);
+      return {
+        success: false,
+        error: error.message || 'Error al actualizar los horarios del doctor',
+      };
+    }
+
+    // Validar respuesta
+    if (!data || !data.success) {
+      console.error('[updateDoctorSchedules] Invalid response:', data);
+      return {
+        success: false,
+        error: data?.error || 'Error al actualizar los horarios del doctor',
+      };
+    }
+
+    console.log('[updateDoctorSchedules] Schedules updated successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('[updateDoctorSchedules] Exception:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
   }
-
-  // Validar respuesta
-  if (!data || !data.success) {
-    console.error('[updateDoctorSchedules] Invalid response:', data);
-    throw new Error(data?.error || 'Error al actualizar los horarios del doctor');
-  }
-
-  console.log('[updateDoctorSchedules] Schedules updated successfully');
 }
 

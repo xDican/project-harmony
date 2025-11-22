@@ -410,7 +410,8 @@ export async function updateUser(
 export async function updateDoctorSchedules(
   doctorId: string,
   weekSchedule: WeekSchedule
-): Promise<void> {
+): Promise<{ success: boolean; error?: string }> {
   console.log('[Dummy] updateDoctorSchedules:', doctorId, weekSchedule);
+  return Promise.resolve({ success: true });
 }
 

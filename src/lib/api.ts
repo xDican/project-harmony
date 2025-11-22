@@ -87,7 +87,7 @@ interface ApiModule {
     phone?: string;
     specialtyId?: string;
   }) => Promise<{ success: boolean; error?: string }>;
-  updateDoctorSchedules: (doctorId: string, weekSchedule: WeekSchedule) => Promise<void>;
+  updateDoctorSchedules: (doctorId: string, weekSchedule: WeekSchedule) => Promise<{ success: boolean; error?: string }>;
   getAdminMetrics?: () => Promise<any>;
 }
 
@@ -278,9 +278,9 @@ export type { AdminMetrics } from './api.dummy';
  * 
  * @param doctorId - ID del doctor
  * @param weekSchedule - Horarios semanales organizados por día
- * @throws Error si la operación falla
+ * @returns Objeto con success y error opcional
  */
-export async function updateDoctorSchedules(doctorId: string, weekSchedule: WeekSchedule): Promise<void> {
+export async function updateDoctorSchedules(doctorId: string, weekSchedule: WeekSchedule): Promise<{ success: boolean; error?: string }> {
   const apiModule = await getApiModule();
   return await apiModule.updateDoctorSchedules(doctorId, weekSchedule);
 }
