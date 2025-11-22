@@ -402,3 +402,14 @@ export async function updateUser(
   return Promise.resolve({ success: true });
 }
 
+/**
+ * Update doctor's weekly schedules (dummy implementation)
+ */
+export async function updateDoctorSchedules(
+  doctorId: string,
+  weekSchedule: any
+): Promise<{ success: boolean; error?: string }> {
+  console.log('[Dummy] updateDoctorSchedules:', doctorId, weekSchedule);
+  return Promise.resolve({ success: true });
+}
+
