@@ -30,8 +30,8 @@ export default function AppointmentsReport() {
     return date.toISOString().split('T')[0];
   });
   const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   // Estados de datos
   const [appointments, setAppointments] = useState<AppointmentReport[]>([]);
@@ -96,11 +96,11 @@ export default function AppointmentsReport() {
         .order('date', { ascending: true })
         .order('time', { ascending: true });
 
-      if (selectedDoctorId) {
+      if (selectedDoctorId && selectedDoctorId !== 'all') {
         query = query.eq('doctor_id', selectedDoctorId);
       }
 
-      if (selectedStatus) {
+      if (selectedStatus && selectedStatus !== 'all') {
         query = query.eq('status', selectedStatus);
       }
 
@@ -221,7 +221,7 @@ export default function AppointmentsReport() {
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
                       {doctors.map((doctor) => (
                         <SelectItem key={doctor.id} value={doctor.id}>
                           {doctor.name}
@@ -238,7 +238,7 @@ export default function AppointmentsReport() {
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
                       <SelectItem value="pending">Pendiente</SelectItem>
                       <SelectItem value="confirmed">Confirmada</SelectItem>
                       <SelectItem value="completed">Completada</SelectItem>
