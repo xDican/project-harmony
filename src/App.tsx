@@ -20,99 +20,79 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-/**
- * ProtectedRoute - Wrapper for routes that require authentication
- */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useCurrentUser();
+const App = () => {
+  /**
+   * RoleBasedRoute - Wrapper for routes that require specific roles
+   */
+  function RoleBasedRoute({ 
+    children, 
+    allowedRoles 
+  }: { 
+    children: React.ReactNode;
+    allowedRoles: UserRole[];
+  }) {
+    const { user, loading } = useCurrentUser();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
-      </div>
-    );
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
+      );
+    }
+
+    if (!user) {
+      return <Navigate to="/login" replace />;
+    }
+
+    // Check if user's role is in the allowed roles
+    if (!allowedRoles.includes(user.role)) {
+      // Redirect based on role
+      if (user.role === 'doctor') {
+        return <Navigate to="/agenda-medico" replace />;
+      }
+      if (user.role === 'secretary') {
+        return <Navigate to="/agenda-secretaria" replace />;
+      }
+      if (user.role === 'admin') {
+        return <Navigate to="/admin" replace />;
+      }
+      return <Navigate to="/login" replace />;
+    }
+
+    return <>{children}</>;
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  /**
+   * HomeRedirect - Redirects to appropriate page based on user role
+   */
+  function HomeRedirect() {
+    const { user, loading } = useCurrentUser();
 
-  return <>{children}</>;
-}
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
+      );
+    }
 
-/**
- * RoleBasedRoute - Wrapper for routes that require specific roles
- */
-function RoleBasedRoute({ 
-  children, 
-  allowedRoles 
-}: { 
-  children: React.ReactNode;
-  allowedRoles: UserRole[];
-}) {
-  const { user, loading } = useCurrentUser();
+    if (!user) {
+      return <Navigate to="/login" replace />;
+    }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Check if user's role is in the allowed roles
-  if (!allowedRoles.includes(user.role)) {
     // Redirect based on role
     if (user.role === 'doctor') {
       return <Navigate to="/agenda-medico" replace />;
     }
-    if (user.role === 'secretary') {
+    if (user.role === 'secretary' || user.role === 'admin') {
       return <Navigate to="/agenda-secretaria" replace />;
     }
-    if (user.role === 'admin') {
-      return <Navigate to="/admin" replace />;
-    }
+
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
-}
-
-/**
- * HomeRedirect - Redirects to appropriate page based on user role
- */
-function HomeRedirect() {
-  const { user, loading } = useCurrentUser();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Redirect based on role
-  if (user.role === 'doctor') {
-    return <Navigate to="/agenda-medico" replace />;
-  }
-  if (user.role === 'secretary' || user.role === 'admin') {
-    return <Navigate to="/agenda-secretaria" replace />;
-  }
-
-  return <Navigate to="/login" replace />;
-}
-
-const App = () => (
+  return (
   <QueryClientProvider client={queryClient}>
     <UserProvider>
       <TooltipProvider>
@@ -209,6 +189,7 @@ const App = () => (
       </TooltipProvider>
     </UserProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;
