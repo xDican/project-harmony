@@ -500,6 +500,91 @@ export async function searchDoctors(query: string): Promise<Doctor[]> {
 }
 
 // --------------------------
+// 11c. getDoctorById
+// --------------------------
+export async function getDoctorById(doctorId: string): Promise<Doctor | null> {
+  const { data, error } = await supabase
+    .from("doctors")
+    .select(`
+      *,
+      specialty:specialty_id (
+        id, name
+      )
+    `)
+    .eq("id", doctorId)
+    .single();
+
+  if (error) {
+    console.error("Error getDoctorById:", error);
+    return null;
+  }
+
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    phone: data.phone,
+    email: data.email ?? undefined,
+    specialtyId: data.specialty_id,
+    specialtyName: (data as any).specialty?.name,
+    createdAt: data.created_at,
+  };
+}
+
+// --------------------------
+// 11d. getDoctorSchedules
+// --------------------------
+const DAY_MAP: { [key: number]: string } = {
+  0: 'sunday',
+  1: 'monday',
+  2: 'tuesday',
+  3: 'wednesday',
+  4: 'thursday',
+  5: 'friday',
+  6: 'saturday',
+};
+
+export async function getDoctorSchedules(doctorId: string): Promise<WeekSchedule> {
+  const { data, error } = await supabase
+    .from("doctor_schedules")
+    .select("*")
+    .eq("doctor_id", doctorId)
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    console.error("Error getDoctorSchedules:", error);
+    throw error;
+  }
+
+  // Initialize empty week schedule
+  const weekSchedule: WeekSchedule = {
+    sunday: [],
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+  };
+
+  // Map database records to WeekSchedule format
+  (data || []).forEach((schedule: any) => {
+    const dayKey = DAY_MAP[schedule.day_of_week];
+    if (dayKey) {
+      weekSchedule[dayKey].push({
+        id: schedule.id,
+        start_time: schedule.start_time.substring(0, 5), // "HH:MM:SS" -> "HH:MM"
+        end_time: schedule.end_time.substring(0, 5),
+      });
+    }
+  });
+
+  return weekSchedule;
+}
+
+// --------------------------
 // 12. getCurrentUserWithRole
 // --------------------------
 export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {

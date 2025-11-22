@@ -70,6 +70,8 @@ interface ApiModule {
   getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
   getDoctors: () => Promise<Doctor[]>;
   searchDoctors: (query: string) => Promise<Doctor[]>;
+  getDoctorById: (doctorId: string) => Promise<Doctor | null>;
+  getDoctorSchedules: (doctorId: string) => Promise<WeekSchedule>;
   getCurrentUserWithRole: () => Promise<CurrentUser | null>;
   createUserWithRole: (input: {
     email: string;
@@ -214,6 +216,22 @@ export async function getDoctors(): Promise<Doctor[]> {
 export async function searchDoctors(query: string): Promise<Doctor[]> {
   const apiModule = await getApiModule();
   return await apiModule.searchDoctors(query);
+}
+
+/**
+ * Get a single doctor by ID
+ */
+export async function getDoctorById(doctorId: string): Promise<Doctor | null> {
+  const apiModule = await getApiModule();
+  return await apiModule.getDoctorById(doctorId);
+}
+
+/**
+ * Get doctor's weekly schedules
+ */
+export async function getDoctorSchedules(doctorId: string): Promise<WeekSchedule> {
+  const apiModule = await getApiModule();
+  return await apiModule.getDoctorSchedules(doctorId);
 }
 
 /**

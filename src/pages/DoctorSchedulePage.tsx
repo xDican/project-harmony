@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Trash2, Plus } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
-import { updateDoctorSchedules } from '@/lib/api';
+import { updateDoctorSchedules, getDoctorById, getDoctorSchedules } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
 // Tipos
@@ -40,14 +40,13 @@ export default function DoctorSchedulePage() {
   const { doctorId } = useParams<{ doctorId: string }>();
   const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [doctorName, setDoctorName] = useState('');
+  const [doctorSpecialty, setDoctorSpecialty] = useState('');
 
-  // Mock data del doctor
-  const doctorName = 'Dr. Juan Pérez';
-  const doctorSpecialty = 'Cardiología';
-
-  // Estado inicial (mock)
+  // Estado inicial (vacío hasta cargar)
   const [schedule, setSchedule] = useState<WeekSchedule>({
-    monday: [{ id: '1', start_time: '08:00', end_time: '12:00' }],
+    monday: [],
     tuesday: [],
     wednesday: [],
     thursday: [],
@@ -55,6 +54,55 @@ export default function DoctorSchedulePage() {
     saturday: [],
     sunday: [],
   });
+
+  // Cargar datos del doctor y sus horarios
+  useEffect(() => {
+    async function loadDoctorData() {
+      if (!doctorId) {
+        toast({
+          title: 'Error',
+          description: 'No se pudo identificar el doctor.',
+          variant: 'destructive',
+        });
+        navigate('/admin/users');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+
+        // Cargar datos del doctor
+        const doctor = await getDoctorById(doctorId);
+        if (!doctor) {
+          toast({
+            title: 'Error',
+            description: 'No se encontró el doctor.',
+            variant: 'destructive',
+          });
+          navigate('/admin/users');
+          return;
+        }
+
+        setDoctorName(doctor.name);
+        setDoctorSpecialty(doctor.specialtyName || 'Sin especialidad');
+
+        // Cargar horarios existentes
+        const schedules = await getDoctorSchedules(doctorId);
+        setSchedule(schedules as WeekSchedule);
+      } catch (error) {
+        console.error('Error loading doctor data:', error);
+        toast({
+          title: 'Error',
+          description: 'No se pudieron cargar los datos del doctor.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadDoctorData();
+  }, [doctorId, navigate]);
 
   // Añadir nuevo slot a un día
   const handleAddSlot = (day: DayKey) => {
@@ -144,6 +192,19 @@ export default function DoctorSchedulePage() {
       setIsSaving(false);
     }
   };
+
+  // Mostrar loading mientras se cargan los datos
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="max-w-4xl mx-auto py-6 px-4">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <p className="text-muted-foreground">Cargando...</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
