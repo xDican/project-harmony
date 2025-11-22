@@ -2,6 +2,7 @@ import { Appointment, AppointmentStatus } from '@/types/appointment';
 import { Patient } from '@/types/patient';
 import { Doctor, Specialty } from '@/types/doctor';
 import { CurrentUser } from '@/types/user';
+import { WeekSchedule } from '@/types/schedule';
 import { appointments, patients, doctors, doctorSchedules, specialties } from './data';
 import type { UserWithRelations } from './api';
 
@@ -404,12 +405,12 @@ export async function updateUser(
 
 /**
  * Update doctor's weekly schedules (dummy implementation)
+ * En modo dummy, solo registra la llamada en consola.
  */
 export async function updateDoctorSchedules(
   doctorId: string,
-  weekSchedule: any
-): Promise<{ success: boolean; error?: string }> {
+  weekSchedule: WeekSchedule
+): Promise<void> {
   console.log('[Dummy] updateDoctorSchedules:', doctorId, weekSchedule);
-  return Promise.resolve({ success: true });
 }
 
