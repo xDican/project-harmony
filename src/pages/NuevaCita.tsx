@@ -232,7 +232,7 @@ export default function NuevaCita() {
             <Label className="text-lg font-semibold text-foreground mb-3 block">
               2. Seleccionar Médico
             </Label>
-            <DoctorSearch onSelect={handleDoctorSelect} />
+            <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
           </section>
 
           {/* Step 3: Date Selection */}

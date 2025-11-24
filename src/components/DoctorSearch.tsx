@@ -9,17 +9,23 @@ import { cn } from '@/lib/utils';
 
 interface DoctorSearchProps {
   onSelect: (doctor: Doctor) => void;
+  value?: Doctor | null;
 }
 
 /**
  * DoctorSearch - Searchable doctor selector with dropdown results
  * Uses debounced search and displays matching doctors with specialty info
  */
-const DoctorSearch = ({ onSelect }: DoctorSearchProps) => {
+const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
   const { data: doctors, isLoading, query, setQuery } = useDoctorsSearch();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(value || null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync internal state with external value prop
+  useEffect(() => {
+    setSelectedDoctor(value || null);
+  }, [value]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
