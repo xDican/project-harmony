@@ -132,10 +132,10 @@ export default function AdminDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold text-foreground">
-                      {metrics.statusBreakdown.scheduled}
+                      {metrics.statusBreakdown.agendada}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {((metrics.statusBreakdown.scheduled / metrics.totalAppointments) * 100).toFixed(0)}% del total
+                      {((metrics.statusBreakdown.agendada / metrics.totalAppointments) * 100).toFixed(0)}% del total
                     </p>
                   </CardContent>
                 </Card>
@@ -150,10 +150,10 @@ export default function AdminDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold text-foreground">
-                      {metrics.statusBreakdown.confirmed}
+                      {metrics.statusBreakdown.confirmada}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {((metrics.statusBreakdown.confirmed / metrics.totalAppointments) * 100).toFixed(0)}% del total
+                      {((metrics.statusBreakdown.confirmada / metrics.totalAppointments) * 100).toFixed(0)}% del total
                     </p>
                   </CardContent>
                 </Card>
@@ -168,10 +168,10 @@ export default function AdminDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold text-foreground">
-                      {metrics.statusBreakdown.completed}
+                      {metrics.statusBreakdown.completada}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {((metrics.statusBreakdown.completed / metrics.totalAppointments) * 100).toFixed(0)}% del total
+                      {((metrics.statusBreakdown.completada / metrics.totalAppointments) * 100).toFixed(0)}% del total
                     </p>
                   </CardContent>
                 </Card>
@@ -186,10 +186,28 @@ export default function AdminDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold text-foreground">
-                      {metrics.statusBreakdown.canceled}
+                      {metrics.statusBreakdown.cancelada}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {((metrics.statusBreakdown.canceled / metrics.totalAppointments) * 100).toFixed(0)}% del total
+                      {((metrics.statusBreakdown.cancelada / metrics.totalAppointments) * 100).toFixed(0)}% del total
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* No se presentaron */}
+                <Card className="border-orange-500/20 bg-orange-500/5">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      No se presentaron
+                    </CardTitle>
+                    <XCircle className="h-4 w-4 text-orange-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-foreground">
+                      {metrics.statusBreakdown.no_asistio}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {((metrics.statusBreakdown.no_asistio / metrics.totalAppointments) * 100).toFixed(0)}% del total
                     </p>
                   </CardContent>
                 </Card>

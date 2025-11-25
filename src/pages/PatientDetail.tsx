@@ -62,7 +62,7 @@ export default function PatientDetail() {
 
     setCancelingId(appointmentToCancel);
     try {
-      await updateAppointmentStatus(appointmentToCancel, 'canceled');
+      await updateAppointmentStatus(appointmentToCancel, 'cancelada');
       toast({
         title: 'Cita cancelada',
         description: 'La cita ha sido cancelada correctamente',
@@ -90,7 +90,7 @@ export default function PatientDetail() {
   };
 
   const canCancelAppointment = (date: string, time: string, status: string) => {
-    if (status === 'canceled') return false;
+    if (status === 'cancelada') return false;
     
     // Compare only dates, not time
     const aptDate = DateTime.fromISO(date).startOf('day');
@@ -258,7 +258,7 @@ export default function PatientDetail() {
                                   )}
                                 </Button>
                               )}
-                              {apt.status === 'canceled' && (
+                              {apt.status === 'cancelada' && (
                                 <Badge variant="outline" className="text-muted-foreground">
                                   Cancelada
                                 </Badge>

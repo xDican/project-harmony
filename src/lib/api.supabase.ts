@@ -8,21 +8,8 @@ import type { WeekSchedule, Slot } from "../types/schedule";
 import { DateTime } from "luxon";
 
 // --------------------------
-// Status mapping helpers
+// Status mapping - No mapping needed, statuses are now stored in Spanish in the database
 // --------------------------
-function dbStatusToAppStatus(dbStatus: string): AppointmentStatus {
-  if (dbStatus === "cancelled") return "canceled";
-  // Map database status to frontend status
-  // "scheduled" stays as "scheduled"
-  return dbStatus as AppointmentStatus;
-}
-
-function appStatusToDbStatus(appStatus: AppointmentStatus): string {
-  if (appStatus === "canceled") return "cancelled";
-  // Map frontend status to database status
-  // "scheduled" stays as "scheduled"
-  return appStatus;
-}
 
 // --------------------------
 // Helper: Map DB appointment to frontend
@@ -34,9 +21,8 @@ function mapAppointment(appointment: any): Appointment {
     patientId: appointment.patient_id,
     date: appointment.date,
     time: appointment.time,
-    status: dbStatusToAppStatus(appointment.status),
+    status: appointment.status as AppointmentStatus,
     notes: appointment.notes ?? undefined,
-    // ...otros campos si aplica
   };
 }
 
@@ -257,10 +243,9 @@ export async function getPatientAppointments(patientId: string): Promise<Appoint
 // 3. updateAppointmentStatus
 // --------------------------
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<Appointment | null> {
-  const dbStatus = appStatusToDbStatus(status);
   const { data, error } = await supabase
     .from("appointments")
-    .update({ status: dbStatus })
+    .update({ status: status })
     .eq("id", id)
     .select()
     .single();
@@ -753,8 +738,6 @@ export async function createUserWithRole(input: {
 // Export helpers for testing or internal use
 // --------------------------
 export const __test_helpers = {
-  dbStatusToAppStatus,
-  appStatusToDbStatus,
   mapAppointment,
 };
 
