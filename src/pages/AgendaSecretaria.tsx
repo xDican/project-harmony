@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, AlertCircle, Search, Clock, User, Stethoscope, Phone } from 'lucide-react';
+import { Calendar, AlertCircle, Search, Clock, User, Stethoscope, Phone, CheckCircle2, XCircle, Circle, UserX } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
@@ -297,81 +297,120 @@ function AppointmentCard({
     }
   };
 
+  const getStatusIcon = () => {
+    switch (appointment.status) {
+      case 'confirmada':
+        return <CheckCircle2 className="h-12 w-12 text-green-500" />;
+      case 'completada':
+        return <CheckCircle2 className="h-12 w-12 text-gray-500" />;
+      case 'cancelada':
+        return <XCircle className="h-12 w-12 text-red-500" />;
+      case 'no_asistio':
+        return <UserX className="h-12 w-12 text-orange-500" />;
+      default:
+        return <Circle className="h-12 w-12 text-blue-500" />;
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (appointment.status) {
+      case 'confirmada':
+        return 'border-l-green-500';
+      case 'completada':
+        return 'border-l-gray-500';
+      case 'cancelada':
+        return 'border-l-red-500';
+      case 'no_asistio':
+        return 'border-l-orange-500';
+      default:
+        return 'border-l-blue-500';
+    }
+  };
+
   return (
-    <Card className="overflow-hidden">
+    <Card className={`overflow-hidden border-l-4 ${getStatusColor()}`}>
       <CardContent className="p-4">
-        {/* Time - Prominente */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <span className="text-2xl font-bold text-foreground">
-              {formatTime(appointment.time)}
-            </span>
-          </div>
-          <StatusBadge status={appointment.status} />
-        </div>
-
-        {/* Patient Name - Prominente */}
-        <div className="flex items-start gap-2 mb-3">
-          <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-lg font-semibold text-foreground leading-tight">
-              {appointment.patient.name}
-            </p>
-            {appointment.patient.phone && (
-              <div className="flex items-center gap-1 mt-1">
-                <Phone className="h-3 w-3 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {appointment.patient.phone}
-                </span>
+        {/* Header: Status Icon + Time */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {getStatusIcon()}
+            <div>
+              <div className="text-3xl font-bold text-foreground">
+                {formatTime(appointment.time)}
               </div>
-            )}
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {appointment.status === 'agendada' && 'Agendada'}
+                {appointment.status === 'confirmada' && 'Confirmada'}
+                {appointment.status === 'completada' && 'Completada'}
+                {appointment.status === 'cancelada' && 'Cancelada'}
+                {appointment.status === 'no_asistio' && 'No se presentó'}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Doctor - Prominente */}
-        <div className="flex items-center gap-2 mb-4">
-          <Stethoscope className="h-5 w-5 text-muted-foreground" />
-          <span className="text-base font-medium text-foreground">
-            {appointment.doctor.name}
-          </span>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-3 border-t">
-          {isCanceled ? (
-            <div className="w-full text-center py-2 text-sm text-muted-foreground">
-              Cita cancelada
+        {/* Patient Info - Clean */}
+        <div className="space-y-3 mb-4">
+          <div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+              Paciente
             </div>
-          ) : (
-            <>
-              <Select
-                value={appointment.status}
-                onValueChange={(value: AppointmentStatus) =>
-                  onStatusChange(appointment.id, value)
-                }
-              >
-                <SelectTrigger className="flex-1 h-9 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="agendada">Agendada</SelectItem>
-                  <SelectItem value="confirmada">Confirmada</SelectItem>
-                  <SelectItem value="completada">Completada</SelectItem>
-                  <SelectItem value="no_asistio">No se presentó</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => onCancel(appointment.id)}
-                className="whitespace-nowrap"
-              >
-                Cancelar
-              </Button>
-            </>
+            <div className="text-lg font-semibold text-foreground">
+              {appointment.patient.name}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+              Doctor
+            </div>
+            <div className="text-base font-medium text-foreground">
+              {appointment.doctor.name}
+            </div>
+          </div>
+
+          {appointment.patient.phone && (
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                Teléfono
+              </div>
+              <div className="text-sm text-foreground">
+                {appointment.patient.phone}
+              </div>
+            </div>
           )}
         </div>
+
+        {/* Actions - Minimal */}
+        {!isCanceled && (
+          <div className="flex gap-2 pt-4 border-t">
+            <Select
+              value={appointment.status}
+              onValueChange={(value: AppointmentStatus) =>
+                onStatusChange(appointment.id, value)
+              }
+            >
+              <SelectTrigger className="flex-1 h-10 bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="agendada">Agendada</SelectItem>
+                <SelectItem value="confirmada">Confirmada</SelectItem>
+                <SelectItem value="completada">Completada</SelectItem>
+                <SelectItem value="no_asistio">No se presentó</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCancel(appointment.id)}
+              className="whitespace-nowrap h-10"
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              Cancelar
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
