@@ -747,12 +747,12 @@ export const __test_helpers = {
 // 16. Get User By ID
 // --------------------------
 export async function getUserById(userId: string): Promise<UserWithRelations | null> {
+  // First, get user data without role
   const { data, error } = await supabase
     .from('users')
     .select(`
       id,
       email,
-      role,
       created_at,
       doctor:doctor_id (
         id,
@@ -781,6 +781,18 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
     return null;
   }
 
+  // Get user role from user_roles table
+  const { data: roleData, error: roleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (roleError) {
+    console.error('[getUserById] Error fetching role:', roleError);
+    throw new Error('Error al cargar el rol del usuario');
+  }
+
   // Handle doctor data - it may come as array or null
   const doctorData: any = Array.isArray(data.doctor) ? data.doctor[0] : data.doctor;
   const secretaryData: any = Array.isArray(data.secretary) ? data.secretary[0] : data.secretary;
@@ -789,7 +801,7 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
   return {
     id: data.id,
     email: data.email,
-    role: data.role,
+    role: roleData?.role || 'unknown',
     createdAt: data.created_at,
     doctor: doctorData ? {
       id: doctorData.id,
