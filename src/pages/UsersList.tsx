@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getAllUsers, type UserWithRelations } from '@/lib/api';
 import { Loader2, Search, Plus, Edit, Calendar } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -26,6 +27,7 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 export default function UsersList() {
   const navigate = useNavigate();
   const { isAdmin } = useCurrentUser();
+  const isMobile = useIsMobile();
   const [users, setUsers] = useState<UserWithRelations[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,9 +102,22 @@ export default function UsersList() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Controls bar */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
+            {/* Create User Button - Mobile Top */}
+            {isMobile && (
+              <div className="mb-4">
+                <Button 
+                  onClick={() => navigate('/admin/users/create')} 
+                  className="w-full"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear usuario
+                </Button>
+              </div>
+            )}
+
+            {/* Search Bar */}
+            <div className="mb-4">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por nombre o correo"
@@ -111,42 +126,49 @@ export default function UsersList() {
                   className="pl-10"
                 />
               </div>
-              
-              <div className="flex gap-2">
-                <Button
-                  variant={roleFilter === 'all' ? 'default' : 'outline'}
-                  onClick={() => setRoleFilter('all')}
-                  size="sm"
-                >
-                  Todos
-                </Button>
-                <Button
-                  variant={roleFilter === 'doctor' ? 'default' : 'outline'}
-                  onClick={() => setRoleFilter('doctor')}
-                  size="sm"
-                >
-                  Doctores
-                </Button>
-                <Button
-                  variant={roleFilter === 'secretary' ? 'default' : 'outline'}
-                  onClick={() => setRoleFilter('secretary')}
-                  size="sm"
-                >
-                  Secretarias
-                </Button>
-                <Button
-                  variant={roleFilter === 'admin' ? 'default' : 'outline'}
-                  onClick={() => setRoleFilter('admin')}
-                  size="sm"
-                >
-                  Admins
-                </Button>
-              </div>
+            </div>
 
-              <Button onClick={() => navigate('/admin/users/create')} className="sm:ml-auto">
-                <Plus className="mr-2 h-4 w-4" />
-                Crear usuario
+            {/* Role Filters */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              <Button
+                variant={roleFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setRoleFilter('all')}
+                size="sm"
+              >
+                Todos
               </Button>
+              <Button
+                variant={roleFilter === 'doctor' ? 'default' : 'outline'}
+                onClick={() => setRoleFilter('doctor')}
+                size="sm"
+              >
+                Doctores
+              </Button>
+              <Button
+                variant={roleFilter === 'secretary' ? 'default' : 'outline'}
+                onClick={() => setRoleFilter('secretary')}
+                size="sm"
+              >
+                Secretarias
+              </Button>
+              <Button
+                variant={roleFilter === 'admin' ? 'default' : 'outline'}
+                onClick={() => setRoleFilter('admin')}
+                size="sm"
+              >
+                Admins
+              </Button>
+              
+              {/* Create User Button - Desktop */}
+              {!isMobile && (
+                <Button 
+                  onClick={() => navigate('/admin/users/create')} 
+                  className="ml-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear usuario
+                </Button>
+              )}
             </div>
 
             {/* Error state */}
@@ -162,74 +184,157 @@ export default function UsersList() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              /* Table */
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Rol</TableHead>
-                      <TableHead>Especialidad</TableHead>
-                      <TableHead>Teléfono</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <>
+                {isMobile ? (
+                  /* Mobile Card View */
+                  <div className="space-y-0 border rounded-md overflow-hidden">
                     {filteredUsers.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          No se encontraron usuarios
-                        </TableCell>
-                      </TableRow>
+                      <div className="py-8 text-center text-muted-foreground">
+                        No se encontraron usuarios
+                      </div>
                     ) : (
                       filteredUsers.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">
-                            {user.doctor?.name || user.email}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={ROLE_VARIANTS[user.role] || 'outline'}>
-                              {ROLE_LABELS[user.role] || user.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {user.doctor?.specialtyName || '—'}
-                          </TableCell>
-                          <TableCell>
-                            {user.doctor?.phone || '—'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/admin/users/${user.id}/edit`)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Editar
-                              </Button>
-                              {user.role === 'doctor' && user.doctor && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)}
-                                >
-                                  <Calendar className="h-4 w-4 mr-1" />
-                                  Horarios
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        <UserCard
+                          key={user.id}
+                          user={user}
+                          onEdit={() => navigate(`/admin/users/${user.id}/edit`)}
+                          onSchedule={
+                            user.role === 'doctor' && user.doctor
+                              ? () => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)
+                              : undefined
+                          }
+                        />
                       ))
                     )}
-                  </TableBody>
-                </Table>
-              </div>
+                  </div>
+                ) : (
+                  /* Desktop Table View */
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>Rol</TableHead>
+                          <TableHead>Especialidad</TableHead>
+                          <TableHead>Teléfono</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                              No se encontraron usuarios
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredUsers.map((user) => (
+                            <TableRow key={user.id}>
+                              <TableCell className="font-medium">
+                                {user.doctor?.name || user.email}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={ROLE_VARIANTS[user.role] || 'outline'}>
+                                  {ROLE_LABELS[user.role] || user.role}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {user.doctor?.specialtyName || '—'}
+                              </TableCell>
+                              <TableCell>
+                                {user.doctor?.phone || '—'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => navigate(`/admin/users/${user.id}/edit`)}
+                                  >
+                                    <Edit className="h-4 w-4 mr-1" />
+                                    Editar
+                                  </Button>
+                                  {user.role === 'doctor' && user.doctor && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)}
+                                    >
+                                      <Calendar className="h-4 w-4 mr-1" />
+                                      Horarios
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
       </div>
     </MainLayout>
+  );
+}
+
+// Mobile Card Component for Users
+interface UserCardProps {
+  user: UserWithRelations;
+  onEdit: () => void;
+  onSchedule?: () => void;
+}
+
+function UserCard({ user, onEdit, onSchedule }: UserCardProps) {
+  return (
+    <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
+      {/* Line 1: Name and Role Badge */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-base font-semibold text-foreground">
+          {user.doctor?.name || user.email}
+        </span>
+        <Badge variant={ROLE_VARIANTS[user.role] || 'outline'}>
+          {ROLE_LABELS[user.role] || user.role}
+        </Badge>
+      </div>
+
+      {/* Line 2: Specialty and Phone */}
+      <div className="flex flex-col gap-1 mb-3 text-sm text-muted-foreground">
+        {user.doctor?.specialtyName && (
+          <span>🩺 {user.doctor.specialtyName}</span>
+        )}
+        {user.doctor?.phone && (
+          <span>📱 {user.doctor.phone}</span>
+        )}
+      </div>
+
+      {/* Line 3: Action Buttons */}
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onEdit}
+          className="flex-1"
+        >
+          <Edit className="h-4 w-4 mr-1" />
+          Editar
+        </Button>
+        {onSchedule && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSchedule}
+            className="flex-1"
+          >
+            <Calendar className="h-4 w-4 mr-1" />
+            Horarios
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
