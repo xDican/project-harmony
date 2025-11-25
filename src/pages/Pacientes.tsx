@@ -237,13 +237,6 @@ export default function Pacientes() {
                 )}
               </>
             )}
-
-            {/* Results Count */}
-            {!isLoading && filteredPatients.length > 0 && (
-              <p className="text-sm text-muted-foreground mt-4">
-                Mostrando {filteredPatients.length} de {patients.length} {patients.length === 1 ? 'paciente' : 'pacientes'}
-              </p>
-            )}
           </CardContent>
         </Card>
       </div>
