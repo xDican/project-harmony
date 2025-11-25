@@ -297,7 +297,14 @@ function AppointmentCard({
 
   return (
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
-      {/* Line 1: Patient Name + Status */}
+      {/* Line 1: Time Centered */}
+      <div className="flex justify-center mb-2">
+        <span className="text-lg font-bold text-foreground">
+          {formatTime(appointment.time)}
+        </span>
+      </div>
+
+      {/* Line 2: Patient Name + Status */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-base font-semibold text-foreground">
           {appointment.patient.name}
@@ -329,8 +336,8 @@ function AppointmentCard({
         </div>
       </div>
 
-      {/* Line 2: Doctor Name + Cancel Button */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      {/* Line 3: Doctor Name + Cancel Button */}
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm text-muted-foreground">
           {appointment.doctor.name}
         </span>
@@ -346,13 +353,6 @@ function AppointmentCard({
             Cancelar cita
           </Button>
         )}
-      </div>
-
-      {/* Line 3: Time Centered */}
-      <div className="flex justify-center">
-        <span className="text-lg font-bold text-foreground">
-          {formatTime(appointment.time)}
-        </span>
       </div>
     </div>
   );
