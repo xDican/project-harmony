@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CalendarIcon, CheckCircle } from 'lucide-react';
+import { CalendarIcon, CheckCircle, User, Stethoscope } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';

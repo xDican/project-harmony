@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Phone, Mail, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, Phone, Mail, Loader2, User, Stethoscope } from 'lucide-react';
 import { usePatientAppointments } from '@/hooks/usePatientAppointments';
 import { getAllPatients, updateAppointmentStatus } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -295,7 +295,12 @@ export default function PatientDetail() {
                               <TableRow key={apt.id}>
                                 <TableCell>{formatDate(apt.date)}</TableCell>
                                 <TableCell>{formatTime(apt.time)}</TableCell>
-                                <TableCell>{apt.doctorName}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    {apt.doctorName}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   <StatusBadge status={apt.status} />
                                 </TableCell>
@@ -397,7 +402,12 @@ export default function PatientDetail() {
                               <TableRow key={apt.id}>
                                 <TableCell>{formatDate(apt.date)}</TableCell>
                                 <TableCell>{formatTime(apt.time)}</TableCell>
-                                <TableCell>{apt.doctorName}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    {apt.doctorName}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   <StatusBadge status={apt.status} />
                                 </TableCell>
@@ -471,9 +481,12 @@ function UpcomingAppointmentCard({
 
       {/* Line 2: Doctor and Status */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-sm text-muted-foreground">
-          {appointment.doctorName}
-        </span>
+        <div className="flex items-center gap-2">
+          <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground">
+            {appointment.doctorName}
+          </span>
+        </div>
         <StatusBadge status={appointment.status as AppointmentStatus} />
       </div>
 
@@ -537,9 +550,12 @@ function PastAppointmentCard({
 
       {/* Line 2: Doctor and Status */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground">
-          {appointment.doctorName}
-        </span>
+        <div className="flex items-center gap-2">
+          <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground">
+            {appointment.doctorName}
+          </span>
+        </div>
         <StatusBadge status={appointment.status as AppointmentStatus} />
       </div>
     </div>

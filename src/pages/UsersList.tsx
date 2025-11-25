@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getAllUsers, type UserWithRelations } from '@/lib/api';
-import { Loader2, Search, Plus, Edit, Calendar } from 'lucide-react';
+import { Loader2, Search, Plus, Edit, Calendar, User, Stethoscope } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -270,10 +270,17 @@ export default function UsersList() {
                           </TableRow>
                         ) : (
                           filteredUsers.map((user) => (
-                            <TableRow key={user.id}>
-                              <TableCell className="font-medium">
+                          <TableRow key={user.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {user.role === 'doctor' ? (
+                                  <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                ) : (
+                                  <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                )}
                                 {user.doctor?.name || user.email}
-                              </TableCell>
+                              </div>
+                            </TableCell>
                               <TableCell>
                                 <Badge variant={ROLE_VARIANTS[user.role] || 'outline'}>
                                   {ROLE_LABELS[user.role] || user.role}
@@ -335,9 +342,16 @@ function UserCard({ user, onEdit, onSchedule }: UserCardProps) {
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
       {/* Line 1: Name and Role Badge */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-base font-semibold text-foreground">
-          {user.doctor?.name || user.email}
-        </span>
+        <div className="flex items-center gap-2">
+          {user.role === 'doctor' ? (
+            <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          ) : (
+            <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          )}
+          <span className="text-base font-semibold text-foreground">
+            {user.doctor?.name || user.email}
+          </span>
+        </div>
         <Badge variant={ROLE_VARIANTS[user.role] || 'outline'}>
           {ROLE_LABELS[user.role] || user.role}
         </Badge>

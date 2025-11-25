@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Users, Eye } from 'lucide-react';
+import { Search, Users, Eye, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getAllPatients } from '@/lib/api';
 import type { Patient } from '@/types/patient';
@@ -172,7 +172,12 @@ export default function Pacientes() {
                       <TableBody>
                         {filteredPatients.map((patient) => (
                           <TableRow key={patient.id}>
-                            <TableCell className="font-medium">{patient.name}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                {patient.name}
+                              </div>
+                            </TableCell>
                             <TableCell>{patient.phone || '—'}</TableCell>
                             <TableCell className="text-muted-foreground">
                               {patient.documentId || '—'}
@@ -218,9 +223,12 @@ function PatientCard({ patient, onViewDetail }: {
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
       {/* Line 1: Patient Name */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-base font-semibold text-foreground">
-          {patient.name}
-        </span>
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-base font-semibold text-foreground">
+            {patient.name}
+          </span>
+        </div>
       </div>
 
       {/* Line 2: Phone & Document */}

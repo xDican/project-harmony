@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, AlertCircle, Stethoscope } from 'lucide-react';
+import { Calendar, AlertCircle, Stethoscope, User } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
 import { useDoctors } from '@/hooks/useDoctors';
@@ -168,9 +168,19 @@ export default function AgendaMedico() {
                         <TableCell className="font-medium">
                           {formatTime(appointment.time)}
                         </TableCell>
-                        <TableCell>{appointment.patient.name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            {appointment.patient.name}
+                          </div>
+                        </TableCell>
                         {isAdmin && (
-                          <TableCell>{appointment.doctor.name}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              {appointment.doctor.name}
+                            </div>
+                          </TableCell>
                         )}
                         <TableCell>
                           <StatusBadge status={appointment.status} />

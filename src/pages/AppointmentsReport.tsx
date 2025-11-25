@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import StatusBadge from '@/components/StatusBadge';
-import { Download, Filter, CalendarIcon } from 'lucide-react';
+import { Download, Filter, CalendarIcon, User, Stethoscope } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import type { AppointmentStatus } from '@/types/appointment';
 import type { Doctor } from '@/types/doctor';
@@ -414,8 +414,18 @@ export default function AppointmentsReport() {
                           <TableRow key={appointment.id}>
                             <TableCell>{formatDate(appointment.date)}</TableCell>
                             <TableCell>{appointment.time}</TableCell>
-                            <TableCell>{appointment.doctors?.name || '-'}</TableCell>
-                            <TableCell>{appointment.patients?.name || '-'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                {appointment.doctors?.name || '-'}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                {appointment.patients?.name || '-'}
+                              </div>
+                            </TableCell>
                             <TableCell>{appointment.patients?.phone || '-'}</TableCell>
                             <TableCell>
                               <StatusBadge status={appointment.status} />
@@ -457,11 +467,11 @@ function AppointmentReportCard({ appointment, formatDate }: AppointmentReportCar
       {/* Line 2: Patient and Doctor */}
       <div className="flex flex-col gap-1 mb-2 text-sm">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">👤</span>
+          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <span className="font-medium">{appointment.patients?.name || '-'}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">🩺</span>
+          <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <span className="text-muted-foreground">{appointment.doctors?.name || '-'}</span>
         </div>
       </div>
