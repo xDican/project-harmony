@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTodayAppointments, getTodayAppointmentsByDoctor, AppointmentWithDetails } from '@/lib/api';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 /**
  * Hook to fetch today's appointments with patient and doctor details
@@ -14,9 +15,7 @@ export const useTodayAppointments = (options?: {
   initialDate?: string;
 }) => {
   // Default to today's date in local timezone if not provided
-  const getToday = () => new Date().toISOString().split('T')[0];
-  
-  const [date, setDate] = useState<string>(options?.initialDate || getToday());
+  const [date, setDate] = useState<string>(options?.initialDate || getLocalDateString());
   const [data, setData] = useState<AppointmentWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
