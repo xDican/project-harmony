@@ -7,7 +7,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -23,13 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, AlertCircle, Search, Clock, User, Stethoscope, Phone, CheckCircle2, XCircle, Circle, UserX } from 'lucide-react';
+import { Calendar, AlertCircle, Search, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
 import { AppointmentWithDetails } from '@/lib/api';
 import { useIsMobile } from '@/hooks/use-mobile';
-import StatusBadge from '@/components/StatusBadge';
 
 /**
  * AgendaSecretaria - Daily appointment schedule for secretary/administrative staff
@@ -227,7 +225,7 @@ function AppointmentsList({
 
   if (isMobile) {
     return (
-      <div className="space-y-4">
+      <div className="border rounded-lg overflow-hidden bg-background">
         {appointments.map((appointment) => (
           <AppointmentCard
             key={appointment.id}
@@ -297,122 +295,65 @@ function AppointmentCard({
     }
   };
 
-  const getStatusIcon = () => {
-    switch (appointment.status) {
-      case 'confirmada':
-        return <CheckCircle2 className="h-12 w-12 text-green-500" />;
-      case 'completada':
-        return <CheckCircle2 className="h-12 w-12 text-gray-500" />;
-      case 'cancelada':
-        return <XCircle className="h-12 w-12 text-red-500" />;
-      case 'no_asistio':
-        return <UserX className="h-12 w-12 text-orange-500" />;
-      default:
-        return <Circle className="h-12 w-12 text-blue-500" />;
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (appointment.status) {
-      case 'confirmada':
-        return 'border-l-green-500';
-      case 'completada':
-        return 'border-l-gray-500';
-      case 'cancelada':
-        return 'border-l-red-500';
-      case 'no_asistio':
-        return 'border-l-orange-500';
-      default:
-        return 'border-l-blue-500';
-    }
-  };
-
   return (
-    <Card className={`overflow-hidden border-l-4 ${getStatusColor()}`}>
-      <CardContent className="p-4">
-        {/* Header: Status Icon + Time */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            {getStatusIcon()}
-            <div>
-              <div className="text-3xl font-bold text-foreground">
-                {formatTime(appointment.time)}
-              </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {appointment.status === 'agendada' && 'Agendada'}
-                {appointment.status === 'confirmada' && 'Confirmada'}
-                {appointment.status === 'completada' && 'Completada'}
-                {appointment.status === 'cancelada' && 'Cancelada'}
-                {appointment.status === 'no_asistio' && 'No se presentó'}
-              </div>
-            </div>
-          </div>
+    <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
+      {/* Line 1: Time + Patient */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <span className="text-base font-bold text-foreground whitespace-nowrap">
+            {formatTime(appointment.time)}
+          </span>
+          <span className="text-base font-medium text-foreground truncate">
+            {appointment.patient.name}
+          </span>
         </div>
+      </div>
 
-        {/* Patient Info - Clean */}
-        <div className="space-y-3 mb-4">
-          <div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-              Paciente
-            </div>
-            <div className="text-lg font-semibold text-foreground">
-              {appointment.patient.name}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-              Doctor
-            </div>
-            <div className="text-base font-medium text-foreground">
-              {appointment.doctor.name}
-            </div>
-          </div>
-
-          {appointment.patient.phone && (
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                Teléfono
-              </div>
-              <div className="text-sm text-foreground">
-                {appointment.patient.phone}
-              </div>
-            </div>
+      {/* Line 2: Doctor + Status + Actions */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-sm text-muted-foreground truncate">
+            {appointment.doctor.name}
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isCanceled ? (
+            <Badge className="text-xs bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700">
+              Cancelada
+            </Badge>
+          ) : (
+            <>
+              <Select
+                value={appointment.status}
+                onValueChange={(value: AppointmentStatus) =>
+                  onStatusChange(appointment.id, value)
+                }
+              >
+                <SelectTrigger className="h-8 w-32 text-xs bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="agendada">Agendada</SelectItem>
+                  <SelectItem value="confirmada">Confirmada</SelectItem>
+                  <SelectItem value="completada">Completada</SelectItem>
+                  <SelectItem value="no_asistio">No asistió</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCancel(appointment.id)}
+                className="h-8 w-8 p-0"
+                title="Cancelar cita"
+              >
+                <XCircle className="h-4 w-4 text-destructive" />
+              </Button>
+            </>
           )}
         </div>
-
-        {/* Actions - Minimal */}
-        {!isCanceled && (
-          <div className="flex gap-2 pt-4 border-t">
-            <Select
-              value={appointment.status}
-              onValueChange={(value: AppointmentStatus) =>
-                onStatusChange(appointment.id, value)
-              }
-            >
-              <SelectTrigger className="flex-1 h-10 bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                <SelectItem value="agendada">Agendada</SelectItem>
-                <SelectItem value="confirmada">Confirmada</SelectItem>
-                <SelectItem value="completada">Completada</SelectItem>
-                <SelectItem value="no_asistio">No se presentó</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onCancel(appointment.id)}
-              className="whitespace-nowrap h-10"
-            >
-              <XCircle className="h-4 w-4 mr-1" />
-              Cancelar
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
