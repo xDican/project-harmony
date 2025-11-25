@@ -1,23 +1,24 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-/**
- * Constantes de configuración
- */
-const MAX_SLOTS_PER_DAY = 12; // Límite opcional de slots por día
+// Zod schemas for validation
+const ScheduleItemSchema = z.object({
+  day_of_week: z.number().int().min(0).max(6, "day_of_week debe estar entre 0 (Domingo) y 6 (Sábado)"),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/, "start_time debe estar en formato HH:MM"),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/, "end_time debe estar en formato HH:MM"),
+});
 
-/**
- * Tipo de un schedule para validación
- */
-interface ScheduleItem {
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-}
+const RequestSchema = z.object({
+  doctorId: z.string().uuid("doctorId debe ser un UUID válido"),
+  schedules: z.array(ScheduleItemSchema).max(50, "Máximo 50 horarios permitidos"),
+});
+
+const MAX_SLOTS_PER_DAY = 12;
 
 /**
  * Convierte tiempo "HH:MM" a minutos desde medianoche
@@ -29,10 +30,8 @@ function timeToMinutes(time: string): number {
 
 /**
  * Valida que los horarios de un día no se solapen
- * @param schedules - Array de horarios para un día específico
- * @throws Error si hay solapamiento o tiempos inválidos
  */
-function validateDaySchedules(schedules: ScheduleItem[]): void {
+function validateDaySchedules(schedules: z.infer<typeof ScheduleItemSchema>[]): void {
   // Validar que end_time > start_time para cada slot
   for (const schedule of schedules) {
     const startMinutes = timeToMinutes(schedule.start_time);
@@ -64,15 +63,12 @@ function validateDaySchedules(schedules: ScheduleItem[]): void {
     }
   }
 
-  // Validar límite de slots por día (opcional)
+  // Validar límite de slots por día
   if (schedules.length > MAX_SLOTS_PER_DAY) {
     throw new Error(`Demasiados slots para un día. Máximo permitido: ${MAX_SLOTS_PER_DAY}`);
   }
 }
 
-/**
- * Edge Function principal para actualizar horarios de un doctor
- */
 Deno.serve(async (req) => {
   // Manejo de preflight CORS
   if (req.method === "OPTIONS") {
@@ -131,14 +127,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5) Validar rol del usuario (admin o secretary)
-    const { data: userData, error: roleError } = await supabaseAdmin
-      .from("users")
+    // 5) Validar rol del usuario usando user_roles (admin o secretary)
+    const { data: userRoles, error: roleError } = await supabaseAdmin
+      .from("user_roles")
       .select("role")
-      .eq("id", user.id)
-      .single();
+      .eq("user_id", user.id);
 
-    if (roleError || !userData) {
+    if (roleError || !userRoles || userRoles.length === 0) {
       console.error("[upsert-doctor-schedules] Role check failed:", roleError);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -146,9 +141,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Solo admin o secretary pueden actualizar horarios
-    if (userData.role !== "admin" && userData.role !== "secretary") {
-      console.error("[upsert-doctor-schedules] Insufficient permissions:", userData.role);
+    const roles = userRoles.map(r => r.role);
+    const hasPermission = roles.includes("admin") || roles.includes("secretary");
+
+    if (!hasPermission) {
+      console.error("[upsert-doctor-schedules] Insufficient permissions. User roles:", roles);
       return new Response(
         JSON.stringify({ error: "Solo administradores y secretarias pueden actualizar horarios" }),
         {
@@ -158,23 +155,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 6) Parsear body de la solicitud
-    const body = await req.json();
-    const { doctorId, schedules } = body;
+    // 6) Parsear y validar body con Zod
+    const rawBody = await req.json();
+    const validationResult = RequestSchema.safeParse(rawBody);
 
-    console.log("[upsert-doctor-schedules] Request:", { doctorId, schedules, userRole: userData.role });
-
-    // 7) Validaciones básicas
-    if (!doctorId) {
-      return new Response(JSON.stringify({ error: "doctorId es requerido" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!Array.isArray(schedules)) {
+    if (!validationResult.success) {
+      console.error("[upsert-doctor-schedules] Validation error:", validationResult.error.errors);
       return new Response(
-        JSON.stringify({ error: "schedules debe ser un array" }),
+        JSON.stringify({ 
+          error: "Datos de entrada inválidos", 
+          details: validationResult.error.errors 
+        }), 
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -182,12 +173,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 8) Validar que el doctor existe
+    const { doctorId, schedules } = validationResult.data;
+
+    console.log("[upsert-doctor-schedules] Request:", { 
+      doctorId, 
+      schedules, 
+      userRoles: roles 
+    });
+
+    // 7) Validar que el doctor existe
     const { data: doctor, error: doctorError } = await supabaseAdmin
       .from("doctors")
       .select("id")
       .eq("id", doctorId)
-      .single();
+      .maybeSingle();
 
     if (doctorError || !doctor) {
       console.error("[upsert-doctor-schedules] Doctor not found:", doctorError);
@@ -197,57 +196,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 9) Validar cada schedule
-    for (const schedule of schedules) {
-      if (
-        typeof schedule.day_of_week !== "number" ||
-        schedule.day_of_week < 0 ||
-        schedule.day_of_week > 6
-      ) {
-        return new Response(
-          JSON.stringify({
-            error: `day_of_week inválido: ${schedule.day_of_week}. Debe ser 0-6 (0=Sunday)`,
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (
-        typeof schedule.start_time !== "string" ||
-        !schedule.start_time.match(/^\d{2}:\d{2}$/)
-      ) {
-        return new Response(
-          JSON.stringify({
-            error: `start_time inválido: ${schedule.start_time}. Formato esperado: HH:MM`,
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (
-        typeof schedule.end_time !== "string" ||
-        !schedule.end_time.match(/^\d{2}:\d{2}$/)
-      ) {
-        return new Response(
-          JSON.stringify({
-            error: `end_time inválido: ${schedule.end_time}. Formato esperado: HH:MM`,
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
-
-    // 10) Agrupar schedules por día y validar cada día
-    const schedulesByDay: Record<number, ScheduleItem[]> = {};
+    // 8) Agrupar schedules por día y validar cada día
+    const schedulesByDay: Record<number, z.infer<typeof ScheduleItemSchema>[]> = {};
 
     for (const schedule of schedules) {
       const day = schedule.day_of_week;
@@ -259,11 +209,11 @@ Deno.serve(async (req) => {
 
     // Validar cada día individualmente
     try {
-      for (const [day, daySchedules] of Object.entries(schedulesByDay)) {
+      for (const daySchedules of Object.values(schedulesByDay)) {
         validateDaySchedules(daySchedules);
       }
     } catch (validationError) {
-      console.error("[upsert-doctor-schedules] Validation error:", validationError);
+      console.error("[upsert-doctor-schedules] Schedule validation error:", validationError);
       const errorMessage = validationError instanceof Error
         ? validationError.message
         : "Error de validación";
@@ -274,13 +224,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 11) Borrar horarios anteriores del doctor
-    // NOTA: Esta operación no está envuelta en una transacción explícita.
-    // Si el insert falla después de un delete exitoso, los horarios se perderán.
-    // Para operaciones críticas, considerar usar una función PostgreSQL que maneje
-    // todo en una transacción SQL. Sin embargo, dado que esta es una operación
-    // administrativa poco frecuente y los horarios se pueden reingresar fácilmente,
-    // se acepta este riesgo menor.
+    // 9) Borrar horarios anteriores del doctor
     const { error: deleteError } = await supabaseAdmin
       .from("doctor_schedules")
       .delete()
@@ -299,7 +243,7 @@ Deno.serve(async (req) => {
 
     console.log("[upsert-doctor-schedules] Old schedules deleted successfully");
 
-    // 12) Insertar nuevos horarios si hay alguno
+    // 10) Insertar nuevos horarios si hay alguno
     if (schedules.length > 0) {
       const schedulesToInsert = schedules.map((schedule) => ({
         doctor_id: doctorId,
@@ -314,8 +258,6 @@ Deno.serve(async (req) => {
 
       if (insertError) {
         console.error("[upsert-doctor-schedules] Error inserting schedules:", insertError);
-        // IMPORTANTE: Si llegamos aquí, los horarios anteriores ya fueron borrados.
-        // Se recomienda intentar la operación nuevamente desde el frontend.
         return new Response(
           JSON.stringify({ 
             error: "Error al insertar nuevos horarios. Los horarios anteriores fueron borrados. Por favor, intente nuevamente." 
@@ -330,7 +272,7 @@ Deno.serve(async (req) => {
 
     console.log("[upsert-doctor-schedules] Schedules updated successfully");
 
-    // 13) Responder con éxito
+    // 11) Responder con éxito
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
