@@ -186,7 +186,7 @@ export const appointments: Appointment[] = [
     time: '08:30',
     patientId: 'pat-001',
     doctorId: 'doc-001',
-    status: 'confirmed',
+    status: 'confirmada',
     notes: 'Control de presión arterial',
   },
   {
@@ -195,7 +195,7 @@ export const appointments: Appointment[] = [
     time: '09:00',
     patientId: 'pat-002',
     doctorId: 'doc-001',
-    status: 'scheduled',
+    status: 'agendada',
     notes: 'Primera consulta cardiología',
   },
   {
@@ -204,7 +204,7 @@ export const appointments: Appointment[] = [
     time: '09:20',
     patientId: 'pat-003',
     doctorId: 'doc-002',
-    status: 'confirmed',
+    status: 'confirmada',
     notes: 'Vacunación infantil',
   },
   {
@@ -213,7 +213,7 @@ export const appointments: Appointment[] = [
     time: '10:30',
     patientId: 'pat-004',
     doctorId: 'doc-003',
-    status: 'confirmed',
+    status: 'confirmada',
     notes: 'Consulta general - dolor de cabeza',
   },
   {
@@ -222,7 +222,7 @@ export const appointments: Appointment[] = [
     time: '11:00',
     patientId: 'pat-005',
     doctorId: 'doc-003',
-    status: 'scheduled',
+    status: 'agendada',
   },
   {
     id: 'apt-006',
@@ -230,7 +230,7 @@ export const appointments: Appointment[] = [
     time: '12:00',
     patientId: 'pat-006',
     doctorId: 'doc-001',
-    status: 'canceled',
+    status: 'cancelada',
     notes: 'Cancelada por el paciente',
   },
 ];

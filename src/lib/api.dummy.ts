@@ -163,10 +163,11 @@ export interface AdminMetrics {
   totalAppointments: number;
   todayAppointments: number;
   statusBreakdown: {
-    scheduled: number;
-    confirmed: number;
-    canceled: number;
-    completed: number;
+    agendada: number;
+    confirmada: number;
+    cancelada: number;
+    completada: number;
+    no_asistio: number;
   };
 }
 
@@ -178,10 +179,11 @@ export function getAdminMetrics(): Promise<AdminMetrics> {
   
   // Count by status
   const statusBreakdown = {
-    scheduled: appointments.filter(apt => apt.status === 'scheduled').length,
-    confirmed: appointments.filter(apt => apt.status === 'confirmed').length,
-    canceled: appointments.filter(apt => apt.status === 'canceled').length,
-    completed: appointments.filter(apt => apt.status === 'completed').length,
+    agendada: appointments.filter(apt => apt.status === 'agendada').length,
+    confirmada: appointments.filter(apt => apt.status === 'confirmada').length,
+    cancelada: appointments.filter(apt => apt.status === 'cancelada').length,
+    completada: appointments.filter(apt => apt.status === 'completada').length,
+    no_asistio: appointments.filter(apt => apt.status === 'no_asistio').length,
   };
   
   const metrics: AdminMetrics = {
@@ -197,7 +199,7 @@ export function getAdminMetrics(): Promise<AdminMetrics> {
 
 /**
  * Update the status of an appointment in-memory
- * Prevents reactivation of canceled appointments
+ * Prevents reactivation of canceled appointments or no-shows
  */
 export function updateAppointmentStatus(
   appointmentId: string,
@@ -206,8 +208,8 @@ export function updateAppointmentStatus(
   const index = appointments.findIndex((a) => a.id === appointmentId);
   if (index === -1) return Promise.resolve(null);
 
-  // Once an appointment is canceled, it cannot be reactivated
-  if (appointments[index].status === "canceled") {
+  // Once an appointment is canceled or no-show, it cannot be reactivated
+  if (appointments[index].status === "cancelada" || appointments[index].status === "no_asistio") {
     return Promise.resolve(appointments[index]);
   }
 
@@ -262,7 +264,7 @@ export function getAvailableSlots(params: { doctorId: string; date: string }): P
     .filter(apt => 
       apt.doctorId === doctorId && 
       apt.date === date && 
-      apt.status !== 'canceled' // Don't count canceled appointments
+      apt.status !== 'cancelada' // Don't count canceled appointments
     )
     .map(apt => apt.time);
   
@@ -289,7 +291,7 @@ export function createAppointment(input: {
     patientId: input.patientId,
     date: input.date,
     time: input.time,
-    status: input.status || 'scheduled',
+    status: input.status || 'agendada',
     notes: input.notes,
   };
   

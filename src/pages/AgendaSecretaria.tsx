@@ -52,10 +52,11 @@ export default function AgendaSecretaria() {
   // Status label mapping for search
   const getStatusLabel = (status: AppointmentStatus): string => {
     const labels: Record<AppointmentStatus, string> = {
-      scheduled: 'agendada',
-      confirmed: 'confirmada',
-      completed: 'completada',
-      canceled: 'cancelada',
+      agendada: 'agendada',
+      confirmada: 'confirmada',
+      completada: 'completada',
+      cancelada: 'cancelada',
+      no_asistio: 'no se presentó',
     };
     return labels[status];
   };
@@ -97,10 +98,10 @@ export default function AgendaSecretaria() {
   const handleCancel = async (appointmentId: string) => {
     const confirmed = window.confirm('¿Seguro que deseas cancelar esta cita?');
     if (confirmed) {
-      const updated = await updateAppointmentStatus(appointmentId, 'canceled');
+      const updated = await updateAppointmentStatus(appointmentId, 'cancelada');
       if (updated) {
         setAppointments(prev =>
-          prev.map(apt => (apt.id === appointmentId ? { ...apt, status: 'canceled' } : apt))
+          prev.map(apt => (apt.id === appointmentId ? { ...apt, status: 'cancelada' } : apt))
         );
       }
     }
@@ -238,17 +239,18 @@ function AppointmentTableRow({
   onCancel,
   formatDateTime 
 }: AppointmentTableRowProps) {
-  const isCanceled = appointment.status === 'canceled';
+  const isCanceled = appointment.status === 'cancelada' || appointment.status === 'no_asistio';
 
   const getStatusBadgeVariant = (status: AppointmentStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
-      case 'scheduled':
+      case 'agendada':
         return 'outline';
-      case 'confirmed':
+      case 'confirmada':
         return 'default';
-      case 'completed':
+      case 'completada':
         return 'secondary';
-      case 'canceled':
+      case 'cancelada':
+      case 'no_asistio':
         return 'destructive';
       default:
         return 'outline';
@@ -257,10 +259,11 @@ function AppointmentTableRow({
 
   const getStatusLabel = (status: AppointmentStatus): string => {
     const labels: Record<AppointmentStatus, string> = {
-      scheduled: 'Agendada',
-      confirmed: 'Confirmada',
-      completed: 'Completada',
-      canceled: 'Cancelada',
+      agendada: 'Agendada',
+      confirmada: 'Confirmada',
+      completada: 'Completada',
+      cancelada: 'Cancelada',
+      no_asistio: 'No se presentó',
     };
     return labels[status];
   };
@@ -291,7 +294,7 @@ function AppointmentTableRow({
       <TableCell>
         {isCanceled ? (
           <Badge variant="destructive" className="whitespace-nowrap">
-            Cancelada
+            {appointment.status === 'cancelada' ? 'Cancelada' : 'No se presentó'}
           </Badge>
         ) : (
           <Select
@@ -304,9 +307,10 @@ function AppointmentTableRow({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background z-50">
-              <SelectItem value="scheduled">Agendada</SelectItem>
-              <SelectItem value="confirmed">Confirmada</SelectItem>
-              <SelectItem value="completed">Completada</SelectItem>
+              <SelectItem value="agendada">Agendada</SelectItem>
+              <SelectItem value="confirmada">Confirmada</SelectItem>
+              <SelectItem value="completada">Completada</SelectItem>
+              <SelectItem value="no_asistio">No se presentó</SelectItem>
             </SelectContent>
           </Select>
         )}

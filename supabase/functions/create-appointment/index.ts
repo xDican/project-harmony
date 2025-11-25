@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       .eq("doctor_id", doctorId)
       .eq("date", date)
       .eq("time", normalizedTime)
-      .neq("status", "cancelled");
+      .neq("status", "cancelada");
 
     if (existingError) {
       console.error("[create-appointment] Error checking existing appointments:", existingError);
@@ -166,8 +166,8 @@ Deno.serve(async (req) => {
         date,
         time: normalizedTime,
         notes: notes || null,
-        status: "scheduled", // o el default que uses
-        appointment_at: appointmentAt, // 👈 AQUÍ SE ENVÍA date+time
+        status: "agendada",
+        appointment_at: appointmentAt,
       })
       .select()
       .single();

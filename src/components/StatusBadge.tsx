@@ -11,22 +11,26 @@ interface StatusBadgeProps {
  */
 const StatusBadge = ({ status }: StatusBadgeProps) => {
   const statusConfig: Record<AppointmentStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    scheduled: { 
+    agendada: { 
       label: 'Agendada', 
       variant: 'outline' 
     },
-    confirmed: { 
+    confirmada: { 
       label: 'Confirmada', 
       variant: 'default' 
     },
-    canceled: { 
+    cancelada: { 
       label: 'Cancelada', 
       variant: 'destructive' 
     },
-    completed: { 
+    completada: { 
       label: 'Completada', 
       variant: 'secondary' 
     },
+    no_asistio: {
+      label: 'No se presentó',
+      variant: 'destructive'
+    }
   };
 
   const config = statusConfig[status] || {
