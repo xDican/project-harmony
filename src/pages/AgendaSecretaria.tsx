@@ -239,7 +239,7 @@ function AppointmentTableRow({
   onCancel,
   formatDateTime 
 }: AppointmentTableRowProps) {
-  const isCanceled = appointment.status === 'cancelada' || appointment.status === 'no_asistio';
+  const isCanceled = appointment.status === 'cancelada';
 
   const getStatusBadgeVariant = (status: AppointmentStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
@@ -293,8 +293,8 @@ function AppointmentTableRow({
       {/* Status */}
       <TableCell>
         {isCanceled ? (
-          <Badge variant="destructive" className="whitespace-nowrap">
-            {appointment.status === 'cancelada' ? 'Cancelada' : 'No se presentó'}
+          <Badge className="whitespace-nowrap bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700">
+            Cancelada
           </Badge>
         ) : (
           <Select
