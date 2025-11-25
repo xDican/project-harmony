@@ -9,6 +9,7 @@ import { Search, Users, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getAllPatients } from '@/lib/api';
 import type { Patient } from '@/types/patient';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 /**
  * Pacientes - Patient management and search page
@@ -16,6 +17,7 @@ import type { Patient } from '@/types/patient';
  */
 export default function Pacientes() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -105,41 +107,55 @@ export default function Pacientes() {
               </Alert>
             )}
 
-            {/* Patients Table */}
+            {/* Patients List */}
             {!isLoading && filteredPatients.length > 0 && (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Teléfono</TableHead>
-                      <TableHead>Documento</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <>
+                {isMobile ? (
+                  <div className="space-y-0 border rounded-md overflow-hidden">
                     {filteredPatients.map((patient) => (
-                      <TableRow key={patient.id}>
-                        <TableCell className="font-medium">{patient.name}</TableCell>
-                        <TableCell>{patient.phone || '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {patient.documentId || '—'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(`/pacientes/${patient.id}`)}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Ver detalle
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                      <PatientCard
+                        key={patient.id}
+                        patient={patient}
+                        onViewDetail={() => navigate(`/pacientes/${patient.id}`)}
+                      />
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>Teléfono</TableHead>
+                          <TableHead>Documento</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredPatients.map((patient) => (
+                          <TableRow key={patient.id}>
+                            <TableCell className="font-medium">{patient.name}</TableCell>
+                            <TableCell>{patient.phone || '—'}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {patient.documentId || '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/pacientes/${patient.id}`)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Ver detalle
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Results Count */}
@@ -152,5 +168,42 @@ export default function Pacientes() {
         </Card>
       </div>
     </MainLayout>
+  );
+}
+
+// Mobile Card Component
+function PatientCard({ patient, onViewDetail }: { 
+  patient: Patient; 
+  onViewDetail: () => void;
+}) {
+  return (
+    <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
+      {/* Line 1: Patient Name */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-base font-semibold text-foreground">
+          {patient.name}
+        </span>
+      </div>
+
+      {/* Line 2: Phone & Document */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+          {patient.phone && (
+            <span>📱 {patient.phone}</span>
+          )}
+          {patient.documentId && (
+            <span>🆔 {patient.documentId}</span>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onViewDetail}
+        >
+          <Eye className="h-4 w-4 mr-1" />
+          Ver
+        </Button>
+      </div>
+    </div>
   );
 }
