@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -22,11 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, AlertCircle, Search } from 'lucide-react';
+import { Calendar, AlertCircle, Search, Clock, User, Stethoscope, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
 import { AppointmentWithDetails } from '@/lib/api';
+import { useIsMobile } from '@/hooks/use-mobile';
+import StatusBadge from '@/components/StatusBadge';
 
 /**
  * AgendaSecretaria - Daily appointment schedule for secretary/administrative staff
@@ -193,36 +196,184 @@ export default function AgendaSecretaria() {
           </Alert>
         )}
 
-        {/* Appointments Table */}
+        {/* Appointments List - Mobile/Desktop */}
         {!isLoading && !error && filteredAppointments.length > 0 && (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">Paciente</TableHead>
-                  <TableHead className="w-[150px]">Doctor</TableHead>
-                  <TableHead className="w-[180px]">Fecha y Hora</TableHead>
-                  <TableHead className="w-[130px]">WhatsApp</TableHead>
-                  <TableHead className="w-[160px]">Estado</TableHead>
-                  <TableHead className="w-[120px] text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAppointments.map((appointment) => (
-                  <AppointmentTableRow
-                    key={appointment.id}
-                    appointment={appointment}
-                    onStatusChange={handleStatusChange}
-                    onCancel={handleCancel}
-                    formatDateTime={formatDateTime}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <AppointmentsList
+            appointments={filteredAppointments}
+            onStatusChange={handleStatusChange}
+            onCancel={handleCancel}
+            formatDateTime={formatDateTime}
+          />
         )}
       </div>
     </MainLayout>
+  );
+}
+
+interface AppointmentsListProps {
+  appointments: AppointmentWithDetails[];
+  onStatusChange: (id: string, status: AppointmentStatus) => void;
+  onCancel: (id: string) => void;
+  formatDateTime: (date: string, time: string) => string;
+}
+
+function AppointmentsList({ 
+  appointments, 
+  onStatusChange, 
+  onCancel,
+  formatDateTime 
+}: AppointmentsListProps) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {appointments.map((appointment) => (
+          <AppointmentCard
+            key={appointment.id}
+            appointment={appointment}
+            onStatusChange={onStatusChange}
+            onCancel={onCancel}
+            formatDateTime={formatDateTime}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[200px]">Paciente</TableHead>
+            <TableHead className="w-[150px]">Doctor</TableHead>
+            <TableHead className="w-[180px]">Fecha y Hora</TableHead>
+            <TableHead className="w-[130px]">WhatsApp</TableHead>
+            <TableHead className="w-[160px]">Estado</TableHead>
+            <TableHead className="w-[120px] text-right">Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {appointments.map((appointment) => (
+            <AppointmentTableRow
+              key={appointment.id}
+              appointment={appointment}
+              onStatusChange={onStatusChange}
+              onCancel={onCancel}
+              formatDateTime={formatDateTime}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+interface AppointmentCardProps {
+  appointment: AppointmentWithDetails;
+  onStatusChange: (id: string, status: AppointmentStatus) => void;
+  onCancel: (id: string) => void;
+  formatDateTime: (date: string, time: string) => string;
+}
+
+function AppointmentCard({ 
+  appointment, 
+  onStatusChange, 
+  onCancel,
+  formatDateTime 
+}: AppointmentCardProps) {
+  const isCanceled = appointment.status === 'cancelada';
+
+  const formatTime = (time: string): string => {
+    try {
+      const [hours, minutes] = time.split(':');
+      const hour = parseInt(hours);
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      return `${displayHour}:${minutes} ${period}`;
+    } catch {
+      return time;
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-4">
+        {/* Time - Prominente */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            <span className="text-2xl font-bold text-foreground">
+              {formatTime(appointment.time)}
+            </span>
+          </div>
+          <StatusBadge status={appointment.status} />
+        </div>
+
+        {/* Patient Name - Prominente */}
+        <div className="flex items-start gap-2 mb-3">
+          <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-lg font-semibold text-foreground leading-tight">
+              {appointment.patient.name}
+            </p>
+            {appointment.patient.phone && (
+              <div className="flex items-center gap-1 mt-1">
+                <Phone className="h-3 w-3 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {appointment.patient.phone}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Doctor - Prominente */}
+        <div className="flex items-center gap-2 mb-4">
+          <Stethoscope className="h-5 w-5 text-muted-foreground" />
+          <span className="text-base font-medium text-foreground">
+            {appointment.doctor.name}
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-3 border-t">
+          {isCanceled ? (
+            <div className="w-full text-center py-2 text-sm text-muted-foreground">
+              Cita cancelada
+            </div>
+          ) : (
+            <>
+              <Select
+                value={appointment.status}
+                onValueChange={(value: AppointmentStatus) =>
+                  onStatusChange(appointment.id, value)
+                }
+              >
+                <SelectTrigger className="flex-1 h-9 bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="agendada">Agendada</SelectItem>
+                  <SelectItem value="confirmada">Confirmada</SelectItem>
+                  <SelectItem value="completada">Completada</SelectItem>
+                  <SelectItem value="no_asistio">No se presentó</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onCancel(appointment.id)}
+                className="whitespace-nowrap"
+              >
+                Cancelar
+              </Button>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -270,27 +421,18 @@ function AppointmentTableRow({
 
   return (
     <TableRow>
-      {/* Patient Name */}
       <TableCell className="font-medium">
         {appointment.patient.name}
       </TableCell>
-
-      {/* Doctor Name */}
       <TableCell className="text-muted-foreground">
         {appointment.doctor.name}
       </TableCell>
-
-      {/* Date & Time */}
       <TableCell className="text-sm">
         {formatDateTime(appointment.date, appointment.time)}
       </TableCell>
-
-      {/* WhatsApp / Phone */}
       <TableCell className="text-sm">
         {appointment.patient.phone || '-'}
       </TableCell>
-
-      {/* Status */}
       <TableCell>
         {isCanceled ? (
           <Badge className="whitespace-nowrap bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700">
@@ -315,8 +457,6 @@ function AppointmentTableRow({
           </Select>
         )}
       </TableCell>
-
-      {/* Actions */}
       <TableCell className="text-right">
         {!isCanceled && (
           <Button
