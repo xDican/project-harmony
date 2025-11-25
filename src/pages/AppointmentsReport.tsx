@@ -6,12 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import StatusBadge from '@/components/StatusBadge';
-import { Download, Filter } from 'lucide-react';
+import { Download, Filter, CalendarIcon } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import type { AppointmentStatus } from '@/types/appointment';
 import type { Doctor } from '@/types/doctor';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface AppointmentReport {
   id: string;
@@ -27,12 +32,12 @@ export default function AppointmentsReport() {
   const isMobile = useIsMobile();
   
   // Estados para filtros
-  const [fromDate, setFromDate] = useState(() => {
+  const [fromDate, setFromDate] = useState<Date>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
-    return date.toISOString().split('T')[0];
+    return date;
   });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [toDate, setToDate] = useState<Date>(() => new Date());
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
@@ -76,6 +81,9 @@ export default function AppointmentsReport() {
   async function loadAppointments() {
     setIsLoading(true);
     try {
+      const fromDateStr = format(fromDate, 'yyyy-MM-dd');
+      const toDateStr = format(toDate, 'yyyy-MM-dd');
+      
       let query = supabase
         .from('appointments')
         .select(`
@@ -94,8 +102,8 @@ export default function AppointmentsReport() {
             phone
           )
         `)
-        .gte('date', fromDate)
-        .lte('date', toDate)
+        .gte('date', fromDateStr)
+        .lte('date', toDateStr)
         .order('date', { ascending: true })
         .order('time', { ascending: true });
 
@@ -195,24 +203,65 @@ export default function AppointmentsReport() {
             {/* Filtros */}
             <div className="space-y-4 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Desde */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Desde</label>
-                  <Input
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !fromDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {fromDate ? format(fromDate, "dd/MM/yyyy") : <span>Seleccionar</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={fromDate}
+                        onSelect={(date) => date && setFromDate(date)}
+                        initialFocus
+                        locale={es}
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
+                {/* Hasta */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Hasta</label>
-                  <Input
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !toDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {toDate ? format(toDate, "dd/MM/yyyy") : <span>Seleccionar</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={toDate}
+                        onSelect={(date) => date && setToDate(date)}
+                        initialFocus
+                        locale={es}
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
+                {/* Doctor */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Doctor</label>
                   <Select
@@ -234,6 +283,7 @@ export default function AppointmentsReport() {
                   </Select>
                 </div>
 
+                {/* Estado */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Estado</label>
                   <Select value={selectedStatus} onValueChange={setSelectedStatus}>
