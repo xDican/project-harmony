@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,34 +67,64 @@ serve(async (req) => {
       throw new Error("Only admins can create users");
     }
 
-    // Get request body
-    const { email, password, role, specialtyId, fullName, phone, prefix } = await req.json();
+    // Parse request body
+    const body = await req.json();
 
-    // Validate required fields
-    if (!email || !password || !role) {
-      throw new Error("Email, password, and role are required");
+    // Define validation schema
+    const baseUserSchema = z.object({
+      email: z.string().email("Invalid email format").max(255, "Email too long"),
+      password: z.string().min(8, "Password must be at least 8 characters"),
+      role: z.enum(["admin", "secretary", "doctor"], { 
+        errorMap: () => ({ message: "Role must be admin, secretary, or doctor" })
+      }),
+    });
+
+    const doctorUserSchema = baseUserSchema.extend({
+      specialtyId: z.string().uuid("Invalid specialty ID format"),
+      fullName: z.string().min(2, "Name too short").max(100, "Name too long"),
+      phone: z.string().regex(/^[\d\s\-+()]+$/, "Invalid phone format").max(20, "Phone too long"),
+      prefix: z.string().max(20, "Prefix too long"),
+    });
+
+    // Validate based on role
+    let validationResult;
+    const partialParse = baseUserSchema.safeParse(body);
+    
+    if (!partialParse.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Validation failed", 
+          details: partialParse.error.errors 
+        }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    if (role === "doctor" && !specialtyId) {
-      throw new Error("Specialty is required for doctor role");
+    if (partialParse.data.role === "doctor") {
+      validationResult = doctorUserSchema.safeParse(body);
+    } else {
+      validationResult = baseUserSchema.safeParse(body);
     }
 
-    if (role === "doctor" && !fullName) {
-      throw new Error("Full name is required for doctor role");
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Validation failed", 
+          details: validationResult.error.errors 
+        }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    if (role === "doctor" && !phone) {
-      throw new Error("Phone is required for doctor role");
-    }
-
-    if (role === "doctor" && !prefix) {
-      throw new Error("Prefix is required for doctor role");
-    }
-
-    // Validate role
-    if (!["admin", "secretary", "doctor"].includes(role)) {
-      throw new Error("Invalid role");
-    }
+    const { email, password, role, specialtyId, fullName, phone, prefix } = validationResult.data as {
+      email: string;
+      password: string;
+      role: string;
+      specialtyId?: string;
+      fullName?: string;
+      phone?: string;
+      prefix?: string;
+    };
 
     // Create the auth user with admin client
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
