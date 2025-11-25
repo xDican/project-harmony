@@ -30,6 +30,18 @@ export default function AgendaMedico() {
     locale: es,
   });
 
+  // Format time to 12-hour format
+  const formatTime = (time: string): string => {
+    try {
+      const [hours, minutes] = time.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours), parseInt(minutes));
+      return format(date, 'h:mm a', { locale: es });
+    } catch {
+      return time;
+    }
+  };
+
   // Fetch doctors list (only for admin)
   const { data: doctors, isLoading: loadingDoctors } = useDoctors();
 
@@ -81,6 +93,11 @@ export default function AgendaMedico() {
             <Calendar className="h-4 w-4" />
             <p className="capitalize">{formattedDate}</p>
           </div>
+          {!loadingAppointments && !loadingDoctors && appointments.length > 0 && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {appointments.length} {appointments.length === 1 ? 'cita programada' : 'citas programadas'} hoy
+            </p>
+          )}
         </div>
 
         {/* Doctor Selection (only for admin) */}
@@ -149,7 +166,7 @@ export default function AgendaMedico() {
                     {appointments.map((appointment) => (
                       <TableRow key={appointment.id}>
                         <TableCell className="font-medium">
-                          {appointment.time}
+                          {formatTime(appointment.time)}
                         </TableCell>
                         <TableCell>{appointment.patient.name}</TableCell>
                         {isAdmin && (
