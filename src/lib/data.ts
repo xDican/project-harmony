@@ -195,7 +195,7 @@ export const appointments: Appointment[] = [
     time: '09:00',
     patientId: 'pat-002',
     doctorId: 'doc-001',
-    status: 'pending',
+    status: 'scheduled',
     notes: 'Primera consulta cardiología',
   },
   {
@@ -222,7 +222,7 @@ export const appointments: Appointment[] = [
     time: '11:00',
     patientId: 'pat-005',
     doctorId: 'doc-003',
-    status: 'pending',
+    status: 'scheduled',
   },
   {
     id: 'apt-006',

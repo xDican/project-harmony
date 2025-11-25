@@ -52,7 +52,7 @@ export default function AgendaSecretaria() {
   // Status label mapping for search
   const getStatusLabel = (status: AppointmentStatus): string => {
     const labels: Record<AppointmentStatus, string> = {
-      pending: 'pendiente',
+      scheduled: 'agendada',
       confirmed: 'confirmada',
       completed: 'completada',
       canceled: 'cancelada',
@@ -242,7 +242,7 @@ function AppointmentTableRow({
 
   const getStatusBadgeVariant = (status: AppointmentStatus): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
-      case 'pending':
+      case 'scheduled':
         return 'outline';
       case 'confirmed':
         return 'default';
@@ -257,7 +257,7 @@ function AppointmentTableRow({
 
   const getStatusLabel = (status: AppointmentStatus): string => {
     const labels: Record<AppointmentStatus, string> = {
-      pending: 'Pendiente',
+      scheduled: 'Agendada',
       confirmed: 'Confirmada',
       completed: 'Completada',
       canceled: 'Cancelada',
@@ -304,7 +304,7 @@ function AppointmentTableRow({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background z-50">
-              <SelectItem value="pending">Pendiente de cita</SelectItem>
+              <SelectItem value="scheduled">Agendada</SelectItem>
               <SelectItem value="confirmed">Confirmada</SelectItem>
               <SelectItem value="completed">Completada</SelectItem>
             </SelectContent>

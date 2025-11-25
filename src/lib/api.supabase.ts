@@ -12,11 +12,15 @@ import { DateTime } from "luxon";
 // --------------------------
 function dbStatusToAppStatus(dbStatus: string): AppointmentStatus {
   if (dbStatus === "cancelled") return "canceled";
+  // Map database status to frontend status
+  // "scheduled" stays as "scheduled"
   return dbStatus as AppointmentStatus;
 }
 
 function appStatusToDbStatus(appStatus: AppointmentStatus): string {
   if (appStatus === "canceled") return "cancelled";
+  // Map frontend status to database status
+  // "scheduled" stays as "scheduled"
   return appStatus;
 }
 
