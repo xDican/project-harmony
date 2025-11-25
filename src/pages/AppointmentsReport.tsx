@@ -194,17 +194,18 @@ export default function AppointmentsReport() {
 
   return (
     <MainLayout>
-      <div className="max-w-7xl mx-auto py-6 px-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Reporte de Citas</CardTitle>
-            <CardDescription>
-              Filtra y exporta el historial de citas del sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Filtros */}
-            <div className="space-y-4 mb-6">
+      <div className="p-4 md:p-6 space-y-6">
+        {/* Header */}
+        <div className="space-y-2">
+          <h1 className="text-2xl md:text-3xl font-bold">Reporte de Citas</h1>
+          <p className="text-sm text-muted-foreground">
+            Filtra y exporta el historial de citas del sistema
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          {/* Filtros */}
+          <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Desde */}
                 <div className="space-y-2">
@@ -325,30 +326,31 @@ export default function AppointmentsReport() {
                 </Button>
               </div>
             </div>
+          </div>
 
-            {/* Contador */}
-            <div className="mb-4">
+          {/* Contador */}
+          <div>
               <p className="text-sm text-muted-foreground">
                 {isLoading ? 'Cargando...' : `${appointments.length} citas encontradas`}
               </p>
-            </div>
+          </div>
 
-            {/* Tabla / Cards */}
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <p className="text-muted-foreground">Cargando citas...</p>
-              </div>
-            ) : appointments.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <p className="text-muted-foreground">
-                  No hay citas que coincidan con los filtros seleccionados.
-                </p>
-              </div>
-            ) : (
-              <>
-                {isMobile ? (
-                  <>
-                    <div className="space-y-0 border rounded-md overflow-hidden">
+          {/* Tabla / Cards */}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">Cargando citas...</p>
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">
+                No hay citas que coincidan con los filtros seleccionados.
+              </p>
+            </div>
+          ) : (
+            <>
+              {isMobile ? (
+                <>
+                  <div className="space-y-0 border rounded-md overflow-hidden bg-card">
                       {(() => {
                         const totalPages = Math.ceil(appointments.length / itemsPerPage);
                         const startIndex = (currentPage - 1) * itemsPerPage;
@@ -391,11 +393,11 @@ export default function AppointmentsReport() {
                             )}
                           </>
                         );
-                      })()}
-                    </div>
-                  </>
-                ) : (
-                  <div className="border rounded-lg overflow-hidden">
+                    })()}
+                  </div>
+                </>
+              ) : (
+                <div className="border rounded-lg overflow-hidden bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -424,14 +426,13 @@ export default function AppointmentsReport() {
                             </TableCell>
                           </TableRow>
                         ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
               </>
             )}
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </MainLayout>
   );
