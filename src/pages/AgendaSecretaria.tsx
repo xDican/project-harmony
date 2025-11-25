@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, AlertCircle, Search } from 'lucide-react';
+import { Calendar, AlertCircle, Search, User, Stethoscope } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
@@ -345,9 +345,12 @@ function AppointmentCard({
 
       {/* Line 2: Patient Name + Status */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-base font-semibold text-foreground">
-          {appointment.patient.name}
-        </span>
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-base font-semibold text-foreground">
+            {appointment.patient.name}
+          </span>
+        </div>
         
         <div className="flex-shrink-0">
           {isCanceled ? (
@@ -377,9 +380,12 @@ function AppointmentCard({
 
       {/* Line 3: Doctor Name + Cancel Button */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground">
-          {appointment.doctor.name}
-        </span>
+        <div className="flex items-center gap-2">
+          <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground">
+            {appointment.doctor.name}
+          </span>
+        </div>
         
         {!isCanceled && (
           <Button
@@ -442,10 +448,16 @@ function AppointmentTableRow({
   return (
     <TableRow>
       <TableCell className="font-medium">
-        {appointment.patient.name}
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          {appointment.patient.name}
+        </div>
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {appointment.doctor.name}
+        <div className="flex items-center gap-2">
+          <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          {appointment.doctor.name}
+        </div>
       </TableCell>
       <TableCell className="text-sm">
         {formatDateTime(appointment.date, appointment.time)}
