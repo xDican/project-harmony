@@ -54,6 +54,7 @@ interface ApiModule {
   getTodayAppointments: (date: string) => Promise<AppointmentWithDetails[]>;
   getTodayAppointmentsByDoctor: (doctorId: string, date: string) => Promise<AppointmentWithDetails[]>;
   getPatientAppointments: (patientId: string) => Promise<AppointmentWithDetails[]>;
+  getAppointmentsByDateRange: (params: { startDate: string; endDate: string; doctorId?: string }) => Promise<AppointmentWithDetails[]>;
   updateAppointmentStatus: (appointmentId: string, newStatus: AppointmentStatus) => Promise<Appointment | null>;
   createAppointment: (input: {
     doctorId: string;
@@ -135,6 +136,18 @@ export async function getTodayAppointmentsByDoctor(
 export async function getPatientAppointments(patientId: string): Promise<AppointmentWithDetails[]> {
   const apiModule = await getApiModule();
   return await apiModule.getPatientAppointments(patientId);
+}
+
+/**
+ * Get appointments within a date range (for calendar view)
+ */
+export async function getAppointmentsByDateRange(params: {
+  startDate: string;
+  endDate: string;
+  doctorId?: string;
+}): Promise<AppointmentWithDetails[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getAppointmentsByDateRange(params);
 }
 
 /**
