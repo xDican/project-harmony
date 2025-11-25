@@ -31,6 +31,9 @@ export default function PatientDetail() {
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const itemsPerPage = 5;
 
   const { upcoming, past, isLoading, error, refetch } = usePatientAppointments(id || '');
 
@@ -101,6 +104,18 @@ export default function PatientDetail() {
     
     return aptDate >= today;
   };
+
+  // Pagination for upcoming appointments
+  const upcomingTotalPages = Math.ceil(upcoming.length / itemsPerPage);
+  const upcomingStartIndex = (upcomingPage - 1) * itemsPerPage;
+  const upcomingEndIndex = upcomingStartIndex + itemsPerPage;
+  const paginatedUpcoming = isMobile ? upcoming.slice(upcomingStartIndex, upcomingEndIndex) : upcoming;
+
+  // Pagination for past appointments
+  const historyTotalPages = Math.ceil(past.length / itemsPerPage);
+  const historyStartIndex = (historyPage - 1) * itemsPerPage;
+  const historyEndIndex = historyStartIndex + itemsPerPage;
+  const paginatedPast = isMobile ? past.slice(historyStartIndex, historyEndIndex) : past;
 
   if (!id) {
     return (
@@ -225,19 +240,44 @@ export default function PatientDetail() {
                 {!isLoading && upcoming.length > 0 && (
                   <>
                     {isMobile ? (
-                      <div className="space-y-0 border rounded-md overflow-hidden mt-4">
-                        {upcoming.map((apt) => (
-                          <UpcomingAppointmentCard
-                            key={apt.id}
-                            appointment={apt}
-                            formatDate={formatDate}
-                            formatTime={formatTime}
-                            canCancelAppointment={canCancelAppointment}
-                            handleCancelClick={handleCancelClick}
-                            cancelingId={cancelingId}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        <div className="space-y-0 border rounded-md overflow-hidden mt-4">
+                          {paginatedUpcoming.map((apt) => (
+                            <UpcomingAppointmentCard
+                              key={apt.id}
+                              appointment={apt}
+                              formatDate={formatDate}
+                              formatTime={formatTime}
+                              canCancelAppointment={canCancelAppointment}
+                              handleCancelClick={handleCancelClick}
+                              cancelingId={cancelingId}
+                            />
+                          ))}
+                        </div>
+                        {upcomingTotalPages > 1 && (
+                          <div className="flex items-center justify-between mt-4 px-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setUpcomingPage(p => Math.max(1, p - 1))}
+                              disabled={upcomingPage === 1}
+                            >
+                              Anterior
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Página {upcomingPage} de {upcomingTotalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setUpcomingPage(p => Math.min(upcomingTotalPages, p + 1))}
+                              disabled={upcomingPage === upcomingTotalPages}
+                            >
+                              Siguiente
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="rounded-md border">
                         <Table>
@@ -306,16 +346,41 @@ export default function PatientDetail() {
                 {!isLoading && past.length > 0 && (
                   <>
                     {isMobile ? (
-                      <div className="space-y-0 border rounded-md overflow-hidden mt-4">
-                        {past.map((apt) => (
-                          <PastAppointmentCard
-                            key={apt.id}
-                            appointment={apt}
-                            formatDate={formatDate}
-                            formatTime={formatTime}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        <div className="space-y-0 border rounded-md overflow-hidden mt-4">
+                          {paginatedPast.map((apt) => (
+                            <PastAppointmentCard
+                              key={apt.id}
+                              appointment={apt}
+                              formatDate={formatDate}
+                              formatTime={formatTime}
+                            />
+                          ))}
+                        </div>
+                        {historyTotalPages > 1 && (
+                          <div className="flex items-center justify-between mt-4 px-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                              disabled={historyPage === 1}
+                            >
+                              Anterior
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Página {historyPage} de {historyTotalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setHistoryPage(p => Math.min(historyTotalPages, p + 1))}
+                              disabled={historyPage === historyTotalPages}
+                            >
+                              Siguiente
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="rounded-md border">
                         <Table>

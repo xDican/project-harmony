@@ -30,6 +30,8 @@ interface AppointmentReport {
 
 export default function AppointmentsReport() {
   const isMobile = useIsMobile();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   
   // Estados para filtros
   const [fromDate, setFromDate] = useState<Date>(() => {
@@ -80,6 +82,7 @@ export default function AppointmentsReport() {
 
   async function loadAppointments() {
     setIsLoading(true);
+    setCurrentPage(1); // Reset to page 1 when loading new data
     try {
       const fromDateStr = format(fromDate, 'yyyy-MM-dd');
       const toDateStr = format(toDate, 'yyyy-MM-dd');
@@ -344,15 +347,53 @@ export default function AppointmentsReport() {
             ) : (
               <>
                 {isMobile ? (
-                  <div className="space-y-0 border rounded-md overflow-hidden">
-                    {appointments.map((appointment) => (
-                      <AppointmentReportCard
-                        key={appointment.id}
-                        appointment={appointment}
-                        formatDate={formatDate}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className="space-y-0 border rounded-md overflow-hidden">
+                      {(() => {
+                        const totalPages = Math.ceil(appointments.length / itemsPerPage);
+                        const startIndex = (currentPage - 1) * itemsPerPage;
+                        const endIndex = startIndex + itemsPerPage;
+                        const paginatedAppointments = appointments.slice(startIndex, endIndex);
+                        
+                        return (
+                          <>
+                            {paginatedAppointments.map((appointment) => (
+                              <AppointmentReportCard
+                                key={appointment.id}
+                                appointment={appointment}
+                                formatDate={formatDate}
+                              />
+                            ))}
+                            {totalPages > 1 && (
+                              <div className="border-t p-4">
+                                <div className="flex items-center justify-between">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                  >
+                                    Anterior
+                                  </Button>
+                                  <span className="text-sm text-muted-foreground">
+                                    Página {currentPage} de {totalPages}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                  >
+                                    Siguiente
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <Table>

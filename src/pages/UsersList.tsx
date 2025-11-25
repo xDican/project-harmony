@@ -34,6 +34,8 @@ export default function UsersList() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     loadUsers();
@@ -75,6 +77,7 @@ export default function UsersList() {
     }
 
     setFilteredUsers(result);
+    setCurrentPage(1); // Reset to page 1 when filters change
   };
 
   if (!isAdmin) {
@@ -187,26 +190,64 @@ export default function UsersList() {
               <>
                 {isMobile ? (
                   /* Mobile Card View */
-                  <div className="space-y-0 border rounded-md overflow-hidden">
-                    {filteredUsers.length === 0 ? (
-                      <div className="py-8 text-center text-muted-foreground">
-                        No se encontraron usuarios
-                      </div>
-                    ) : (
-                      filteredUsers.map((user) => (
-                        <UserCard
-                          key={user.id}
-                          user={user}
-                          onEdit={() => navigate(`/admin/users/${user.id}/edit`)}
-                          onSchedule={
-                            user.role === 'doctor' && user.doctor
-                              ? () => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)
-                              : undefined
-                          }
-                        />
-                      ))
-                    )}
-                  </div>
+                  <>
+                    <div className="space-y-0 border rounded-md overflow-hidden">
+                      {filteredUsers.length === 0 ? (
+                        <div className="py-8 text-center text-muted-foreground">
+                          No se encontraron usuarios
+                        </div>
+                      ) : (
+                        (() => {
+                          const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+                          const startIndex = (currentPage - 1) * itemsPerPage;
+                          const endIndex = startIndex + itemsPerPage;
+                          const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+                          
+                          return (
+                            <>
+                              {paginatedUsers.map((user) => (
+                                <UserCard
+                                  key={user.id}
+                                  user={user}
+                                  onEdit={() => navigate(`/admin/users/${user.id}/edit`)}
+                                  onSchedule={
+                                    user.role === 'doctor' && user.doctor
+                                      ? () => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)
+                                      : undefined
+                                  }
+                                />
+                              ))}
+                              {totalPages > 1 && (
+                                <div className="border-t p-4">
+                                  <div className="flex items-center justify-between">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                      disabled={currentPage === 1}
+                                    >
+                                      Anterior
+                                    </Button>
+                                    <span className="text-sm text-muted-foreground">
+                                      Página {currentPage} de {totalPages}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                      disabled={currentPage === totalPages}
+                                    >
+                                      Siguiente
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
+                      )}
+                    </div>
+                  </>
                 ) : (
                   /* Desktop Table View */
                   <div className="border rounded-lg overflow-hidden">
