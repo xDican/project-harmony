@@ -84,12 +84,12 @@ export interface UserWithRelations {
 // Get all users with doctor and specialty info
 // --------------------------
 export async function getAllUsers(): Promise<UserWithRelations[]> {
-  const { data, error } = await supabase
+  // First, get all users with their related data
+  const { data: usersData, error: usersError } = await supabase
     .from("users")
     .select(`
       id,
       email,
-      role,
       created_at,
       doctor:doctor_id (
         id,
@@ -108,15 +108,33 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
     `)
     .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error getAllUsers:", error);
-    throw error;
+  if (usersError) {
+    console.error("Error getAllUsers:", usersError);
+    throw usersError;
   }
 
-  return (data as any[]).map((user) => ({
+  // Get all user roles
+  const { data: rolesData, error: rolesError } = await supabase
+    .from("user_roles")
+    .select("user_id, role");
+
+  if (rolesError) {
+    console.error("Error fetching user roles:", rolesError);
+    throw rolesError;
+  }
+
+  // Create a map of user_id to role (using first role found)
+  const userRolesMap = new Map<string, string>();
+  (rolesData || []).forEach((roleRecord) => {
+    if (!userRolesMap.has(roleRecord.user_id)) {
+      userRolesMap.set(roleRecord.user_id, roleRecord.role);
+    }
+  });
+
+  return (usersData as any[]).map((user) => ({
     id: user.id,
     email: user.email,
-    role: user.role,
+    role: userRolesMap.get(user.id) || 'unknown',
     createdAt: user.created_at,
     doctor: user.doctor ? {
       id: user.doctor.id,
