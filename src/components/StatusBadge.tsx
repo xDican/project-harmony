@@ -11,8 +11,8 @@ interface StatusBadgeProps {
  */
 const StatusBadge = ({ status }: StatusBadgeProps) => {
   const statusConfig: Record<AppointmentStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    pending: { 
-      label: 'Pendiente', 
+    scheduled: { 
+      label: 'Agendada', 
       variant: 'outline' 
     },
     confirmed: { 

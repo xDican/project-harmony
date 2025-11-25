@@ -163,7 +163,7 @@ export interface AdminMetrics {
   totalAppointments: number;
   todayAppointments: number;
   statusBreakdown: {
-    pending: number;
+    scheduled: number;
     confirmed: number;
     canceled: number;
     completed: number;
@@ -178,7 +178,7 @@ export function getAdminMetrics(): Promise<AdminMetrics> {
   
   // Count by status
   const statusBreakdown = {
-    pending: appointments.filter(apt => apt.status === 'pending').length,
+    scheduled: appointments.filter(apt => apt.status === 'scheduled').length,
     confirmed: appointments.filter(apt => apt.status === 'confirmed').length,
     canceled: appointments.filter(apt => apt.status === 'canceled').length,
     completed: appointments.filter(apt => apt.status === 'completed').length,
@@ -289,7 +289,7 @@ export function createAppointment(input: {
     patientId: input.patientId,
     date: input.date,
     time: input.time,
-    status: input.status || 'pending',
+    status: input.status || 'scheduled',
     notes: input.notes,
   };
   
