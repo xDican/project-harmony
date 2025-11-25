@@ -155,6 +155,44 @@ export function getPatientAppointments(patientId: string): Promise<AppointmentWi
 }
 
 /**
+ * Get appointments within a date range (for calendar view)
+ */
+export function getAppointmentsByDateRange(params: {
+  startDate: string;
+  endDate: string;
+  doctorId?: string;
+}): Promise<AppointmentWithDetails[]> {
+  const filteredAppointments = appointments
+    .filter(apt => {
+      const isInDateRange = apt.date >= params.startDate && apt.date <= params.endDate;
+      const matchesDoctor = !params.doctorId || apt.doctorId === params.doctorId;
+      return isInDateRange && matchesDoctor;
+    })
+    .map(apt => {
+      const patient = patients.find(p => p.id === apt.patientId);
+      const doctor = doctors.find(d => d.id === apt.doctorId);
+      
+      if (!patient || !doctor) {
+        throw new Error(`Missing patient or doctor for appointment ${apt.id}`);
+      }
+      
+      return {
+        ...apt,
+        patient,
+        doctor,
+      };
+    })
+    .sort((a, b) => {
+      // Sort by date asc, then time asc
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.time.localeCompare(b.time);
+    });
+  
+  return Promise.resolve(filteredAppointments);
+}
+
+/**
  * Get admin dashboard metrics
  */
 export interface AdminMetrics {
