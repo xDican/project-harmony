@@ -240,47 +240,6 @@ export async function getPatientAppointments(patientId: string): Promise<Appoint
 }
 
 // --------------------------
-// Get appointments within a date range (for calendar view)
-// --------------------------
-export async function getAppointmentsByDateRange(params: {
-  startDate: string;
-  endDate: string;
-  doctorId?: string;
-}): Promise<AppointmentWithDetails[]> {
-  let query = supabase
-    .from("appointments")
-    .select(
-      `
-      *,
-      doctor:doctor_id (
-        id, name, phone, email, specialty_id, created_at
-      ),
-      patient:patient_id (
-        id, name, phone, email, notes, created_at
-      )
-      `
-    )
-    .gte("date", params.startDate)
-    .lte("date", params.endDate);
-
-  // Filter by doctor if provided
-  if (params.doctorId) {
-    query = query.eq("doctor_id", params.doctorId);
-  }
-
-  query = query.order("date", { ascending: true }).order("time", { ascending: true });
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error getAppointmentsByDateRange:", error);
-    throw error;
-  }
-
-  return Promise.all((data as any[]).map(fetchAppointmentWithRelations));
-}
-
-// --------------------------
 // 3. updateAppointmentStatus
 // --------------------------
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<Appointment | null> {

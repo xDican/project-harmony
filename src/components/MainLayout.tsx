@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, CalendarDays, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -46,7 +46,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (isSecretary) {
       items.push(
         { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
-        { to: '/calendario', label: 'Calendario', icon: CalendarDays },
         { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
         { to: '/pacientes', label: 'Pacientes', icon: Users }
       );
@@ -56,7 +55,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (isAdmin) {
       items.push(
         { to: '/agenda-secretaria', label: 'Agenda de Hoy', icon: Calendar },
-        { to: '/calendario', label: 'Calendario', icon: CalendarDays },
         { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
         { to: '/pacientes', label: 'Pacientes', icon: Users },
         { to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope }
