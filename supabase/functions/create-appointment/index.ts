@@ -59,15 +59,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2.2) Check if user has permission (admin or secretary)
-    const { data: userData, error: roleError } = await supabase
-      .from("users")
+    // 2.2) Check if user has permission using user_roles table
+    const { data: userRoles, error: roleError } = await supabase
+      .from("user_roles")
       .select("role")
-      .eq("id", user.id)
-      .single();
+      .eq("user_id", user.id);
 
-    if (roleError || !userData || !["admin", "secretary"].includes(userData.role)) {
-      console.error("[create-appointment] Role check failed:", roleError, userData);
+    if (roleError || !userRoles || userRoles.length === 0) {
+      console.error("[create-appointment] Role check failed:", roleError);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify user permissions" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const hasPermission = userRoles.some(r => ["admin", "secretary"].includes(r.role));
+    if (!hasPermission) {
+      console.error("[create-appointment] User lacks permission:", userRoles);
       return new Response(
         JSON.stringify({ error: "Insufficient permissions. Only admins and secretaries can create appointments." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
