@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,25 +49,56 @@ Deno.serve(async (req) => {
       },
     });
 
-    // 3) Leer body
-    const body: CreateAppointmentRequest = await req.json();
-    const { doctorId, patientId, date, time, notes } = body;
-
-    console.log("[create-appointment] Request body:", body);
-
-    // Validar campos mínimos
-    if (!doctorId || !patientId || !date || !time) {
-      console.error("[create-appointment] Missing required fields");
+    // 2.1) Verify user is authenticated and has permission
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("[create-appointment] Auth error:", userError);
       return new Response(
-        JSON.stringify({
-          error: "doctorId, patientId, date y time son requeridos",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // 2.2) Check if user has permission (admin or secretary)
+    const { data: userData, error: roleError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (roleError || !userData || !["admin", "secretary"].includes(userData.role)) {
+      console.error("[create-appointment] Role check failed:", roleError, userData);
+      return new Response(
+        JSON.stringify({ error: "Insufficient permissions. Only admins and secretaries can create appointments." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3) Parse and validate request body with Zod
+    const body = await req.json();
+
+    const appointmentSchema = z.object({
+      doctorId: z.string().uuid("Invalid doctor ID format"),
+      patientId: z.string().uuid("Invalid patient ID format"),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
+      time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Time must be in HH:MM or HH:MM:SS format"),
+      notes: z.string().max(2000, "Notes must be less than 2000 characters").optional(),
+    });
+
+    const validationResult = appointmentSchema.safeParse(body);
+    if (!validationResult.success) {
+      console.error("[create-appointment] Validation failed:", validationResult.error.errors);
+      return new Response(
+        JSON.stringify({ 
+          error: "Validation failed", 
+          details: validationResult.error.errors 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { doctorId, patientId, date, time, notes } = validationResult.data;
+    console.log("[create-appointment] Validated request body:", validationResult.data);
 
     // 4) Normalizar hora a HH:MM:SS
     let normalizedTime = time;
