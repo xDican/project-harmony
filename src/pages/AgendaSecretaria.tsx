@@ -343,7 +343,7 @@ function AppointmentCard({
             className="h-8 px-2 text-xs text-destructive hover:text-destructive"
             title="Cancelar cita"
           >
-            Cancelar
+            Cancelar cita
           </Button>
         )}
       </div>
