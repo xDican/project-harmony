@@ -326,7 +326,6 @@ export default function AppointmentsReport() {
                 </Button>
               </div>
             </div>
-          </div>
 
           {/* Contador */}
           <div>
