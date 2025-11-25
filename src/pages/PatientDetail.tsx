@@ -16,6 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import StatusBadge from '@/components/StatusBadge';
 import type { Patient } from '@/types/patient';
 import { useEffect } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { AppointmentStatus } from '@/types/appointment';
 
 /**
  * PatientDetail - Detailed view of a patient with appointment history
@@ -24,6 +26,7 @@ export default function PatientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
@@ -220,55 +223,73 @@ export default function PatientDetail() {
                 )}
 
                 {!isLoading && upcoming.length > 0 && (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Hora</TableHead>
-                          <TableHead>Médico</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead>Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                  <>
+                    {isMobile ? (
+                      <div className="space-y-0 border rounded-md overflow-hidden mt-4">
                         {upcoming.map((apt) => (
-                          <TableRow key={apt.id}>
-                            <TableCell>{formatDate(apt.date)}</TableCell>
-                            <TableCell>{formatTime(apt.time)}</TableCell>
-                            <TableCell>{apt.doctorName}</TableCell>
-                            <TableCell>
-                              <StatusBadge status={apt.status} />
-                            </TableCell>
-                            <TableCell>
-                              {canCancelAppointment(apt.date, apt.time, apt.status) && (
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleCancelClick(apt.id)}
-                                  disabled={cancelingId === apt.id}
-                                >
-                                  {cancelingId === apt.id ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                      Cancelando...
-                                    </>
-                                  ) : (
-                                    'Cancelar cita'
-                                  )}
-                                </Button>
-                              )}
-                              {apt.status === 'cancelada' && (
-                                <Badge variant="outline" className="text-muted-foreground">
-                                  Cancelada
-                                </Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
+                          <UpcomingAppointmentCard
+                            key={apt.id}
+                            appointment={apt}
+                            formatDate={formatDate}
+                            formatTime={formatTime}
+                            canCancelAppointment={canCancelAppointment}
+                            handleCancelClick={handleCancelClick}
+                            cancelingId={cancelingId}
+                          />
                         ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha</TableHead>
+                              <TableHead>Hora</TableHead>
+                              <TableHead>Médico</TableHead>
+                              <TableHead>Estado</TableHead>
+                              <TableHead>Acciones</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {upcoming.map((apt) => (
+                              <TableRow key={apt.id}>
+                                <TableCell>{formatDate(apt.date)}</TableCell>
+                                <TableCell>{formatTime(apt.time)}</TableCell>
+                                <TableCell>{apt.doctorName}</TableCell>
+                                <TableCell>
+                                  <StatusBadge status={apt.status} />
+                                </TableCell>
+                                <TableCell>
+                                  {canCancelAppointment(apt.date, apt.time, apt.status) && (
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleCancelClick(apt.id)}
+                                      disabled={cancelingId === apt.id}
+                                    >
+                                      {cancelingId === apt.id ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Cancelando...
+                                        </>
+                                      ) : (
+                                        'Cancelar cita'
+                                      )}
+                                    </Button>
+                                  )}
+                                  {apt.status === 'cancelada' && (
+                                    <Badge variant="outline" className="text-muted-foreground">
+                                      Cancelada
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
 
@@ -283,30 +304,45 @@ export default function PatientDetail() {
                 )}
 
                 {!isLoading && past.length > 0 && (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Hora</TableHead>
-                          <TableHead>Médico</TableHead>
-                          <TableHead>Estado</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                  <>
+                    {isMobile ? (
+                      <div className="space-y-0 border rounded-md overflow-hidden mt-4">
                         {past.map((apt) => (
-                          <TableRow key={apt.id}>
-                            <TableCell>{formatDate(apt.date)}</TableCell>
-                            <TableCell>{formatTime(apt.time)}</TableCell>
-                            <TableCell>{apt.doctorName}</TableCell>
-                            <TableCell>
-                              <StatusBadge status={apt.status} />
-                            </TableCell>
-                          </TableRow>
+                          <PastAppointmentCard
+                            key={apt.id}
+                            appointment={apt}
+                            formatDate={formatDate}
+                            formatTime={formatTime}
+                          />
                         ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha</TableHead>
+                              <TableHead>Hora</TableHead>
+                              <TableHead>Médico</TableHead>
+                              <TableHead>Estado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {past.map((apt) => (
+                              <TableRow key={apt.id}>
+                                <TableCell>{formatDate(apt.date)}</TableCell>
+                                <TableCell>{formatTime(apt.time)}</TableCell>
+                                <TableCell>{apt.doctorName}</TableCell>
+                                <TableCell>
+                                  <StatusBadge status={apt.status} />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
             </Tabs>
@@ -332,5 +368,115 @@ export default function PatientDetail() {
         </AlertDialog>
       </div>
     </MainLayout>
+  );
+}
+
+// Mobile Card Component for Upcoming Appointments
+interface UpcomingAppointmentCardProps {
+  appointment: {
+    id: string;
+    date: string;
+    time: string;
+    doctorName: string;
+    status: string;
+  };
+  formatDate: (date: string) => string;
+  formatTime: (time: string) => string;
+  canCancelAppointment: (date: string, time: string, status: string) => boolean;
+  handleCancelClick: (id: string) => void;
+  cancelingId: string | null;
+}
+
+function UpcomingAppointmentCard({
+  appointment,
+  formatDate,
+  formatTime,
+  canCancelAppointment,
+  handleCancelClick,
+  cancelingId,
+}: UpcomingAppointmentCardProps) {
+  return (
+    <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
+      {/* Line 1: Date and Time */}
+      <div className="flex justify-center mb-2">
+        <span className="text-lg font-bold text-foreground">
+          {formatDate(appointment.date)} • {formatTime(appointment.time)}
+        </span>
+      </div>
+
+      {/* Line 2: Doctor and Status */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-sm text-muted-foreground">
+          {appointment.doctorName}
+        </span>
+        <StatusBadge status={appointment.status as AppointmentStatus} />
+      </div>
+
+      {/* Line 3: Cancel Button */}
+      {canCancelAppointment(appointment.date, appointment.time, appointment.status) && (
+        <div className="flex justify-center">
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => handleCancelClick(appointment.id)}
+            disabled={cancelingId === appointment.id}
+          >
+            {cancelingId === appointment.id ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Cancelando...
+              </>
+            ) : (
+              'Cancelar cita'
+            )}
+          </Button>
+        </div>
+      )}
+      {appointment.status === 'cancelada' && (
+        <div className="flex justify-center">
+          <Badge variant="outline" className="text-muted-foreground">
+            Cancelada
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mobile Card Component for Past Appointments
+interface PastAppointmentCardProps {
+  appointment: {
+    id: string;
+    date: string;
+    time: string;
+    doctorName: string;
+    status: string;
+  };
+  formatDate: (date: string) => string;
+  formatTime: (time: string) => string;
+}
+
+function PastAppointmentCard({
+  appointment,
+  formatDate,
+  formatTime,
+}: PastAppointmentCardProps) {
+  return (
+    <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
+      {/* Line 1: Date and Time */}
+      <div className="flex justify-center mb-2">
+        <span className="text-lg font-bold text-foreground">
+          {formatDate(appointment.date)} • {formatTime(appointment.time)}
+        </span>
+      </div>
+
+      {/* Line 2: Doctor and Status */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-muted-foreground">
+          {appointment.doctorName}
+        </span>
+        <StatusBadge status={appointment.status as AppointmentStatus} />
+      </div>
+    </div>
   );
 }
