@@ -625,28 +625,44 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     return null;
   }
 
-  // 2. Consultar la tabla public.users
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, email, role, doctor_id")
-    .eq("id", user.id)
+  // 2. Consultar la tabla user_roles para obtener el rol
+  const { data: rolesData, error: rolesError } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error) {
-    console.error("Error getCurrentUserWithRole:users", error);
-    throw error;
+  if (rolesError) {
+    console.error("Error getCurrentUserWithRole:user_roles", rolesError);
+    throw rolesError;
   }
 
-  if (!data) {
+  if (!rolesData) {
     return null;
   }
 
-  // 3. Mapear a CurrentUser
+  // 3. Consultar la tabla users para obtener email y doctor_id
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id, email, doctor_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (userError) {
+    console.error("Error getCurrentUserWithRole:users", userError);
+    throw userError;
+  }
+
+  if (!userData) {
+    return null;
+  }
+
+  // 4. Mapear a CurrentUser
   return {
-    id: data.id,
-    email: data.email,
-    role: data.role as CurrentUser["role"],
-    doctorId: data.doctor_id ?? null,
+    id: userData.id,
+    email: userData.email,
+    role: rolesData.role as CurrentUser["role"],
+    doctorId: userData.doctor_id ?? null,
   };
 }
 

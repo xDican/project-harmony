@@ -55,15 +55,20 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    // Check if user is admin using admin client (bypasses RLS)
-    const { data: userData, error: roleError } = await supabaseAdmin
-      .from("users")
+    // Check if user is admin using user_roles table
+    const { data: userRoles, error: roleError } = await supabaseAdmin
+      .from("user_roles")
       .select("role")
-      .eq("id", user.id)
-      .single();
+      .eq("user_id", user.id);
 
-    if (roleError || userData?.role !== "admin") {
-      console.error("Role check failed:", roleError, userData);
+    if (roleError || !userRoles || userRoles.length === 0) {
+      console.error("Role check failed:", roleError);
+      throw new Error("Failed to verify user permissions");
+    }
+
+    const isAdmin = userRoles.some(r => r.role === 'admin');
+    if (!isAdmin) {
+      console.error("User is not admin:", userRoles);
       throw new Error("Only admins can create users");
     }
 
@@ -165,11 +170,10 @@ serve(async (req) => {
       doctorId = doctorData.id;
     }
 
-    // Insert into users table with the role
+    // Insert into users table (without role field)
     const { error: insertError } = await supabaseAdmin.from("users").insert({
       id: newUser.user.id,
       email: email,
-      role: role,
       doctor_id: doctorId,
     });
 
@@ -180,6 +184,22 @@ serve(async (req) => {
         await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
       }
       throw insertError;
+    }
+
+    // Insert role into user_roles table
+    const { error: roleInsertError } = await supabaseAdmin.from("user_roles").insert({
+      user_id: newUser.user.id,
+      role: role,
+    });
+
+    if (roleInsertError) {
+      // Rollback: delete users record, auth user, and doctor if created
+      await supabaseAdmin.from("users").delete().eq("id", newUser.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+      if (doctorId) {
+        await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
+      }
+      throw roleInsertError;
     }
 
     return new Response(
