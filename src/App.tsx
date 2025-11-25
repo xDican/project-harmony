@@ -18,6 +18,7 @@ import DoctorSchedulePage from "./pages/DoctorSchedulePage";
 import AppointmentsReport from "./pages/AppointmentsReport";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import PatientDetail from "./pages/PatientDetail";
 
 const queryClient = new QueryClient();
 
@@ -118,6 +119,11 @@ const App = () => {
             <Route path="/pacientes" element={
               <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
                 <Pacientes />
+              </RoleBasedRoute>
+            } />
+            <Route path="/pacientes/:id" element={
+              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+                <PatientDetail />
               </RoleBasedRoute>
             } />
             

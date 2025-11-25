@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Users } from 'lucide-react';
+import { Search, Users, Eye } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getAllPatients } from '@/lib/api';
 import type { Patient } from '@/types/patient';
 
@@ -13,6 +15,7 @@ import type { Patient } from '@/types/patient';
  * Displays a searchable list of all patients
  */
 export default function Pacientes() {
+  const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -111,6 +114,7 @@ export default function Pacientes() {
                       <TableHead>Nombre</TableHead>
                       <TableHead>Teléfono</TableHead>
                       <TableHead>Documento</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -120,6 +124,16 @@ export default function Pacientes() {
                         <TableCell>{patient.phone || '—'}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {patient.documentId || '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/pacientes/${patient.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver detalle
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

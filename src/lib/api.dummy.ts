@@ -125,6 +125,36 @@ export function getTodayAppointmentsByDoctor(
 }
 
 /**
+ * Get all appointments for a specific patient with doctor details
+ */
+export function getPatientAppointments(patientId: string): Promise<AppointmentWithDetails[]> {
+  const filteredAppointments = appointments
+    .filter(apt => apt.patientId === patientId)
+    .map(apt => {
+      const patient = patients.find(p => p.id === apt.patientId);
+      const doctor = doctors.find(d => d.id === apt.doctorId);
+      
+      if (!patient || !doctor) {
+        throw new Error(`Missing patient or doctor for appointment ${apt.id}`);
+      }
+      
+      return {
+        ...apt,
+        patient,
+        doctor,
+      };
+    })
+    .sort((a, b) => {
+      // Sort by date desc, then time desc
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      return b.time.localeCompare(a.time);
+    });
+  
+  return Promise.resolve(filteredAppointments);
+}
+
+/**
  * Get admin dashboard metrics
  */
 export interface AdminMetrics {
