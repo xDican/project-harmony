@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { Calendar, AlertCircle, Stethoscope, User } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
@@ -23,6 +24,8 @@ import { getLocalDateString, getLocalToday } from '@/lib/dateUtils';
 export default function AgendaMedico() {
   const { user, loading, isAdmin, isDoctor } = useCurrentUser();
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   
   // Get today's date in local timezone
   const today = getLocalDateString();
@@ -151,19 +154,26 @@ export default function AgendaMedico() {
                 </AlertDescription>
               </Alert>
             ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Hora</TableHead>
-                      <TableHead>Paciente</TableHead>
-                      {isAdmin && <TableHead>Médico</TableHead>}
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Notas</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {appointments.map((appointment) => (
+              <>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Hora</TableHead>
+                        <TableHead>Paciente</TableHead>
+                        {isAdmin && <TableHead>Médico</TableHead>}
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Notas</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        const totalPages = Math.ceil(appointments.length / itemsPerPage);
+                        const startIndex = (currentPage - 1) * itemsPerPage;
+                        const endIndex = startIndex + itemsPerPage;
+                        const paginatedAppointments = appointments.slice(startIndex, endIndex);
+                        
+                        return paginatedAppointments.map((appointment) => (
                       <TableRow key={appointment.id}>
                         <TableCell className="font-medium">
                           {formatTime(appointment.time)}
@@ -189,10 +199,38 @@ export default function AgendaMedico() {
                           {appointment.notes || '-'}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                        ));
+                      })()}
+                    </TableBody>
+                  </Table>
+                </div>
+                {(() => {
+                  const totalPages = Math.ceil(appointments.length / itemsPerPage);
+                  return totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 px-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Página {currentPage} de {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </>
         )}

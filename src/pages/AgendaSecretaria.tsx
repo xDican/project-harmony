@@ -223,13 +223,15 @@ function AppointmentsList({
 }: AppointmentsListProps) {
   const isMobile = useIsMobile();
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPageMobile = 5;
+  const itemsPerPageDesktop = 10;
+  const itemsPerPage = isMobile ? itemsPerPageMobile : itemsPerPageDesktop;
 
-  // Calculate pagination for mobile
+  // Calculate pagination
   const totalPages = Math.ceil(appointments.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedAppointments = isMobile ? appointments.slice(startIndex, endIndex) : appointments;
+  const paginatedAppointments = appointments.slice(startIndex, endIndex);
 
   // Reset to page 1 when appointments change
   useEffect(() => {

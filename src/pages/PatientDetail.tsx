@@ -33,7 +33,8 @@ export default function PatientDetail() {
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPageMobile = 5;
+  const itemsPerPageDesktop = 10;
 
   const { upcoming, past, isLoading, error, refetch } = usePatientAppointments(id || '');
 
@@ -106,15 +107,15 @@ export default function PatientDetail() {
   };
 
   // Pagination for upcoming appointments
-  const upcomingTotalPages = Math.ceil(upcoming.length / itemsPerPage);
-  const upcomingStartIndex = (upcomingPage - 1) * itemsPerPage;
-  const upcomingEndIndex = upcomingStartIndex + itemsPerPage;
+  const upcomingTotalPages = Math.ceil(upcoming.length / itemsPerPageMobile);
+  const upcomingStartIndex = (upcomingPage - 1) * itemsPerPageMobile;
+  const upcomingEndIndex = upcomingStartIndex + itemsPerPageMobile;
   const paginatedUpcoming = isMobile ? upcoming.slice(upcomingStartIndex, upcomingEndIndex) : upcoming;
 
   // Pagination for past appointments
-  const historyTotalPages = Math.ceil(past.length / itemsPerPage);
-  const historyStartIndex = (historyPage - 1) * itemsPerPage;
-  const historyEndIndex = historyStartIndex + itemsPerPage;
+  const historyTotalPages = Math.ceil(past.length / itemsPerPageMobile);
+  const historyStartIndex = (historyPage - 1) * itemsPerPageMobile;
+  const historyEndIndex = historyStartIndex + itemsPerPageMobile;
   const paginatedPast = isMobile ? past.slice(historyStartIndex, historyEndIndex) : past;
 
   if (!id) {
@@ -279,19 +280,26 @@ export default function PatientDetail() {
                         )}
                       </>
                     ) : (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead>Hora</TableHead>
-                              <TableHead>Médico</TableHead>
-                              <TableHead>Estado</TableHead>
-                              <TableHead>Acciones</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {upcoming.map((apt) => (
+                      <>
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Hora</TableHead>
+                                <TableHead>Médico</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead>Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(() => {
+                                const upcomingTotalPagesDesktop = Math.ceil(upcoming.length / itemsPerPageDesktop);
+                                const upcomingStartIndexDesktop = (upcomingPage - 1) * itemsPerPageDesktop;
+                                const upcomingEndIndexDesktop = upcomingStartIndexDesktop + itemsPerPageDesktop;
+                                const paginatedUpcomingDesktop = upcoming.slice(upcomingStartIndexDesktop, upcomingEndIndexDesktop);
+                                
+                                return paginatedUpcomingDesktop.map((apt) => (
                               <TableRow key={apt.id}>
                                 <TableCell>{formatDate(apt.date)}</TableCell>
                                 <TableCell>{formatTime(apt.time)}</TableCell>
@@ -327,12 +335,40 @@ export default function PatientDetail() {
                                       Cancelada
                                     </Badge>
                                   )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                                  </TableCell>
+                                </TableRow>
+                                ));
+                              })()}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {(() => {
+                          const upcomingTotalPagesDesktop = Math.ceil(upcoming.length / itemsPerPageDesktop);
+                          return upcomingTotalPagesDesktop > 1 && (
+                            <div className="flex items-center justify-between mt-4 px-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setUpcomingPage(p => Math.max(1, p - 1))}
+                                disabled={upcomingPage === 1}
+                              >
+                                Anterior
+                              </Button>
+                              <span className="text-sm text-muted-foreground">
+                                Página {upcomingPage} de {upcomingTotalPagesDesktop}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setUpcomingPage(p => Math.min(upcomingTotalPagesDesktop, p + 1))}
+                                disabled={upcomingPage === upcomingTotalPagesDesktop}
+                              >
+                                Siguiente
+                              </Button>
+                            </div>
+                          );
+                        })()}
+                      </>
                     )}
                   </>
                 )}
@@ -387,18 +423,25 @@ export default function PatientDetail() {
                         )}
                       </>
                     ) : (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead>Hora</TableHead>
-                              <TableHead>Médico</TableHead>
-                              <TableHead>Estado</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {past.map((apt) => (
+                      <>
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fecha</TableHead>
+                                <TableHead>Hora</TableHead>
+                                <TableHead>Médico</TableHead>
+                                <TableHead>Estado</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(() => {
+                                const historyTotalPagesDesktop = Math.ceil(past.length / itemsPerPageDesktop);
+                                const historyStartIndexDesktop = (historyPage - 1) * itemsPerPageDesktop;
+                                const historyEndIndexDesktop = historyStartIndexDesktop + itemsPerPageDesktop;
+                                const paginatedPastDesktop = past.slice(historyStartIndexDesktop, historyEndIndexDesktop);
+                                
+                                return paginatedPastDesktop.map((apt) => (
                               <TableRow key={apt.id}>
                                 <TableCell>{formatDate(apt.date)}</TableCell>
                                 <TableCell>{formatTime(apt.time)}</TableCell>
@@ -410,12 +453,40 @@ export default function PatientDetail() {
                                 </TableCell>
                                 <TableCell>
                                   <StatusBadge status={apt.status} />
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                                  </TableCell>
+                                </TableRow>
+                                ));
+                              })()}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {(() => {
+                          const historyTotalPagesDesktop = Math.ceil(past.length / itemsPerPageDesktop);
+                          return historyTotalPagesDesktop > 1 && (
+                            <div className="flex items-center justify-between mt-4 px-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                disabled={historyPage === 1}
+                              >
+                                Anterior
+                              </Button>
+                              <span className="text-sm text-muted-foreground">
+                                Página {historyPage} de {historyTotalPagesDesktop}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setHistoryPage(p => Math.min(historyTotalPagesDesktop, p + 1))}
+                                disabled={historyPage === historyTotalPagesDesktop}
+                              >
+                                Siguiente
+                              </Button>
+                            </div>
+                          );
+                        })()}
+                      </>
                     )}
                   </>
                 )}

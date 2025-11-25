@@ -159,18 +159,26 @@ export default function Pacientes() {
                     )}
                   </>
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nombre</TableHead>
-                          <TableHead>Teléfono</TableHead>
-                          <TableHead>Documento</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredPatients.map((patient) => (
+                  <>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Teléfono</TableHead>
+                            <TableHead>Documento</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(() => {
+                            const itemsPerPageDesktop = 10;
+                            const totalPagesDesktop = Math.ceil(filteredPatients.length / itemsPerPageDesktop);
+                            const startIndexDesktop = (currentPage - 1) * itemsPerPageDesktop;
+                            const endIndexDesktop = startIndexDesktop + itemsPerPageDesktop;
+                            const paginatedPatientsDesktop = filteredPatients.slice(startIndexDesktop, endIndexDesktop);
+                            
+                            return paginatedPatientsDesktop.map((patient) => (
                           <TableRow key={patient.id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
@@ -193,10 +201,39 @@ export default function Pacientes() {
                               </Button>
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                            ));
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {(() => {
+                      const itemsPerPageDesktop = 10;
+                      const totalPagesDesktop = Math.ceil(filteredPatients.length / itemsPerPageDesktop);
+                      return totalPagesDesktop > 1 && (
+                        <div className="flex items-center justify-between mt-4 px-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            Anterior
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Página {currentPage} de {totalPagesDesktop}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPagesDesktop, p + 1))}
+                            disabled={currentPage === totalPagesDesktop}
+                          >
+                            Siguiente
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
               </>
             )}
