@@ -37,42 +37,50 @@ export function usePatientAppointments(patientId: string): UsePatientAppointment
 
     getPatientAppointments(patientId)
       .then((appointments) => {
-        const now = DateTime.now();
+        const today = DateTime.now().startOf('day');
         const upcomingList: PatientAppointment[] = [];
         const pastList: PatientAppointment[] = [];
 
         appointments.forEach((apt) => {
-          // Combine date and time to create a DateTime object
-          const aptDateTime = DateTime.fromFormat(
-            `${apt.date} ${apt.time}`,
-            'yyyy-MM-dd HH:mm'
-          );
+          // Parse only the date (without time) for comparison
+          const aptDate = DateTime.fromISO(apt.date).startOf('day');
 
           const enrichedApt: PatientAppointment = {
             ...apt,
             doctorName: apt.doctor.name,
           };
 
-          // If appointment is in the future or today/now, it's upcoming
-          if (aptDateTime >= now) {
+          // If appointment date is today or future, it's upcoming
+          // If appointment date is before today, it's past
+          if (aptDate >= today) {
             upcomingList.push(enrichedApt);
           } else {
             pastList.push(enrichedApt);
           }
         });
 
-        // Sort upcoming ascending (closest first)
+        // Sort upcoming ascending (closest to today first)
         upcomingList.sort((a, b) => {
-          const aDate = DateTime.fromFormat(`${a.date} ${a.time}`, 'yyyy-MM-dd HH:mm');
-          const bDate = DateTime.fromFormat(`${b.date} ${b.time}`, 'yyyy-MM-dd HH:mm');
-          return aDate.toMillis() - bDate.toMillis();
+          const aDate = DateTime.fromISO(a.date);
+          const bDate = DateTime.fromISO(b.date);
+          const dateDiff = aDate.toMillis() - bDate.toMillis();
+          // If same date, sort by time
+          if (dateDiff === 0) {
+            return a.time.localeCompare(b.time);
+          }
+          return dateDiff;
         });
 
-        // Sort past descending (most recent first)
+        // Sort past descending (closest to today first, most recent)
         pastList.sort((a, b) => {
-          const aDate = DateTime.fromFormat(`${a.date} ${a.time}`, 'yyyy-MM-dd HH:mm');
-          const bDate = DateTime.fromFormat(`${b.date} ${b.time}`, 'yyyy-MM-dd HH:mm');
-          return bDate.toMillis() - aDate.toMillis();
+          const aDate = DateTime.fromISO(a.date);
+          const bDate = DateTime.fromISO(b.date);
+          const dateDiff = bDate.toMillis() - aDate.toMillis();
+          // If same date, sort by time descending
+          if (dateDiff === 0) {
+            return b.time.localeCompare(a.time);
+          }
+          return dateDiff;
         });
 
         setUpcoming(upcomingList);

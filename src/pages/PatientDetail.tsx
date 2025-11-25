@@ -92,13 +92,11 @@ export default function PatientDetail() {
   const canCancelAppointment = (date: string, time: string, status: string) => {
     if (status === 'canceled') return false;
     
-    const aptDateTime = DateTime.fromFormat(
-      `${date} ${time}`,
-      'yyyy-MM-dd HH:mm'
-    );
-    const now = DateTime.now();
+    // Compare only dates, not time
+    const aptDate = DateTime.fromISO(date).startOf('day');
+    const today = DateTime.now().startOf('day');
     
-    return aptDateTime >= now;
+    return aptDate >= today;
   };
 
   if (!id) {
