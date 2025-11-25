@@ -243,7 +243,6 @@ export type Database = {
           doctor_id: string | null
           email: string
           id: string
-          role: string
           secretary_id: string | null
         }
         Insert: {
@@ -251,7 +250,6 @@ export type Database = {
           doctor_id?: string | null
           email: string
           id?: string
-          role: string
           secretary_id?: string | null
         }
         Update: {
@@ -259,7 +257,6 @@ export type Database = {
           doctor_id?: string | null
           email?: string
           id?: string
-          role?: string
           secretary_id?: string | null
         }
         Relationships: [
