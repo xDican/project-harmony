@@ -297,61 +297,62 @@ function AppointmentCard({
 
   return (
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
-      {/* Line 1: Patient Name */}
-      <div className="mb-1">
+      {/* Line 1: Patient Name + Status */}
+      <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-base font-semibold text-foreground">
           {appointment.patient.name}
         </span>
-      </div>
-
-      {/* Line 2: Doctor Name */}
-      <div className="mb-2">
-        <span className="text-sm text-muted-foreground">
-          {appointment.doctor.name}
-        </span>
-      </div>
-
-      {/* Line 3: Time + Status + Cancel Button */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-lg font-bold text-foreground whitespace-nowrap">
-          {formatTime(appointment.time)}
-        </span>
         
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex-shrink-0">
           {isCanceled ? (
             <Badge className="text-xs bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700">
               Cancelada
             </Badge>
           ) : (
-            <>
-              <Select
-                value={appointment.status}
-                onValueChange={(value: AppointmentStatus) =>
-                  onStatusChange(appointment.id, value)
-                }
-              >
-                <SelectTrigger className="h-8 w-32 text-xs bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="agendada">Agendada</SelectItem>
-                  <SelectItem value="confirmada">Confirmada</SelectItem>
-                  <SelectItem value="completada">Completada</SelectItem>
-                  <SelectItem value="no_asistio">No asistió</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onCancel(appointment.id)}
-                className="h-8 px-2 text-xs text-destructive hover:text-destructive"
-                title="Cancelar cita"
-              >
-                Cancelar
-              </Button>
-            </>
+            <Select
+              value={appointment.status}
+              onValueChange={(value: AppointmentStatus) =>
+                onStatusChange(appointment.id, value)
+              }
+            >
+              <SelectTrigger className="h-8 w-32 text-xs bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="agendada">Agendada</SelectItem>
+                <SelectItem value="confirmada">Confirmada</SelectItem>
+                <SelectItem value="completada">Completada</SelectItem>
+                <SelectItem value="no_asistio">No asistió</SelectItem>
+              </SelectContent>
+            </Select>
           )}
         </div>
+      </div>
+
+      {/* Line 2: Doctor Name + Cancel Button */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-sm text-muted-foreground">
+          {appointment.doctor.name}
+        </span>
+        
+        {!isCanceled && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onCancel(appointment.id)}
+            className="h-8 px-2 text-xs text-destructive hover:text-destructive"
+            title="Cancelar cita"
+          >
+            Cancelar
+          </Button>
+        )}
+      </div>
+
+      {/* Line 3: Time Centered */}
+      <div className="flex justify-center">
+        <span className="text-lg font-bold text-foreground">
+          {formatTime(appointment.time)}
+        </span>
       </div>
     </div>
   );
