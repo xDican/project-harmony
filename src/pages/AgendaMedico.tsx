@@ -13,6 +13,7 @@ import { useCurrentUser } from '@/context/UserContext';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
 import { useDoctors } from '@/hooks/useDoctors';
 import StatusBadge from '@/components/StatusBadge';
+import { getLocalDateString, getLocalToday } from '@/lib/dateUtils';
 
 /**
  * AgendaMedico - Doctor's daily agenda view
@@ -23,9 +24,9 @@ export default function AgendaMedico() {
   const { user, loading, isAdmin, isDoctor } = useCurrentUser();
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   
-  // Get today's date in ISO format
-  const today = new Date().toISOString().split('T')[0];
-  const formattedDate = format(new Date(today + 'T00:00:00'), "EEEE, d 'de' MMMM 'de' yyyy", {
+  // Get today's date in local timezone
+  const today = getLocalDateString();
+  const formattedDate = format(getLocalToday(), "EEEE, d 'de' MMMM 'de' yyyy", {
     locale: es,
   });
 

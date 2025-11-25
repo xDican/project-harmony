@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getAvailableSlots, createPatient, createAppointment } from '@/lib/api';
+import { getLocalToday } from '@/lib/dateUtils';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
 
@@ -262,7 +263,7 @@ export default function NuevaCita() {
                   mode="single"
                   selected={selectedDate}
                   onSelect={setSelectedDate}
-                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  disabled={(date) => date < getLocalToday()}
                   initialFocus
                   className={cn("p-3 pointer-events-auto")}
                 />
