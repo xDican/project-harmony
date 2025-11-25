@@ -297,25 +297,23 @@ function AppointmentCard({
 
   return (
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
-      {/* Line 1: Time + Patient */}
+      {/* Line 1: Time + Patient Name */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <span className="text-base font-bold text-foreground whitespace-nowrap">
+        <div className="flex items-center gap-3">
+          <span className="text-lg font-bold text-foreground whitespace-nowrap">
             {formatTime(appointment.time)}
           </span>
-          <span className="text-base font-medium text-foreground truncate">
+          <span className="text-base font-semibold text-foreground">
             {appointment.patient.name}
           </span>
         </div>
       </div>
 
-      {/* Line 2: Doctor + Status + Actions */}
+      {/* Line 2: Doctor + Status + Cancel Button */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-sm text-muted-foreground truncate">
-            {appointment.doctor.name}
-          </span>
-        </div>
+        <span className="text-sm text-muted-foreground truncate flex-shrink">
+          {appointment.doctor.name}
+        </span>
         
         <div className="flex items-center gap-2 flex-shrink-0">
           {isCanceled ? (
@@ -344,10 +342,10 @@ function AppointmentCard({
                 variant="ghost"
                 size="sm"
                 onClick={() => onCancel(appointment.id)}
-                className="h-8 w-8 p-0"
+                className="h-8 px-2 text-xs text-destructive hover:text-destructive"
                 title="Cancelar cita"
               >
-                <XCircle className="h-4 w-4 text-destructive" />
+                Cancelar
               </Button>
             </>
           )}
