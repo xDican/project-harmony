@@ -192,6 +192,35 @@ export async function getTodayAppointmentsByDoctor(doctorId: string, date: strin
 }
 
 // --------------------------
+// Get all appointments for a specific patient
+// --------------------------
+export async function getPatientAppointments(patientId: string): Promise<AppointmentWithDetails[]> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(
+      `
+      *,
+      doctor:doctor_id (
+        id, name, phone, email, specialty_id, created_at
+      ),
+      patient:patient_id (
+        id, name, phone, email, notes, created_at
+      )
+      `
+    )
+    .eq("patient_id", patientId)
+    .order("date", { ascending: false })
+    .order("time", { ascending: false });
+
+  if (error) {
+    console.error("Error getPatientAppointments:", error);
+    throw error;
+  }
+
+  return Promise.all((data as any[]).map(fetchAppointmentWithRelations));
+}
+
+// --------------------------
 // 3. updateAppointmentStatus
 // --------------------------
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<Appointment | null> {
