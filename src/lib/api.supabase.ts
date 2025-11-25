@@ -84,7 +84,7 @@ export interface UserWithRelations {
 // Get all users with doctor and specialty info
 // --------------------------
 export async function getAllUsers(): Promise<UserWithRelations[]> {
-  // First, get all users with their related data
+  // Get all users with their related data
   const { data: usersData, error: usersError } = await supabase
     .from("users")
     .select(`
@@ -113,6 +113,10 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
     throw usersError;
   }
 
+  if (!usersData || usersData.length === 0) {
+    return [];
+  }
+
   // Get all user roles
   const { data: rolesData, error: rolesError } = await supabase
     .from("user_roles")
@@ -123,32 +127,39 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
     throw rolesError;
   }
 
-  // Create a map of user_id to role (using first role found)
+  // Create a map of user_id to role
   const userRolesMap = new Map<string, string>();
-  (rolesData || []).forEach((roleRecord) => {
-    if (!userRolesMap.has(roleRecord.user_id)) {
-      userRolesMap.set(roleRecord.user_id, roleRecord.role);
-    }
-  });
+  if (rolesData) {
+    rolesData.forEach((roleRecord: any) => {
+      if (!userRolesMap.has(roleRecord.user_id)) {
+        userRolesMap.set(roleRecord.user_id, roleRecord.role);
+      }
+    });
+  }
 
-  return (usersData as any[]).map((user) => ({
-    id: user.id,
-    email: user.email,
-    role: userRolesMap.get(user.id) || 'unknown',
-    createdAt: user.created_at,
-    doctor: user.doctor ? {
-      id: user.doctor.id,
-      name: user.doctor.name,
-      phone: user.doctor.phone,
-      specialtyId: user.doctor.specialty_id,
-      specialtyName: user.doctor.specialty?.name,
-    } : undefined,
-    secretary: user.secretary ? {
-      id: user.secretary.id,
-      name: user.secretary.name,
-      phone: user.secretary.phone,
-    } : undefined,
-  }));
+  // Map users with their roles
+  return usersData.map((user: any) => {
+    const role = userRolesMap.get(user.id);
+    
+    return {
+      id: user.id,
+      email: user.email,
+      role: role || 'unknown',
+      createdAt: user.created_at,
+      doctor: user.doctor ? {
+        id: user.doctor.id,
+        name: user.doctor.name,
+        phone: user.doctor.phone,
+        specialtyId: user.doctor.specialty_id,
+        specialtyName: user.doctor.specialty?.name,
+      } : undefined,
+      secretary: user.secretary ? {
+        id: user.secretary.id,
+        name: user.secretary.name,
+        phone: user.secretary.phone,
+      } : undefined,
+    };
+  });
 }
 
 // --------------------------
