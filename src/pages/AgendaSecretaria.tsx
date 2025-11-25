@@ -297,22 +297,24 @@ function AppointmentCard({
 
   return (
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
-      {/* Line 1: Time + Patient Name */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-bold text-foreground whitespace-nowrap">
-            {formatTime(appointment.time)}
-          </span>
-          <span className="text-base font-semibold text-foreground">
-            {appointment.patient.name}
-          </span>
-        </div>
+      {/* Line 1: Patient Name */}
+      <div className="mb-1">
+        <span className="text-base font-semibold text-foreground">
+          {appointment.patient.name}
+        </span>
       </div>
 
-      {/* Line 2: Doctor + Status + Cancel Button */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground truncate flex-shrink">
+      {/* Line 2: Doctor Name */}
+      <div className="mb-2">
+        <span className="text-sm text-muted-foreground">
           {appointment.doctor.name}
+        </span>
+      </div>
+
+      {/* Line 3: Time + Status + Cancel Button */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-lg font-bold text-foreground whitespace-nowrap">
+          {formatTime(appointment.time)}
         </span>
         
         <div className="flex items-center gap-2 flex-shrink-0">
