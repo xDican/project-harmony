@@ -250,26 +250,34 @@ export default function UsersList() {
                   </>
                 ) : (
                   /* Desktop Table View */
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nombre</TableHead>
-                          <TableHead>Rol</TableHead>
-                          <TableHead>Especialidad</TableHead>
-                          <TableHead>Teléfono</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredUsers.length === 0 ? (
+                  <>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                              No se encontraron usuarios
-                            </TableCell>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead>Rol</TableHead>
+                            <TableHead>Especialidad</TableHead>
+                            <TableHead>Teléfono</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
                           </TableRow>
-                        ) : (
-                          filteredUsers.map((user) => (
+                        </TableHeader>
+                        <TableBody>
+                          {filteredUsers.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                No se encontraron usuarios
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            (() => {
+                              const itemsPerPageDesktop = 10;
+                              const totalPagesDesktop = Math.ceil(filteredUsers.length / itemsPerPageDesktop);
+                              const startIndexDesktop = (currentPage - 1) * itemsPerPageDesktop;
+                              const endIndexDesktop = startIndexDesktop + itemsPerPageDesktop;
+                              const paginatedUsersDesktop = filteredUsers.slice(startIndexDesktop, endIndexDesktop);
+                              
+                              return paginatedUsersDesktop.map((user) => (
                           <TableRow key={user.id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
@@ -315,11 +323,40 @@ export default function UsersList() {
                                 </div>
                               </TableCell>
                             </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                              ));
+                            })()
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {(() => {
+                      const itemsPerPageDesktop = 10;
+                      const totalPagesDesktop = Math.ceil(filteredUsers.length / itemsPerPageDesktop);
+                      return totalPagesDesktop > 1 && (
+                        <div className="flex items-center justify-between mt-4 px-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            Anterior
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Página {currentPage} de {totalPagesDesktop}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPagesDesktop, p + 1))}
+                            disabled={currentPage === totalPagesDesktop}
+                          >
+                            Siguiente
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
               </>
             )}

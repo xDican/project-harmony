@@ -396,7 +396,8 @@ export default function AppointmentsReport() {
                   </div>
                 </>
               ) : (
-                <div className="border rounded-lg overflow-hidden bg-card">
+                <>
+                  <div className="border rounded-lg overflow-hidden bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -410,7 +411,14 @@ export default function AppointmentsReport() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {appointments.map((appointment) => (
+                        {(() => {
+                          const itemsPerPageDesktop = 10;
+                          const totalPagesDesktop = Math.ceil(appointments.length / itemsPerPageDesktop);
+                          const startIndexDesktop = (currentPage - 1) * itemsPerPageDesktop;
+                          const endIndexDesktop = startIndexDesktop + itemsPerPageDesktop;
+                          const paginatedAppointmentsDesktop = appointments.slice(startIndexDesktop, endIndexDesktop);
+                          
+                          return paginatedAppointmentsDesktop.map((appointment) => (
                           <TableRow key={appointment.id}>
                             <TableCell>{formatDate(appointment.date)}</TableCell>
                             <TableCell>{appointment.time}</TableCell>
@@ -432,15 +440,44 @@ export default function AppointmentsReport() {
                             </TableCell>
                             <TableCell className="max-w-xs truncate">
                               {appointment.notes || '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-              </>
-            )}
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {(() => {
+                    const itemsPerPageDesktop = 10;
+                    const totalPagesDesktop = Math.ceil(appointments.length / itemsPerPageDesktop);
+                    return totalPagesDesktop > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                          Página {currentPage} de {totalPagesDesktop}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPagesDesktop, p + 1))}
+                          disabled={currentPage === totalPagesDesktop}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     </MainLayout>
