@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, AlertCircle, Search, XCircle } from 'lucide-react';
+import { Calendar, AlertCircle, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
@@ -222,19 +222,58 @@ function AppointmentsList({
   formatDateTime 
 }: AppointmentsListProps) {
   const isMobile = useIsMobile();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  // Calculate pagination for mobile
+  const totalPages = Math.ceil(appointments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAppointments = isMobile ? appointments.slice(startIndex, endIndex) : appointments;
+
+  // Reset to page 1 when appointments change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [appointments]);
 
   if (isMobile) {
     return (
-      <div className="border rounded-lg overflow-hidden bg-background">
-        {appointments.map((appointment) => (
-          <AppointmentCard
-            key={appointment.id}
-            appointment={appointment}
-            onStatusChange={onStatusChange}
-            onCancel={onCancel}
-            formatDateTime={formatDateTime}
-          />
-        ))}
+      <div>
+        <div className="border rounded-lg overflow-hidden bg-background">
+          {paginatedAppointments.map((appointment) => (
+            <AppointmentCard
+              key={appointment.id}
+              appointment={appointment}
+              onStatusChange={onStatusChange}
+              onCancel={onCancel}
+              formatDateTime={formatDateTime}
+            />
+          ))}
+        </div>
+        
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Página {currentPage} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Siguiente
+            </Button>
+          </div>
+        )}
       </div>
     );
   }

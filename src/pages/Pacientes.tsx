@@ -21,6 +21,8 @@ export default function Pacientes() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Load patients on mount
   useEffect(() => {
@@ -50,6 +52,17 @@ export default function Pacientes() {
       return nameMatch || phoneMatch || documentMatch;
     });
   }, [patients, searchQuery]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Calculate pagination for mobile
+  const totalPages = Math.ceil(filteredPatients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const displayedPatients = isMobile ? filteredPatients.slice(startIndex, endIndex) : filteredPatients;
 
   return (
     <MainLayout>
@@ -111,15 +124,40 @@ export default function Pacientes() {
             {!isLoading && filteredPatients.length > 0 && (
               <>
                 {isMobile ? (
-                  <div className="space-y-0 border rounded-md overflow-hidden">
-                    {filteredPatients.map((patient) => (
-                      <PatientCard
-                        key={patient.id}
-                        patient={patient}
-                        onViewDetail={() => navigate(`/pacientes/${patient.id}`)}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div className="space-y-0 border rounded-md overflow-hidden">
+                      {displayedPatients.map((patient) => (
+                        <PatientCard
+                          key={patient.id}
+                          patient={patient}
+                          onViewDetail={() => navigate(`/pacientes/${patient.id}`)}
+                        />
+                      ))}
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                          Página {currentPage} de {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="rounded-md border">
                     <Table>
