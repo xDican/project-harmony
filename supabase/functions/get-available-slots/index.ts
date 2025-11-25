@@ -1,14 +1,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface RequestBody {
-  doctorId: string;
-  date: string;
-}
+// Zod schema for request validation
+const RequestSchema = z.object({
+  doctorId: z.string().uuid("doctorId debe ser un UUID válido"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date debe estar en formato YYYY-MM-DD"),
+});
 
 const APPOINTMENT_DURATION_MINUTES = 60; // Duración fija de cada cita
 const SLOT_GRANULARITY_MINUTES = 30; // Intervalo entre posibles inicios
@@ -32,41 +34,73 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // 1) Authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
+      console.error("[get-available-slots] Missing Authorization header");
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // 2) Environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("[get-available-slots] Missing Supabase env vars");
       return new Response(JSON.stringify({ error: "Supabase env vars not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // 3) Create Supabase client with user's JWT
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const body: RequestBody = await req.json();
-    const { doctorId, date } = body;
+    // 4) Parse and validate request body with Zod
+    const rawBody = await req.json();
+    const validationResult = RequestSchema.safeParse(rawBody);
 
-    if (!doctorId || !date) {
-      return new Response(JSON.stringify({ error: "doctorId and date are required" }), {
-        status: 400,
+    if (!validationResult.success) {
+      console.error("[get-available-slots] Validation error:", validationResult.error.errors);
+      return new Response(
+        JSON.stringify({ 
+          error: "Datos de entrada inválidos", 
+          details: validationResult.error.errors 
+        }), 
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const { doctorId, date } = validationResult.data;
+    console.log("[get-available-slots] Request:", { doctorId, date });
+
+    // 5) Verify doctor exists
+    const { data: doctor, error: doctorError } = await supabase
+      .from("doctors")
+      .select("id")
+      .eq("id", doctorId)
+      .maybeSingle();
+
+    if (doctorError || !doctor) {
+      console.error("[get-available-slots] Doctor not found:", doctorError);
+      return new Response(JSON.stringify({ error: "Doctor no encontrado" }), {
+        status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // 6) Calculate day of week
     const dateObj = new Date(date + "T00:00:00");
     const dayOfWeek = dateObj.getDay(); // 0 Domingo ... 6 Sábado
 
-    // 1) Horarios del doctor para ese día
+    // 7) Fetch doctor's schedules for that day
     const { data: schedules, error: scheduleError } = await supabase
       .from("doctor_schedules")
       .select("*")
@@ -74,35 +108,38 @@ Deno.serve(async (req) => {
       .eq("day_of_week", dayOfWeek);
 
     if (scheduleError) {
-      return new Response(JSON.stringify({ error: "Error fetching doctor schedule" }), {
+      console.error("[get-available-slots] Error fetching schedules:", scheduleError);
+      return new Response(JSON.stringify({ error: "Error al obtener horarios del doctor" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (!schedules || schedules.length === 0) {
+      console.log("[get-available-slots] No schedules found for day:", dayOfWeek);
       return new Response(JSON.stringify({ slots: [] }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 2) Citas existentes (excluye canceladas)
+    // 8) Fetch existing appointments (exclude cancelled)
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
       .select("time")
       .eq("doctor_id", doctorId)
       .eq("date", date)
-      .not("status", "in", '("cancelled","canceled")'); // robustez por variantes
+      .not("status", "in", '("cancelled","canceled")');
 
     if (appointmentsError) {
-      return new Response(JSON.stringify({ error: "Error fetching appointments" }), {
+      console.error("[get-available-slots] Error fetching appointments:", appointmentsError);
+      return new Response(JSON.stringify({ error: "Error al obtener citas existentes" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 3) Construir intervalos ocupados [start, end)
+    // 9) Build occupied intervals [start, end)
     const occupiedIntervals = (appointments || []).map((apt) => {
       const startMinutes = parseTimeToMinutes(apt.time);
       return {
@@ -111,16 +148,16 @@ Deno.serve(async (req) => {
       };
     });
 
-    // 4) Generar candidatos y filtrar por:
-    //    - Que quepa dentro del bloque de horario
-    //    - Que no solape un intervalo ocupado
+    console.log("[get-available-slots] Occupied intervals:", occupiedIntervals.length);
+
+    // 10) Generate available slots
     const availableSlots: string[] = [];
 
     for (const schedule of schedules) {
       const scheduleStart = parseTimeToMinutes(schedule.start_time);
       const scheduleEnd = parseTimeToMinutes(schedule.end_time);
 
-      // Recorremos cada posible inicio
+      // Iterate through possible start times
       for (
         let candidateStart = scheduleStart;
         candidateStart + APPOINTMENT_DURATION_MINUTES <= scheduleEnd;
@@ -128,7 +165,7 @@ Deno.serve(async (req) => {
       ) {
         const candidateEnd = candidateStart + APPOINTMENT_DURATION_MINUTES;
 
-        // Verificar solape con cualquier cita ocupada
+        // Check for overlap with occupied appointments
         const overlaps = occupiedIntervals.some(({ start, end }) => {
           return candidateStart < end && start < candidateEnd;
         });
@@ -139,14 +176,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Opcional: ordenar y eliminar duplicados (por si hay bloques que se solapen)
+    // 11) Sort and deduplicate
     const uniqueSorted = Array.from(new Set(availableSlots)).sort((a, b) => a.localeCompare(b));
+
+    console.log("[get-available-slots] Available slots:", uniqueSorted.length);
 
     return new Response(JSON.stringify({ slots: uniqueSorted }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    console.error("[get-available-slots] Unexpected error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: "Internal server error", details: errorMessage }), {
       status: 500,
