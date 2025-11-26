@@ -66,7 +66,7 @@ interface ApiModule {
   getAvailableSlots: (params: { doctorId: string; date: string }) => Promise<string[]>;
   searchPatients: (query: string) => Promise<Patient[]>;
   getAllPatients: () => Promise<Patient[]>;
-  createPatient: (input: { name: string; phone: string }) => Promise<Patient>;
+  createPatient: (input: { name: string; phone: string; email?: string; notes?: string }) => Promise<Patient>;
   getSpecialties: () => Promise<Specialty[]>;
   getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
   getDoctors: () => Promise<Doctor[]>;
@@ -190,7 +190,7 @@ export async function getAllPatients(): Promise<Patient[]> {
 /**
  * Create a new patient
  */
-export async function createPatient(input: { name: string; phone: string }): Promise<Patient> {
+export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string }): Promise<Patient> {
   const apiModule = await getApiModule();
   return await apiModule.createPatient(input);
 }

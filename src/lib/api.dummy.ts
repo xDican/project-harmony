@@ -9,11 +9,13 @@ import type { UserWithRelations } from './api';
 /**
  * Create a new patient and add to in-memory data
  */
-export function createPatient(input: { name: string; phone: string }): Promise<Patient> {
+export function createPatient(input: { name: string; phone: string; email?: string; notes?: string }): Promise<Patient> {
   const newPatient: Patient = {
     id: `p-${Date.now()}`,
     name: input.name,
     phone: input.phone,
+    email: input.email,
+    notes: input.notes,
   };
   
   patients.push(newPatient);

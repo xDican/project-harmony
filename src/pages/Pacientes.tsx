@@ -5,12 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Users, Eye, User } from 'lucide-react';
+import { Search, Users, Eye, User, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getAllPatients } from '@/lib/api';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { getAllPatients, createPatient } from '@/lib/api';
 import type { Patient } from '@/types/patient';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { formatPhoneForDisplay } from '@/lib/utils';
+import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 
 /**
  * Pacientes - Patient management and search page
@@ -24,6 +28,14 @@ export default function Pacientes() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  // Create patient dialog state
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientPhone, setNewPatientPhone] = useState('');
+  const [newPatientEmail, setNewPatientEmail] = useState('');
+  const [newPatientNotes, setNewPatientNotes] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   // Load patients on mount
   useEffect(() => {
@@ -65,6 +77,52 @@ export default function Pacientes() {
   const endIndex = startIndex + itemsPerPage;
   const displayedPatients = isMobile ? filteredPatients.slice(startIndex, endIndex) : filteredPatients;
 
+  const handleCreatePatient = async () => {
+    if (!newPatientName.trim() || !newPatientPhone.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Campos requeridos',
+        description: 'El nombre y teléfono son obligatorios',
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      await createPatient({
+        name: newPatientName.trim(),
+        phone: formatPhoneForStorage(newPatientPhone.trim()),
+        email: newPatientEmail.trim() || undefined,
+        notes: newPatientNotes.trim() || undefined,
+      });
+
+      toast({
+        title: 'Paciente creado',
+        description: 'El paciente ha sido creado exitosamente',
+      });
+
+      // Refresh patients list
+      const data = await getAllPatients();
+      setPatients(data);
+
+      // Close dialog and reset form
+      setIsCreateDialogOpen(false);
+      setNewPatientName('');
+      setNewPatientPhone('');
+      setNewPatientEmail('');
+      setNewPatientNotes('');
+    } catch (error) {
+      console.error('Error creating patient:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo crear el paciente',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="container mx-auto p-6 max-w-6xl">
@@ -78,10 +136,16 @@ export default function Pacientes() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Lista de Pacientes
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Lista de Pacientes
+              </CardTitle>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo paciente
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {/* Search Input */}
@@ -240,6 +304,72 @@ export default function Pacientes() {
             )}
           </CardContent>
         </Card>
+
+        {/* Create Patient Dialog */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Crear nuevo paciente</DialogTitle>
+              <DialogDescription>
+                Completa la información del nuevo paciente
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre *</Label>
+                <Input
+                  id="name"
+                  value={newPatientName}
+                  onChange={(e) => setNewPatientName(e.target.value)}
+                  placeholder="Nombre completo"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Teléfono *</Label>
+                <Input
+                  id="phone"
+                  value={newPatientPhone}
+                  onChange={(e) => setNewPatientPhone(formatPhoneInput(e.target.value))}
+                  placeholder="1234-5678"
+                  maxLength={9}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newPatientEmail}
+                  onChange={(e) => setNewPatientEmail(e.target.value)}
+                  placeholder="ejemplo@correo.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notas</Label>
+                <Textarea
+                  id="notes"
+                  value={newPatientNotes}
+                  onChange={(e) => setNewPatientNotes(e.target.value)}
+                  placeholder="Información adicional"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsCreateDialogOpen(false)}
+                disabled={isCreating}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleCreatePatient} disabled={isCreating}>
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Crear paciente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
