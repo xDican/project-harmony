@@ -97,15 +97,16 @@ export default function UsersList() {
 
   return (
     <MainLayout>
-      <div className="p-6 max-w-7xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle>Usuarios</CardTitle>
-            <CardDescription>
-              Gestiona doctores, secretarias y administradores del sistema.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <div className="p-4 md:p-6 space-y-6">
+        {/* Page Header */}
+        <div className="mb-6">
+          <h1 className="text-4xl font-bold text-foreground mb-2">Usuarios</h1>
+          <p className="text-muted-foreground">
+            Gestiona doctores, secretarias y administradores del sistema.
+          </p>
+        </div>
+
+        <div>
             {/* Create User Button - Mobile Top */}
             {isMobile && (
               <div className="mb-4">
@@ -361,8 +362,7 @@ export default function UsersList() {
                 )}
               </>
             )}
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </MainLayout>
   );
