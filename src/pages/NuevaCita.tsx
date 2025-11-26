@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { getAvailableSlots, createPatient, createAppointment } from '@/lib/api';
-import { getLocalToday } from '@/lib/dateUtils';
+import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
 
@@ -51,7 +51,16 @@ export default function NuevaCita() {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
       getAvailableSlots({ doctorId: selectedDoctor.id, date: dateString })
         .then(slots => {
-          setAvailableSlots(slots);
+          // Filter slots to show only future times if the selected date is today
+          let filteredSlots = slots;
+          if (isToday(selectedDate)) {
+            const currentTimeInMinutes = getCurrentTimeInMinutes();
+            filteredSlots = slots.filter(slot => {
+              const slotTimeInMinutes = timeStringToMinutes(slot);
+              return slotTimeInMinutes > currentTimeInMinutes;
+            });
+          }
+          setAvailableSlots(filteredSlots);
         })
         .catch(error => {
           console.error('Error loading slots:', error);
