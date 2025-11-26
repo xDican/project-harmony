@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/MainLayout';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Users, Eye, User, Plus, Loader2 } from 'lucide-react';
+import { Search, Eye, User, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -125,29 +124,22 @@ export default function Pacientes() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto p-6 max-w-6xl">
+      <div className="p-4 md:p-6 space-y-6">
         {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Pacientes</h1>
-          <p className="text-muted-foreground">
-            Gestión y búsqueda de pacientes registrados
-          </p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Pacientes</h1>
+            <p className="text-muted-foreground">
+              Gestión y búsqueda de pacientes registrados
+            </p>
+          </div>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo paciente
+          </Button>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Lista de Pacientes
-              </CardTitle>
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo paciente
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
+        <div>
             {/* Search Input */}
             <div className="mb-6">
               <div className="relative">
@@ -302,8 +294,7 @@ export default function Pacientes() {
                 )}
               </>
             )}
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Create Patient Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
