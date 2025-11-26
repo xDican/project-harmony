@@ -121,7 +121,7 @@ export default function AgendaSecretaria() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto p-6 max-w-5xl">
+      <div className="p-4 md:p-6 space-y-6">
         {/* Page Header */}
         <div className="mb-6">
           <h1 className="text-4xl font-bold text-foreground mb-2">Agenda de Hoy</h1>
