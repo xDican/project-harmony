@@ -17,6 +17,7 @@ import StatusBadge from '@/components/StatusBadge';
 import type { Patient } from '@/types/patient';
 import { useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatPhoneForDisplay } from '@/lib/utils';
 import { AppointmentStatus } from '@/types/appointment';
 
 /**
@@ -179,7 +180,7 @@ export default function PatientDetail() {
               {patient.phone && (
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4" />
-                  <span>{patient.phone}</span>
+                  <span>{formatPhoneForDisplay(patient.phone)}</span>
                 </div>
               )}
               {patient.email && (

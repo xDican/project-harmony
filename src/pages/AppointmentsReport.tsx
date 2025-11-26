@@ -16,7 +16,7 @@ import type { Doctor } from '@/types/doctor';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, formatPhoneForDisplay } from '@/lib/utils';
 
 interface AppointmentReport {
   id: string;
@@ -434,7 +434,7 @@ export default function AppointmentsReport() {
                                 {appointment.patients?.name || '-'}
                               </div>
                             </TableCell>
-                            <TableCell>{appointment.patients?.phone || '-'}</TableCell>
+                            <TableCell>{formatPhoneForDisplay(appointment.patients?.phone) || '-'}</TableCell>
                             <TableCell>
                               <StatusBadge status={appointment.status} />
                             </TableCell>
@@ -518,7 +518,7 @@ function AppointmentReportCard({ appointment, formatDate }: AppointmentReportCar
         {appointment.patients?.phone && (
           <div className="flex items-center gap-2">
             <span>📱</span>
-            <span>{appointment.patients.phone}</span>
+            <span>{formatPhoneForDisplay(appointment.patients.phone)}</span>
           </div>
         )}
         {appointment.notes && (

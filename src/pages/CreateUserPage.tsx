@@ -12,6 +12,7 @@ import { createUserWithRole, getSpecialties } from "@/lib/api";
 import type { Specialty } from "@/types/doctor";
 import type { UserRole } from "@/types/user";
 import { Loader2, ArrowLeft } from "lucide-react";
+import { formatPhoneInput, formatPhoneForStorage } from "@/lib/utils";
 
 export default function CreateUserPage() {
   const navigate = useNavigate();
@@ -88,7 +89,7 @@ export default function CreateUserPage() {
         role,
         specialtyId: role === "doctor" ? specialtyId : undefined,
         fullName: formattedName,
-        phone: role === "doctor" ? phone : undefined,
+        phone: role === "doctor" ? formatPhoneForStorage(phone) : undefined,
         prefix: role === "doctor" ? prefix : undefined,
       });
 
@@ -224,8 +225,9 @@ export default function CreateUserPage() {
                       id="phone"
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+1234567890"
+                      onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                      placeholder="1234-5678"
+                      maxLength={9}
                       disabled={loading}
                     />
                   </div>

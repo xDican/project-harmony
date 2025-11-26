@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { getAllPatients } from '@/lib/api';
 import type { Patient } from '@/types/patient';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatPhoneForDisplay } from '@/lib/utils';
 
 /**
  * Pacientes - Patient management and search page
@@ -186,7 +187,7 @@ export default function Pacientes() {
                                 {patient.name}
                               </div>
                             </TableCell>
-                            <TableCell>{patient.phone || '—'}</TableCell>
+                            <TableCell>{formatPhoneForDisplay(patient.phone) || '—'}</TableCell>
                             <TableCell className="text-muted-foreground">
                               {patient.documentId || '—'}
                             </TableCell>
@@ -265,7 +266,7 @@ function PatientCard({ patient, onViewDetail }: {
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex flex-col gap-1 text-sm text-muted-foreground">
           {patient.phone && (
-            <span>📱 {patient.phone}</span>
+            <span>📱 {formatPhoneForDisplay(patient.phone)}</span>
           )}
           {patient.documentId && (
             <span>🆔 {patient.documentId}</span>
