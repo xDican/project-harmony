@@ -385,7 +385,7 @@ function PatientCard({ patient, onViewDetail }: {
           </div>
           
           {/* Phone & Document */}
-          <div className="flex flex-col gap-1 text-sm text-muted-foreground pl-6">
+          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
             {patient.phone && (
               <span>📱 {formatPhoneForDisplay(patient.phone)}</span>
             )}
