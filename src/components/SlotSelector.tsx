@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatTimeTo12Hour } from '@/lib/dateUtils';
 
 interface SlotSelectorProps {
   slots: string[];
@@ -31,6 +32,7 @@ const SlotSelector = ({ slots, selectedSlot, onSelect }: SlotSelectorProps) => {
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
         {slots.map((slot) => {
           const isSelected = slot === selectedSlot;
+          const displayTime = formatTimeTo12Hour(slot);
           
           return (
             <Button
@@ -43,9 +45,9 @@ const SlotSelector = ({ slots, selectedSlot, onSelect }: SlotSelectorProps) => {
                 isSelected && 'ring-2 ring-primary ring-offset-2'
               )}
               aria-pressed={isSelected}
-              aria-label={`Seleccionar horario ${slot}`}
+              aria-label={`Seleccionar horario ${displayTime}`}
             >
-              {slot}
+              {displayTime}
             </Button>
           );
         })}

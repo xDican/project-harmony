@@ -21,3 +21,43 @@ export function getLocalToday(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
+
+/**
+ * Checks if a given date is today
+ */
+export function isToday(date: Date): boolean {
+  const today = getLocalToday();
+  return date.getFullYear() === today.getFullYear() &&
+         date.getMonth() === today.getMonth() &&
+         date.getDate() === today.getDate();
+}
+
+/**
+ * Converts a time string in HH:MM format to 12-hour format with AM/PM
+ * @param timeStr - Time in 24-hour format (e.g., "14:30", "09:00")
+ * @returns Time in 12-hour format (e.g., "2:30 PM", "9:00 AM")
+ */
+export function formatTimeTo12Hour(timeStr: string): string {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12; // Convert 0 to 12
+  
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+
+/**
+ * Gets the current time in minutes since midnight
+ */
+export function getCurrentTimeInMinutes(): number {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+/**
+ * Converts a time string (HH:MM) to minutes since midnight
+ */
+export function timeStringToMinutes(timeStr: string): number {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+}
