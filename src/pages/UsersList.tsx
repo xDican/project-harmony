@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getAllUsers, type UserWithRelations } from '@/lib/api';
 import { Loader2, Search, Plus, Edit, Calendar, User, Stethoscope } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatPhoneForDisplay } from '@/lib/utils';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -298,7 +299,7 @@ export default function UsersList() {
                                 {user.doctor?.specialtyName || '—'}
                               </TableCell>
                               <TableCell>
-                                {user.doctor?.phone || '—'}
+                                {formatPhoneForDisplay(user.doctor?.phone) || '—'}
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
@@ -400,7 +401,7 @@ function UserCard({ user, onEdit, onSchedule }: UserCardProps) {
           <span>🩺 {user.doctor.specialtyName}</span>
         )}
         {user.doctor?.phone && (
-          <span>📱 {user.doctor.phone}</span>
+          <span>📱 {formatPhoneForDisplay(user.doctor.phone)}</span>
         )}
       </div>
 

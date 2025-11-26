@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Patient } from '@/types/patient';
 import { usePatientsSearch } from '@/hooks/usePatientsSearch';
 import { Search, User, Phone, X, UserPlus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatPhoneForDisplay } from '@/lib/utils';
 
 interface PatientSearchProps {
   onSelect: (patient: Patient) => void;
@@ -81,7 +81,7 @@ const PatientSearch = ({ onSelect, onCreateNew, value }: PatientSearchProps) => 
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Phone className="h-3 w-3" />
-                  <span>{selectedPatient.phone}</span>
+                  <span>{formatPhoneForDisplay(selectedPatient.phone)}</span>
                 </div>
                 {selectedPatient.documentId && (
                   <div className="text-xs text-muted-foreground">
@@ -165,7 +165,7 @@ const PatientSearch = ({ onSelect, onCreateNew, value }: PatientSearchProps) => 
                             </div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Phone className="h-3 w-3" />
-                              <span>{patient.phone}</span>
+                              <span>{formatPhoneForDisplay(patient.phone)}</span>
                             </div>
                             {patient.documentId && (
                               <div className="text-xs text-muted-foreground pl-6">

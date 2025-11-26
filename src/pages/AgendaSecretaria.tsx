@@ -28,6 +28,7 @@ import { es } from 'date-fns/locale';
 import { AppointmentStatus } from '@/types/appointment';
 import { AppointmentWithDetails } from '@/lib/api';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatPhoneForDisplay } from '@/lib/utils';
 
 /**
  * AgendaSecretaria - Daily appointment schedule for secretary/administrative staff
@@ -465,7 +466,7 @@ function AppointmentTableRow({
         {formatDateTime(appointment.date, appointment.time)}
       </TableCell>
       <TableCell className="text-sm">
-        {appointment.patient.phone || '-'}
+        {formatPhoneForDisplay(appointment.patient.phone) || '-'}
       </TableCell>
       <TableCell>
         {isCanceled ? (

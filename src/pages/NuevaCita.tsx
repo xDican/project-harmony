@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { getAvailableSlots, createPatient, createAppointment } from '@/lib/api';
 import { getLocalToday } from '@/lib/dateUtils';
 import type { Patient } from '@/types/patient';
@@ -112,7 +112,7 @@ export default function NuevaCita() {
     try {
       const patient = await createPatient({
         name: newPatientName.trim(),
-        phone: newPatientPhone.trim(),
+        phone: formatPhoneForStorage(newPatientPhone.trim()),
       });
 
       // Set the new patient as selected
@@ -344,8 +344,9 @@ export default function NuevaCita() {
               <Input
                 id="patient-phone"
                 value={newPatientPhone}
-                onChange={(e) => setNewPatientPhone(e.target.value)}
-                placeholder="Ej: 555-0101"
+                onChange={(e) => setNewPatientPhone(formatPhoneInput(e.target.value))}
+                placeholder="1234-5678"
+                maxLength={9}
               />
             </div>
           </div>

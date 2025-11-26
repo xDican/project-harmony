@@ -13,6 +13,7 @@ import { getUserById, updateUser, getSpecialties } from '@/lib/api';
 import type { Specialty } from '@/types/doctor';
 import type { UserWithRelations } from '@/lib/api';
 import { Loader2, ArrowLeft, Calendar } from 'lucide-react';
+import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 
 export default function EditUserPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -59,11 +60,11 @@ export default function EditUserPage() {
         // Pre-fill form based on role
         if (userData.role === 'doctor' && userData.doctor) {
           setFullName(userData.doctor.name || '');
-          setPhone(userData.doctor.phone || '');
+          setPhone(formatPhoneForDisplay(userData.doctor.phone) || '');
           setSpecialtyId(userData.doctor.specialtyId || '');
         } else if (userData.role === 'secretary' && userData.secretary) {
           setFullName(userData.secretary.name || '');
-          setPhone(userData.secretary.phone || '');
+          setPhone(formatPhoneForDisplay(userData.secretary.phone) || '');
         }
       } catch (err: any) {
         console.error('Error loading user:', err);
@@ -113,7 +114,7 @@ export default function EditUserPage() {
     try {
       const result = await updateUser(userId!, {
         name: fullName,
-        phone: phone,
+        phone: formatPhoneForStorage(phone),
         specialtyId: specialtyId,
       });
 
@@ -251,8 +252,9 @@ export default function EditUserPage() {
                     id="phone"
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1234567890"
+                    onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                    placeholder="1234-5678"
+                    maxLength={9}
                     disabled={saving}
                   />
                 </div>
