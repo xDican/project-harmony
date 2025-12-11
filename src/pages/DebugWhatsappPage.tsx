@@ -17,12 +17,8 @@ const DebugWhatsappPage = () => {
       const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
         body: {
           to: "whatsapp:+50433899824",
-          type: "confirmation",
-          templateParams: {
-            name: "Diego",
-            date: "2025-12-11",
-            time: "3:00 PM",
-          },
+          type: "generic",
+          body: "Hola Diego! Este es un mensaje de prueba desde el sistema de citas médicas. Tu cita está programada para el 2025-12-11 a las 3:00 PM.",
         },
       });
 
@@ -74,14 +70,10 @@ const DebugWhatsappPage = () => {
           <CardContent className="space-y-6">
             <div className="bg-muted/50 p-4 rounded-lg text-sm space-y-2">
               <p><strong>Número destino:</strong> +504 3389 9824</p>
-              <p><strong>Tipo:</strong> confirmation</p>
-              <p><strong>Parámetros:</strong></p>
-              <pre className="bg-background p-2 rounded text-xs overflow-x-auto">
-{`{
-  name: "Diego",
-  date: "2025-12-11",
-  time: "3:00 PM"
-}`}
+              <p><strong>Tipo:</strong> generic (texto plano)</p>
+              <p><strong>Mensaje:</strong></p>
+              <pre className="bg-background p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">
+{`Hola Diego! Este es un mensaje de prueba desde el sistema de citas médicas. Tu cita está programada para el 2025-12-11 a las 3:00 PM.`}
               </pre>
             </div>
 
