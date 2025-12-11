@@ -77,14 +77,18 @@ export default function NuevaCita() {
     }
   }, [isDoctor, user?.doctorId, selectedDoctor]);
 
-  // Fetch available slots when doctor and date are selected
+  // Fetch available slots when doctor, date, or duration changes
   useEffect(() => {
     if (selectedDoctor && selectedDate) {
       setIsLoadingSlots(true);
-      setSelectedSlot(null); // Reset selected slot when date/doctor changes
-      
+      setSelectedSlot(null); // Reset selected slot when date/doctor/duration changes
+
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      getAvailableSlots({ doctorId: selectedDoctor.id, date: dateString })
+      getAvailableSlots({
+        doctorId: selectedDoctor.id,
+        date: dateString,
+        durationMinutes: durationMinutes
+      })
         .then(slots => {
           // Filter slots to show only future times if the selected date is today
           let filteredSlots = slots;
@@ -108,7 +112,7 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setSelectedSlot(null);
     }
-  }, [selectedDoctor, selectedDate]);
+  }, [selectedDoctor, selectedDate, durationMinutes]);
 
   // Reset date and slots when doctor changes
   useEffect(() => {
