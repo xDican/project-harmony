@@ -61,9 +61,14 @@ export default function MainLayout({ children }: MainLayoutProps) {
       );
     }
 
-    // Doctor can see: only Agenda Médico
-    if (isDoctor) {
-      items.push({ to: '/agenda-medico', label: 'Agenda Médico', icon: Stethoscope });
+    // Doctor (independent mode) can see: Consultorio, Nueva Cita, Pacientes, Configuración
+    if (isDoctor && !isAdmin) {
+      items.push(
+        { to: '/consultorio', label: 'Citas de Hoy', icon: Calendar },
+        { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
+        { to: '/pacientes', label: 'Pacientes', icon: Users },
+        { to: '/configuracion', label: 'Configuración', icon: Settings }
+      );
     }
 
     return items;

@@ -21,6 +21,7 @@ export type Database = {
           created_at: string | null
           date: string
           doctor_id: string
+          duration_minutes: number
           id: string
           notes: string | null
           patient_id: string
@@ -34,6 +35,7 @@ export type Database = {
           created_at?: string | null
           date: string
           doctor_id: string
+          duration_minutes?: number
           id?: string
           notes?: string | null
           patient_id: string
@@ -47,6 +49,7 @@ export type Database = {
           created_at?: string | null
           date?: string
           doctor_id?: string
+          duration_minutes?: number
           id?: string
           notes?: string | null
           patient_id?: string
