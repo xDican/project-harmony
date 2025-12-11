@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,20 +14,26 @@ const RequestSchema = z.object({
   durationMinutes: z.number().int().min(15).max(480).optional().default(60),
 });
 
-const DEFAULT_DURATION_MINUTES = 60; // Duración por defecto si no se especifica
-const SLOT_GRANULARITY_MINUTES = 30; // Intervalo entre posibles inicios
+const DEFAULT_DURATION_MINUTES = 60;
+const SLOT_GRANULARITY_MINUTES = 30;
 
-function parseTimeToMinutes(timeStr: string): number {
-  // Soporta HH:MM o HH:MM:SS
-  const parts = timeStr.split(":").map(Number);
-  const [h, m] = parts;
-  return h * 60 + m;
+/**
+ * Construye un DateTime de Luxon combinando una fecha y una hora
+ * @param date - Fecha en formato "YYYY-MM-DD"
+ * @param time - Hora en formato "HH:MM" o "HH:MM:SS"
+ * @returns DateTime de Luxon
+ */
+function buildDateTime(date: string, time: string): DateTime {
+  // Normalizar tiempo a HH:MM
+  const normalizedTime = time.substring(0, 5);
+  return DateTime.fromISO(`${date}T${normalizedTime}:00`);
 }
 
-function formatMinutesToHHMM(totalMinutes: number): string {
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+/**
+ * Formatea un DateTime a string "HH:MM"
+ */
+function formatToHHMM(dt: DateTime): string {
+  return dt.toFormat("HH:mm");
 }
 
 Deno.serve(async (req) => {
@@ -68,10 +75,10 @@ Deno.serve(async (req) => {
     if (!validationResult.success) {
       console.error("[get-available-slots] Validation error:", validationResult.error.errors);
       return new Response(
-        JSON.stringify({ 
-          error: "Datos de entrada inválidos", 
-          details: validationResult.error.errors 
-        }), 
+        JSON.stringify({
+          error: "Datos de entrada inválidos",
+          details: validationResult.error.errors
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -97,14 +104,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 6) Calculate day of week
-    const dateObj = new Date(date + "T00:00:00");
-    const dayOfWeek = dateObj.getDay(); // 0 Domingo ... 6 Sábado
+    // 6) Calculate day of week using Luxon
+    const requestedDate = DateTime.fromISO(date);
+    const dayOfWeek = requestedDate.weekday % 7; // Luxon: 1=Monday...7=Sunday -> convert to 0=Sunday...6=Saturday
 
     // 7) Fetch doctor's schedules for that day
     const { data: schedules, error: scheduleError } = await supabase
       .from("doctor_schedules")
-      .select("*")
+      .select("start_time, end_time")
       .eq("doctor_id", doctorId)
       .eq("day_of_week", dayOfWeek);
 
@@ -124,7 +131,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 8) Fetch existing appointments (exclude cancelled) - now including duration_minutes
+    // 8) Fetch existing appointments (exclude cancelled)
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
       .select("time, duration_minutes")
@@ -140,42 +147,41 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 9) Build occupied intervals [start, end) - using each appointment's actual duration
+    // 9) Build occupied intervals as DateTime pairs [start, end)
     const occupiedIntervals = (appointments || []).map((apt: { time: string; duration_minutes: number | null }) => {
-      const startMinutes = parseTimeToMinutes(apt.time);
+      const appointmentStart = buildDateTime(date, apt.time);
       const appointmentDuration = apt.duration_minutes ?? DEFAULT_DURATION_MINUTES;
-      return {
-        start: startMinutes,
-        end: startMinutes + appointmentDuration,
-      };
+      const appointmentEnd = appointmentStart.plus({ minutes: appointmentDuration });
+      return { start: appointmentStart, end: appointmentEnd };
     });
 
     console.log("[get-available-slots] Occupied intervals:", occupiedIntervals.length);
 
-    // 10) Generate available slots using the requested duration
+    // 10) Generate available slots using Luxon
     const availableSlots: string[] = [];
 
     for (const schedule of schedules) {
-      const scheduleStart = parseTimeToMinutes(schedule.start_time);
-      const scheduleEnd = parseTimeToMinutes(schedule.end_time);
+      const workStart = buildDateTime(date, schedule.start_time);
+      const workEnd = buildDateTime(date, schedule.end_time);
 
-      // Iterate through possible start times
-      for (
-        let candidateStart = scheduleStart;
-        candidateStart + durationMinutes <= scheduleEnd; // Use requested duration to check if slot fits
-        candidateStart += SLOT_GRANULARITY_MINUTES
-      ) {
-        const candidateEnd = candidateStart + durationMinutes; // Use requested duration for slot end
+      // Generate candidate slots every SLOT_GRANULARITY_MINUTES
+      let slotStart = workStart;
 
-        // Check for overlap with occupied appointments
+      while (slotStart.plus({ minutes: durationMinutes }) <= workEnd) {
+        const slotEnd = slotStart.plus({ minutes: durationMinutes });
+
+        // Check for overlap with any occupied appointment
         // Overlap condition: slotStart < appointmentEnd AND appointmentStart < slotEnd
-        const overlaps = occupiedIntervals.some(({ start, end }) => {
-          return candidateStart < end && start < candidateEnd;
+        const hasOverlap = occupiedIntervals.some(({ start: aptStart, end: aptEnd }) => {
+          return slotStart < aptEnd && aptStart < slotEnd;
         });
 
-        if (!overlaps) {
-          availableSlots.push(formatMinutesToHHMM(candidateStart));
+        if (!hasOverlap) {
+          availableSlots.push(formatToHHMM(slotStart));
         }
+
+        // Move to next candidate slot
+        slotStart = slotStart.plus({ minutes: SLOT_GRANULARITY_MINUTES });
       }
     }
 
