@@ -64,7 +64,7 @@ interface ApiModule {
     status?: AppointmentStatus;
     durationMinutes?: number;
   }) => Promise<Appointment>;
-  getAvailableSlots: (params: { doctorId: string; date: string }) => Promise<string[]>;
+  getAvailableSlots: (params: { doctorId: string; date: string; durationMinutes?: number }) => Promise<string[]>;
   searchPatients: (query: string) => Promise<Patient[]>;
   getAllPatients: () => Promise<Patient[]>;
   createPatient: (input: { name: string; phone: string; email?: string; notes?: string }) => Promise<Patient>;
@@ -167,8 +167,15 @@ export async function createAppointment(input: {
 
 /**
  * Get available time slots for a doctor on a specific date
+ * @param params.doctorId - ID del doctor
+ * @param params.date - Fecha en formato YYYY-MM-DD
+ * @param params.durationMinutes - Duración de la cita en minutos (default: 60)
  */
-export async function getAvailableSlots(params: { doctorId: string; date: string }): Promise<string[]> {
+export async function getAvailableSlots(params: {
+  doctorId: string;
+  date: string;
+  durationMinutes?: number;
+}): Promise<string[]> {
   const apiModule = await getApiModule();
   return await apiModule.getAvailableSlots(params);
 }

@@ -227,8 +227,9 @@ export function updateAppointmentStatus(
 /**
  * Generate available time slots for a doctor on a specific date
  * Returns array of time strings like ["08:00", "08:30", "09:00"]
+ * @param params.durationMinutes - Duration in minutes (default: 60). Note: In dummy mode this is ignored for simplicity.
  */
-export function getAvailableSlots(params: { doctorId: string; date: string }): Promise<string[]> {
+export function getAvailableSlots(params: { doctorId: string; date: string; durationMinutes?: number }): Promise<string[]> {
   const { doctorId, date } = params;
   
   // Get the weekday for the given date (0=Sunday, 1=Monday, etc.)

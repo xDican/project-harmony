@@ -309,12 +309,20 @@ export async function createAppointment(input: {
 // --------------------------
 /**
  * Obtiene los slots disponibles de un doctor en una fecha llamando a la Edge Function
+ * @param params.doctorId - ID del doctor
+ * @param params.date - Fecha en formato YYYY-MM-DD
+ * @param params.durationMinutes - Duración de la cita en minutos (default: 60)
  */
-export async function getAvailableSlots(params: { doctorId: string; date: string }): Promise<string[]> {
+export async function getAvailableSlots(params: {
+  doctorId: string;
+  date: string;
+  durationMinutes?: number;
+}): Promise<string[]> {
   const { data, error } = await supabase.functions.invoke('get-available-slots', {
     body: {
       doctorId: params.doctorId,
       date: params.date,
+      durationMinutes: params.durationMinutes ?? 60,
     },
   });
 

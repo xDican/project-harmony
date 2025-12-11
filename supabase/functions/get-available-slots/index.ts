@@ -10,9 +10,10 @@ const corsHeaders = {
 const RequestSchema = z.object({
   doctorId: z.string().uuid("doctorId debe ser un UUID válido"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date debe estar en formato YYYY-MM-DD"),
+  durationMinutes: z.number().int().min(15).max(480).optional().default(60),
 });
 
-const APPOINTMENT_DURATION_MINUTES = 60; // Duración fija de cada cita
+const DEFAULT_DURATION_MINUTES = 60; // Duración por defecto si no se especifica
 const SLOT_GRANULARITY_MINUTES = 30; // Intervalo entre posibles inicios
 
 function parseTimeToMinutes(timeStr: string): number {
@@ -78,8 +79,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { doctorId, date } = validationResult.data;
-    console.log("[get-available-slots] Request:", { doctorId, date });
+    const { doctorId, date, durationMinutes } = validationResult.data;
+    console.log("[get-available-slots] Request:", { doctorId, date, durationMinutes });
 
     // 5) Verify doctor exists
     const { data: doctor, error: doctorError } = await supabase
@@ -123,13 +124,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 8) Fetch existing appointments (exclude cancelled)
+    // 8) Fetch existing appointments (exclude cancelled) - now including duration_minutes
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
-      .select("time")
+      .select("time, duration_minutes")
       .eq("doctor_id", doctorId)
       .eq("date", date)
-      .not("status", "in", '("cancelled","canceled")');
+      .not("status", "in", '("cancelled","canceled","cancelada")');
 
     if (appointmentsError) {
       console.error("[get-available-slots] Error fetching appointments:", appointmentsError);
@@ -139,18 +140,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 9) Build occupied intervals [start, end)
-    const occupiedIntervals = (appointments || []).map((apt) => {
+    // 9) Build occupied intervals [start, end) - using each appointment's actual duration
+    const occupiedIntervals = (appointments || []).map((apt: { time: string; duration_minutes: number | null }) => {
       const startMinutes = parseTimeToMinutes(apt.time);
+      const appointmentDuration = apt.duration_minutes ?? DEFAULT_DURATION_MINUTES;
       return {
         start: startMinutes,
-        end: startMinutes + APPOINTMENT_DURATION_MINUTES,
+        end: startMinutes + appointmentDuration,
       };
     });
 
     console.log("[get-available-slots] Occupied intervals:", occupiedIntervals.length);
 
-    // 10) Generate available slots
+    // 10) Generate available slots using the requested duration
     const availableSlots: string[] = [];
 
     for (const schedule of schedules) {
@@ -160,12 +162,13 @@ Deno.serve(async (req) => {
       // Iterate through possible start times
       for (
         let candidateStart = scheduleStart;
-        candidateStart + APPOINTMENT_DURATION_MINUTES <= scheduleEnd;
+        candidateStart + durationMinutes <= scheduleEnd; // Use requested duration to check if slot fits
         candidateStart += SLOT_GRANULARITY_MINUTES
       ) {
-        const candidateEnd = candidateStart + APPOINTMENT_DURATION_MINUTES;
+        const candidateEnd = candidateStart + durationMinutes; // Use requested duration for slot end
 
         // Check for overlap with occupied appointments
+        // Overlap condition: slotStart < appointmentEnd AND appointmentStart < slotEnd
         const overlaps = occupiedIntervals.some(({ start, end }) => {
           return candidateStart < end && start < candidateEnd;
         });
