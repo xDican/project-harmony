@@ -61,6 +61,7 @@ function formatAppointmentDateTime(date: string, time: string): string {
 async function sendReminderMessage(params: {
   functionsBaseUrl: string;
   serviceRoleKey: string;
+  anonKey: string;
   to: string;
   templateName: string;
   templateParams: Record<string, string>;
@@ -73,7 +74,10 @@ async function sendReminderMessage(params: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // Use service role key as Bearer token for Authorization
         "Authorization": `Bearer ${params.serviceRoleKey}`,
+        // Also include apikey header for Supabase Edge Functions
+        "apikey": params.anonKey,
       },
       body: JSON.stringify({
         to: params.to,
@@ -119,9 +123,10 @@ Deno.serve(async (req) => {
     // 1) Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const twilioTemplateReminder = Deno.env.get("TWILIO_TEMPLATE_REMINDER_24H");
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
       console.error("[send-reminders] Missing Supabase env vars");
       return new Response(
         JSON.stringify({ ok: false, error: "Server configuration error: Supabase" }),
@@ -276,6 +281,7 @@ Deno.serve(async (req) => {
       const sendResult = await sendReminderMessage({
         functionsBaseUrl,
         serviceRoleKey: supabaseServiceKey,
+        anonKey: supabaseAnonKey,
         to: whatsappTo,
         templateName: twilioTemplateReminder,
         templateParams,
