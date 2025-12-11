@@ -280,7 +280,7 @@ export async function createAppointment(input: {
         date: input.date,
         time: input.time,
         notes: input.notes,
-        duration_minutes: input.durationMinutes,
+        durationMinutes: input.durationMinutes ?? 60,
       },
     });
 
@@ -293,8 +293,16 @@ export async function createAppointment(input: {
       throw new Error(data.error);
     }
 
-    if (!data?.success || !data?.appointment) {
+    // Edge Function returns { ok: true, appointment, whatsappSent, ... }
+    if (!data?.ok || !data?.appointment) {
       throw new Error('Respuesta inválida del servidor');
+    }
+
+    // Log WhatsApp status for debugging
+    if (data.whatsappSent) {
+      console.log('[createAppointment] WhatsApp enviado:', data.twilioSid);
+    } else if (data.whatsappError) {
+      console.warn('[createAppointment] WhatsApp no enviado:', data.whatsappError);
     }
 
     return mapAppointment(data.appointment);
