@@ -284,6 +284,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_app_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       current_doctor_id: { Args: never; Returns: string }
       has_role: {
         Args: {

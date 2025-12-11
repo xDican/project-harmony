@@ -344,10 +344,33 @@ export default function NuevaCita() {
             </Popover>
           </section>
 
-          {/* Step 4 (or 3 for doctors): Time Slot Selection */}
+          {/* Step 4 (or 3 for doctors): Duration Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              {isDoctor ? '3' : '4'}. Seleccionar Horario
+              {isDoctor ? '3' : '4'}. Duración de la Cita
+            </Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {durationOptions.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={durationMinutes === option.value ? 'default' : 'outline'}
+                  onClick={() => setDurationMinutes(option.value)}
+                  className={cn(
+                    'h-12',
+                    durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
+                  )}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </section>
+
+          {/* Step 5 (or 4 for doctors): Time Slot Selection */}
+          <section>
+            <Label className="text-lg font-semibold text-foreground mb-3 block">
+              {isDoctor ? '4' : '5'}. Seleccionar Horario
             </Label>
             
             {!selectedDoctor || !selectedDate ? (
@@ -367,29 +390,6 @@ export default function NuevaCita() {
                 onSelect={setSelectedSlot}
               />
             )}
-          </section>
-
-          {/* Step 5 (or 4 for doctors): Duration Selection */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              {isDoctor ? '4' : '5'}. Duración de la Cita
-            </Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {durationOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  type="button"
-                  variant={durationMinutes === option.value ? 'default' : 'outline'}
-                  onClick={() => setDurationMinutes(option.value)}
-                  className={cn(
-                    'h-12',
-                    durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
-                  )}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
           </section>
 
           {/* Submit Button */}
