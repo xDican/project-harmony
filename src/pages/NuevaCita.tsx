@@ -16,22 +16,27 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
-import { getAvailableSlots, createPatient, createAppointment } from '@/lib/api';
+import { getAvailableSlots, createPatient, createAppointment, getDoctorById } from '@/lib/api';
 import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
+import { useCurrentUser } from '@/context/UserContext';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
 
 /**
  * NuevaCita - New appointment creation page
  * Multi-step form for scheduling medical appointments
+ * For doctors: auto-fills the doctor selection with the logged-in doctor
  */
 export default function NuevaCita() {
+  const { user, isDoctor } = useCurrentUser();
+  
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
 
   // Create patient dialog state
   const [isCreatePatientOpen, setIsCreatePatientOpen] = useState(false);
@@ -41,6 +46,25 @@ export default function NuevaCita() {
   
   // Create appointment loading state
   const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
+
+  // Auto-fill doctor for logged-in doctors
+  useEffect(() => {
+    if (isDoctor && user?.doctorId && !selectedDoctor) {
+      setIsLoadingDoctor(true);
+      getDoctorById(user.doctorId)
+        .then((doctor) => {
+          if (doctor) {
+            setSelectedDoctor(doctor);
+          }
+        })
+        .catch((error) => {
+          console.error('Error fetching doctor info:', error);
+        })
+        .finally(() => {
+          setIsLoadingDoctor(false);
+        });
+    }
+  }, [isDoctor, user?.doctorId, selectedDoctor]);
 
   // Fetch available slots when doctor and date are selected
   useEffect(() => {
@@ -237,18 +261,40 @@ export default function NuevaCita() {
             />
           </section>
 
-          {/* Step 2: Doctor Selection */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              2. Seleccionar Médico
-            </Label>
-            <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
-          </section>
+          {/* Step 2: Doctor Selection (hidden for doctors) */}
+          {!isDoctor && (
+            <section>
+              <Label className="text-lg font-semibold text-foreground mb-3 block">
+                2. Seleccionar Médico
+              </Label>
+              <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
+            </section>
+          )}
 
-          {/* Step 3: Date Selection */}
+          {/* Show selected doctor info for doctors */}
+          {isDoctor && selectedDoctor && (
+            <section>
+              <Label className="text-lg font-semibold text-foreground mb-3 block">
+                Médico
+              </Label>
+              <Card>
+                <CardContent className="flex items-center gap-3 py-3">
+                  <Stethoscope className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium">{selectedDoctor.name}</p>
+                    {selectedDoctor.specialtyName && (
+                      <p className="text-sm text-muted-foreground">{selectedDoctor.specialtyName}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+          {/* Step 3 (or 2 for doctors): Date Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              3. Seleccionar Fecha
+              {isDoctor ? '2' : '3'}. Seleccionar Fecha
             </Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -280,10 +326,10 @@ export default function NuevaCita() {
             </Popover>
           </section>
 
-          {/* Step 4: Time Slot Selection */}
+          {/* Step 4 (or 3 for doctors): Time Slot Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
-              4. Seleccionar Horario
+              {isDoctor ? '3' : '4'}. Seleccionar Horario
             </Label>
             
             {!selectedDoctor || !selectedDate ? (
