@@ -26,6 +26,7 @@ export type Database = {
           notes: string | null
           patient_id: string
           reminder_24h_sent: boolean
+          reminder_24h_sent_at: string | null
           status: string
           time: string
         }
@@ -40,6 +41,7 @@ export type Database = {
           notes?: string | null
           patient_id: string
           reminder_24h_sent?: boolean
+          reminder_24h_sent_at?: string | null
           status?: string
           time: string
         }
@@ -54,6 +56,7 @@ export type Database = {
           notes?: string | null
           patient_id?: string
           reminder_24h_sent?: boolean
+          reminder_24h_sent_at?: string | null
           status?: string
           time?: string
         }
@@ -140,6 +143,79 @@ export type Database = {
             columns: ["specialty_id"]
             isOneToOne: false
             referencedRelation: "specialties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_logs: {
+        Row: {
+          appointment_id: string | null
+          body: string | null
+          channel: string
+          created_at: string
+          direction: string
+          doctor_id: string | null
+          from_phone: string
+          id: string
+          patient_id: string | null
+          raw_payload: Json | null
+          status: string | null
+          template_name: string | null
+          to_phone: string
+          type: string | null
+        }
+        Insert: {
+          appointment_id?: string | null
+          body?: string | null
+          channel?: string
+          created_at?: string
+          direction: string
+          doctor_id?: string | null
+          from_phone: string
+          id?: string
+          patient_id?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          template_name?: string | null
+          to_phone: string
+          type?: string | null
+        }
+        Update: {
+          appointment_id?: string | null
+          body?: string | null
+          channel?: string
+          created_at?: string
+          direction?: string
+          doctor_id?: string | null
+          from_phone?: string
+          id?: string
+          patient_id?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          template_name?: string | null
+          to_phone?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_logs_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_logs_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
             referencedColumns: ["id"]
           },
         ]
