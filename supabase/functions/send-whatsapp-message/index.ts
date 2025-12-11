@@ -95,7 +95,7 @@ async function sendTwilioMessage(params: {
  * Inserts a record into message_logs table
  */
 async function logMessage(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   params: {
     appointmentId?: string;
     patientId?: string;
