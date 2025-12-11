@@ -62,6 +62,7 @@ interface ApiModule {
     time: string;
     notes?: string;
     status?: AppointmentStatus;
+    durationMinutes?: number;
   }) => Promise<Appointment>;
   getAvailableSlots: (params: { doctorId: string; date: string }) => Promise<string[]>;
   searchPatients: (query: string) => Promise<Patient[]>;
@@ -158,6 +159,7 @@ export async function createAppointment(input: {
   time: string;
   notes?: string;
   status?: AppointmentStatus;
+  durationMinutes?: number;
 }): Promise<Appointment> {
   const apiModule = await getApiModule();
   return await apiModule.createAppointment(input);

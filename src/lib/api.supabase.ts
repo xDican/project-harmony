@@ -23,6 +23,7 @@ function mapAppointment(appointment: any): Appointment {
     time: appointment.time,
     status: appointment.status as AppointmentStatus,
     notes: appointment.notes ?? undefined,
+    durationMinutes: appointment.duration_minutes ?? 60,
   };
 }
 
@@ -268,6 +269,7 @@ export async function createAppointment(input: {
   time: string;
   notes?: string;
   status?: AppointmentStatus;
+  durationMinutes?: number;
 }): Promise<Appointment> {
   try {
     // Llamar a la Edge Function create-appointment
@@ -278,6 +280,7 @@ export async function createAppointment(input: {
         date: input.date,
         time: input.time,
         notes: input.notes,
+        duration_minutes: input.durationMinutes,
       },
     });
 

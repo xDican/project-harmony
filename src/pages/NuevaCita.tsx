@@ -46,6 +46,17 @@ export default function NuevaCita() {
   
   // Create appointment loading state
   const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
+  
+  // Appointment duration state
+  const [durationMinutes, setDurationMinutes] = useState<number>(60);
+
+  // Duration options
+  const durationOptions = [
+    { value: 60, label: '1 hora' },
+    { value: 90, label: '1.5 horas' },
+    { value: 120, label: '2 horas' },
+    { value: 180, label: '3 horas' },
+  ];
 
   // Auto-fill doctor for logged-in doctors
   useEffect(() => {
@@ -200,9 +211,11 @@ export default function NuevaCita() {
         date: dateString,
         time: selectedSlot,
         notes: undefined,
+        durationMinutes: durationMinutes,
       });
 
       const displayDate = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+      const displayDuration = durationOptions.find(d => d.value === durationMinutes)?.label || `${durationMinutes} min`;
 
       // Show success message
       toast({
@@ -213,6 +226,7 @@ export default function NuevaCita() {
             <p><strong>Doctor:</strong> {selectedDoctor.name}</p>
             <p><strong>Fecha:</strong> {displayDate}</p>
             <p><strong>Hora:</strong> {selectedSlot}</p>
+            <p><strong>Duración:</strong> {displayDuration}</p>
           </div>
         ),
       });
@@ -349,6 +363,29 @@ export default function NuevaCita() {
                 onSelect={setSelectedSlot}
               />
             )}
+          </section>
+
+          {/* Step 5 (or 4 for doctors): Duration Selection */}
+          <section>
+            <Label className="text-lg font-semibold text-foreground mb-3 block">
+              {isDoctor ? '4' : '5'}. Duración de la Cita
+            </Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {durationOptions.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={durationMinutes === option.value ? 'default' : 'outline'}
+                  onClick={() => setDurationMinutes(option.value)}
+                  className={cn(
+                    'h-12',
+                    durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
+                  )}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
           </section>
 
           {/* Submit Button */}
