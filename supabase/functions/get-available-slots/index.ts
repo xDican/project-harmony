@@ -147,15 +147,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 9) Build occupied intervals as DateTime pairs [start, end)
+    // 9) Build occupied intervals as milliseconds for reliable comparison
     const occupiedIntervals = (appointments || []).map((apt: { time: string; duration_minutes: number | null }) => {
       const appointmentStart = buildDateTime(date, apt.time);
       const appointmentDuration = apt.duration_minutes ?? DEFAULT_DURATION_MINUTES;
       const appointmentEnd = appointmentStart.plus({ minutes: appointmentDuration });
-      return { start: appointmentStart, end: appointmentEnd };
+      return {
+        startMs: appointmentStart.toMillis(),
+        endMs: appointmentEnd.toMillis(),
+        // For debugging
+        startTime: formatToHHMM(appointmentStart),
+        endTime: formatToHHMM(appointmentEnd),
+        duration: appointmentDuration
+      };
     });
 
-    console.log("[get-available-slots] Occupied intervals:", occupiedIntervals.length);
+    console.log("[get-available-slots] Occupied intervals:", JSON.stringify(occupiedIntervals));
 
     // 10) Generate available slots using Luxon
     const availableSlots: string[] = [];
@@ -163,17 +170,21 @@ Deno.serve(async (req) => {
     for (const schedule of schedules) {
       const workStart = buildDateTime(date, schedule.start_time);
       const workEnd = buildDateTime(date, schedule.end_time);
+      const workEndMs = workEnd.toMillis();
+
+      console.log("[get-available-slots] Schedule:", formatToHHMM(workStart), "to", formatToHHMM(workEnd));
 
       // Generate candidate slots every SLOT_GRANULARITY_MINUTES
       let slotStart = workStart;
 
-      while (slotStart.plus({ minutes: durationMinutes }) <= workEnd) {
-        const slotEnd = slotStart.plus({ minutes: durationMinutes });
+      while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
+        const slotStartMs = slotStart.toMillis();
+        const slotEndMs = slotStart.plus({ minutes: durationMinutes }).toMillis();
 
         // Check for overlap with any occupied appointment
         // Overlap condition: slotStart < appointmentEnd AND appointmentStart < slotEnd
-        const hasOverlap = occupiedIntervals.some(({ start: aptStart, end: aptEnd }) => {
-          return slotStart < aptEnd && aptStart < slotEnd;
+        const hasOverlap = occupiedIntervals.some(({ startMs: aptStartMs, endMs: aptEndMs }) => {
+          return slotStartMs < aptEndMs && aptStartMs < slotEndMs;
         });
 
         if (!hasOverlap) {
