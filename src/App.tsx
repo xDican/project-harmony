@@ -19,6 +19,8 @@ import AppointmentsReport from "./pages/AppointmentsReport";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import PatientDetail from "./pages/PatientDetail";
+import Consultorio from "./pages/Consultorio";
+import ConfiguracionMedico from "./pages/ConfiguracionMedico";
 
 const queryClient = new QueryClient();
 
@@ -85,7 +87,7 @@ const App = () => {
 
     // Redirect based on role
     if (user.role === 'doctor') {
-      return <Navigate to="/agenda-medico" replace />;
+      return <Navigate to="/consultorio" replace />;
     }
     if (user.role === 'secretary' || user.role === 'admin') {
       return <Navigate to="/agenda-secretaria" replace />;
@@ -105,25 +107,37 @@ const App = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<HomeRedirect />} />
             
-            {/* Secretary and Admin routes */}
+            {/* Secretary, Admin, and Doctor routes */}
             <Route path="/agenda-secretaria" element={
               <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
                 <AgendaSecretaria />
               </RoleBasedRoute>
             } />
             <Route path="/citas/nueva" element={
-              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+              <RoleBasedRoute allowedRoles={['admin', 'secretary', 'doctor']}>
                 <NuevaCita />
               </RoleBasedRoute>
             } />
             <Route path="/pacientes" element={
-              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+              <RoleBasedRoute allowedRoles={['admin', 'secretary', 'doctor']}>
                 <Pacientes />
               </RoleBasedRoute>
             } />
             <Route path="/pacientes/:id" element={
-              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+              <RoleBasedRoute allowedRoles={['admin', 'secretary', 'doctor']}>
                 <PatientDetail />
+              </RoleBasedRoute>
+            } />
+            
+            {/* Doctor routes (independent doctor mode) */}
+            <Route path="/consultorio" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <Consultorio />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <ConfiguracionMedico />
               </RoleBasedRoute>
             } />
             
@@ -156,7 +170,7 @@ const App = () => {
               </RoleBasedRoute>
             } />
             <Route path="/admin/doctors/:doctorId/schedule" element={
-              <RoleBasedRoute allowedRoles={['admin']}>
+              <RoleBasedRoute allowedRoles={['admin', 'doctor']}>
                 <DoctorSchedulePage />
               </RoleBasedRoute>
             } />
