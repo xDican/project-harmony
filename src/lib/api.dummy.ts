@@ -286,6 +286,7 @@ export function createAppointment(input: {
   time: string;
   notes?: string;
   status?: AppointmentStatus;
+  durationMinutes?: number;
 }): Promise<Appointment> {
   const newAppointment: Appointment = {
     id: `a-${Date.now()}`,

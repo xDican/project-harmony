@@ -8,4 +8,5 @@ export interface Appointment {
   doctorId: string;
   status: AppointmentStatus;
   notes?: string;
+  durationMinutes?: number;  // Duration in minutes (default: 60)
 }

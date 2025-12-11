@@ -12,6 +12,7 @@ interface CreateAppointmentRequest {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM o HH:MM:SS
   notes?: string;
+  duration_minutes?: number;
 }
 
 Deno.serve(async (req) => {
@@ -73,11 +74,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const hasPermission = userRoles.some(r => ["admin", "secretary"].includes(r.role));
+    const hasPermission = userRoles.some(r => ["admin", "secretary", "doctor"].includes(r.role));
     if (!hasPermission) {
       console.error("[create-appointment] User lacks permission:", userRoles);
       return new Response(
-        JSON.stringify({ error: "Insufficient permissions. Only admins and secretaries can create appointments." }),
+        JSON.stringify({ error: "Insufficient permissions." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -91,6 +92,7 @@ Deno.serve(async (req) => {
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
       time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Time must be in HH:MM or HH:MM:SS format"),
       notes: z.string().max(2000, "Notes must be less than 2000 characters").optional(),
+      duration_minutes: z.number().int().min(15).max(480).optional().default(60),
     });
 
     const validationResult = appointmentSchema.safeParse(body);
@@ -105,7 +107,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { doctorId, patientId, date, time, notes } = validationResult.data;
+    const { doctorId, patientId, date, time, notes, duration_minutes } = validationResult.data;
     console.log("[create-appointment] Validated request body:", validationResult.data);
 
     // 4) Normalizar hora a HH:MM:SS
@@ -168,6 +170,7 @@ Deno.serve(async (req) => {
         notes: notes || null,
         status: "agendada",
         appointment_at: appointmentAt,
+        duration_minutes: duration_minutes,
       })
       .select()
       .single();
