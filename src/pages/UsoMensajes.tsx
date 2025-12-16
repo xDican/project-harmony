@@ -75,11 +75,12 @@ export default function UsoMensajes() {
     fetchUsageData();
   }, []);
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, decimals: number = 2) => {
     return new Intl.NumberFormat('es-HN', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     }).format(amount);
   };
 
@@ -151,7 +152,7 @@ export default function UsoMensajes() {
                       </div>
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Precio por mensaje</p>
-                        <p className="text-2xl font-bold">{formatCurrency(monthlyData.unit_price)}</p>
+                        <p className="text-2xl font-bold">{formatCurrency(monthlyData.unit_price, 4)}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Costo estimado del mes</p>
