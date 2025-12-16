@@ -392,8 +392,8 @@ export async function getAllPatients(): Promise<Patient[]> {
 // --------------------------
 // 8. createPatient
 // --------------------------
-export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string }): Promise<Patient> {
-  const { name, phone, email, notes } = input;
+export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient> {
+  const { name, phone, email, notes, doctorId } = input;
   const { data, error } = await supabase
     .from("patients")
     .insert([
@@ -402,6 +402,7 @@ export async function createPatient(input: { name: string; phone: string; email?
         phone,
         email,
         notes,
+        doctor_id: doctorId,
       },
     ])
     .select()

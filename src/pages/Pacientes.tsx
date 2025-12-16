@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { getAllPatients, createPatient } from '@/lib/api';
 import type { Patient } from '@/types/patient';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useCurrentUser } from '@/context/UserContext';
 import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
@@ -22,6 +23,7 @@ import { toast } from '@/hooks/use-toast';
 export default function Pacientes() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user } = useCurrentUser();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -93,6 +95,7 @@ export default function Pacientes() {
         phone: formatPhoneForStorage(newPatientPhone.trim()),
         email: newPatientEmail.trim() || undefined,
         notes: newPatientNotes.trim() || undefined,
+        doctorId: user?.doctorId ?? undefined,
       });
 
       toast({

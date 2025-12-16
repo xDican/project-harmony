@@ -161,6 +161,7 @@ export default function NuevaCita() {
       const patient = await createPatient({
         name: newPatientName.trim(),
         phone: formatPhoneForStorage(newPatientPhone.trim()),
+        doctorId: user?.doctorId ?? undefined,
       });
 
       // Set the new patient as selected

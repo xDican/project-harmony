@@ -199,7 +199,7 @@ export async function getAllPatients(): Promise<Patient[]> {
 /**
  * Create a new patient
  */
-export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string }): Promise<Patient> {
+export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient> {
   const apiModule = await getApiModule();
   return await apiModule.createPatient(input);
 }
