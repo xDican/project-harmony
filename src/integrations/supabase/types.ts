@@ -27,6 +27,7 @@ export type Database = {
           patient_id: string
           reminder_24h_sent: boolean
           reminder_24h_sent_at: string | null
+          reschedule_notified_at: string | null
           status: string
           time: string
         }
@@ -42,6 +43,7 @@ export type Database = {
           patient_id: string
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
+          reschedule_notified_at?: string | null
           status?: string
           time: string
         }
@@ -57,6 +59,7 @@ export type Database = {
           patient_id?: string
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
+          reschedule_notified_at?: string | null
           status?: string
           time?: string
         }
@@ -76,6 +79,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      billing_settings: {
+        Row: {
+          created_at: string
+          currency: string
+          effective_from: string
+          id: number
+          is_active: boolean
+          per_message_price: number
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          effective_from?: string
+          id?: number
+          is_active?: boolean
+          per_message_price: number
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          effective_from?: string
+          id?: number
+          is_active?: boolean
+          per_message_price?: number
+        }
+        Relationships: []
       }
       doctor_schedules: {
         Row: {
@@ -118,6 +148,7 @@ export type Database = {
           phone: string | null
           prefix: string | null
           specialty_id: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -127,6 +158,7 @@ export type Database = {
           phone?: string | null
           prefix?: string | null
           specialty_id?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -136,6 +168,7 @@ export type Database = {
           phone?: string | null
           prefix?: string | null
           specialty_id?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -150,51 +183,78 @@ export type Database = {
       message_logs: {
         Row: {
           appointment_id: string | null
+          billable: boolean
+          billed_at: string | null
           body: string | null
           channel: string
           created_at: string
           direction: string
           doctor_id: string | null
+          error_code: string | null
+          error_message: string | null
           from_phone: string
           id: string
           patient_id: string | null
+          price_category: string | null
+          provider: string | null
+          provider_message_id: string | null
           raw_payload: Json | null
           status: string | null
           template_name: string | null
           to_phone: string
+          total_price: number | null
           type: string | null
+          unit_price: number | null
         }
         Insert: {
           appointment_id?: string | null
+          billable?: boolean
+          billed_at?: string | null
           body?: string | null
           channel?: string
           created_at?: string
           direction: string
           doctor_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
           from_phone: string
           id?: string
           patient_id?: string | null
+          price_category?: string | null
+          provider?: string | null
+          provider_message_id?: string | null
           raw_payload?: Json | null
           status?: string | null
           template_name?: string | null
           to_phone: string
+          total_price?: number | null
           type?: string | null
+          unit_price?: number | null
         }
         Update: {
           appointment_id?: string | null
+          billable?: boolean
+          billed_at?: string | null
           body?: string | null
           channel?: string
           created_at?: string
           direction?: string
           doctor_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
           from_phone?: string
           id?: string
           patient_id?: string | null
+          price_category?: string | null
+          provider?: string | null
+          provider_message_id?: string | null
           raw_payload?: Json | null
           status?: string | null
           template_name?: string | null
           to_phone?: string
+          total_price?: number | null
           type?: string | null
+          unit_price?: number | null
         }
         Relationships: [
           {
@@ -223,6 +283,7 @@ export type Database = {
       patients: {
         Row: {
           created_at: string | null
+          doctor_id: string
           email: string | null
           id: string
           id_last_appointment: string | null
@@ -232,6 +293,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          doctor_id: string
           email?: string | null
           id?: string
           id_last_appointment?: string | null
@@ -241,6 +303,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          doctor_id?: string
           email?: string | null
           id?: string
           id_last_appointment?: string | null
@@ -248,7 +311,15 @@ export type Database = {
           notes?: string | null
           phone?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "patients_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       secretaries: {
         Row: {
@@ -365,6 +436,37 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       current_doctor_id: { Args: never; Returns: string }
+      current_per_message_price: { Args: never; Returns: number }
+      get_message_usage: {
+        Args: { period_end: string; period_start: string }
+        Returns: {
+          billable_outbound: number
+          estimated_cost: number
+          period_end: string
+          period_start: string
+          total_outbound: number
+          unit_price: number
+        }[]
+      }
+      get_message_usage_current_month: {
+        Args: never
+        Returns: {
+          billable_outbound: number
+          estimated_cost: number
+          period_end: string
+          period_start: string
+          total_outbound: number
+          unit_price: number
+        }[]
+      }
+      get_message_usage_daily: {
+        Args: { period_end: string; period_start: string }
+        Returns: {
+          billable_outbound: number
+          day: string
+          estimated_cost: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
