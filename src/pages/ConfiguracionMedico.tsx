@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/context/UserContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, User, ArrowLeft } from 'lucide-react';
+import { Calendar, User, ArrowLeft, MessageSquare } from 'lucide-react';
 
 /**
  * ConfiguracionMedico - Settings page for independent doctors
@@ -63,6 +63,28 @@ export default function ConfiguracionMedico() {
                 <span className="text-sm text-muted-foreground">Email:</span>
                 <p className="font-medium">{user?.email}</p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Usage and Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Uso y Notificaciones
+              </CardTitle>
+              <CardDescription>
+                Revisa cuántas notificaciones se han enviado a tus pacientes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate('/configuracion/uso-mensajes')}
+              >
+                Ver uso de mensajes →
+              </Button>
             </CardContent>
           </Card>
         </div>

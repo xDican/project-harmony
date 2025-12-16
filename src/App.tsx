@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 import PatientDetail from "./pages/PatientDetail";
 import Consultorio from "./pages/Consultorio";
 import ConfiguracionMedico from "./pages/ConfiguracionMedico";
+import UsoMensajes from "./pages/UsoMensajes";
 import DebugWhatsappPage from "./pages/DebugWhatsappPage";
 
 const queryClient = new QueryClient();
@@ -139,6 +140,11 @@ const App = () => {
             <Route path="/configuracion" element={
               <RoleBasedRoute allowedRoles={['doctor']}>
                 <ConfiguracionMedico />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/uso-mensajes" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <UsoMensajes />
               </RoleBasedRoute>
             } />
             
