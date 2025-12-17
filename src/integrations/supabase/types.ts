@@ -87,7 +87,9 @@ export type Database = {
           effective_from: string
           id: number
           is_active: boolean
+          meta_fee_outside_window: number | null
           per_message_price: number
+          window_hours: number
         }
         Insert: {
           created_at?: string
@@ -95,7 +97,9 @@ export type Database = {
           effective_from?: string
           id?: number
           is_active?: boolean
+          meta_fee_outside_window?: number | null
           per_message_price: number
+          window_hours?: number
         }
         Update: {
           created_at?: string
@@ -103,7 +107,9 @@ export type Database = {
           effective_from?: string
           id?: number
           is_active?: boolean
+          meta_fee_outside_window?: number | null
           per_message_price?: number
+          window_hours?: number
         }
         Relationships: []
       }
@@ -194,6 +200,7 @@ export type Database = {
           error_message: string | null
           from_phone: string
           id: string
+          is_in_service_window: boolean | null
           patient_id: string | null
           price_category: string | null
           provider: string | null
@@ -219,6 +226,7 @@ export type Database = {
           error_message?: string | null
           from_phone: string
           id?: string
+          is_in_service_window?: boolean | null
           patient_id?: string | null
           price_category?: string | null
           provider?: string | null
@@ -244,6 +252,7 @@ export type Database = {
           error_message?: string | null
           from_phone?: string
           id?: string
+          is_in_service_window?: boolean | null
           patient_id?: string | null
           price_category?: string | null
           provider?: string | null
@@ -434,6 +443,15 @@ export type Database = {
       current_app_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      current_billing_settings: {
+        Args: never
+        Returns: {
+          currency: string
+          meta_fee_outside_window: number
+          twilio_fee: number
+          window_hours: number
+        }[]
       }
       current_doctor_id: { Args: never; Returns: string }
       current_per_message_price: { Args: never; Returns: number }

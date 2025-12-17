@@ -156,7 +156,7 @@ export default function UsoMensajes() {
                       </div>
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Costo estimado del mes</p>
-                        <p className="text-2xl font-bold text-primary">{formatCurrency(monthlyData.estimated_cost)}</p>
+                        <p className="text-2xl font-bold text-primary">{formatCurrency(monthlyData.estimated_cost, 4)}</p>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground border-t pt-4">
