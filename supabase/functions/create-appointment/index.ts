@@ -7,6 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Optional: helpful to confirm which version is deployed
+const BUILD = "create-appointment@2025-12-19_owner_checks_v1";
+
 // Zod schema for request validation
 const appointmentSchema = z.object({
   doctorId: z.string().uuid("Invalid doctor ID format"),
@@ -125,6 +128,13 @@ function formatTimeForTemplate(timeStr: string): string {
   return `${hours12}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
+function json(status: number, payload: unknown) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   // Preflight CORS
   if (req.method === "OPTIONS") {
@@ -136,10 +146,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       console.error("[create-appointment] Missing Authorization header");
-      return new Response(JSON.stringify({ ok: false, error: "Missing Authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(401, { ok: false, error: "Missing Authorization header", build: BUILD });
     }
 
     // 2) Get environment variables
@@ -149,10 +156,7 @@ Deno.serve(async (req) => {
 
     if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
       console.error("[create-appointment] Missing Supabase env vars");
-      return new Response(JSON.stringify({ ok: false, error: "Supabase env vars not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(500, { ok: false, error: "Supabase env vars not configured", build: BUILD });
     }
 
     // Twilio env vars
@@ -173,10 +177,10 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Create service role client for data operations
+    // Create service role client for data operations (bypass RLS)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 4) Verify user is authenticated and has permission
+    // 4) Verify user is authenticated
     const {
       data: { user },
       error: userError,
@@ -184,13 +188,28 @@ Deno.serve(async (req) => {
 
     if (userError || !user) {
       console.error("[create-appointment] Auth error:", userError);
-      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return json(401, { ok: false, error: "Unauthorized", build: BUILD });
+    }
+
+    // 5) Parse and validate request body FIRST (we need doctorId/patientId)
+    const body = await req.json();
+    const validationResult = appointmentSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      console.error("[create-appointment] Validation failed:", validationResult.error.errors);
+      return json(400, {
+        ok: false,
+        error: "Validation failed",
+        details: validationResult.error.errors,
+        build: BUILD,
       });
     }
 
-    // 5) Check if user has permission using user_roles table
+    const { doctorId, patientId, date, time, notes, durationMinutes } = validationResult.data;
+    console.log("[create-appointment] BUILD:", BUILD);
+    console.log("[create-appointment] Validated request:", { doctorId, patientId, date, time, durationMinutes });
+
+    // 6) Check if user has permission using user_roles table (via RLS)
     const { data: userRoles, error: roleError } = await supabaseAuth
       .from("user_roles")
       .select("role")
@@ -198,50 +217,76 @@ Deno.serve(async (req) => {
 
     if (roleError || !userRoles || userRoles.length === 0) {
       console.error("[create-appointment] Role check failed:", roleError);
-      return new Response(JSON.stringify({ ok: false, error: "Failed to verify user permissions" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
     }
 
-    const hasPermission = userRoles.some((r) => ["admin", "secretary", "doctor"].includes(r.role));
+    const roles = userRoles.map((r) => r.role);
+    const isAdmin = roles.includes("admin");
+    const isSecretary = roles.includes("secretary");
+    const isDoctor = roles.includes("doctor");
+
+    const hasPermission = isAdmin || isSecretary || isDoctor;
     if (!hasPermission) {
-      console.error("[create-appointment] User lacks permission:", userRoles);
-      return new Response(JSON.stringify({ ok: false, error: "Insufficient permissions." }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("[create-appointment] User lacks permission:", roles);
+      return json(403, { ok: false, error: "Insufficient permissions.", build: BUILD });
     }
 
-    // 6) Parse and validate request body
-    const body = await req.json();
-    const validationResult = appointmentSchema.safeParse(body);
+    // 7) If doctor (and not admin/secretary), enforce doctorId matches doctors.user_id
+    if (isDoctor && !isAdmin && !isSecretary) {
+      const { data: myDoctor, error: myDoctorErr } = await supabase
+        .from("doctors")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (!validationResult.success) {
-      console.error("[create-appointment] Validation failed:", validationResult.error.errors);
-      return new Response(
-        JSON.stringify({
+      if (myDoctorErr) {
+        console.error("[create-appointment] Error resolving doctor from user:", myDoctorErr);
+        return json(500, { ok: false, error: "Error resolving doctor", details: myDoctorErr.message, build: BUILD });
+      }
+
+      if (!myDoctor?.id || myDoctor.id !== doctorId) {
+        console.error("[create-appointment] Doctor attempted to create appointment for another doctor:", {
+          userId: user.id,
+          myDoctorId: myDoctor?.id,
+          requestedDoctorId: doctorId,
+        });
+        return json(403, {
           ok: false,
-          error: "Validation failed",
-          details: validationResult.error.errors,
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+          error: "Forbidden",
+          message: "Los médicos solo pueden crear citas para su propio doctorId",
+          build: BUILD,
+        });
+      }
     }
 
-    const { doctorId, patientId, date, time, notes, durationMinutes } = validationResult.data;
-    console.log("[create-appointment] Validated request:", { doctorId, patientId, date, time, durationMinutes });
-
-    // 7) Normalize time to HH:MM:SS
+    // 8) Normalize time to HH:MM:SS
     let normalizedTime = time;
     if (/^\d{2}:\d{2}$/.test(time)) {
       normalizedTime = `${time}:00`;
     }
 
-    // 8) Build appointment_at timestamp
+    // 9) Build appointment_at timestamp
     const appointmentAt = `${date}T${normalizedTime}`;
 
-    // 9) Check for existing appointment in same slot
+    // 10) Validate patient belongs to doctor (doctor-owned patients model)
+    // Also fetch patient data we need later (name/phone) in the same query.
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id, name, phone, doctor_id")
+      .eq("id", patientId)
+      .eq("doctor_id", doctorId)
+      .maybeSingle();
+
+    if (patientError) {
+      console.error("[create-appointment] Error validating patient ownership:", patientError);
+      return json(500, { ok: false, error: "Error validando paciente", details: patientError.message, build: BUILD });
+    }
+
+    if (!patient) {
+      return json(403, { ok: false, error: "Paciente no pertenece a este doctor", build: BUILD });
+    }
+
+    // 11) Check for existing appointment in same slot (exclude cancelled)
     const { data: existingAppointments, error: existingError } = await supabase
       .from("appointments")
       .select("id")
@@ -252,21 +297,15 @@ Deno.serve(async (req) => {
 
     if (existingError) {
       console.error("[create-appointment] Error checking existing appointments:", existingError);
-      return new Response(JSON.stringify({ ok: false, error: "Error al verificar citas existentes" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(500, { ok: false, error: "Error al verificar citas existentes", build: BUILD });
     }
 
     if (existingAppointments && existingAppointments.length > 0) {
       console.warn("[create-appointment] Slot already occupied");
-      return new Response(JSON.stringify({ ok: false, error: "El horario seleccionado ya está ocupado" }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
     }
 
-    // 10) Insert appointment
+    // 12) Insert appointment
     const { data: appointment, error: insertError } = await supabase
       .from("appointments")
       .insert({
@@ -278,42 +317,29 @@ Deno.serve(async (req) => {
         status: "agendada",
         appointment_at: appointmentAt,
         duration_minutes: durationMinutes,
+        confirmation_message_sent: false,
+        reminder_24h_sent: false,
+        reminder_24h_sent_at: null,
+        reschedule_notified_at: null,
       })
       .select()
       .single();
 
     if (insertError) {
       console.error("[create-appointment] Error inserting appointment:", insertError);
-      return new Response(JSON.stringify({ ok: false, error: "Error al crear la cita" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+      // If you added a unique index (doctor_id, date, time), a race condition can produce a 23505
+      const code = (insertError as any)?.code;
+      if (code === "23505") {
+        return json(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
+      }
+
+      return json(500, { ok: false, error: "Error al crear la cita", details: insertError.message, build: BUILD });
     }
 
     console.log("[create-appointment] Appointment created:", appointment.id);
 
-    // 11) Get patient data
-    const { data: patient, error: patientError } = await supabase
-      .from("patients")
-      .select("id, name, phone")
-      .eq("id", patientId)
-      .single();
-
-    if (patientError || !patient) {
-      console.error("[create-appointment] Error fetching patient:", patientError);
-      // Continue without sending WhatsApp - appointment was created
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          appointment,
-          whatsappSent: false,
-          whatsappError: "No se pudo obtener datos del paciente",
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // 12) Get doctor data
+    // 13) Get doctor data (needed for template)
     const { data: doctor, error: doctorError } = await supabase
       .from("doctors")
       .select("id, name, prefix")
@@ -322,53 +348,45 @@ Deno.serve(async (req) => {
 
     if (doctorError || !doctor) {
       console.error("[create-appointment] Error fetching doctor:", doctorError);
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          appointment,
-          whatsappSent: false,
-          whatsappError: "No se pudo obtener datos del doctor",
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json(200, {
+        ok: true,
+        appointment,
+        whatsappSent: false,
+        whatsappError: "No se pudo obtener datos del doctor",
+        build: BUILD,
+      });
     }
 
-    // 13) Build doctor display name
-    // Use prefix if available (e.g., "Dr.", "Dra."), otherwise default to "Dr."
+    // 14) Build doctor display name
     const doctorPrefix = doctor.prefix || "Dr.";
     const doctorDisplayName = `${doctorPrefix} ${doctor.name}`;
 
-    // 14) Check if patient has a phone number
+    // 15) Check if patient has a phone number
     if (!patient.phone) {
       console.warn("[create-appointment] Patient has no phone number");
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          appointment,
-          whatsappSent: false,
-          whatsappError: "El paciente no tiene número de teléfono",
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json(200, {
+        ok: true,
+        appointment,
+        whatsappSent: false,
+        whatsappError: "El paciente no tiene número de teléfono",
+        build: BUILD,
+      });
     }
 
-    // 15) Check Twilio configuration
+    // 16) Check Twilio configuration
     if (!hasTwilioConfig) {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          appointment,
-          whatsappSent: false,
-          whatsappError: "Twilio no está configurado",
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json(200, {
+        ok: true,
+        appointment,
+        whatsappSent: false,
+        whatsappError: "Twilio no está configurado",
+        build: BUILD,
+      });
     }
 
-    // 16) Format phone number for WhatsApp
+    // 17) Format phone number for WhatsApp
     let whatsappTo = patient.phone;
     if (!whatsappTo.startsWith("whatsapp:")) {
-      // Ensure phone has country code
       if (!whatsappTo.startsWith("+")) {
         // Assume Honduras (+504) if no country code
         whatsappTo = `+504${whatsappTo.replace(/\D/g, "")}`;
@@ -376,11 +394,7 @@ Deno.serve(async (req) => {
       whatsappTo = `whatsapp:${whatsappTo}`;
     }
 
-    // 17) Build template parameters
-    // Template placeholders:
-    // {{1}} = Patient name
-    // {{2}} = Doctor display name (with prefix)
-    // {{3}} = Formatted date
+    // 18) Build template parameters
     const formattedDate = formatDateForTemplate(date);
     const formattedTime = formatTimeForTemplate(normalizedTime);
 
@@ -395,7 +409,7 @@ Deno.serve(async (req) => {
       templateParams,
     });
 
-    // 18) Send WhatsApp message
+    // 19) Send WhatsApp message
     const twilioResult = await sendTwilioWhatsApp({
       accountSid: twilioAccountSid!,
       authToken: twilioAuthToken!,
@@ -408,7 +422,7 @@ Deno.serve(async (req) => {
 
     console.log("[create-appointment] Twilio response:", JSON.stringify(twilioResult.data));
 
-    // 19) Log the message
+    // 20) Log the message
     const messageStatus = twilioResult.success ? "sent" : "failed";
 
     await logMessage(supabase, {
@@ -422,38 +436,30 @@ Deno.serve(async (req) => {
       rawPayload: twilioResult.data,
     });
 
-    // 20) Return response
+    // 21) Return response
     if (twilioResult.success) {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          appointment,
-          whatsappSent: true,
-          twilioSid: twilioResult.data.sid,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json(200, {
+        ok: true,
+        appointment,
+        whatsappSent: true,
+        twilioSid: twilioResult.data.sid,
+        build: BUILD,
+      });
     } else {
-      // Appointment created but WhatsApp failed
       const whatsappError = twilioResult.data.error_message || twilioResult.data.message || "Error enviando WhatsApp";
       console.error("[create-appointment] WhatsApp send failed:", whatsappError);
 
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          appointment,
-          whatsappSent: false,
-          whatsappError,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json(200, {
+        ok: true,
+        appointment,
+        whatsappSent: false,
+        whatsappError,
+        build: BUILD,
+      });
     }
   } catch (error) {
     console.error("[create-appointment] Unexpected error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ ok: false, error: "Error interno del servidor", details: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(500, { ok: false, error: "Error interno del servidor", details: errorMessage, build: BUILD });
   }
 });
