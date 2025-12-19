@@ -10,7 +10,6 @@ import { supabase } from '@/integrations/supabase/client';
 interface MonthlyUsage {
   period_start: string;
   period_end: string;
-  total_outbound: number;
   billable_outbound: number;
   unit_price: number;
   estimated_cost: number;
