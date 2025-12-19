@@ -473,7 +473,6 @@ export type Database = {
           estimated_cost: number
           period_end: string
           period_start: string
-          total_outbound: number
           unit_price: number
         }[]
       }
