@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DateTime } from 'luxon';
 import MainLayout from '@/components/MainLayout';
@@ -9,13 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Phone, Mail, Loader2, User, Stethoscope } from 'lucide-react';
+import { ArrowLeft, Calendar, Phone, Mail, Loader2, Stethoscope, CalendarClock } from 'lucide-react';
 import { usePatientAppointments } from '@/hooks/usePatientAppointments';
-import { getAllPatients, updateAppointmentStatus } from '@/lib/api';
+import { getAllPatients } from '@/lib/api';
+import { cancelAppointment } from '@/lib/appointmentActions';
 import { useToast } from '@/hooks/use-toast';
 import StatusBadge from '@/components/StatusBadge';
+import { RescheduleModal } from '@/components/RescheduleModal';
 import type { Patient } from '@/types/patient';
-import { useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatPhoneForDisplay } from '@/lib/utils';
 import { AppointmentStatus } from '@/types/appointment';
@@ -32,6 +33,12 @@ export default function PatientDetail() {
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [rescheduleAppointment, setRescheduleAppointment] = useState<{
+    id: string;
+    date: string;
+    time: string;
+    durationMinutes?: number;
+  } | null>(null);
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
   const itemsPerPageMobile = 5;
@@ -70,23 +77,42 @@ export default function PatientDetail() {
 
     setCancelingId(appointmentToCancel);
     try {
-      await updateAppointmentStatus(appointmentToCancel, 'cancelada');
+      const result = await cancelAppointment(appointmentToCancel);
+      
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      
       toast({
         title: 'Cita cancelada',
-        description: 'La cita ha sido cancelada correctamente',
+        description: 'Cita cancelada.',
       });
       refetch();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error canceling appointment:', err);
       toast({
         title: 'Error',
-        description: 'No se pudo cancelar la cita',
+        description: err?.message || 'No se pudo cancelar la cita',
         variant: 'destructive',
       });
     } finally {
       setCancelingId(null);
       setAppointmentToCancel(null);
     }
+  };
+
+  const handleRescheduleClick = (apt: { id: string; date: string; time: string; durationMinutes?: number }) => {
+    setRescheduleAppointment({
+      id: apt.id,
+      date: apt.date,
+      time: apt.time,
+      durationMinutes: apt.durationMinutes,
+    });
+  };
+
+  const handleRescheduleSuccess = () => {
+    setRescheduleAppointment(null);
+    refetch();
   };
 
   const formatDate = (dateStr: string) => {
@@ -252,6 +278,7 @@ export default function PatientDetail() {
                               formatTime={formatTime}
                               canCancelAppointment={canCancelAppointment}
                               handleCancelClick={handleCancelClick}
+                              handleRescheduleClick={handleRescheduleClick}
                               cancelingId={cancelingId}
                             />
                           ))}
@@ -314,28 +341,41 @@ export default function PatientDetail() {
                                   <StatusBadge status={apt.status} />
                                 </TableCell>
                                 <TableCell>
-                                  {canCancelAppointment(apt.date, apt.time, apt.status) && (
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => handleCancelClick(apt.id)}
-                                      disabled={cancelingId === apt.id}
-                                    >
-                                      {cancelingId === apt.id ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                          Cancelando...
-                                        </>
-                                      ) : (
-                                        'Cancelar cita'
-                                      )}
-                                    </Button>
-                                  )}
-                                  {apt.status === 'cancelada' && (
-                                    <Badge variant="outline" className="text-muted-foreground">
-                                      Cancelada
-                                    </Badge>
-                                  )}
+                                  <div className="flex items-center gap-2">
+                                    {canCancelAppointment(apt.date, apt.time, apt.status) && (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleRescheduleClick(apt)}
+                                          disabled={cancelingId === apt.id}
+                                        >
+                                          <CalendarClock className="h-4 w-4 mr-1" />
+                                          Re-agendar
+                                        </Button>
+                                        <Button
+                                          variant="destructive"
+                                          size="sm"
+                                          onClick={() => handleCancelClick(apt.id)}
+                                          disabled={cancelingId === apt.id}
+                                        >
+                                          {cancelingId === apt.id ? (
+                                            <>
+                                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                              Cancelando...
+                                            </>
+                                          ) : (
+                                            'Cancelar'
+                                          )}
+                                        </Button>
+                                      </>
+                                    )}
+                                    {apt.status === 'cancelada' && (
+                                      <Badge variant="outline" className="text-muted-foreground">
+                                        Cancelada
+                                      </Badge>
+                                    )}
+                                  </div>
                                   </TableCell>
                                 </TableRow>
                                 ));
@@ -513,6 +553,19 @@ export default function PatientDetail() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Reschedule modal */}
+        {rescheduleAppointment && (
+          <RescheduleModal
+            open={!!rescheduleAppointment}
+            onOpenChange={(open) => !open && setRescheduleAppointment(null)}
+            appointmentId={rescheduleAppointment.id}
+            currentDate={rescheduleAppointment.date}
+            currentTime={rescheduleAppointment.time}
+            currentDuration={rescheduleAppointment.durationMinutes}
+            onSuccess={handleRescheduleSuccess}
+          />
+        )}
       </div>
     </MainLayout>
   );
@@ -526,11 +579,13 @@ interface UpcomingAppointmentCardProps {
     time: string;
     doctorName: string;
     status: string;
+    durationMinutes?: number;
   };
   formatDate: (date: string) => string;
   formatTime: (time: string) => string;
   canCancelAppointment: (date: string, time: string, status: string) => boolean;
   handleCancelClick: (id: string) => void;
+  handleRescheduleClick: (apt: { id: string; date: string; time: string; durationMinutes?: number }) => void;
   cancelingId: string | null;
 }
 
@@ -540,6 +595,7 @@ function UpcomingAppointmentCard({
   formatTime,
   canCancelAppointment,
   handleCancelClick,
+  handleRescheduleClick,
   cancelingId,
 }: UpcomingAppointmentCardProps) {
   return (
@@ -562,9 +618,18 @@ function UpcomingAppointmentCard({
         <StatusBadge status={appointment.status as AppointmentStatus} />
       </div>
 
-      {/* Line 3: Cancel Button */}
+      {/* Line 3: Action Buttons */}
       {canCancelAppointment(appointment.date, appointment.time, appointment.status) && (
-        <div className="flex justify-center">
+        <div className="flex justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleRescheduleClick(appointment)}
+            disabled={cancelingId === appointment.id}
+          >
+            <CalendarClock className="h-4 w-4 mr-1" />
+            Re-agendar
+          </Button>
           <Button
             variant="destructive"
             size="sm"
@@ -577,7 +642,7 @@ function UpcomingAppointmentCard({
                 Cancelando...
               </>
             ) : (
-              'Cancelar cita'
+              'Cancelar'
             )}
           </Button>
         </div>
