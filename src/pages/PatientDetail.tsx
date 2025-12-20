@@ -35,6 +35,7 @@ export default function PatientDetail() {
   const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
   const [rescheduleAppointment, setRescheduleAppointment] = useState<{
     id: string;
+    doctorId: string;
     date: string;
     time: string;
     durationMinutes?: number;
@@ -101,9 +102,10 @@ export default function PatientDetail() {
     }
   };
 
-  const handleRescheduleClick = (apt: { id: string; date: string; time: string; durationMinutes?: number }) => {
+  const handleRescheduleClick = (apt: { id: string; doctorId: string; date: string; time: string; durationMinutes?: number }) => {
     setRescheduleAppointment({
       id: apt.id,
+      doctorId: apt.doctorId,
       date: apt.date,
       time: apt.time,
       durationMinutes: apt.durationMinutes,
@@ -560,6 +562,7 @@ export default function PatientDetail() {
             open={!!rescheduleAppointment}
             onOpenChange={(open) => !open && setRescheduleAppointment(null)}
             appointmentId={rescheduleAppointment.id}
+            doctorId={rescheduleAppointment.doctorId}
             currentDate={rescheduleAppointment.date}
             currentTime={rescheduleAppointment.time}
             currentDuration={rescheduleAppointment.durationMinutes}
@@ -575,6 +578,7 @@ export default function PatientDetail() {
 interface UpcomingAppointmentCardProps {
   appointment: {
     id: string;
+    doctorId: string;
     date: string;
     time: string;
     doctorName: string;
@@ -585,7 +589,7 @@ interface UpcomingAppointmentCardProps {
   formatTime: (time: string) => string;
   canCancelAppointment: (date: string, time: string, status: string) => boolean;
   handleCancelClick: (id: string) => void;
-  handleRescheduleClick: (apt: { id: string; date: string; time: string; durationMinutes?: number }) => void;
+  handleRescheduleClick: (apt: { id: string; doctorId: string; date: string; time: string; durationMinutes?: number }) => void;
   cancelingId: string | null;
 }
 
