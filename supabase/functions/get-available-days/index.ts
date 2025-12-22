@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
-const BUILD = "get-available-days-v1.0.0";
+const BUILD = "get-available-days-v1.1.0";
 const DEFAULT_TIMEZONE = "America/Tegucigalpa";
 
 const corsHeaders = {
@@ -11,8 +11,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Statuses que consideramos como "ocupados"
-const OCCUPIED_STATUSES = ["agendada", "confirmada", "pending", "confirmed"];
+// Statuses que NO consideramos como ocupados (igual que get-available-slots)
+const CANCELLED_STATUSES = ["cancelled", "canceled", "cancelada"];
 
 // Zod schema for request validation
 const RequestSchema = z.object({
@@ -44,6 +44,8 @@ interface AppointmentRow {
   appointment_at: string;
   duration_minutes: number;
   status: string;
+  date: string;
+  time: string;
 }
 
 interface Interval {
@@ -299,13 +301,14 @@ Deno.serve(async (req) => {
     }
 
     // 7) Query B: Obtener citas del doctor en el mes completo
+    // Usamos la misma lógica que get-available-slots: excluir canceladas
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
-      .select("appointment_at, duration_minutes, status")
+      .select("appointment_at, duration_minutes, status, date, time")
       .eq("doctor_id", doctorId)
       .gte("appointment_at", monthStartISO)
       .lt("appointment_at", monthEndISO)
-      .in("status", OCCUPIED_STATUSES);
+      .not("status", "in", `(${CANCELLED_STATUSES.map(s => `"${s}"`).join(",")})`);
 
     if (appointmentsError) {
       console.error(
@@ -325,6 +328,16 @@ Deno.serve(async (req) => {
         "[get-available-days] Appointments loaded:",
         appointments?.length ?? 0
       );
+      // Log cada cita para debug
+      for (const apt of appointments || []) {
+        const aptDt = DateTime.fromISO(apt.appointment_at, { zone: timezone });
+        console.log(
+          `[get-available-days] Appointment: date=${apt.date}, time=${apt.time}, ` +
+          `appointment_at=${apt.appointment_at}, ` +
+          `parsed_date=${aptDt.toFormat("yyyy-MM-dd")}, ` +
+          `status=${apt.status}, duration=${apt.duration_minutes}`
+        );
+      }
     }
 
     // 8) Agrupar citas por fecha (en la timezone especificada)
