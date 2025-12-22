@@ -332,3 +332,60 @@ export async function getAdminMetrics() {
   }
   throw new Error('getAdminMetrics is only available in dummy mode');
 }
+
+/**
+ * Available days result from get-available-days edge function
+ */
+export interface AvailableDayInfo {
+  date: string;
+  dow: number;
+  working: boolean;
+  canFit: boolean;
+}
+
+/**
+ * Get available days for a doctor in a specific month
+ * Calls the get-available-days edge function to determine which days
+ * can accommodate an appointment of the specified duration.
+ * 
+ * @param params.doctorId - ID del doctor
+ * @param params.month - Mes en formato YYYY-MM
+ * @param params.durationMinutes - Duración de la cita en minutos
+ * @returns Map de fechas a disponibilidad { [date: string]: { canFit, working } }
+ */
+export async function getAvailableDays(params: {
+  doctorId: string;
+  month: string;
+  durationMinutes: number;
+}): Promise<Record<string, { canFit: boolean; working: boolean }>> {
+  const { supabase } = await import('@/integrations/supabase/client');
+  
+  const { data, error } = await supabase.functions.invoke('get-available-days', {
+    body: {
+      doctorId: params.doctorId,
+      month: params.month,
+      durationMinutes: params.durationMinutes,
+    },
+  });
+
+  if (error) {
+    console.error('[getAvailableDays] Error:', error);
+    throw new Error(error.message || 'Error al obtener días disponibles');
+  }
+
+  if (!data?.ok) {
+    console.error('[getAvailableDays] API error:', data);
+    throw new Error(data?.error || 'Error al obtener días disponibles');
+  }
+
+  // Convert array to map for easy lookup
+  const daysMap: Record<string, { canFit: boolean; working: boolean }> = {};
+  for (const day of (data.days as AvailableDayInfo[]) || []) {
+    daysMap[day.date] = {
+      canFit: day.canFit,
+      working: day.working,
+    };
+  }
+
+  return daysMap;
+}
