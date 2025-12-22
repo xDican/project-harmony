@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
-const BUILD = "get-available-days-v1.1.0";
+const BUILD = "get-available-days-v1.2.0";
 const DEFAULT_TIMEZONE = "America/Tegucigalpa";
 
 const corsHeaders = {
@@ -41,11 +41,10 @@ interface ScheduleRow {
 }
 
 interface AppointmentRow {
-  appointment_at: string;
-  duration_minutes: number;
-  status: string;
   date: string;
   time: string;
+  duration_minutes: number;
+  status: string;
 }
 
 interface Interval {
@@ -256,14 +255,14 @@ Deno.serve(async (req) => {
     );
     const monthEnd = monthStart.plus({ months: 1 });
 
-    // Convertir a ISO para query (Supabase usa UTC)
-    const monthStartISO = monthStart.toUTC().toISO();
-    const monthEndISO = monthEnd.toUTC().toISO();
+    // Calcular límites del mes como fechas YYYY-MM-DD (para filtrar por campo date)
+    const monthStartDate = monthStart.toFormat("yyyy-MM-dd");
+    const monthEndDate = monthEnd.toFormat("yyyy-MM-dd");
 
     if (debug) {
       console.log("[get-available-days] Month bounds:", {
-        monthStart: monthStartISO,
-        monthEnd: monthEndISO,
+        monthStartDate,
+        monthEndDate,
         timezone,
       });
     }
@@ -301,13 +300,13 @@ Deno.serve(async (req) => {
     }
 
     // 7) Query B: Obtener citas del doctor en el mes completo
-    // Usamos la misma lógica que get-available-slots: excluir canceladas
+    // Usamos el campo `date` igual que get-available-slots (más confiable que appointment_at)
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
-      .select("appointment_at, duration_minutes, status, date, time")
+      .select("date, time, duration_minutes, status")
       .eq("doctor_id", doctorId)
-      .gte("appointment_at", monthStartISO)
-      .lt("appointment_at", monthEndISO)
+      .gte("date", monthStartDate)
+      .lt("date", monthEndDate)
       .not("status", "in", `(${CANCELLED_STATUSES.map(s => `"${s}"`).join(",")})`);
 
     if (appointmentsError) {
@@ -330,23 +329,18 @@ Deno.serve(async (req) => {
       );
       // Log cada cita para debug
       for (const apt of appointments || []) {
-        const aptDt = DateTime.fromISO(apt.appointment_at, { zone: timezone });
         console.log(
           `[get-available-days] Appointment: date=${apt.date}, time=${apt.time}, ` +
-          `appointment_at=${apt.appointment_at}, ` +
-          `parsed_date=${aptDt.toFormat("yyyy-MM-dd")}, ` +
           `status=${apt.status}, duration=${apt.duration_minutes}`
         );
       }
     }
 
-    // 8) Agrupar citas por fecha (en la timezone especificada)
+    // 8) Agrupar citas por fecha (usando el campo date directamente)
     const appointmentsByDate = new Map<string, AppointmentRow[]>();
 
     for (const apt of appointments || []) {
-      // Convertir appointment_at a DateTime en la timezone del doctor
-      const aptDt = DateTime.fromISO(apt.appointment_at, { zone: timezone });
-      const dateKey = aptDt.toFormat("yyyy-MM-dd");
+      const dateKey = apt.date; // Usar el campo date directamente
 
       if (!appointmentsByDate.has(dateKey)) {
         appointmentsByDate.set(dateKey, []);
@@ -407,12 +401,14 @@ Deno.serve(async (req) => {
       // Obtener citas de este día
       const dayAppointments = appointmentsByDate.get(date) || [];
 
-      // Construir intervalos ocupados
+      // Construir intervalos ocupados usando date + time (igual que get-available-slots)
       const occupiedIntervals: Interval[] = dayAppointments.map((apt) => {
-        const aptStart = DateTime.fromISO(apt.appointment_at, {
+        // Normalizar tiempo a HH:MM y combinar con la fecha
+        const normalizedTime = apt.time.substring(0, 5);
+        const aptStart = DateTime.fromISO(`${apt.date}T${normalizedTime}:00`, {
           zone: timezone,
         });
-        const aptEnd = aptStart.plus({ minutes: apt.duration_minutes });
+        const aptEnd = aptStart.plus({ minutes: apt.duration_minutes ?? 60 });
         return {
           startMs: aptStart.toMillis(),
           endMs: aptEnd.toMillis(),
