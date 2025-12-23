@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabaseClient';
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
   '/agenda-secretaria': 'Agenda de Hoy',
-  '/agenda-medico': 'Agenda del Médico',
+  '/agenda-medico': 'Agenda Médica',
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
   '/configuracion': 'Configuración',
@@ -108,7 +108,7 @@ export default function MainLayout({
         icon: Users
       }, {
         to: '/agenda-medico',
-        label: 'Agenda Médico',
+        label: 'Agenda Médica',
         icon: Stethoscope
       });
     }
@@ -117,7 +117,7 @@ export default function MainLayout({
     if (isDoctor && !isAdmin) {
       items.push({
         to: '/agenda-medico',
-        label: 'Agenda del Médico',
+        label: 'Agenda Médica',
         icon: Calendar
       }, {
         to: '/citas/nueva',
