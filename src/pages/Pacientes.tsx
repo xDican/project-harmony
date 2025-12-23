@@ -126,9 +126,9 @@ export default function Pacientes() {
   };
 
   const mobileHeaderAction = (
-    <Button size="icon" variant="ghost" onClick={() => setIsCreateDialogOpen(true)}>
-      <Plus className="h-5 w-5" />
-      <span className="sr-only">Nuevo paciente</span>
+    <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
+      <Plus className="h-4 w-4 mr-1" />
+      Nuevo paciente
     </Button>
   );
 
