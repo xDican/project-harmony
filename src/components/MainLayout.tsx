@@ -193,7 +193,7 @@ export default function MainLayout({
               </SheetTrigger>
               <SheetContent side="left" className="w-64 flex flex-col">
                 <div className="py-4 border-b">
-                  <h2 className="text-lg font-semibold text-foreground px-4">Menú</h2>
+                  <h2 className="font-semibold text-foreground px-4 text-xl text-center">Menú</h2>
                 </div>
                 <div className="mt-4 flex-1">
                   <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
