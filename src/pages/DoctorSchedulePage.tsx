@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import { updateDoctorSchedules, getDoctorById, getDoctorSchedules } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -196,7 +196,7 @@ export default function DoctorSchedulePage() {
   // Mostrar loading mientras se cargan los datos
   if (isLoading) {
     return (
-      <MainLayout>
+      <MainLayout backTo="/configuracion">
         <div className="max-w-4xl mx-auto py-6 px-4">
           <div className="flex items-center justify-center min-h-[400px]">
             <p className="text-muted-foreground">Cargando...</p>
@@ -207,21 +207,11 @@ export default function DoctorSchedulePage() {
   }
 
   return (
-    <MainLayout>
+    <MainLayout backTo="/configuracion">
       <div className="max-w-4xl mx-auto py-6 px-4">
         {/* Encabezado */}
         <div className="mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(-1)}
-            className="mb-3"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver
-          </Button>
-
-          <h1 className="text-2xl font-semibold mb-1">Horarios del doctor</h1>
+          <h1 className="text-2xl font-semibold mb-1">Horarios de Atención</h1>
           <p className="text-sm text-muted-foreground">
             {doctorName} · {doctorSpecialty}
           </p>
