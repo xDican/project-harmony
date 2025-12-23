@@ -28,10 +28,8 @@ export default function PerfilMedico() {
   }
 
   return (
-    <MainLayout>
+    <MainLayout backTo="/configuracion">
       <div className="p-4 md:p-6 lg:p-8 max-w-lg">
-        <h1 className="text-xl font-semibold mb-4">Mi Perfil</h1>
-
         <Card className="divide-y divide-border">
           {/* Name */}
           <div className="flex items-start gap-3 p-4">
