@@ -350,6 +350,7 @@ export default function Pacientes() {
                   onChange={(e) => setNewPatientNotes(e.target.value)}
                   placeholder="Información adicional"
                   rows={3}
+                  className="text-base"
                 />
               </div>
             </div>
