@@ -14,7 +14,8 @@ export default function ConfiguracionMedico() {
 
   return (
     <MainLayout>
-      <div className="p-4 md:p-6 lg:p-8 max-w-lg">
+      <div className="p-4 md:p-6 lg:p-8 max-w-lg md:mx-auto">
+        <h1 className="hidden md:block text-2xl font-semibold mb-6">Configuración</h1>
         <Card className="divide-y divide-border">
           {/* Profile Info - First */}
           <button
