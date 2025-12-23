@@ -45,7 +45,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { loading, isAdmin, isSecretary, isDoctor, isAdminOrSecretary } = useCurrentUser();
+  const { user, loading, isAdmin, isSecretary, isDoctor, isAdminOrSecretary } = useCurrentUser();
 
   // Keep admin menu open if current route is an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -163,27 +163,37 @@ export default function MainLayout({ children }: MainLayoutProps) {
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Mobile Header */}
       <header className="md:hidden sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Abrir menú</span>
+        <div className="flex h-16 items-center px-4 gap-2">
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Abrir menú</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 flex flex-col">
+              <div className="mt-8 flex-1">
+                <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
+              </div>
+              {/* Footer with user email and logout */}
+              <div className="border-t py-4 flex items-center justify-between gap-2">
+                <span className="text-sm text-muted-foreground truncate flex-1">
+                  {user?.email || ''}
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleLogout} 
+                  title="Cerrar sesión"
+                  className="flex-shrink-0"
+                >
+                  <LogOut className="h-5 w-5" />
+                  <span className="sr-only">Cerrar sesión</span>
                 </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-64">
-                <div className="mt-8">
-                  <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
-                </div>
-              </SheetContent>
-            </Sheet>
-            <h1 className="text-xl font-bold text-foreground">{getPageTitle(location.pathname)}</h1>
-          </div>
-          <Button variant="ghost" size="icon" onClick={handleLogout} title="Cerrar sesión">
-            <LogOut className="h-5 w-5" />
-            <span className="sr-only">Cerrar sesión</span>
-          </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+          <h1 className="text-xl font-bold text-foreground">{getPageTitle(location.pathname)}</h1>
         </div>
       </header>
 
