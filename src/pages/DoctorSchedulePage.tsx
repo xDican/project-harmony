@@ -209,14 +209,6 @@ export default function DoctorSchedulePage() {
   return (
     <MainLayout backTo="/configuracion">
       <div className="max-w-4xl mx-auto py-6 px-4">
-        {/* Encabezado */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold mb-1">Horarios de Atención</h1>
-          <p className="text-sm text-muted-foreground">
-            {doctorName} · {doctorSpecialty}
-          </p>
-        </div>
-
         {/* Contenedor de días */}
         <div className="space-y-4 mb-6">
           {DAYS.map(({ key, label }) => (
