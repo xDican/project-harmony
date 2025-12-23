@@ -53,6 +53,7 @@ export default function NuevaCita() {
   // Slots state
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   // Loading states
   const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
@@ -405,7 +406,7 @@ export default function NuevaCita() {
               </Alert>
             ) : (
               <div className="space-y-3">
-                <Popover>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -433,7 +434,10 @@ export default function NuevaCita() {
                     <Calendar
                       mode="single"
                       selected={selectedDate}
-                      onSelect={setSelectedDate}
+                      onSelect={(date) => {
+                        setSelectedDate(date);
+                        setIsCalendarOpen(false);
+                      }}
                       month={currentMonth}
                       onMonthChange={handleMonthChange}
                       disabled={isDateDisabled}
