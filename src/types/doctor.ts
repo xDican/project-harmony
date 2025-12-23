@@ -6,6 +6,7 @@ export interface Specialty {
 export interface Doctor {
   id: string;
   name: string;
+  prefix?: string;
   specialtyId?: string;
   specialtyName?: string;
   phone?: string;

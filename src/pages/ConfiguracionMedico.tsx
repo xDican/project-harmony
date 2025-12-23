@@ -16,6 +16,19 @@ export default function ConfiguracionMedico() {
     <MainLayout>
       <div className="p-4 md:p-6 lg:p-8 max-w-lg">
         <Card className="divide-y divide-border">
+          {/* Profile Info - First */}
+          <button
+            onClick={() => navigate('/configuracion/perfil')}
+            className="w-full flex items-center gap-3 p-4 hover:bg-accent/50 transition-colors text-left"
+          >
+            <User className="h-5 w-5 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">Mi Perfil</p>
+              <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+          </button>
+
           {/* Schedule Configuration */}
           {user?.doctorId && (
             <button
@@ -30,15 +43,6 @@ export default function ConfiguracionMedico() {
               <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
             </button>
           )}
-
-          {/* Profile Info */}
-          <div className="flex items-center gap-3 p-4">
-            <User className="h-5 w-5 text-primary shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">Mi Perfil</p>
-              <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
-            </div>
-          </div>
 
           {/* Usage and Notifications */}
           <button

@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 import PatientDetail from "./pages/PatientDetail";
 
 import ConfiguracionMedico from "./pages/ConfiguracionMedico";
+import PerfilMedico from "./pages/PerfilMedico";
 import UsoMensajes from "./pages/UsoMensajes";
 import DebugWhatsappPage from "./pages/DebugWhatsappPage";
 
@@ -135,6 +136,11 @@ const App = () => {
             <Route path="/configuracion" element={
               <RoleBasedRoute allowedRoles={['doctor']}>
                 <ConfiguracionMedico />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/perfil" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <PerfilMedico />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/uso-mensajes" element={
