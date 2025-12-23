@@ -97,11 +97,38 @@ export default function AgendaMedico() {
     );
   }
 
+  // Day navigation component for header
+  const dayNavigation = (
+    <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setSelectedDate('today')}
+        disabled={selectedDate === 'today'}
+        className="h-8 w-8"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span className="text-sm font-medium min-w-[60px] text-center">
+        {selectedDate === 'today' ? 'Hoy' : 'Mañana'}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setSelectedDate('tomorrow')}
+        disabled={selectedDate === 'tomorrow'}
+        className="h-8 w-8"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
   return (
-    <MainLayout>
+    <MainLayout headerAction={dayNavigation}>
       <div className="container mx-auto p-6 max-w-5xl">
-        {/* Date Navigation */}
-        <div className="mb-6 flex items-center justify-between">
+        {/* Date Info - Desktop only */}
+        <div className="mb-6 hidden md:flex items-center justify-between">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
             <p className="capitalize">{formattedDate}</p>
@@ -111,29 +138,7 @@ export default function AgendaMedico() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSelectedDate('today')}
-              disabled={selectedDate === 'today'}
-              className="h-8 w-8"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium px-2 min-w-[60px] text-center">
-              {selectedDate === 'today' ? 'Hoy' : 'Mañana'}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSelectedDate('tomorrow')}
-              disabled={selectedDate === 'tomorrow'}
-              className="h-8 w-8"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          {dayNavigation}
         </div>
 
         {/* Doctor Selection (only for admin) */}
