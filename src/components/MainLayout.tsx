@@ -192,8 +192,8 @@ export default function MainLayout({
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 flex flex-col">
-                <div className="flex items-center border-b pb-4 -mt-2">
-                  <h2 className="font-semibold text-foreground text-xl">Menú</h2>
+                <div className="border-b pb-4 -mt-2 items-center justify-center flex flex-col mx-0 my-0 gap-0">
+                  <h2 className="font-semibold text-foreground text-xl text-center">Menú</h2>
                 </div>
                 <div className="mt-4 flex-1">
                   <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
