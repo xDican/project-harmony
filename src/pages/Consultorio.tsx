@@ -32,11 +32,8 @@ export default function Consultorio() {
   return (
     <MainLayout>
       <div className="p-4 md:p-6 lg:p-8 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Mi Consultorio</h1>
-          <p className="text-muted-foreground capitalize">{formattedDate}</p>
-        </div>
+        {/* Date Info */}
+        <p className="text-muted-foreground capitalize">{formattedDate}</p>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

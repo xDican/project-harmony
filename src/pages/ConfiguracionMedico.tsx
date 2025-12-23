@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/context/UserContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, User, ArrowLeft, MessageSquare } from 'lucide-react';
+import { Calendar, User, MessageSquare } from 'lucide-react';
 
 /**
  * ConfiguracionMedico - Settings page for independent doctors
@@ -15,16 +15,8 @@ export default function ConfiguracionMedico() {
   return (
     <MainLayout>
       <div className="p-4 md:p-6 lg:p-8 space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Configuración</h1>
-            <p className="text-muted-foreground">Administra tu consultorio</p>
-          </div>
-        </div>
+        {/* Info */}
+        <p className="text-muted-foreground">Administra tu consultorio</p>
 
         <div className="grid gap-4 md:grid-cols-2">
           {/* Schedule Configuration */}

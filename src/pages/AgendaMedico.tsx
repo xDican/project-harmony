@@ -89,17 +89,14 @@ export default function AgendaMedico() {
   return (
     <MainLayout>
       <div className="container mx-auto p-6 max-w-5xl">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Agenda del Médico</h1>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <p className="capitalize">{formattedDate}</p>
-          </div>
+        {/* Page Info */}
+        <div className="mb-6 flex items-center gap-2 text-muted-foreground">
+          <Calendar className="h-4 w-4" />
+          <p className="capitalize">{formattedDate}</p>
           {!loadingAppointments && !loadingDoctors && appointments.length > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {appointments.length} {appointments.length === 1 ? 'cita programada' : 'citas programadas'} hoy
-            </p>
+            <span className="text-sm">
+              · {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
+            </span>
           )}
         </div>
 
