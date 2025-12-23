@@ -344,13 +344,10 @@ export default function NuevaCita() {
   return (
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Nueva Cita</h1>
-          <p className="text-muted-foreground">
-            Completa los siguientes campos para agendar una nueva cita médica
-          </p>
-        </div>
+        {/* Page Info */}
+        <p className="text-muted-foreground mb-8">
+          Completa los siguientes campos para agendar una nueva cita médica
+        </p>
 
         <div className="space-y-8">
           {/* Step 1: Patient Selection */}

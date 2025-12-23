@@ -122,17 +122,14 @@ export default function AgendaSecretaria() {
   return (
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
-        {/* Page Header */}
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Agenda de Hoy</h1>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <p className="capitalize">{formattedDate}</p>
-          </div>
+        {/* Page Info */}
+        <div className="mb-6 flex items-center gap-2 text-muted-foreground">
+          <Calendar className="h-4 w-4" />
+          <p className="capitalize">{formattedDate}</p>
           {!isLoading && !error && appointments.length > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {appointments.length} {appointments.length === 1 ? 'cita programada' : 'citas programadas'} hoy
-            </p>
+            <span className="text-sm">
+              · {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
+            </span>
           )}
         </div>
 

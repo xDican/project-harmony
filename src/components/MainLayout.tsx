@@ -8,6 +8,31 @@ import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserP
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 
+// Route to title mapping for dynamic header
+const routeTitles: Record<string, string> = {
+  '/agenda-secretaria': 'Agenda de Hoy',
+  '/agenda-medico': 'Agenda del Médico',
+  '/citas/nueva': 'Nueva Cita',
+  '/pacientes': 'Pacientes',
+  '/configuracion': 'Configuración',
+  '/consultorio': 'Mi Consultorio',
+  '/admin/users': 'Usuarios',
+  '/admin/reports/appointments': 'Reporte de Citas',
+};
+
+const getPageTitle = (pathname: string): string => {
+  // Exact match first
+  if (routeTitles[pathname]) return routeTitles[pathname];
+  
+  // Pattern matches for dynamic routes
+  if (pathname.startsWith('/pacientes/')) return 'Detalle Paciente';
+  if (pathname.startsWith('/admin/users/')) return 'Editar Usuario';
+  if (pathname.startsWith('/admin/doctors/') && pathname.includes('/schedule')) return 'Horarios';
+  if (pathname.startsWith('/configuracion/')) return 'Configuración';
+  
+  return 'Agenda Médica';
+};
+
 interface MainLayoutProps {
   children: ReactNode;
 }
@@ -153,7 +178,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 </div>
               </SheetContent>
             </Sheet>
-            <h1 className="text-xl font-bold text-foreground">Agenda Médica</h1>
+            <h1 className="text-xl font-bold text-foreground">{getPageTitle(location.pathname)}</h1>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout} title="Cerrar sesión">
             <LogOut className="h-5 w-5" />

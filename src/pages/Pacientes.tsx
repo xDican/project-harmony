@@ -130,12 +130,9 @@ export default function Pacientes() {
       <div className="p-4 md:p-6 space-y-6">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-4xl font-bold text-foreground mb-2">Pacientes</h1>
-            <p className="text-muted-foreground">
-              Gestión y búsqueda de pacientes registrados
-            </p>
-          </div>
+          <p className="text-muted-foreground">
+            Gestión y búsqueda de pacientes registrados
+          </p>
           <Button onClick={() => setIsCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo paciente
