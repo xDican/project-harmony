@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -36,13 +36,14 @@ const getPageTitle = (pathname: string): string => {
 interface MainLayoutProps {
   children: ReactNode;
   headerAction?: ReactNode;
+  backTo?: string;
 }
 
 /**
  * MainLayout - Responsive layout wrapper with navigation
  * Provides a sidebar on desktop and a hamburger menu on mobile
  */
-export default function MainLayout({ children, headerAction }: MainLayoutProps) {
+export default function MainLayout({ children, headerAction, backTo }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,35 +166,42 @@ export default function MainLayout({ children, headerAction }: MainLayoutProps) 
       {/* Mobile Header */}
       <header className="md:hidden sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center px-4 gap-2">
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Abrir menú</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 flex flex-col">
-              <div className="mt-8 flex-1">
-                <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
-              </div>
-              {/* Footer with user email and logout */}
-              <div className="border-t py-4 flex items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground truncate flex-1">
-                  {user?.email || ''}
-                </span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={handleLogout} 
-                  title="Cerrar sesión"
-                  className="flex-shrink-0"
-                >
-                  <LogOut className="h-5 w-5" />
-                  <span className="sr-only">Cerrar sesión</span>
+          {backTo ? (
+            <Button variant="ghost" size="icon" onClick={() => navigate(backTo)}>
+              <ChevronLeft className="h-5 w-5" />
+              <span className="sr-only">Volver</span>
+            </Button>
+          ) : (
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Abrir menú</span>
                 </Button>
-              </div>
-            </SheetContent>
-          </Sheet>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 flex flex-col">
+                <div className="mt-8 flex-1">
+                  <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
+                </div>
+                {/* Footer with user email and logout */}
+                <div className="border-t py-4 flex items-center justify-between gap-2">
+                  <span className="text-sm text-muted-foreground truncate flex-1">
+                    {user?.email || ''}
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={handleLogout} 
+                    title="Cerrar sesión"
+                    className="flex-shrink-0"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    <span className="sr-only">Cerrar sesión</span>
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
           <h1 className="text-xl font-bold text-foreground flex-1">{getPageTitle(location.pathname)}</h1>
           {headerAction}
         </div>
