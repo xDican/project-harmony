@@ -95,11 +95,6 @@ export default function UsoMensajes() {
   return (
     <MainLayout backTo="/configuracion">
       <div className="p-4 md:p-6 lg:p-8 space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Uso de Mensajes</h1>
-          <p className="text-muted-foreground">Resumen de notificaciones enviadas a tus pacientes</p>
-        </div>
 
         {/* Loading State */}
         {isLoading && (
