@@ -167,9 +167,9 @@ export default function MainLayout({ children, headerAction, backTo }: MainLayou
       <header className="md:hidden sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center px-4 gap-2">
           {backTo ? (
-            <Button variant="ghost" size="icon" onClick={() => navigate(backTo)}>
+            <Button variant="ghost" className="gap-1 -ml-2" onClick={() => navigate(backTo)}>
               <ChevronLeft className="h-5 w-5" />
-              <span className="sr-only">Volver</span>
+              <span>{getPageTitle(backTo)}</span>
             </Button>
           ) : (
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -202,7 +202,8 @@ export default function MainLayout({ children, headerAction, backTo }: MainLayou
               </SheetContent>
             </Sheet>
           )}
-          <h1 className="text-xl font-bold text-foreground flex-1">{getPageTitle(location.pathname)}</h1>
+          {!backTo && <h1 className="text-xl font-bold text-foreground flex-1">{getPageTitle(location.pathname)}</h1>}
+          <div className="flex-1" />
           {headerAction}
         </div>
       </header>
