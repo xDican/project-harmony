@@ -4,7 +4,7 @@ import MainLayout from '@/components/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, MessageSquare, DollarSign, CalendarDays } from 'lucide-react';
+import { MessageSquare, CalendarDays } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface MonthlyUsage {
@@ -93,22 +93,12 @@ export default function UsoMensajes() {
   };
 
   return (
-    <MainLayout>
+    <MainLayout backTo="/configuracion">
       <div className="p-4 md:p-6 lg:p-8 space-y-6">
         {/* Header */}
-        <div className="space-y-4">
-          <Button 
-            variant="ghost" 
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => navigate('/configuracion')}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver a Configuración
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Uso de Mensajes</h1>
-            <p className="text-muted-foreground">Resumen de notificaciones enviadas a tus pacientes</p>
-          </div>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Uso de Mensajes</h1>
+          <p className="text-muted-foreground">Resumen de notificaciones enviadas a tus pacientes</p>
         </div>
 
         {/* Loading State */}
