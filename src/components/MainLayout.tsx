@@ -35,13 +35,14 @@ const getPageTitle = (pathname: string): string => {
 
 interface MainLayoutProps {
   children: ReactNode;
+  headerAction?: ReactNode;
 }
 
 /**
  * MainLayout - Responsive layout wrapper with navigation
  * Provides a sidebar on desktop and a hamburger menu on mobile
  */
-export default function MainLayout({ children }: MainLayoutProps) {
+export default function MainLayout({ children, headerAction }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -193,7 +194,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
               </div>
             </SheetContent>
           </Sheet>
-          <h1 className="text-xl font-bold text-foreground">{getPageTitle(location.pathname)}</h1>
+          <h1 className="text-xl font-bold text-foreground flex-1">{getPageTitle(location.pathname)}</h1>
+          {headerAction}
         </div>
       </header>
 

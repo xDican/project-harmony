@@ -72,11 +72,11 @@ export default function Pacientes() {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // Calculate pagination for mobile
+  // Calculate pagination
   const totalPages = Math.ceil(filteredPatients.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const displayedPatients = isMobile ? filteredPatients.slice(startIndex, endIndex) : filteredPatients;
+  const displayedPatients = filteredPatients.slice(startIndex, endIndex);
 
   const handleCreatePatient = async () => {
     if (!newPatientName.trim() || !newPatientPhone.trim()) {
@@ -125,11 +125,18 @@ export default function Pacientes() {
     }
   };
 
+  const mobileHeaderAction = (
+    <Button size="icon" variant="ghost" onClick={() => setIsCreateDialogOpen(true)}>
+      <Plus className="h-5 w-5" />
+      <span className="sr-only">Nuevo paciente</span>
+    </Button>
+  );
+
   return (
-    <MainLayout>
+    <MainLayout headerAction={mobileHeaderAction}>
       <div className="p-4 md:p-6 space-y-6">
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Page Header - Desktop only */}
+        <div className="hidden md:flex items-center justify-between mb-6">
           <p className="text-muted-foreground">
             Gestión y búsqueda de pacientes registrados
           </p>
