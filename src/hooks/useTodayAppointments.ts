@@ -3,19 +3,19 @@ import { getTodayAppointments, getTodayAppointmentsByDoctor, AppointmentWithDeta
 import { getLocalDateString } from '@/lib/dateUtils';
 
 /**
- * Hook to fetch today's appointments with patient and doctor details
+ * Hook to fetch appointments with patient and doctor details for a given date
  * 
  * @param options - Optional configuration object
  * @param options.doctorId - If provided, fetches appointments for specific doctor only
  * @param options.initialDate - Optional ISO date string (defaults to today in local timezone)
- * @returns Object with data, loading state, error, current date, and setter
+ * @returns Object with data, loading state, error, and current date
  */
 export const useTodayAppointments = (options?: { 
   doctorId?: string | null; 
   initialDate?: string;
 }) => {
-  // Default to today's date in local timezone if not provided
-  const [date, setDate] = useState<string>(options?.initialDate || getLocalDateString());
+  // Use the provided date directly, defaulting to today
+  const date = options?.initialDate || getLocalDateString();
   const [data, setData] = useState<AppointmentWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -46,6 +46,5 @@ export const useTodayAppointments = (options?: {
     isLoading,
     error,
     date,
-    setDate,
   };
 };
