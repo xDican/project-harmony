@@ -129,11 +129,14 @@ export default function Pacientes() {
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-muted-foreground">
-            Gestión y búsqueda de pacientes registrados
-          </p>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
+        <div className="flex items-center justify-between">
+          <div className="hidden md:block">
+            <h1 className="text-3xl font-bold text-foreground">Pacientes</h1>
+            <p className="text-muted-foreground">
+              Gestión y búsqueda de pacientes registrados
+            </p>
+          </div>
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="ml-auto">
             <Plus className="h-4 w-4 mr-2" />
             Nuevo paciente
           </Button>
