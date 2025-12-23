@@ -192,7 +192,10 @@ export default function MainLayout({
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 flex flex-col">
-                <div className="mt-8 flex-1">
+                <div className="py-4 border-b">
+                  <h2 className="text-lg font-semibold text-foreground px-4">Menú</h2>
+                </div>
+                <div className="mt-4 flex-1">
                   <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
                 </div>
                 {/* Footer with user email and logout */}
