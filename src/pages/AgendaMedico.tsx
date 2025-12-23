@@ -181,7 +181,7 @@ export default function AgendaMedico() {
         )}
 
         {/* Date Header - Mobile */}
-        <div className="mb-4 md:hidden flex items-center gap-2 text-muted-foreground">
+        <div className="mb-4 md:hidden flex items-center justify-center gap-2 text-muted-foreground">
           <Calendar className="h-4 w-4" />
           <p className="capitalize text-sm">{formattedDate}</p>
           {!loadingAppointments && !loadingDoctors && appointments.length > 0 && (
