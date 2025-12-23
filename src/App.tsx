@@ -19,7 +19,7 @@ import AppointmentsReport from "./pages/AppointmentsReport";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import PatientDetail from "./pages/PatientDetail";
-import Consultorio from "./pages/Consultorio";
+
 import ConfiguracionMedico from "./pages/ConfiguracionMedico";
 import UsoMensajes from "./pages/UsoMensajes";
 import DebugWhatsappPage from "./pages/DebugWhatsappPage";
@@ -89,7 +89,7 @@ const App = () => {
 
     // Redirect based on role
     if (user.role === 'doctor') {
-      return <Navigate to="/consultorio" replace />;
+      return <Navigate to="/agenda-medico" replace />;
     }
     if (user.role === 'secretary' || user.role === 'admin') {
       return <Navigate to="/agenda-secretaria" replace />;
@@ -132,11 +132,6 @@ const App = () => {
             } />
             
             {/* Doctor routes (independent doctor mode) */}
-            <Route path="/consultorio" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
-                <Consultorio />
-              </RoleBasedRoute>
-            } />
             <Route path="/configuracion" element={
               <RoleBasedRoute allowedRoles={['doctor']}>
                 <ConfiguracionMedico />

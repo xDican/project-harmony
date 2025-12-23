@@ -15,7 +15,7 @@ const routeTitles: Record<string, string> = {
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
   '/configuracion': 'Configuración',
-  '/consultorio': 'Mi Consultorio',
+  
   '/admin/users': 'Usuarios',
   '/admin/reports/appointments': 'Reporte de Citas',
 };
@@ -86,10 +86,10 @@ export default function MainLayout({ children }: MainLayoutProps) {
       );
     }
 
-    // Doctor (independent mode) can see: Consultorio, Nueva Cita, Pacientes, Configuración
+    // Doctor (independent mode) can see: Agenda Médico, Nueva Cita, Pacientes, Configuración
     if (isDoctor && !isAdmin) {
       items.push(
-        { to: '/consultorio', label: 'Citas de Hoy', icon: Calendar },
+        { to: '/agenda-medico', label: 'Agenda del Médico', icon: Calendar },
         { to: '/citas/nueva', label: 'Nueva Cita', icon: PlusCircle },
         { to: '/pacientes', label: 'Pacientes', icon: Users },
         { to: '/configuracion', label: 'Configuración', icon: Settings }
