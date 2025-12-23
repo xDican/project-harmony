@@ -65,10 +65,6 @@ const PatientSearch = ({ onSelect, onCreateNew, value }: PatientSearchProps) => 
 
   return (
     <div className="space-y-2" ref={containerRef}>
-      <label className="text-sm font-medium text-foreground">
-        Paciente
-      </label>
-
       {selectedPatient ? (
         // Selected patient display
         <Card className="bg-primary/5 border-primary/20">
