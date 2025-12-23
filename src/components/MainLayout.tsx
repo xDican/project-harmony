@@ -207,8 +207,7 @@ export default function MainLayout({
                 </div>
               </SheetContent>
             </Sheet>}
-          {!backTo && <h1 className="text-xl font-bold text-foreground flex-1">{getPageTitle(location.pathname)}</h1>}
-          <div className="flex-1" />
+          {!backTo && <h1 className="text-xl font-bold text-foreground flex-1 truncate">{getPageTitle(location.pathname)}</h1>}
           {headerAction}
         </div>
       </header>
