@@ -15,11 +15,32 @@ export function getLocalDateString(): string {
 }
 
 /**
+ * Gets the date string for tomorrow in the user's local timezone as YYYY-MM-DD string
+ */
+export function getTomorrowDateString(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const day = String(tomorrow.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Gets a Date object representing the start of today in local timezone
  */
 export function getLocalToday(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+/**
+ * Gets a Date object representing the start of tomorrow in local timezone
+ */
+export function getLocalTomorrow(): Date {
+  const today = getLocalToday();
+  today.setDate(today.getDate() + 1);
+  return today;
 }
 
 /**

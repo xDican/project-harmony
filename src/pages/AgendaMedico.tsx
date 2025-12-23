@@ -9,12 +9,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, AlertCircle, Stethoscope, User } from 'lucide-react';
+import { Calendar, AlertCircle, Stethoscope, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
 import { useDoctors } from '@/hooks/useDoctors';
 import StatusBadge from '@/components/StatusBadge';
-import { getLocalDateString, getLocalToday } from '@/lib/dateUtils';
+import { getLocalDateString, getLocalToday, getLocalTomorrow, getTomorrowDateString } from '@/lib/dateUtils';
 
 /**
  * AgendaMedico - Doctor's daily agenda view
@@ -25,11 +25,16 @@ export default function AgendaMedico() {
   const { user, loading, isAdmin, isDoctor } = useCurrentUser();
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedDate, setSelectedDate] = useState<'today' | 'tomorrow'>('today');
   const itemsPerPage = 10;
   
-  // Get today's date in local timezone
-  const today = getLocalDateString();
-  const formattedDate = format(getLocalToday(), "EEEE, d 'de' MMMM 'de' yyyy", {
+  // Get today's and tomorrow's date in local timezone
+  const todayStr = getLocalDateString();
+  const tomorrowStr = getTomorrowDateString();
+  const currentDateStr = selectedDate === 'today' ? todayStr : tomorrowStr;
+  const currentDateObj = selectedDate === 'today' ? getLocalToday() : getLocalTomorrow();
+  
+  const formattedDate = format(currentDateObj, "EEEE, d 'de' MMMM 'de' yyyy", {
     locale: es,
   });
 
@@ -53,10 +58,16 @@ export default function AgendaMedico() {
     ? user?.doctorId || undefined 
     : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
 
-  // Fetch appointments based on role and selection
+  // Fetch appointments based on role, selection, and date
   const { data: appointments, isLoading: loadingAppointments } = useTodayAppointments({
     doctorId: doctorIdToFetch,
+    initialDate: currentDateStr,
   });
+
+  // Reset page when date changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDate]);
 
   // Loading state
   if (loading) {
@@ -89,15 +100,40 @@ export default function AgendaMedico() {
   return (
     <MainLayout>
       <div className="container mx-auto p-6 max-w-5xl">
-        {/* Page Info */}
-        <div className="mb-6 flex items-center gap-2 text-muted-foreground">
-          <Calendar className="h-4 w-4" />
-          <p className="capitalize">{formattedDate}</p>
-          {!loadingAppointments && !loadingDoctors && appointments.length > 0 && (
-            <span className="text-sm">
-              · {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
+        {/* Date Navigation */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            <p className="capitalize">{formattedDate}</p>
+            {!loadingAppointments && !loadingDoctors && appointments.length > 0 && (
+              <span className="text-sm">
+                · {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSelectedDate('today')}
+              disabled={selectedDate === 'today'}
+              className="h-8 w-8"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium px-2 min-w-[60px] text-center">
+              {selectedDate === 'today' ? 'Hoy' : 'Mañana'}
             </span>
-          )}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSelectedDate('tomorrow')}
+              disabled={selectedDate === 'tomorrow'}
+              className="h-8 w-8"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Doctor Selection (only for admin) */}
@@ -147,7 +183,7 @@ export default function AgendaMedico() {
                 <Calendar className="h-4 w-4" />
                 <AlertTitle>No hay citas programadas</AlertTitle>
                 <AlertDescription>
-                  No se encontraron citas para hoy.
+                  No se encontraron citas para {selectedDate === 'today' ? 'hoy' : 'mañana'}.
                 </AlertDescription>
               </Alert>
             ) : (
