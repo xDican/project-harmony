@@ -375,25 +375,6 @@ export default function NuevaCita() {
             </section>
           )}
 
-          {/* Show selected doctor info for doctors */}
-          {isDoctor && selectedDoctor && (
-            <section>
-              <Label className="text-lg font-semibold text-foreground mb-3 block">
-                Médico
-              </Label>
-              <Card>
-                <CardContent className="flex items-center gap-3 py-3">
-                  <Stethoscope className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="font-medium">{selectedDoctor.name}</p>
-                    {selectedDoctor.specialtyName && (
-                      <p className="text-sm text-muted-foreground">{selectedDoctor.specialtyName}</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
-          )}
 
           {/* Step 3 (or 2): Duration Selection - AHORA ANTES DE LA FECHA */}
           <section>
