@@ -4,6 +4,7 @@ import { useCurrentUser } from '@/context/UserContext';
 import { getDoctorById } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { User, Mail, Phone, Stethoscope, Loader2 } from 'lucide-react';
+import { formatPhoneForDisplay } from '@/lib/utils';
 
 /**
  * PerfilMedico - Profile page for doctors showing their complete information
@@ -57,7 +58,9 @@ export default function PerfilMedico() {
             <Phone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-muted-foreground">Teléfono</p>
-              <p className="font-medium">{doctor?.phone || 'Sin teléfono'}</p>
+              <p className="font-medium">
+                {doctor?.phone ? `+504 ${formatPhoneForDisplay(doctor.phone)}` : 'Sin teléfono'}
+              </p>
             </div>
           </div>
 
