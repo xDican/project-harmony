@@ -59,7 +59,10 @@ export default function PerfilMedico() {
             <div className="flex-1 min-w-0">
               <p className="text-sm text-muted-foreground">Teléfono</p>
               <p className="font-medium">
-                {doctor?.phone ? `+504 ${formatPhoneForDisplay(doctor.phone)}` : 'Sin teléfono'}
+                {doctor?.phone ? (() => {
+                  const cleaned = doctor.phone.replace(/\D/g, '');
+                  return `+504 ${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}`;
+                })() : 'Sin teléfono'}
               </p>
             </div>
           </div>
