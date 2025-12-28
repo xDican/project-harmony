@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DateTime } from 'luxon';
@@ -70,6 +70,16 @@ export function RescheduleModal({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to calendar when it opens
+  useEffect(() => {
+    if (calendarOpen && calendarRef.current) {
+      setTimeout(() => {
+        calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+    }
+  }, [calendarOpen]);
 
   /**
    * Fetch available days when duration or month changes
@@ -357,7 +367,7 @@ export function RescheduleModal({
 
             {/* Calendario inline (visible solo cuando calendarOpen = true) */}
             {calendarOpen && (
-              <div className="border rounded-md p-3 bg-background">
+              <div ref={calendarRef} className="border rounded-md p-3 bg-background animate-fade-in">
                 <Calendar
                   mode="single"
                   selected={selectedDate}
