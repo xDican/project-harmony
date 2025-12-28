@@ -71,6 +71,7 @@ export function RescheduleModal({
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const calendarRef = useRef<HTMLDivElement>(null);
+  const slotsRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to calendar when it opens
   useEffect(() => {
@@ -266,6 +267,12 @@ export function RescheduleModal({
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
     setCalendarOpen(false);
+    // Scroll to time slots section
+    if (date) {
+      setTimeout(() => {
+        slotsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
+    }
   };
 
   const handleMonthChange = (month: Date) => {
@@ -403,7 +410,7 @@ export function RescheduleModal({
           </div>
 
           {/* Step 3: Time slot selector */}
-          <div className="space-y-2">
+          <div ref={slotsRef} className="space-y-2">
             <Label>3. Horario</Label>
             {!selectedDate ? (
               <Alert>
