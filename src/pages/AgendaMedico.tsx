@@ -318,10 +318,10 @@ export default function AgendaMedico() {
           open={rescheduleModalOpen}
           onOpenChange={setRescheduleModalOpen}
           appointmentId={selectedAppointment.id}
-          doctorId={selectedAppointment.doctor_id}
+          doctorId={selectedAppointment.doctorId}
           currentDate={selectedAppointment.date}
           currentTime={selectedAppointment.time}
-          currentDuration={selectedAppointment.duration_minutes}
+          currentDuration={selectedAppointment.durationMinutes}
           onSuccess={() => {
             refetch();
             setRescheduleModalOpen(false);
