@@ -255,7 +255,10 @@ export function RescheduleModal({
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
-    setCalendarOpen(false);
+    // Small delay to prevent ghost clicks on elements below the popover
+    setTimeout(() => {
+      setCalendarOpen(false);
+    }, 50);
   };
 
   const handleMonthChange = (month: Date) => {
