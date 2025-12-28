@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getTodayAppointments, getTodayAppointmentsByDoctor, AppointmentWithDetails } from '@/lib/api';
 import { getLocalDateString } from '@/lib/dateUtils';
 
@@ -8,7 +8,7 @@ import { getLocalDateString } from '@/lib/dateUtils';
  * @param options - Optional configuration object
  * @param options.doctorId - If provided, fetches appointments for specific doctor only
  * @param options.initialDate - Optional ISO date string (defaults to today in local timezone)
- * @returns Object with data, loading state, error, and current date
+ * @returns Object with data, loading state, error, current date, and refetch function
  */
 export const useTodayAppointments = (options?: { 
   doctorId?: string | null; 
@@ -20,12 +20,10 @@ export const useTodayAppointments = (options?: {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    // Reset state when date or doctorId changes
+  const fetchAppointments = useCallback(() => {
     setIsLoading(true);
     setError(null);
 
-    // Fetch appointments based on doctorId
     const fetchPromise = options?.doctorId
       ? getTodayAppointmentsByDoctor(options.doctorId, date)
       : getTodayAppointments(date);
@@ -41,10 +39,15 @@ export const useTodayAppointments = (options?: {
       });
   }, [date, options?.doctorId]);
 
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
   return {
     data,
     isLoading,
     error,
     date,
+    refetch: fetchAppointments,
   };
 };
