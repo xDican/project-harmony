@@ -2,18 +2,18 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import MainLayout from '@/components/MainLayout';
-import AppointmentRow from '@/components/AppointmentRow';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Calendar, AlertCircle, Stethoscope, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { Calendar, AlertCircle, Stethoscope, User, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
 import { useDoctors } from '@/hooks/useDoctors';
 import StatusBadge from '@/components/StatusBadge';
+import { RescheduleModal } from '@/components/RescheduleModal';
 import { getLocalDateString, getLocalToday, getLocalTomorrow, getTomorrowDateString } from '@/lib/dateUtils';
 
 /**
@@ -26,6 +26,8 @@ export default function AgendaMedico() {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDate, setSelectedDate] = useState<'today' | 'tomorrow'>('today');
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const itemsPerPage = 10;
   
   // Get today's and tomorrow's date in local timezone
@@ -38,15 +40,17 @@ export default function AgendaMedico() {
     locale: es,
   });
 
-  // Format time to 12-hour format
-  const formatTime = (time: string): string => {
+  // Format time to 12-hour format, returns {time, period}
+  const formatTimeParts = (time: string): { time: string; period: string } => {
     try {
       const [hours, minutes] = time.split(':');
       const date = new Date();
       date.setHours(parseInt(hours), parseInt(minutes));
-      return format(date, 'h:mm a', { locale: es });
+      const formatted = format(date, 'h:mm a', { locale: es });
+      const parts = formatted.split(' ');
+      return { time: parts[0], period: parts[1]?.toUpperCase() || '' };
     } catch {
-      return time;
+      return { time, period: '' };
     }
   };
 
@@ -59,7 +63,7 @@ export default function AgendaMedico() {
     : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
 
   // Fetch appointments based on role, selection, and date
-  const { data: appointments, isLoading: loadingAppointments } = useTodayAppointments({
+  const { data: appointments, isLoading: loadingAppointments, refetch } = useTodayAppointments({
     doctorId: doctorIdToFetch,
     initialDate: currentDateStr,
   });
@@ -124,9 +128,20 @@ export default function AgendaMedico() {
     </div>
   );
 
+  // Calculate pagination
+  const totalPages = Math.ceil(appointments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAppointments = appointments.slice(startIndex, endIndex);
+
+  const handleReschedule = (appointment: any) => {
+    setSelectedAppointment(appointment);
+    setRescheduleModalOpen(true);
+  };
+
   return (
     <MainLayout headerAction={dayNavigation}>
-      <div className="container mx-auto p-6 max-w-5xl">
+      <div className="container mx-auto p-4 md:p-6 max-w-3xl">
         {/* Date Info - Desktop only */}
         <div className="mb-6 hidden md:flex items-center justify-between">
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -143,7 +158,7 @@ export default function AgendaMedico() {
 
         {/* Doctor Selection (only for admin) */}
         {isAdmin && (
-          <div className="mb-8">
+          <div className="mb-6">
             <Label className="text-base font-semibold text-foreground mb-3 block">
               Médico
             </Label>
@@ -174,9 +189,9 @@ export default function AgendaMedico() {
         {/* Loading State */}
         {(loadingAppointments || loadingDoctors) && (
           <div className="space-y-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
           </div>
         )}
 
@@ -191,7 +206,7 @@ export default function AgendaMedico() {
           )}
         </div>
 
-        {/* Appointments Table */}
+        {/* Timeline View */}
         {!loadingAppointments && !loadingDoctors && (
           <>
             {appointments.length === 0 ? (
@@ -204,86 +219,116 @@ export default function AgendaMedico() {
               </Alert>
             ) : (
               <>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Hora</TableHead>
-                        <TableHead>Paciente</TableHead>
-                        {isAdmin && <TableHead>Médico</TableHead>}
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Notas</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(() => {
-                        const totalPages = Math.ceil(appointments.length / itemsPerPage);
-                        const startIndex = (currentPage - 1) * itemsPerPage;
-                        const endIndex = startIndex + itemsPerPage;
-                        const paginatedAppointments = appointments.slice(startIndex, endIndex);
-                        
-                        return paginatedAppointments.map((appointment) => (
-                      <TableRow key={appointment.id}>
-                        <TableCell className="font-medium">
-                          {formatTime(appointment.time)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            {appointment.patient.name}
+                {/* Timeline Container */}
+                <div className="space-y-0">
+                  {paginatedAppointments.map((appointment, index) => {
+                    const { time, period } = formatTimeParts(appointment.time);
+                    const isLast = index === paginatedAppointments.length - 1;
+                    
+                    return (
+                      <div 
+                        key={appointment.id} 
+                        className={`flex items-start gap-4 py-4 ${!isLast ? 'border-b border-dashed border-border' : ''}`}
+                      >
+                        {/* Hora prominente a la izquierda */}
+                        <div className="flex-shrink-0 w-16 text-center pt-1">
+                          <div className="text-xl font-bold text-primary leading-none">
+                            {time}
                           </div>
-                        </TableCell>
-                        {isAdmin && (
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                              {appointment.doctor.name}
-                            </div>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <StatusBadge status={appointment.status} />
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {appointment.notes || '-'}
-                        </TableCell>
-                      </TableRow>
-                        ));
-                      })()}
-                    </TableBody>
-                  </Table>
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">
+                            {period}
+                          </div>
+                        </div>
+                        
+                        {/* Contenido de la cita */}
+                        <div className="flex-1 min-w-0">
+                          {/* Nombre del paciente con truncado */}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2 mb-2 cursor-default">
+                                  <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="font-medium truncate text-foreground">
+                                    {appointment.patient.name}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p>{appointment.patient.name}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          
+                          {/* Estado y botón reagendar */}
+                          <div className="flex items-center justify-between gap-2">
+                            <StatusBadge status={appointment.status} />
+                            
+                            {appointment.status !== 'cancelada' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => handleReschedule(appointment)}
+                              >
+                                <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
+                                <span className="hidden sm:inline">Reagendar</span>
+                                <span className="sm:hidden">Mover</span>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {(() => {
-                  const totalPages = Math.ceil(appointments.length / itemsPerPage);
-                  return totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 px-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Anterior
-                      </Button>
-                      <span className="text-sm text-muted-foreground">
-                        Página {currentPage} de {totalPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
-                  );
-                })()}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </>
         )}
       </div>
+
+      {/* Reschedule Modal */}
+      {selectedAppointment && (
+        <RescheduleModal
+          open={rescheduleModalOpen}
+          onOpenChange={setRescheduleModalOpen}
+          appointmentId={selectedAppointment.id}
+          doctorId={selectedAppointment.doctor_id}
+          currentDate={selectedAppointment.date}
+          currentTime={selectedAppointment.time}
+          currentDuration={selectedAppointment.duration_minutes}
+          onSuccess={() => {
+            refetch();
+            setRescheduleModalOpen(false);
+            setSelectedAppointment(null);
+          }}
+        />
+      )}
     </MainLayout>
   );
 }
