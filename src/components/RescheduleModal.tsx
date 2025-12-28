@@ -351,7 +351,7 @@ export function RescheduleModal({
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto p-0 z-[100]" align="start" side="bottom" sideOffset={4} avoidCollisions={false}>
                 <Calendar
                   mode="single"
                   selected={selectedDate}
