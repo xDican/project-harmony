@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CalendarIcon, Loader2, AlertCircle } from 'lucide-react';
@@ -255,10 +255,7 @@ export function RescheduleModal({
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
-    // Small delay to prevent ghost clicks on elements below the popover
-    setTimeout(() => {
-      setCalendarOpen(false);
-    }, 50);
+    setCalendarOpen(false);
   };
 
   const handleMonthChange = (month: Date) => {
@@ -327,31 +324,40 @@ export function RescheduleModal({
               </Alert>
             )}
             
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'w-full justify-start text-left font-normal',
-                    !selectedDate && 'text-muted-foreground'
-                  )}
-                  disabled={isLoading || isLoadingDays}
-                >
-                  {isLoadingDays ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                  )}
-                  {selectedDate ? (
-                    format(selectedDate, "PPP", { locale: es })
-                  ) : isLoadingDays ? (
-                    <span>Cargando disponibilidad...</span>
-                  ) : (
-                    <span>Seleccionar fecha</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 z-[100]" align="start" side="bottom" sideOffset={4} avoidCollisions={false}>
+            {/* Botón para mostrar/ocultar calendario */}
+            <Button
+              variant="outline"
+              className={cn(
+                'w-full justify-between text-left font-normal',
+                !selectedDate && 'text-muted-foreground'
+              )}
+              onClick={() => setCalendarOpen(!calendarOpen)}
+              disabled={isLoading || isLoadingDays}
+            >
+              <span className="flex items-center">
+                {isLoadingDays ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                )}
+                {selectedDate ? (
+                  format(selectedDate, "PPP", { locale: es })
+                ) : isLoadingDays ? (
+                  'Cargando disponibilidad...'
+                ) : (
+                  'Seleccionar fecha'
+                )}
+              </span>
+              {calendarOpen ? (
+                <ChevronUp className="h-4 w-4 opacity-50" />
+              ) : (
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              )}
+            </Button>
+
+            {/* Calendario inline (visible solo cuando calendarOpen = true) */}
+            {calendarOpen && (
+              <div className="border rounded-md p-3 bg-background">
                 <Calendar
                   mode="single"
                   selected={selectedDate}
@@ -359,8 +365,7 @@ export function RescheduleModal({
                   month={currentMonth}
                   onMonthChange={handleMonthChange}
                   disabled={isDateDisabled}
-                  initialFocus
-                  className="pointer-events-auto"
+                  className="mx-auto pointer-events-auto"
                   modifiers={{
                     unavailable: (date) => {
                       const dateString = format(date, 'yyyy-MM-dd');
@@ -372,8 +377,8 @@ export function RescheduleModal({
                     unavailable: 'text-muted-foreground/50 line-through cursor-not-allowed'
                   }}
                 />
-                {/* Leyenda simple */}
-                <div className="px-3 pb-3 flex items-center gap-4 text-xs text-muted-foreground border-t pt-2">
+                {/* Leyenda */}
+                <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground border-t pt-2 mt-2">
                   <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded-sm bg-primary/20 border border-primary"></div>
                     <span>Disponible</span>
@@ -383,8 +388,8 @@ export function RescheduleModal({
                     <span>No disponible</span>
                   </div>
                 </div>
-              </PopoverContent>
-            </Popover>
+              </div>
+            )}
           </div>
 
           {/* Step 3: Time slot selector */}
