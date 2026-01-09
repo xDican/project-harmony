@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
+import { cn } from '@/lib/utils';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -34,6 +35,7 @@ interface MainLayoutProps {
   children: ReactNode;
   headerAction?: ReactNode;
   backTo?: string;
+  mainClassName?: string;
 }
 
 /**
@@ -43,7 +45,8 @@ interface MainLayoutProps {
 export default function MainLayout({
   children,
   headerAction,
-  backTo
+  backTo,
+  mainClassName
 }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -241,7 +244,7 @@ export default function MainLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className={cn("flex-1 min-h-0", mainClassName ?? "overflow-auto")}>
         {children}
       </main>
     </div>;

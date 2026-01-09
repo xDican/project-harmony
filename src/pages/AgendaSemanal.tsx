@@ -182,15 +182,15 @@ export default function AgendaSemanal() {
   };
 
   return (
-    <MainLayout>
+    <MainLayout mainClassName="overflow-hidden">
       {/* Flex container - full height layout */}
-      <div className="flex flex-col h-[calc(100vh-4rem)] md:h-screen -m-4 md:-m-6">
+      <div className="flex flex-col h-full min-h-0">
         
         {/* FIXED HEADER - Week navigation + Day selector */}
         <div className="flex-shrink-0 bg-background border-b shadow-sm">
-          <div className="max-w-3xl mx-auto px-4 pt-3 pb-2">
+          <div className="max-w-3xl mx-auto px-4 pt-4 pb-2">
             {/* Week Range Header */}
-            <div className="mb-2 text-center">
+            <div className="mb-3 text-center">
               <p className="text-sm text-muted-foreground capitalize">{weekRangeText}</p>
             </div>
 
@@ -261,7 +261,7 @@ export default function AgendaSemanal() {
         </div>
 
         {/* SCROLLABLE CONTENT - Appointments list */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-4 py-4">
             {/* Doctor Selection (only for admin) */}
             {isAdmin && (
