@@ -67,6 +67,7 @@ export default function NuevaCita() {
 
   // Duration options
   const durationOptions = [
+    { value: 30, label: '30 min' },
     { value: 60, label: '1 hora' },
     { value: 90, label: '1.5 horas' },
     { value: 120, label: '2 horas' },
