@@ -71,7 +71,6 @@ export default function NuevaCita() {
     { value: 60, label: '1 hora' },
     { value: 90, label: '1.5 horas' },
     { value: 120, label: '2 horas' },
-    { value: 180, label: '3 horas' },
   ];
 
   // Auto-fill doctor for logged-in doctors
