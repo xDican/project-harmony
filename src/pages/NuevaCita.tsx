@@ -42,7 +42,7 @@ export default function NuevaCita() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   
   // Duration state (ahora es el primer paso después de seleccionar médico)
-  const [durationMinutes, setDurationMinutes] = useState<number>(60);
+  const [durationMinutes, setDurationMinutes] = useState<number>(30);
   
   // Available days state (para bloquear días en el calendario)
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
