@@ -183,230 +183,239 @@ export default function AgendaSemanal() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto p-4 md:p-6 max-w-3xl">
-        {/* Sticky Header Container */}
-        <div className="sticky top-16 md:top-0 z-30 bg-background pt-2 pb-3 -mx-4 px-4 md:-mx-6 md:px-6 border-b shadow-sm">
-          {/* Week Range Header */}
-          <div className="mb-2 text-center">
-            <p className="text-sm text-muted-foreground capitalize">{weekRangeText}</p>
-          </div>
+      {/* Flex container - full height layout */}
+      <div className="flex flex-col h-[calc(100vh-4rem)] md:h-screen -m-4 md:-m-6">
+        
+        {/* FIXED HEADER - Week navigation + Day selector */}
+        <div className="flex-shrink-0 bg-background border-b shadow-sm">
+          <div className="max-w-3xl mx-auto px-4 pt-3 pb-2">
+            {/* Week Range Header */}
+            <div className="mb-2 text-center">
+              <p className="text-sm text-muted-foreground capitalize">{weekRangeText}</p>
+            </div>
 
-          {/* Week Navigation - Always visible */}
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
-              className="gap-1 text-xs md:text-sm"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Semana </span>anterior
-            </Button>
-            {!isCurrentWeek && (
+            {/* Week Navigation */}
+            <div className="flex items-center justify-center gap-2 mb-3">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleGoToToday}
-                className="text-xs md:text-sm"
+                onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
+                className="gap-1 text-xs md:text-sm"
               >
-                Hoy
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Semana </span>anterior
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
-              className="gap-1 text-xs md:text-sm"
-            >
-              <span className="hidden sm:inline">Semana </span>siguiente
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Day Selector Tabs - Fixed 7-column grid */}
-          <div className="grid grid-cols-7 gap-1 md:gap-2 md:max-w-xl md:mx-auto">
-            {dayTabs.map((tab) => (
+              {!isCurrentWeek && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGoToToday}
+                  className="text-xs md:text-sm"
+                >
+                  Hoy
+                </Button>
+              )}
               <Button
-                key={tab.dateStr}
-                variant={selectedDayIndex === tab.index ? "default" : "outline"}
+                variant="outline"
                 size="sm"
-                onClick={() => setSelectedDayIndex(tab.index)}
-                className={cn(
-                  "flex flex-col items-center h-auto py-1.5 px-1 md:py-2 md:px-3 relative",
-                  tab.isToday && selectedDayIndex !== tab.index && "border-primary/50 bg-primary/5"
-                )}
+                onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
+                className="gap-1 text-xs md:text-sm"
               >
-                <span className="text-[10px] md:text-xs font-normal opacity-80">{tab.dayName}</span>
-                <span className="text-base md:text-lg font-semibold">{tab.dayNum}</span>
-                {tab.isToday && (
-                  <span className="text-[8px] md:text-[10px] uppercase tracking-wide opacity-70">Hoy</span>
-                )}
-                {tab.appointmentCount > 0 && (
-                  <span className={cn(
-                    "absolute -top-1 -right-1 text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-medium",
-                    selectedDayIndex === tab.index 
-                      ? "bg-background text-foreground" 
-                      : "bg-primary text-primary-foreground"
-                  )}>
-                    {tab.appointmentCount}
-                  </span>
-                )}
+                <span className="hidden sm:inline">Semana </span>siguiente
+                <ChevronRight className="h-4 w-4" />
               </Button>
-            ))}
+            </div>
+
+            {/* Day Selector Tabs */}
+            <div className="grid grid-cols-7 gap-1 md:gap-2 md:max-w-xl md:mx-auto">
+              {dayTabs.map((tab) => (
+                <Button
+                  key={tab.dateStr}
+                  variant={selectedDayIndex === tab.index ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedDayIndex(tab.index)}
+                  className={cn(
+                    "flex flex-col items-center h-auto py-1.5 px-1 md:py-2 md:px-3 relative",
+                    tab.isToday && selectedDayIndex !== tab.index && "border-primary/50 bg-primary/5"
+                  )}
+                >
+                  <span className="text-[10px] md:text-xs font-normal opacity-80">{tab.dayName}</span>
+                  <span className="text-base md:text-lg font-semibold">{tab.dayNum}</span>
+                  {tab.isToday && (
+                    <span className="text-[8px] md:text-[10px] uppercase tracking-wide opacity-70">Hoy</span>
+                  )}
+                  {tab.appointmentCount > 0 && (
+                    <span className={cn(
+                      "absolute -top-1 -right-1 text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-medium",
+                      selectedDayIndex === tab.index 
+                        ? "bg-background text-foreground" 
+                        : "bg-primary text-primary-foreground"
+                    )}>
+                      {tab.appointmentCount}
+                    </span>
+                  )}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Doctor Selection (only for admin) */}
-        {isAdmin && (
-          <div className="mb-6">
-            <Label className="text-base font-semibold text-foreground mb-3 block">
-              Médico
-            </Label>
-            <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
-              <SelectTrigger className="w-full max-w-md">
-                <SelectValue placeholder="Selecciona un médico" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  <div className="flex items-center gap-2">
-                    <Stethoscope className="h-4 w-4" />
-                    Todos los médicos
-                  </div>
-                </SelectItem>
-                {doctors.map((doctor) => (
-                  <SelectItem key={doctor.id} value={doctor.id}>
-                    <div className="flex items-center gap-2">
-                      <Stethoscope className="h-4 w-4" />
-                      {doctor.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Loading State */}
-        {(loadingAppointments || loadingDoctors) && (
-          <div className="space-y-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-        )}
-
-        {/* Appointments List */}
-        {!loadingAppointments && !loadingDoctors && (
-          <>
-            {appointments.length === 0 ? (
-              <Alert>
-                <Calendar className="h-4 w-4" />
-                <AlertTitle>No hay citas programadas</AlertTitle>
-                <AlertDescription>
-                  No hay citas para este día.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                {/* Appointments Count */}
-                <div className="flex items-center justify-center gap-2 text-muted-foreground mb-4">
-                  <CalendarDays className="h-4 w-4" />
-                  <p className="text-sm">
-                    {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
-                  </p>
-                </div>
-
-                {/* Timeline Container */}
-                <div className="space-y-0">
-                  {paginatedAppointments.map((appointment, index) => {
-                    const { time, period } = formatTimeParts(appointment.time);
-                    const isLast = index === paginatedAppointments.length - 1;
-                    
-                    return (
-                      <div 
-                        key={appointment.id} 
-                        className={`flex items-start gap-4 py-4 ${!isLast ? 'border-b border-dashed border-border' : ''}`}
-                      >
-                        {/* Time */}
-                        <div className="flex-shrink-0 w-16 text-center pt-1">
-                          <div className="text-xl font-bold text-primary leading-none">
-                            {time}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">
-                            {period}
-                          </div>
-                        </div>
-                        
-                        {/* Appointment Content */}
-                        <div className="flex-1 min-w-0">
-                          {/* Patient Name */}
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-2 mb-2 cursor-default">
-                                  <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                  <span className="font-medium truncate text-foreground">
-                                    {appointment.patient.name}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                <p>{appointment.patient.name}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          
-                          {/* Status and Reschedule */}
-                          <div className="flex items-center justify-between gap-2">
-                            <StatusBadge status={appointment.status} />
-                            
-                            {appointment.status !== 'cancelada' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-xs"
-                                onClick={() => handleReschedule(appointment)}
-                              >
-                                <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
-                                <span className="hidden sm:inline">Reagendar</span>
-                                <span className="sm:hidden">Mover</span>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
+        {/* SCROLLABLE CONTENT - Appointments list */}
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-3xl mx-auto px-4 py-4">
+            {/* Doctor Selection (only for admin) */}
+            {isAdmin && (
+              <div className="mb-6">
+                <Label className="text-base font-semibold text-foreground mb-3 block">
+                  Médico
+                </Label>
+                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                  <SelectTrigger className="w-full max-w-md">
+                    <SelectValue placeholder="Selecciona un médico" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <Stethoscope className="h-4 w-4" />
+                        Todos los médicos
                       </div>
-                    );
-                  })}
-                </div>
+                    </SelectItem>
+                    {doctors.map((doctor) => (
+                      <SelectItem key={doctor.id} value={doctor.id}>
+                        <div className="flex items-center gap-2">
+                          <Stethoscope className="h-4 w-4" />
+                          {doctor.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      {currentPage} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
+            {/* Loading State */}
+            {(loadingAppointments || loadingDoctors) && (
+              <div className="space-y-4">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            )}
+
+            {/* Appointments List */}
+            {!loadingAppointments && !loadingDoctors && (
+              <>
+                {appointments.length === 0 ? (
+                  <Alert>
+                    <Calendar className="h-4 w-4" />
+                    <AlertTitle>No hay citas programadas</AlertTitle>
+                    <AlertDescription>
+                      No hay citas para este día.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <>
+                    {/* Appointments Count */}
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground mb-4">
+                      <CalendarDays className="h-4 w-4" />
+                      <p className="text-sm">
+                        {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
+                      </p>
+                    </div>
+
+                    {/* Timeline Container */}
+                    <div className="space-y-0">
+                      {paginatedAppointments.map((appointment, index) => {
+                        const { time, period } = formatTimeParts(appointment.time);
+                        const isLast = index === paginatedAppointments.length - 1;
+                        
+                        return (
+                          <div 
+                            key={appointment.id} 
+                            className={`flex items-start gap-4 py-4 ${!isLast ? 'border-b border-dashed border-border' : ''}`}
+                          >
+                            {/* Time */}
+                            <div className="flex-shrink-0 w-16 text-center pt-1">
+                              <div className="text-xl font-bold text-primary leading-none">
+                                {time}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">
+                                {period}
+                              </div>
+                            </div>
+                            
+                            {/* Appointment Content */}
+                            <div className="flex-1 min-w-0">
+                              {/* Patient Name */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-2 mb-2 cursor-default">
+                                      <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                      <span className="font-medium truncate text-foreground">
+                                        {appointment.patient.name}
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p>{appointment.patient.name}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              {/* Status and Reschedule */}
+                              <div className="flex items-center justify-between gap-2">
+                                <StatusBadge status={appointment.status} />
+                                
+                                {appointment.status !== 'cancelada' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs"
+                                    onClick={() => handleReschedule(appointment)}
+                                  >
+                                    <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
+                                    <span className="hidden sm:inline">Reagendar</span>
+                                    <span className="sm:hidden">Mover</span>
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
       {/* Reschedule Modal */}
