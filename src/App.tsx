@@ -10,6 +10,7 @@ import AgendaSecretaria from "./pages/AgendaSecretaria";
 import NuevaCita from "./pages/NuevaCita";
 import Pacientes from "./pages/Pacientes";
 import AgendaMedico from "./pages/AgendaMedico";
+import AgendaSemanal from "./pages/AgendaSemanal";
 import AdminDashboard from "./pages/AdminDashboard";
 import UsersList from "./pages/UsersList";
 import CreateUserPage from "./pages/CreateUserPage";
@@ -153,6 +154,11 @@ const App = () => {
             <Route path="/agenda-medico" element={
               <RoleBasedRoute allowedRoles={['admin', 'doctor']}>
                 <AgendaMedico />
+              </RoleBasedRoute>
+            } />
+            <Route path="/agenda-semanal" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor']}>
+                <AgendaSemanal />
               </RoleBasedRoute>
             } />
             

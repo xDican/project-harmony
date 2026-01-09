@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabaseClient';
 const routeTitles: Record<string, string> = {
   '/agenda-secretaria': 'Agenda de Hoy',
   '/agenda-medico': 'Agenda Médica',
+  '/agenda-semanal': 'Agenda Semanal',
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
   '/configuracion': 'Configuración',
@@ -110,15 +111,23 @@ export default function MainLayout({
         to: '/agenda-medico',
         label: 'Agenda Médica',
         icon: Stethoscope
+      }, {
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
       });
     }
 
-    // Doctor (independent mode) can see: Agenda Médico, Nueva Cita, Pacientes, Configuración
+    // Doctor (independent mode) can see: Agenda Médico, Agenda Semanal, Nueva Cita, Pacientes, Configuración
     if (isDoctor && !isAdmin) {
       items.push({
         to: '/agenda-medico',
         label: 'Agenda Médica',
         icon: Calendar
+      }, {
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
       }, {
         to: '/citas/nueva',
         label: 'Nueva Cita',
