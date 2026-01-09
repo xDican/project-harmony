@@ -324,7 +324,7 @@ export default function NuevaCita() {
       setSelectedDate(undefined);
       setSelectedSlot(null);
       setAvailableSlots([]);
-      setDurationMinutes(60);
+      setDurationMinutes(30);
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
