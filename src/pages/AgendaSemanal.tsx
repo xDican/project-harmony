@@ -15,7 +15,7 @@ import { useDoctors } from '@/hooks/useDoctors';
 import StatusBadge from '@/components/StatusBadge';
 import { RescheduleModal } from '@/components/RescheduleModal';
 import { getLocalToday } from '@/lib/dateUtils';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+
 import { cn } from '@/lib/utils';
 
 /**
@@ -181,64 +181,31 @@ export default function AgendaSemanal() {
     setRescheduleModalOpen(true);
   };
 
-  // Week navigation header action
-  const weekNavigation = (
-    <div className="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
-        className="h-8 w-8"
-        title="Semana anterior"
-      >
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      {!isCurrentWeek && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleGoToToday}
-          className="h-8 text-xs px-2"
-        >
-          Hoy
-        </Button>
-      )}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
-        className="h-8 w-8"
-        title="Semana siguiente"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-
   return (
-    <MainLayout headerAction={weekNavigation}>
+    <MainLayout>
       <div className="container mx-auto p-4 md:p-6 max-w-3xl">
         {/* Week Range Header */}
-        <div className="mb-4 text-center">
+        <div className="mb-2 text-center">
           <p className="text-sm text-muted-foreground capitalize">{weekRangeText}</p>
         </div>
 
-        {/* Week Navigation - Desktop */}
-        <div className="hidden md:flex items-center justify-center gap-2 mb-6">
+        {/* Week Navigation - Always visible */}
+        <div className="flex items-center justify-center gap-2 mb-4">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
-            className="gap-1"
+            className="gap-1 text-xs md:text-sm"
           >
             <ChevronLeft className="h-4 w-4" />
-            Semana anterior
+            <span className="hidden sm:inline">Semana </span>anterior
           </Button>
           {!isCurrentWeek && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleGoToToday}
+              className="text-xs md:text-sm"
             >
               Hoy
             </Button>
@@ -247,40 +214,44 @@ export default function AgendaSemanal() {
             variant="outline"
             size="sm"
             onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
-            className="gap-1"
+            className="gap-1 text-xs md:text-sm"
           >
-            Semana siguiente
+            <span className="hidden sm:inline">Semana </span>siguiente
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Day Selector Tabs */}
-        <ScrollArea className="w-full whitespace-nowrap mb-6">
-          <div className="flex gap-2 pb-2">
-            {dayTabs.map((tab) => (
-              <Button
-                key={tab.dateStr}
-                variant={selectedDayIndex === tab.index ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedDayIndex(tab.index)}
-                className={cn(
-                  "flex flex-col items-center min-w-[60px] h-auto py-2 px-3",
-                  tab.isToday && selectedDayIndex !== tab.index && "border-primary/50 bg-primary/5"
-                )}
-              >
-                <span className="text-xs font-normal opacity-80">{tab.dayName}</span>
-                <span className="text-lg font-semibold">{tab.dayNum}</span>
-                {tab.isToday && (
-                  <span className="text-[10px] uppercase tracking-wide opacity-70">Hoy</span>
-                )}
-                {!tab.isToday && tab.appointmentCount > 0 && (
-                  <span className="text-[10px] text-muted-foreground">{tab.appointmentCount} citas</span>
-                )}
-              </Button>
-            ))}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+        {/* Day Selector Tabs - Fixed 7-column grid */}
+        <div className="grid grid-cols-7 gap-1 md:gap-2 mb-6 md:max-w-xl md:mx-auto">
+          {dayTabs.map((tab) => (
+            <Button
+              key={tab.dateStr}
+              variant={selectedDayIndex === tab.index ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedDayIndex(tab.index)}
+              className={cn(
+                "flex flex-col items-center h-auto py-1.5 px-1 md:py-2 md:px-3 relative",
+                tab.isToday && selectedDayIndex !== tab.index && "border-primary/50 bg-primary/5"
+              )}
+            >
+              <span className="text-[10px] md:text-xs font-normal opacity-80">{tab.dayName}</span>
+              <span className="text-base md:text-lg font-semibold">{tab.dayNum}</span>
+              {tab.isToday && (
+                <span className="text-[8px] md:text-[10px] uppercase tracking-wide opacity-70">Hoy</span>
+              )}
+              {tab.appointmentCount > 0 && (
+                <span className={cn(
+                  "absolute -top-1 -right-1 text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-medium",
+                  selectedDayIndex === tab.index 
+                    ? "bg-background text-foreground" 
+                    : "bg-primary text-primary-foreground"
+                )}>
+                  {tab.appointmentCount}
+                </span>
+              )}
+            </Button>
+          ))}
+        </div>
 
         {/* Doctor Selection (only for admin) */}
         {isAdmin && (
