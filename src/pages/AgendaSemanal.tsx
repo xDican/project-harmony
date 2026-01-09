@@ -184,73 +184,76 @@ export default function AgendaSemanal() {
   return (
     <MainLayout>
       <div className="container mx-auto p-4 md:p-6 max-w-3xl">
-        {/* Week Range Header */}
-        <div className="mb-2 text-center">
-          <p className="text-sm text-muted-foreground capitalize">{weekRangeText}</p>
-        </div>
+        {/* Sticky Header Container */}
+        <div className="sticky top-16 md:top-0 z-30 bg-background pt-2 pb-3 -mx-4 px-4 md:-mx-6 md:px-6 border-b shadow-sm">
+          {/* Week Range Header */}
+          <div className="mb-2 text-center">
+            <p className="text-sm text-muted-foreground capitalize">{weekRangeText}</p>
+          </div>
 
-        {/* Week Navigation - Always visible */}
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
-            className="gap-1 text-xs md:text-sm"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Semana </span>anterior
-          </Button>
-          {!isCurrentWeek && (
+          {/* Week Navigation - Always visible */}
+          <div className="flex items-center justify-center gap-2 mb-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={handleGoToToday}
-              className="text-xs md:text-sm"
+              onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
+              className="gap-1 text-xs md:text-sm"
             >
-              Hoy
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Semana </span>anterior
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
-            className="gap-1 text-xs md:text-sm"
-          >
-            <span className="hidden sm:inline">Semana </span>siguiente
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Day Selector Tabs - Fixed 7-column grid */}
-        <div className="grid grid-cols-7 gap-1 md:gap-2 mb-6 md:max-w-xl md:mx-auto">
-          {dayTabs.map((tab) => (
+            {!isCurrentWeek && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGoToToday}
+                className="text-xs md:text-sm"
+              >
+                Hoy
+              </Button>
+            )}
             <Button
-              key={tab.dateStr}
-              variant={selectedDayIndex === tab.index ? "default" : "outline"}
+              variant="outline"
               size="sm"
-              onClick={() => setSelectedDayIndex(tab.index)}
-              className={cn(
-                "flex flex-col items-center h-auto py-1.5 px-1 md:py-2 md:px-3 relative",
-                tab.isToday && selectedDayIndex !== tab.index && "border-primary/50 bg-primary/5"
-              )}
+              onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
+              className="gap-1 text-xs md:text-sm"
             >
-              <span className="text-[10px] md:text-xs font-normal opacity-80">{tab.dayName}</span>
-              <span className="text-base md:text-lg font-semibold">{tab.dayNum}</span>
-              {tab.isToday && (
-                <span className="text-[8px] md:text-[10px] uppercase tracking-wide opacity-70">Hoy</span>
-              )}
-              {tab.appointmentCount > 0 && (
-                <span className={cn(
-                  "absolute -top-1 -right-1 text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-medium",
-                  selectedDayIndex === tab.index 
-                    ? "bg-background text-foreground" 
-                    : "bg-primary text-primary-foreground"
-                )}>
-                  {tab.appointmentCount}
-                </span>
-              )}
+              <span className="hidden sm:inline">Semana </span>siguiente
+              <ChevronRight className="h-4 w-4" />
             </Button>
-          ))}
+          </div>
+
+          {/* Day Selector Tabs - Fixed 7-column grid */}
+          <div className="grid grid-cols-7 gap-1 md:gap-2 md:max-w-xl md:mx-auto">
+            {dayTabs.map((tab) => (
+              <Button
+                key={tab.dateStr}
+                variant={selectedDayIndex === tab.index ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedDayIndex(tab.index)}
+                className={cn(
+                  "flex flex-col items-center h-auto py-1.5 px-1 md:py-2 md:px-3 relative",
+                  tab.isToday && selectedDayIndex !== tab.index && "border-primary/50 bg-primary/5"
+                )}
+              >
+                <span className="text-[10px] md:text-xs font-normal opacity-80">{tab.dayName}</span>
+                <span className="text-base md:text-lg font-semibold">{tab.dayNum}</span>
+                {tab.isToday && (
+                  <span className="text-[8px] md:text-[10px] uppercase tracking-wide opacity-70">Hoy</span>
+                )}
+                {tab.appointmentCount > 0 && (
+                  <span className={cn(
+                    "absolute -top-1 -right-1 text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-medium",
+                    selectedDayIndex === tab.index 
+                      ? "bg-background text-foreground" 
+                      : "bg-primary text-primary-foreground"
+                  )}>
+                    {tab.appointmentCount}
+                  </span>
+                )}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Doctor Selection (only for admin) */}
