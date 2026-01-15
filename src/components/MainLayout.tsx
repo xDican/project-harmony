@@ -111,10 +111,6 @@ export default function MainLayout({
         label: 'Pacientes',
         icon: Users
       }, {
-        to: '/agenda-medico',
-        label: 'Agenda Médica',
-        icon: Stethoscope
-      }, {
         to: '/agenda-semanal',
         label: 'Agenda Semanal',
         icon: CalendarDays
@@ -124,10 +120,6 @@ export default function MainLayout({
     // Doctor (independent mode) can see: Agenda Médico, Agenda Semanal, Nueva Cita, Pacientes, Configuración
     if (isDoctor && !isAdmin) {
       items.push({
-        to: '/agenda-medico',
-        label: 'Agenda Médica',
-        icon: Calendar
-      }, {
         to: '/agenda-semanal',
         label: 'Agenda Semanal',
         icon: CalendarDays
