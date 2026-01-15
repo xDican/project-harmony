@@ -29,7 +29,7 @@ const getPageTitle = (pathname: string): string => {
   if (pathname.startsWith('/admin/users/')) return 'Editar Usuario';
   if (pathname.startsWith('/admin/doctors/') && pathname.includes('/schedule')) return 'Horarios';
   if (pathname.startsWith('/configuracion/')) return 'Configuración';
-  return 'Agenda Médica';
+  return 'Agenda Semanal';
 };
 interface MainLayoutProps {
   children: ReactNode;

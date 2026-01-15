@@ -55,17 +55,8 @@ const App = () => {
 
     // Check if user's role is in the allowed roles
     if (!allowedRoles.includes(user.role)) {
-      // Redirect based on role
-      if (user.role === 'doctor') {
-        return <Navigate to="/agenda-medico" replace />;
-      }
-      if (user.role === 'secretary') {
-        return <Navigate to="/agenda-secretaria" replace />;
-      }
-      if (user.role === 'admin') {
-        return <Navigate to="/admin" replace />;
-      }
-      return <Navigate to="/login" replace />;
+      // Redirect all users to agenda semanal
+      return <Navigate to="/agenda-semanal" replace />;
     }
 
     return <>{children}</>;
@@ -89,15 +80,8 @@ const App = () => {
       return <Navigate to="/login" replace />;
     }
 
-    // Redirect based on role
-    if (user.role === 'doctor') {
-      return <Navigate to="/agenda-medico" replace />;
-    }
-    if (user.role === 'secretary' || user.role === 'admin') {
-      return <Navigate to="/agenda-secretaria" replace />;
-    }
-
-    return <Navigate to="/login" replace />;
+    // Redirect all authenticated users to agenda semanal
+    return <Navigate to="/agenda-semanal" replace />;
   }
 
   return (
@@ -157,7 +141,7 @@ const App = () => {
               </RoleBasedRoute>
             } />
             <Route path="/agenda-semanal" element={
-              <RoleBasedRoute allowedRoles={['admin', 'doctor']}>
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
                 <AgendaSemanal />
               </RoleBasedRoute>
             } />
