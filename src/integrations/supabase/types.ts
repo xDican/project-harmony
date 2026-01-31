@@ -484,6 +484,23 @@ export type Database = {
           estimated_cost: number
         }[]
       }
+      get_monthly_billing_summary: {
+        Args: { p_doctor_id: string; p_month: string }
+        Returns: {
+          avg_cost_per_message: number
+          base_fee: number
+          in_window_cost: number
+          in_window_msgs: number
+          inbound_cost: number
+          inbound_msgs: number
+          messages_total: number
+          month_key: string
+          outside_window_template_cost: number
+          outside_window_template_msgs: number
+          total_due: number
+          usage_total: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
