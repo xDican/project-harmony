@@ -1,154 +1,133 @@
 
-## Plan: Actualizar página de Uso y Mensajes
 
-### Resumen del cambio
-Reescribir completamente la página `/configuracion/uso-mensajes` para usar la función `get_monthly_billing_summary` en lugar de las funciones actuales, mostrando el costo real de facturación de forma clara y transparente para el cliente.
+## Plan: Interfaz de WhatsApp Business bajo /configuracion/whatsapp
 
----
+### Resumen
 
-### Cambios en `src/pages/UsoMensajes.tsx`
-
-#### 1. Actualizar interfaces de datos
-
-**Antes:**
-```typescript
-interface MonthlyUsage {
-  period_start: string;
-  period_end: string;
-  billable_outbound: number;
-  unit_price: number;
-  estimated_cost: number;
-}
-```
-
-**Después:**
-```typescript
-interface BillingSummary {
-  month_key: string;
-  base_fee: number;
-  messages_total: number;
-  usage_total: number;
-  total_due: number;
-  avg_cost_per_message: number;
-  inbound_msgs: number;
-  inbound_cost: number;
-  in_window_msgs: number;
-  in_window_cost: number;
-  outside_window_template_msgs: number;
-  outside_window_template_cost: number;
-}
-```
+Refactorizar y expandir las páginas existentes de WhatsApp (`/settings/whatsapp` y `/auth/meta/callback`) para moverlas bajo `/configuracion/whatsapp`, traducir todo a español latino, agregar gestión de plantillas con modo mock, y registrar las nuevas rutas en el router.
 
 ---
 
-#### 2. Cambiar fuente de datos
+### Archivos a crear
 
-**Antes:**
-- Llamada a `get_message_usage_current_month()` (sin parámetros)
-- Llamada a `get_message_usage_daily()` para el detalle
+#### 1. `src/lib/whatsappApi.ts` - Servicio centralizado de API
 
-**Después:**
-- Usar `useCurrentUser()` para obtener `doctorId`
-- Llamada a `get_monthly_billing_summary(p_doctor_id, p_month)`:
-```typescript
-const currentMonth = new Date().toISOString().slice(0, 10); // "2026-01-31" -> usar primer día del mes
-const { data } = await supabase.rpc('get_monthly_billing_summary', {
-  p_doctor_id: user.doctorId,
-  p_month: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`
-});
-```
-
----
-
-#### 3. Nueva estructura visual
-
-**Card 1: Resumen del mes (bloque principal)**
-
-Diseño con 3 métricas grandes:
-
-| Métrica | Valor | Texto auxiliar |
-|---------|-------|----------------|
-| **Total a pagar** | `total_due` | "Incluye plan base + consumo de mensajes" |
-| **Plan base** | `base_fee` (USD 35.00) | - |
-| **Consumo de mensajes** | `usage_total` | "Uso real del mes" |
-
-Eliminar:
-- "Precio por mensaje" (`unit_price`)
-- Cualquier cálculo manual de `mensajes * precio`
-
----
-
-**Card 2: Detalle de consumo (tabla corta)**
-
-Nueva tabla con 3 filas:
-
-| Tipo de mensaje | Cantidad | Costo |
-|-----------------|----------|-------|
-| Mensajes recibidos | `inbound_msgs` | `inbound_cost` |
-| Mensajes dentro de ventana | `in_window_msgs` | `in_window_cost` |
-| Mensajes fuera de ventana | `outside_window_template_msgs` | `outside_window_template_cost` |
-
----
-
-**Card 3: Métricas informativas (pequeño, secundario)**
-
-Mostrar como texto auxiliar debajo del resumen:
-- Mensajes totales: `messages_total`
-- Costo promedio por mensaje: `avg_cost_per_message`
-
----
-
-**Card 4: Detalle por día (colapsable)**
-
-- Mantener sección existente usando `get_message_usage_daily`
-- Hacer el detalle colapsable (cerrado por defecto)
-- Usar componente `Collapsible` de Radix
-
----
-
-#### 4. Agregar import de `useCurrentUser`
+Centraliza todas las llamadas a Edge Functions de WhatsApp:
 
 ```typescript
-import { useCurrentUser } from '@/context/UserContext';
+const SUPABASE_URL = 'https://soxrlxvivuplezssgssq.supabase.co';
+
+// startOAuth: POST meta-oauth-start
+// exchangeOAuth: POST meta-oauth-exchange
+// listTemplates: GET templates-list (con fallback a mock)
+// createTemplate: POST templates-create (con fallback a localStorage)
 ```
 
----
+- Si las llamadas fallan, usa datos mock desde localStorage
+- Flag `isMockMode` en las respuestas para mostrar banner
 
-#### 5. Agregar import de componente Collapsible
+#### 2. `src/pages/WhatsAppPlantillaNueva.tsx` - Crear plantilla
 
-```typescript
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-```
+Formulario con:
+- Nombre (requerido)
+- Categoría: select con UTILITY, MARKETING, AUTHENTICATION
+- Idioma: select con es_ES (default), en_US
+- Cuerpo del mensaje: textarea (requerido)
+- Texto explicativo: "Use {{1}}, {{2}} para variables dinámicas."
+- Botones: "Crear plantilla" y "Cancelar"
+- POST a `templates-create`, fallback a localStorage con estado "borrador"
+- Al crear, navegar a `/configuracion/whatsapp` con toast de éxito
 
----
+#### 3. `src/pages/WhatsAppPlantillaDetalle.tsx` - Ver plantilla
 
-#### 6. Actualizar textos (copy)
-
-**Header principal:**
-- Título: "Resumen del mes"
-- Descripción: "Este es un resumen de tu consumo real de mensajes durante el mes."
-
-**Nota al pie:**
-- "El costo final incluye tu plan base y el uso de mensajes enviados y recibidos. Los montos se calculan según el uso real del servicio."
-
----
-
-### Notas técnicas
-
-1. **Tipado**: Como `get_monthly_billing_summary` no está en los tipos generados de Supabase, usaremos type assertion o definiremos la interfaz manualmente.
-
-2. **Manejo de doctor sin mensajes**: Si no hay datos, mostrar mensaje amigable.
-
-3. **Formato de moneda**: Mantener `formatCurrency` existente con 2-4 decimales según corresponda.
-
-4. **Acceso**: La página solo es accesible para doctores (desde `/configuracion`), por lo que `user.doctorId` siempre debería estar disponible.
+Muestra:
+- Nombre, Categoría, Idioma, Estado, Cuerpo del mensaje
+- Botón "Volver"
+- Botón deshabilitado "Usar en confirmación de cita"
 
 ---
 
 ### Archivos a modificar
-- `src/pages/UsoMensajes.tsx` (reescritura completa de la lógica y UI)
 
-### Archivos que NO se modifican
-- Funciones SQL en Supabase (ya existen)
-- Componentes UI base (`Card`, `Table`, `Collapsible`)
-- Contexto de usuario (`UserContext`)
+#### 4. `src/pages/WhatsAppSettings.tsx` - Reescritura completa
+
+Cambios principales:
+- Traducir todo a español latino
+- **Tarjeta 1: Conexión con Meta**
+  - Badge: "Conectado" o "No conectado" (basado en `localStorage.meta_connected`)
+  - Botón "Conectar WhatsApp Business"
+  - Texto auxiliar: "Esta conexión es obligatoria para la revisión de Meta."
+- **Tarjeta 2: Plantillas de Mensajes**
+  - Subtítulo: "Requerido para la revisión de Meta"
+  - Tabla: Nombre, Categoría, Idioma, Estado, Última actualización
+  - GET a `templates-list`, fallback a mock con banner "Backend no conectado aún. Ejecutando en modo demostración."
+  - Botón "Crear plantilla" -> `/configuracion/whatsapp/plantillas/nueva`
+  - Click en fila -> `/configuracion/whatsapp/plantillas/:id`
+  - Estado vacío: "Aún no hay plantillas creadas."
+- `backTo="/configuracion"` en MainLayout
+
+#### 5. `src/pages/MetaOAuthCallback.tsx` - Actualizar
+
+- Traducir textos a español
+- Título: "Conectando WhatsApp..."
+- Éxito: "Conectado correctamente" + redirección a `/configuracion/whatsapp`
+- Error: mensaje claro + botón "Volver a configuración"
+- Texto: "No cierre esta ventana."
+- Errores de `code`/`state` faltantes: mensaje en español
+
+#### 6. `src/pages/ConfiguracionMedico.tsx` - Agregar enlace
+
+Agregar nueva fila en la Card después de "Uso y Notificaciones":
+- Icono: `MessageCircle` o similar de lucide
+- Título: "WhatsApp Business"
+- Subtítulo: "Conexión y plantillas de mensajes"
+- Navega a `/configuracion/whatsapp`
+
+#### 7. `src/App.tsx` - Registrar rutas
+
+Cambios:
+- Importar `WhatsAppPlantillaNueva` y `WhatsAppPlantillaDetalle`
+- Cambiar ruta de `/settings/whatsapp` a `/configuracion/whatsapp`
+- Agregar rutas:
+  - `/configuracion/whatsapp` -> WhatsAppSettings (doctor)
+  - `/configuracion/whatsapp/plantillas/nueva` -> WhatsAppPlantillaNueva (doctor)
+  - `/configuracion/whatsapp/plantillas/:id` -> WhatsAppPlantillaDetalle (doctor)
+  - `/auth/meta/callback` -> MetaOAuthCallback (sin protección, ya existe)
+- Eliminar la ruta vieja `/settings/whatsapp`
+
+#### 8. `src/components/MainLayout.tsx` - Actualizar routeTitles
+
+- Eliminar entrada `/settings/whatsapp`
+- Agregar `/configuracion/whatsapp`: "WhatsApp Business"
+
+---
+
+### Detalles tecnicos
+
+**Modo mock para plantillas:**
+- `localStorage` key: `whatsapp_templates_mock`
+- Formato: array de objetos `{ id, name, category, language, body, status, updated_at }`
+- Se usa cuando `templates-list` falla con error de red o 404
+
+**Estructura de archivos resultante:**
+```
+src/
+  lib/whatsappApi.ts          (nuevo)
+  pages/
+    WhatsAppSettings.tsx       (reescrito)
+    MetaOAuthCallback.tsx      (actualizado)
+    WhatsAppPlantillaNueva.tsx (nuevo)
+    WhatsAppPlantillaDetalle.tsx (nuevo)
+    ConfiguracionMedico.tsx    (modificado)
+  App.tsx                      (modificado)
+  components/MainLayout.tsx    (modificado)
+```
+
+**Rutas finales:**
+| Ruta | Componente | Roles |
+|------|-----------|-------|
+| `/configuracion/whatsapp` | WhatsAppSettings | doctor |
+| `/configuracion/whatsapp/plantillas/nueva` | WhatsAppPlantillaNueva | doctor |
+| `/configuracion/whatsapp/plantillas/:id` | WhatsAppPlantillaDetalle | doctor |
+| `/auth/meta/callback` | MetaOAuthCallback | sin protección |
+
