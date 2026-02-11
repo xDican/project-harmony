@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { createTemplate } from '@/lib/whatsappApi';
 import { useToast } from '@/hooks/use-toast';
+import { t } from '@/lib/i18n';
 
 export default function WhatsAppPlantillaNueva() {
   const navigate = useNavigate();
@@ -30,11 +31,11 @@ export default function WhatsAppPlantillaNueva() {
     setSaving(false);
 
     if (result.error) {
-      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      toast({ title: t('ct.error'), description: result.error, variant: 'destructive' });
       return;
     }
 
-    toast({ title: 'Plantilla creada correctamente' });
+    toast({ title: t('ct.success') });
     navigate('/configuracion/whatsapp');
   }
 
@@ -43,18 +44,18 @@ export default function WhatsAppPlantillaNueva() {
       <div className="p-4 md:p-6 lg:p-8 max-w-2xl md:mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle>Crear plantilla</CardTitle>
+            <CardTitle>{t('ct.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="name">Nombre de la plantilla *</Label>
-                <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="confirmacion_cita" required />
+                <Label htmlFor="name">{t('ct.name_label')}</Label>
+                <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder={t('ct.name_placeholder')} required />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Categoría</Label>
+                  <Label>{t('ct.category_label')}</Label>
                   <Select value={category} onValueChange={(v) => setCategory(v as any)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -65,39 +66,39 @@ export default function WhatsAppPlantillaNueva() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Idioma</Label>
+                  <Label>{t('ct.language_label')}</Label>
                   <Select value={language} onValueChange={setLanguage}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="es_ES">Español (es_ES)</SelectItem>
-                      <SelectItem value="en_US">Inglés (en_US)</SelectItem>
+                      <SelectItem value="es_ES">{t('ct.lang_es')}</SelectItem>
+                      <SelectItem value="en_US">{t('ct.lang_en')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="body">Cuerpo del mensaje *</Label>
+                <Label htmlFor="body">{t('ct.body_label')}</Label>
                 <Textarea
                   id="body"
                   value={body}
                   onChange={e => setBody(e.target.value)}
-                  placeholder="Hola {{1}}, tu cita con {{2}} es el {{3}} a las {{4}}."
+                  placeholder={t('ct.body_placeholder')}
                   rows={5}
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use {'{{1}}'}, {'{{2}}'} para variables dinámicas.
+                  {t('ct.body_hint')}
                 </p>
               </div>
 
               <div className="flex gap-3 justify-end">
                 <Button type="button" variant="outline" onClick={() => navigate('/configuracion/whatsapp')}>
-                  Cancelar
+                  {t('ct.cancel')}
                 </Button>
                 <Button type="submit" disabled={saving || !name.trim() || !body.trim()}>
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Crear plantilla
+                  {t('ct.submit')}
                 </Button>
               </div>
             </form>

@@ -7,12 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Plus, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { startOAuth, listTemplates, type WhatsAppTemplate } from '@/lib/whatsappApi';
 import { useToast } from '@/hooks/use-toast';
+import { t, getLang, setLang, statusLabel, getDateLocale, type Lang } from '@/lib/i18n';
 
 export default function WhatsAppSettings() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [lang, setLangState] = useState<Lang>(getLang);
   const [isConnected, setIsConnected] = useState(() => localStorage.getItem('meta_connected') === 'true');
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -24,6 +27,13 @@ export default function WhatsAppSettings() {
   useEffect(() => {
     loadTemplates();
   }, []);
+
+  function handleLangChange(value: string) {
+    if (value === 'es' || value === 'en') {
+      setLang(value);
+      setLangState(value);
+    }
+  }
 
   async function loadTemplates() {
     setTemplatesLoading(true);
@@ -46,39 +56,38 @@ export default function WhatsAppSettings() {
     if (result.data?.authorize_url) {
       window.location.href = result.data.authorize_url;
     } else {
-      setConnectError('No se recibió la URL de autorización.');
+      setConnectError(t('ws.no_auth_url'));
       setConnectLoading(false);
     }
   }
 
-  const statusLabel: Record<string, string> = {
-    APPROVED: 'Aprobada',
-    PENDING: 'Pendiente',
-    REJECTED: 'Rechazada',
-    borrador: 'Borrador',
-  };
-
   return (
     <MainLayout backTo="/configuracion">
       <div className="p-4 md:p-6 lg:p-8 max-w-3xl md:mx-auto space-y-6">
-        <h1 className="text-2xl font-semibold">Configuración de WhatsApp</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{t('ws.title')}</h1>
+          <ToggleGroup type="single" value={lang} onValueChange={handleLangChange} size="sm" variant="outline">
+            <ToggleGroupItem value="es" className="text-xs px-2">ES</ToggleGroupItem>
+            <ToggleGroupItem value="en" className="text-xs px-2">EN</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
 
         {/* Card 1: Meta Connection */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Conexión con Meta</CardTitle>
+              <CardTitle className="text-lg">{t('ws.meta_title')}</CardTitle>
               {isConnected ? (
                 <Badge variant="default" className="gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Conectado
+                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('ws.connected')}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="gap-1">
-                  <XCircle className="h-3.5 w-3.5" /> No conectado
+                  <XCircle className="h-3.5 w-3.5" /> {t('ws.not_connected')}
                 </Badge>
               )}
             </div>
-            <CardDescription>Esta conexión es obligatoria para la revisión de Meta.</CardDescription>
+            <CardDescription>{t('ws.meta_desc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {connectError && (
@@ -88,7 +97,7 @@ export default function WhatsAppSettings() {
             )}
             <Button onClick={handleConnect} disabled={connectLoading}>
               {connectLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Conectar WhatsApp Business
+              {t('ws.connect_btn')}
             </Button>
           </CardContent>
         </Card>
@@ -98,11 +107,11 @@ export default function WhatsAppSettings() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Plantillas de Mensajes</CardTitle>
-                <CardDescription>Requerido para la revisión de Meta</CardDescription>
+                <CardTitle className="text-lg">{t('ws.templates_title')}</CardTitle>
+                <CardDescription>{t('ws.templates_desc')}</CardDescription>
               </div>
               <Button size="sm" onClick={() => navigate('/configuracion/whatsapp/plantillas/nueva')}>
-                <Plus className="h-4 w-4" /> Crear plantilla
+                <Plus className="h-4 w-4" /> {t('ws.create_template')}
               </Button>
             </div>
           </CardHeader>
@@ -110,9 +119,7 @@ export default function WhatsAppSettings() {
             {isMockMode && (
               <Alert className="mb-4">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Backend no conectado aún. Ejecutando en modo demostración.
-                </AlertDescription>
+                <AlertDescription>{t('ws.mock_banner')}</AlertDescription>
               </Alert>
             )}
 
@@ -121,37 +128,35 @@ export default function WhatsAppSettings() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : templates.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                Aún no hay plantillas creadas.
-              </p>
+              <p className="text-center text-muted-foreground py-8">{t('ws.no_templates')}</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead>Idioma</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Actualización</TableHead>
+                    <TableHead>{t('ws.col_name')}</TableHead>
+                    <TableHead>{t('ws.col_category')}</TableHead>
+                    <TableHead>{t('ws.col_language')}</TableHead>
+                    <TableHead>{t('ws.col_status')}</TableHead>
+                    <TableHead>{t('ws.col_updated')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {templates.map((t) => (
+                  {templates.map((tpl) => (
                     <TableRow
-                      key={t.id}
+                      key={tpl.id}
                       className="cursor-pointer"
-                      onClick={() => navigate(`/configuracion/whatsapp/plantillas/${t.id}`)}
+                      onClick={() => navigate(`/configuracion/whatsapp/plantillas/${tpl.id}`)}
                     >
-                      <TableCell className="font-medium">{t.name}</TableCell>
-                      <TableCell>{t.category}</TableCell>
-                      <TableCell>{t.language}</TableCell>
+                      <TableCell className="font-medium">{tpl.name}</TableCell>
+                      <TableCell>{tpl.category}</TableCell>
+                      <TableCell>{tpl.language}</TableCell>
                       <TableCell>
-                        <Badge variant={t.status === 'APPROVED' ? 'default' : 'secondary'}>
-                          {statusLabel[t.status] ?? t.status}
+                        <Badge variant={tpl.status === 'APPROVED' ? 'default' : 'secondary'}>
+                          {statusLabel(tpl.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {new Date(t.updated_at).toLocaleDateString('es-MX')}
+                        {new Date(tpl.updated_at).toLocaleDateString(getDateLocale())}
                       </TableCell>
                     </TableRow>
                   ))}
