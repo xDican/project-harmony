@@ -25,8 +25,6 @@ import ConfiguracionMedico from "./pages/ConfiguracionMedico";
 import PerfilMedico from "./pages/PerfilMedico";
 import UsoMensajes from "./pages/UsoMensajes";
 import DebugWhatsappPage from "./pages/DebugWhatsappPage";
-import WhatsAppSettings from "./pages/WhatsAppSettings";
-import MetaOAuthCallback from "./pages/MetaOAuthCallback";
 
 const queryClient = new QueryClient();
 
@@ -207,14 +205,6 @@ const App = () => {
                 </MainLayout>
               </RoleBasedRoute>
             } />
-            
-            {/* WhatsApp Settings */}
-            <Route path="/settings/whatsapp" element={
-              <RoleBasedRoute allowedRoles={['admin', 'doctor']}>
-                <WhatsAppSettings />
-              </RoleBasedRoute>
-            } />
-            <Route path="/auth/meta/callback" element={<MetaOAuthCallback />} />
             
             {/* Debug routes */}
             <Route path="/debug-whatsapp" element={

@@ -18,8 +18,7 @@ const routeTitles: Record<string, string> = {
   '/pacientes': 'Pacientes',
   '/configuracion': 'Configuración',
   '/admin/users': 'Usuarios',
-  '/admin/reports/appointments': 'Reporte de Citas',
-  '/settings/whatsapp': 'WhatsApp Settings'
+  '/admin/reports/appointments': 'Reporte de Citas'
 };
 const getPageTitle = (pathname: string): string => {
   // Exact match first
