@@ -1,23 +1,59 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/MainLayout';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getTemplateById } from '@/lib/whatsappApi';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { getTemplate, type WhatsAppTemplate } from '@/lib/whatsappApi';
 import { t, statusLabel, getDateLocale } from '@/lib/i18n';
 
 export default function WhatsAppPlantillaDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const template = id ? getTemplateById(id) : null;
+  const [template, setTemplate] = useState<WhatsAppTemplate | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!template) {
+  useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      const result = await getTemplate(id);
+      setTemplate(result.data);
+      setError(result.error);
+      setLoading(false);
+    })();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <MainLayout backTo="/configuracion/whatsapp">
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error || !template) {
     return (
       <MainLayout backTo="/configuracion/whatsapp">
         <div className="p-4 md:p-6 lg:p-8 max-w-2xl md:mx-auto">
           <Card>
             <CardContent className="pt-6 text-center space-y-4">
-              <p className="text-muted-foreground">{t('td.not_found')}</p>
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : (
+                <p className="text-muted-foreground">{t('td.not_found')}</p>
+              )}
               <Button variant="outline" onClick={() => navigate('/configuracion/whatsapp')}>
                 {t('td.back')}
               </Button>

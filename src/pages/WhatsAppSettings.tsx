@@ -22,6 +22,7 @@ export default function WhatsAppSettings() {
 
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [isMockMode, setIsMockMode] = useState(false);
 
   useEffect(() => {
@@ -37,9 +38,11 @@ export default function WhatsAppSettings() {
 
   async function loadTemplates() {
     setTemplatesLoading(true);
+    setTemplatesError(null);
     const result = await listTemplates();
     setTemplates(result.data ?? []);
     setIsMockMode(result.isMockMode);
+    setTemplatesError(result.error);
     setTemplatesLoading(false);
   }
 
@@ -120,6 +123,12 @@ export default function WhatsAppSettings() {
               <Alert className="mb-4">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>{t('ws.mock_banner')}</AlertDescription>
+              </Alert>
+            )}
+            {templatesError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{templatesError}</AlertDescription>
               </Alert>
             )}
 
