@@ -17,6 +17,7 @@ const routeTitles: Record<string, string> = {
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
   '/configuracion': 'Configuración',
+  '/configuracion/whatsapp': 'WhatsApp Business',
   '/admin/users': 'Usuarios',
   '/admin/reports/appointments': 'Reporte de Citas'
 };

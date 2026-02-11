@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUser } from '@/context/UserContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, User, MessageSquare, ChevronRight } from 'lucide-react';
+import { Calendar, User, MessageSquare, MessageCircle, ChevronRight } from 'lucide-react';
 
 /**
  * ConfiguracionMedico - Settings page for independent doctors (iOS style)
@@ -54,6 +54,19 @@ export default function ConfiguracionMedico() {
             <div className="flex-1 min-w-0">
               <p className="font-medium">Uso y Notificaciones</p>
               <p className="text-sm text-muted-foreground">Mensajes enviados a pacientes</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+          </button>
+
+          {/* WhatsApp Business */}
+          <button
+            onClick={() => navigate('/configuracion/whatsapp')}
+            className="w-full flex items-center gap-3 p-4 hover:bg-accent/50 transition-colors text-left"
+          >
+            <MessageCircle className="h-5 w-5 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">WhatsApp Business</p>
+              <p className="text-sm text-muted-foreground">Conexión y plantillas de mensajes</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
           </button>
