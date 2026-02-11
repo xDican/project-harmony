@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { exchangeOAuth } from '@/lib/whatsappApi';
+import { t } from '@/lib/i18n';
 
 type Status = 'loading' | 'success' | 'error';
 
@@ -29,7 +30,7 @@ export default function MetaOAuthCallback() {
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     if (!code || !state) {
-      setErrorMsg('Faltan parámetros de autorización (code o state).');
+      setErrorMsg(t('cb.missing_params'));
       setStatus('error');
       return;
     }
@@ -48,7 +49,7 @@ export default function MetaOAuthCallback() {
       setStatus('success');
       setTimeout(() => navigate('/configuracion/whatsapp', { replace: true }), 1500);
     } else {
-      setErrorMsg('La conexión no se completó correctamente.');
+      setErrorMsg(t('cb.not_completed'));
       setStatus('error');
     }
   }
@@ -60,26 +61,26 @@ export default function MetaOAuthCallback() {
           {status === 'loading' && (
             <>
               <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
-              <h2 className="text-xl font-semibold">Conectando WhatsApp...</h2>
-              <p className="text-sm text-muted-foreground">No cierre esta ventana.</p>
+              <h2 className="text-xl font-semibold">{t('cb.connecting')}</h2>
+              <p className="text-sm text-muted-foreground">{t('cb.do_not_close')}</p>
             </>
           )}
 
           {status === 'success' && (
             <>
               <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto" />
-              <h2 className="text-xl font-semibold">Conectado correctamente</h2>
-              <p className="text-sm text-muted-foreground">Redirigiendo a configuración…</p>
+              <h2 className="text-xl font-semibold">{t('cb.success')}</h2>
+              <p className="text-sm text-muted-foreground">{t('cb.redirecting')}</p>
             </>
           )}
 
           {status === 'error' && (
             <>
               <XCircle className="h-10 w-10 text-destructive mx-auto" />
-              <h2 className="text-xl font-semibold">Error de conexión</h2>
+              <h2 className="text-xl font-semibold">{t('cb.error')}</h2>
               <p className="text-sm text-muted-foreground">{errorMsg}</p>
               <Button variant="outline" onClick={() => navigate('/configuracion/whatsapp')}>
-                Volver a configuración
+                {t('cb.back')}
               </Button>
             </>
           )}
