@@ -25,6 +25,10 @@ import ConfiguracionMedico from "./pages/ConfiguracionMedico";
 import PerfilMedico from "./pages/PerfilMedico";
 import UsoMensajes from "./pages/UsoMensajes";
 import DebugWhatsappPage from "./pages/DebugWhatsappPage";
+import WhatsAppSettings from "./pages/WhatsAppSettings";
+import WhatsAppPlantillaNueva from "./pages/WhatsAppPlantillaNueva";
+import WhatsAppPlantillaDetalle from "./pages/WhatsAppPlantillaDetalle";
+import MetaOAuthCallback from "./pages/MetaOAuthCallback";
 
 const queryClient = new QueryClient();
 
@@ -133,6 +137,24 @@ const App = () => {
                 <UsoMensajes />
               </RoleBasedRoute>
             } />
+            <Route path="/configuracion/whatsapp" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <WhatsAppSettings />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/whatsapp/plantillas/nueva" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <WhatsAppPlantillaNueva />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/whatsapp/plantillas/:id" element={
+              <RoleBasedRoute allowedRoles={['doctor']}>
+                <WhatsAppPlantillaDetalle />
+              </RoleBasedRoute>
+            } />
+
+            {/* Meta OAuth callback (no auth protection) */}
+            <Route path="/auth/meta/callback" element={<MetaOAuthCallback />} />
             
             {/* Doctor and Admin routes */}
             <Route path="/agenda-medico" element={
