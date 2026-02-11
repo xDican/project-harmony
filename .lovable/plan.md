@@ -1,133 +1,130 @@
 
 
-## Plan: Interfaz de WhatsApp Business bajo /configuracion/whatsapp
+## Plan: i18n minimal para flujo WhatsApp (ES + EN)
 
 ### Resumen
-
-Refactorizar y expandir las páginas existentes de WhatsApp (`/settings/whatsapp` y `/auth/meta/callback`) para moverlas bajo `/configuracion/whatsapp`, traducir todo a español latino, agregar gestión de plantillas con modo mock, y registrar las nuevas rutas en el router.
+Crear un sistema de internacionalizacion ligero con un diccionario ES/EN y una funcion `t(key)`, luego reemplazar todos los strings hardcodeados en las 4 paginas de WhatsApp.
 
 ---
 
 ### Archivos a crear
 
-#### 1. `src/lib/whatsappApi.ts` - Servicio centralizado de API
+#### 1. `src/lib/i18n.ts` - Utilidad de internacionalizacion
 
-Centraliza todas las llamadas a Edge Functions de WhatsApp:
+Contenido:
+- Tipo `Lang = 'es' | 'en'`
+- Diccionario `translations` con claves para todos los textos visibles (~50 keys)
+- Funcion `getLang()`: lee `?lang=` del URL > `localStorage.app_lang` > default `'es'`
+- Funcion `setLang(lang)`: guarda en `localStorage.app_lang`
+- Funcion `t(key)`: devuelve `translations[key][getLang()]`
+
+Ejemplo de estructura del diccionario:
 
 ```typescript
-const SUPABASE_URL = 'https://soxrlxvivuplezssgssq.supabase.co';
-
-// startOAuth: POST meta-oauth-start
-// exchangeOAuth: POST meta-oauth-exchange
-// listTemplates: GET templates-list (con fallback a mock)
-// createTemplate: POST templates-create (con fallback a localStorage)
+const translations: Record<string, Record<Lang, string>> = {
+  // WhatsAppSettings
+  'ws.title': { es: 'Configuracion de WhatsApp', en: 'WhatsApp Settings' },
+  'ws.meta_title': { es: 'Conexion con Meta', en: 'Meta Connection' },
+  'ws.connected': { es: 'Conectado', en: 'Connected' },
+  'ws.not_connected': { es: 'No conectado', en: 'Not connected' },
+  'ws.meta_desc': { es: 'Esta conexion es obligatoria para la revision de Meta.', en: 'This connection is required for Meta App Review.' },
+  'ws.connect_btn': { es: 'Conectar WhatsApp Business', en: 'Connect WhatsApp Business' },
+  'ws.no_auth_url': { es: 'No se recibio la URL de autorizacion.', en: 'Authorization URL not received.' },
+  'ws.templates_title': { es: 'Plantillas de Mensajes', en: 'Message Templates' },
+  'ws.templates_desc': { es: 'Requerido para la revision de Meta', en: 'Required for Meta App Review' },
+  'ws.create_template': { es: 'Crear plantilla', en: 'Create template' },
+  'ws.mock_banner': { es: 'Backend no conectado aun. Ejecutando en modo demostracion.', en: 'Backend not connected yet. Running in demo mode.' },
+  'ws.no_templates': { es: 'Aun no hay plantillas creadas.', en: 'No templates created yet.' },
+  'ws.col_name': { es: 'Nombre', en: 'Name' },
+  'ws.col_category': { es: 'Categoria', en: 'Category' },
+  'ws.col_language': { es: 'Idioma', en: 'Language' },
+  'ws.col_status': { es: 'Estado', en: 'Status' },
+  'ws.col_updated': { es: 'Actualizacion', en: 'Updated' },
+  // Status labels
+  'status.approved': { es: 'Aprobada', en: 'Approved' },
+  'status.pending': { es: 'Pendiente', en: 'Pending' },
+  'status.rejected': { es: 'Rechazada', en: 'Rejected' },
+  'status.draft': { es: 'Borrador', en: 'Draft' },
+  // Callback page
+  'cb.connecting': { es: 'Conectando WhatsApp...', en: 'Connecting WhatsApp...' },
+  'cb.do_not_close': { es: 'No cierre esta ventana.', en: 'Do not close this window.' },
+  'cb.success': { es: 'Conectado correctamente', en: 'Connected successfully' },
+  'cb.redirecting': { es: 'Redirigiendo a configuracion...', en: 'Redirecting to settings...' },
+  'cb.error': { es: 'Error de conexion', en: 'Connection error' },
+  'cb.back': { es: 'Volver a configuracion', en: 'Back to settings' },
+  'cb.missing_params': { es: 'Faltan parametros de autorizacion (code o state).', en: 'Missing authorization parameters (code or state).' },
+  'cb.not_completed': { es: 'La conexion no se completo correctamente.', en: 'The connection was not completed successfully.' },
+  // Create template page
+  'ct.title': { es: 'Crear plantilla', en: 'Create template' },
+  'ct.name_label': { es: 'Nombre de la plantilla *', en: 'Template name *' },
+  'ct.category_label': { es: 'Categoria', en: 'Category' },
+  'ct.language_label': { es: 'Idioma', en: 'Language' },
+  'ct.body_label': { es: 'Cuerpo del mensaje *', en: 'Message body *' },
+  'ct.body_hint': { es: 'Use {{1}}, {{2}} para variables dinamicas.', en: 'Use {{1}}, {{2}} for dynamic variables.' },
+  'ct.cancel': { es: 'Cancelar', en: 'Cancel' },
+  'ct.submit': { es: 'Crear plantilla', en: 'Create template' },
+  'ct.success': { es: 'Plantilla creada correctamente', en: 'Template created successfully' },
+  // Template detail page
+  'td.not_found': { es: 'Plantilla no encontrada.', en: 'Template not found.' },
+  'td.back': { es: 'Volver', en: 'Back' },
+  'td.category': { es: 'Categoria', en: 'Category' },
+  'td.language': { es: 'Idioma', en: 'Language' },
+  'td.status': { es: 'Estado', en: 'Status' },
+  'td.updated': { es: 'Ultima actualizacion', en: 'Last updated' },
+  'td.body': { es: 'Cuerpo del mensaje', en: 'Message body' },
+  'td.use_btn': { es: 'Usar en confirmacion de cita', en: 'Use for appointment confirmation' },
+};
 ```
-
-- Si las llamadas fallan, usa datos mock desde localStorage
-- Flag `isMockMode` en las respuestas para mostrar banner
-
-#### 2. `src/pages/WhatsAppPlantillaNueva.tsx` - Crear plantilla
-
-Formulario con:
-- Nombre (requerido)
-- Categoría: select con UTILITY, MARKETING, AUTHENTICATION
-- Idioma: select con es_ES (default), en_US
-- Cuerpo del mensaje: textarea (requerido)
-- Texto explicativo: "Use {{1}}, {{2}} para variables dinámicas."
-- Botones: "Crear plantilla" y "Cancelar"
-- POST a `templates-create`, fallback a localStorage con estado "borrador"
-- Al crear, navegar a `/configuracion/whatsapp` con toast de éxito
-
-#### 3. `src/pages/WhatsAppPlantillaDetalle.tsx` - Ver plantilla
-
-Muestra:
-- Nombre, Categoría, Idioma, Estado, Cuerpo del mensaje
-- Botón "Volver"
-- Botón deshabilitado "Usar en confirmación de cita"
 
 ---
 
 ### Archivos a modificar
 
-#### 4. `src/pages/WhatsAppSettings.tsx` - Reescritura completa
+#### 2. `src/pages/WhatsAppSettings.tsx`
 
-Cambios principales:
-- Traducir todo a español latino
-- **Tarjeta 1: Conexión con Meta**
-  - Badge: "Conectado" o "No conectado" (basado en `localStorage.meta_connected`)
-  - Botón "Conectar WhatsApp Business"
-  - Texto auxiliar: "Esta conexión es obligatoria para la revisión de Meta."
-- **Tarjeta 2: Plantillas de Mensajes**
-  - Subtítulo: "Requerido para la revisión de Meta"
-  - Tabla: Nombre, Categoría, Idioma, Estado, Última actualización
-  - GET a `templates-list`, fallback a mock con banner "Backend no conectado aún. Ejecutando en modo demostración."
-  - Botón "Crear plantilla" -> `/configuracion/whatsapp/plantillas/nueva`
-  - Click en fila -> `/configuracion/whatsapp/plantillas/:id`
-  - Estado vacío: "Aún no hay plantillas creadas."
-- `backTo="/configuracion"` en MainLayout
+- Import `t`, `getLang`, `setLang` from `@/lib/i18n`
+- Add `lang` state initialized with `getLang()`
+- Add language toggle `ES | EN` in the page header (using `ToggleGroup` from existing UI components)
+- Replace all hardcoded strings with `t('key')` calls
+- Replace `statusLabel` object with `t('status.approved')`, etc.
+- Change date locale based on lang (`'es-MX'` vs `'en-US'`)
 
-#### 5. `src/pages/MetaOAuthCallback.tsx` - Actualizar
+#### 3. `src/pages/MetaOAuthCallback.tsx`
 
-- Traducir textos a español
-- Título: "Conectando WhatsApp..."
-- Éxito: "Conectado correctamente" + redirección a `/configuracion/whatsapp`
-- Error: mensaje claro + botón "Volver a configuración"
-- Texto: "No cierre esta ventana."
-- Errores de `code`/`state` faltantes: mensaje en español
+- Import `t` from `@/lib/i18n`
+- Replace all hardcoded strings with `t('key')` calls
 
-#### 6. `src/pages/ConfiguracionMedico.tsx` - Agregar enlace
+#### 4. `src/pages/WhatsAppPlantillaNueva.tsx`
 
-Agregar nueva fila en la Card después de "Uso y Notificaciones":
-- Icono: `MessageCircle` o similar de lucide
-- Título: "WhatsApp Business"
-- Subtítulo: "Conexión y plantillas de mensajes"
-- Navega a `/configuracion/whatsapp`
+- Import `t` from `@/lib/i18n`
+- Replace all hardcoded strings with `t('key')` calls
+- Toast messages use `t()` as well
 
-#### 7. `src/App.tsx` - Registrar rutas
+#### 5. `src/pages/WhatsAppPlantillaDetalle.tsx`
 
-Cambios:
-- Importar `WhatsAppPlantillaNueva` y `WhatsAppPlantillaDetalle`
-- Cambiar ruta de `/settings/whatsapp` a `/configuracion/whatsapp`
-- Agregar rutas:
-  - `/configuracion/whatsapp` -> WhatsAppSettings (doctor)
-  - `/configuracion/whatsapp/plantillas/nueva` -> WhatsAppPlantillaNueva (doctor)
-  - `/configuracion/whatsapp/plantillas/:id` -> WhatsAppPlantillaDetalle (doctor)
-  - `/auth/meta/callback` -> MetaOAuthCallback (sin protección, ya existe)
-- Eliminar la ruta vieja `/settings/whatsapp`
-
-#### 8. `src/components/MainLayout.tsx` - Actualizar routeTitles
-
-- Eliminar entrada `/settings/whatsapp`
-- Agregar `/configuracion/whatsapp`: "WhatsApp Business"
+- Import `t` from `@/lib/i18n`
+- Replace all hardcoded strings with `t('key')` calls
+- Status labels use `t('status.*')`
+- Date locale based on `getLang()`
 
 ---
 
-### Detalles tecnicos
+### Componente de cambio de idioma (dentro de WhatsAppSettings)
 
-**Modo mock para plantillas:**
-- `localStorage` key: `whatsapp_templates_mock`
-- Formato: array de objetos `{ id, name, category, language, body, status, updated_at }`
-- Se usa cuando `templates-list` falla con error de red o 404
+Ubicacion: junto al titulo `h1` en la cabecera de la pagina.
 
-**Estructura de archivos resultante:**
 ```
-src/
-  lib/whatsappApi.ts          (nuevo)
-  pages/
-    WhatsAppSettings.tsx       (reescrito)
-    MetaOAuthCallback.tsx      (actualizado)
-    WhatsAppPlantillaNueva.tsx (nuevo)
-    WhatsAppPlantillaDetalle.tsx (nuevo)
-    ConfiguracionMedico.tsx    (modificado)
-  App.tsx                      (modificado)
-  components/MainLayout.tsx    (modificado)
+[Configuracion de WhatsApp]          [ES | EN]
 ```
 
-**Rutas finales:**
-| Ruta | Componente | Roles |
-|------|-----------|-------|
-| `/configuracion/whatsapp` | WhatsAppSettings | doctor |
-| `/configuracion/whatsapp/plantillas/nueva` | WhatsAppPlantillaNueva | doctor |
-| `/configuracion/whatsapp/plantillas/:id` | WhatsAppPlantillaDetalle | doctor |
-| `/auth/meta/callback` | MetaOAuthCallback | sin protección |
+Usando `ToggleGroup` de Radix (ya disponible en el proyecto) con `type="single"`:
+- Al cambiar: llama `setLang(value)`, actualiza estado local para re-render inmediato
+- Pequeno y discreto, no modifica el layout
 
+---
+
+### Lo que NO cambia
+- Rutas (siguen siendo `/configuracion/whatsapp`, etc.)
+- Estructura visual / UX
+- Logica de negocio
+- whatsappApi.ts (los mensajes de error de API se mantienen tecnicos)
