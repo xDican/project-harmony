@@ -289,6 +289,50 @@ export type Database = {
           },
         ]
       }
+      meta_connections: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          doctor_id: string
+          expires_at: string | null
+          id: string
+          phone_number_id: string | null
+          token_type: string | null
+          updated_at: string | null
+          waba_id: string | null
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          doctor_id: string
+          expires_at?: string | null
+          id?: string
+          phone_number_id?: string | null
+          token_type?: string | null
+          updated_at?: string | null
+          waba_id?: string | null
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          doctor_id?: string
+          expires_at?: string | null
+          id?: string
+          phone_number_id?: string | null
+          token_type?: string | null
+          updated_at?: string | null
+          waba_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_connections_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: true
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_oauth_states: {
         Row: {
           created_at: string
