@@ -289,6 +289,27 @@ export type Database = {
           },
         ]
       }
+      meta_oauth_states: {
+        Row: {
+          created_at: string
+          id: string
+          state: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          state: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          state?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       patients: {
         Row: {
           created_at: string | null
