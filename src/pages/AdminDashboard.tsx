@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import MainLayout from '@/components/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +14,29 @@ import type { AdminMetrics } from '@/lib/api';
 export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // TEMPORARY: Diagnostic test for auth.uid()
+  useEffect(() => {
+    const testUid = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("🔑 session.user.id (from getSession):", session?.user?.id ?? "NO SESSION");
+      console.log("🔑 session.access_token (first 20 chars):", session?.access_token?.substring(0, 20) ?? "NONE");
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error("❌ getUser() error:", userError);
+      } else {
+        console.log("👤 supabase.auth.getUser().id:", userData?.user?.id);
+      }
+
+      // Compare
+      if (session?.user?.id && userData?.user?.id) {
+        const match = session.user.id === userData.user.id;
+        console.log(match ? "✅ IDs MATCH" : "❌ IDs DO NOT MATCH");
+      }
+    };
+    testUid();
+  }, []);
 
   // Load metrics on mount
   useEffect(() => {
