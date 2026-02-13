@@ -3,7 +3,7 @@ import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
 };
 
 interface Appointment {
@@ -17,18 +17,6 @@ interface Appointment {
   duration_minutes: number;
 }
 
-interface Patient {
-  id: string;
-  name: string;
-  phone: string | null;
-}
-
-interface Doctor {
-  id: string;
-  name: string;
-  prefix: string | null;
-}
-
 interface ReminderResult {
   appointmentId: string;
   patientName: string;
@@ -36,32 +24,26 @@ interface ReminderResult {
   error?: string;
 }
 
-/**
- * Formats appointment datetime for the template
- */
-function formatAppointmentDateTime(date: string, time: string): string {
-  // Combine date and time, then format
+function formatAppointmentDate(date: string): string {
+  const dt = DateTime.fromISO(date);
+  return dt.toFormat("dd/MM/yyyy");
+}
+
+function formatAppointmentTime(date: string, time: string): string {
   const dt = DateTime.fromISO(`${date}T${time}`);
-
-  // Format: "12/12/2025 a las 3:00 PM"
-  const formattedDate = dt.toFormat("dd/MM/yyyy");
-
   const hours = dt.hour;
   const minutes = dt.minute;
   const period = hours >= 12 ? "PM" : "AM";
   const hours12 = hours % 12 || 12;
-  const formattedTime = `${hours12}:${String(minutes).padStart(2, "0")} ${period}`;
-
-  return `${formattedDate} a las ${formattedTime}`;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
 /**
- * Sends a reminder via the send-whatsapp-message Edge Function
+ * Calls send-whatsapp-message using INTERNAL_FUNCTION_SECRET (server-to-server).
  */
 async function sendReminderMessage(params: {
   functionsBaseUrl: string;
-  serviceRoleKey: string;
-  anonKey: string;
+  internalSecret: string;
   to: string;
   templateName: string;
   templateParams: Record<string, string>;
@@ -74,10 +56,7 @@ async function sendReminderMessage(params: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Use service role key as Bearer token for Authorization
-        "Authorization": `Bearer ${params.serviceRoleKey}`,
-        // Also include apikey header for Supabase Edge Functions
-        "apikey": params.anonKey,
+        "x-internal-secret": params.internalSecret,
       },
       body: JSON.stringify({
         to: params.to,
@@ -90,7 +69,7 @@ async function sendReminderMessage(params: {
       }),
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok || !data.ok) {
       return {
@@ -109,7 +88,6 @@ async function sendReminderMessage(params: {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -120,85 +98,91 @@ Deno.serve(async (req) => {
   let failedCount = 0;
 
   try {
-    // 1) Get environment variables
+    // 1) Env vars
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const twilioTemplateReminder = Deno.env.get("TWILIO_TEMPLATE_REMINDER_24H");
+    const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET");
 
-    if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       console.error("[send-reminders] Missing Supabase env vars");
-      return new Response(
-        JSON.stringify({ ok: false, error: "Server configuration error: Supabase" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Supabase" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!internalSecret) {
+      console.error("[send-reminders] Missing INTERNAL_FUNCTION_SECRET");
+      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: INTERNAL_FUNCTION_SECRET" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!twilioTemplateReminder) {
       console.error("[send-reminders] Missing TWILIO_TEMPLATE_REMINDER_24H");
-      return new Response(
-        JSON.stringify({ ok: false, error: "Server configuration error: Twilio template not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Twilio template not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // 2) Derive functions base URL from Supabase URL
+    // 2) Functions base URL
     const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
     const functionsBaseUrl = `https://${projectRef}.supabase.co/functions/v1`;
-
     console.log("[send-reminders] Functions base URL:", functionsBaseUrl);
 
-    // 3) Create Supabase client with service role
+    // 3) Supabase client (service role)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 4) Calculate tomorrow's date
-    // Using Honduras timezone (UTC-6)
+    // 4) Tomorrow (HN timezone)
     const now = DateTime.now().setZone("America/Tegucigalpa");
-    const tomorrow = now.plus({ days: 1 });
-    const tomorrowDateString = tomorrow.toFormat("yyyy-MM-dd");
+    const tomorrowDateString = now.plus({ days: 1 }).toFormat("yyyy-MM-dd");
 
     console.log("[send-reminders] Today:", now.toFormat("yyyy-MM-dd"));
     console.log("[send-reminders] Looking for appointments on:", tomorrowDateString);
 
-    // 5) Get tomorrow's appointments that need reminders
+    // 5) Fetch appointments
+    // ✅ Extra filter: reminder_24h_sent = false (to hard-prevent duplicates)
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
       .select("id, doctor_id, patient_id, date, time, appointment_at, status, duration_minutes")
       .eq("date", tomorrowDateString)
       .in("status", ["agendada", "confirmada", "pending", "confirmed"])
+      .eq("reminder_24h_sent", false)
       .is("reminder_24h_sent_at", null);
 
     if (appointmentsError) {
       console.error("[send-reminders] Error fetching appointments:", appointmentsError);
-      return new Response(
-        JSON.stringify({ ok: false, error: "Error fetching appointments" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ ok: false, error: "Error fetching appointments" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!appointments || appointments.length === 0) {
       console.log("[send-reminders] No appointments found for tomorrow");
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          message: "No appointments to remind",
-          date: tomorrowDateString,
-          total: 0,
-          sent: 0,
-          failed: 0,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({
+        ok: true,
+        message: "No appointments to remind",
+        date: tomorrowDateString,
+        total: 0,
+        sent: 0,
+        failed: 0,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     totalAppointments = appointments.length;
     console.log("[send-reminders] Found", totalAppointments, "appointments to process");
 
-    // 6) Process each appointment
+    // 6) Loop
     for (const appointment of appointments as Appointment[]) {
       console.log("[send-reminders] Processing appointment:", appointment.id);
 
-      // Get patient data
       const { data: patient, error: patientError } = await supabase
         .from("patients")
         .select("id, name, phone")
@@ -207,30 +191,18 @@ Deno.serve(async (req) => {
 
       if (patientError || !patient) {
         console.error("[send-reminders] Error fetching patient:", patientError);
-        results.push({
-          appointmentId: appointment.id,
-          patientName: "Unknown",
-          success: false,
-          error: "Patient not found",
-        });
+        results.push({ appointmentId: appointment.id, patientName: "Unknown", success: false, error: "Patient not found" });
         failedCount++;
         continue;
       }
 
-      // Check if patient has phone
       if (!patient.phone) {
         console.warn("[send-reminders] Patient has no phone:", patient.id);
-        results.push({
-          appointmentId: appointment.id,
-          patientName: patient.name,
-          success: false,
-          error: "No phone number",
-        });
+        results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: "No phone number" });
         failedCount++;
         continue;
       }
 
-      // Get doctor data
       const { data: doctor, error: doctorError } = await supabase
         .from("doctors")
         .select("id, name, prefix")
@@ -239,49 +211,33 @@ Deno.serve(async (req) => {
 
       if (doctorError || !doctor) {
         console.error("[send-reminders] Error fetching doctor:", doctorError);
-        results.push({
-          appointmentId: appointment.id,
-          patientName: patient.name,
-          success: false,
-          error: "Doctor not found",
-        });
+        results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: "Doctor not found" });
         failedCount++;
         continue;
       }
 
-      // Build doctor display name
-      const doctorDisplayName = doctor.prefix
-        ? `${doctor.prefix} ${doctor.name}`
-        : `Dr. ${doctor.name}`;
+      const doctorDisplayName = doctor.prefix ? `${doctor.prefix} ${doctor.name}` : `Dr. ${doctor.name}`;
+      const formattedDate = formatAppointmentDate(appointment.date);
+      const formattedTime = formatAppointmentTime(appointment.date, appointment.time);
 
-      // Format appointment date/time
-      const formattedDateTime = formatAppointmentDateTime(appointment.date, appointment.time);
-
-      // Build template params
-      // Template placeholders:
-      // {{1}} = Patient name
-      // {{2}} = Doctor display name
-      // {{3}} = Formatted date/time
       const templateParams = {
         "1": patient.name,
         "2": doctorDisplayName,
-        "3": formattedDateTime,
+        "3": formattedDate,
+        "4": formattedTime,
+        "5": `c-${appointment.id}`,  // c- prefix for "Confirmar" button
+        "6": `r-${appointment.id}`,  // r- prefix for "Reagendar" button
       };
 
-      // Format phone for WhatsApp
-      let whatsappTo = patient.phone;
-      if (!whatsappTo.startsWith("+")) {
-        whatsappTo = `+504${whatsappTo.replace(/\D/g, "")}`;
-      }
-      whatsappTo = `whatsapp:${whatsappTo}`;
+      // patient.phone is stored as 8 digits; build WhatsApp E.164
+      const digits = patient.phone.replace(/\D/g, "");
+      const whatsappTo = `whatsapp:+504${digits}`;
 
       console.log("[send-reminders] Sending reminder to:", whatsappTo);
 
-      // Send reminder via send-whatsapp-message
       const sendResult = await sendReminderMessage({
         functionsBaseUrl,
-        serviceRoleKey: supabaseServiceKey,
-        anonKey: supabaseAnonKey,
+        internalSecret,
         to: whatsappTo,
         templateName: twilioTemplateReminder,
         templateParams,
@@ -291,60 +247,51 @@ Deno.serve(async (req) => {
       });
 
       if (sendResult.success) {
-        // Update appointment to mark reminder as sent
+        const nowIso = DateTime.now().setZone("America/Tegucigalpa").toISO();
+
+        // ✅ Update BOTH flags (prevents duplicates even if one gets out of sync)
         const { error: updateError } = await supabase
           .from("appointments")
-          .update({ reminder_24h_sent_at: new Date().toISOString() })
+          .update({
+            reminder_24h_sent: true,
+            reminder_24h_sent_at: nowIso,
+          })
           .eq("id", appointment.id);
 
         if (updateError) {
           console.error("[send-reminders] Error updating appointment:", updateError);
         }
 
-        results.push({
-          appointmentId: appointment.id,
-          patientName: patient.name,
-          success: true,
-        });
+        results.push({ appointmentId: appointment.id, patientName: patient.name, success: true });
         successCount++;
         console.log("[send-reminders] Reminder sent successfully for:", appointment.id);
       } else {
-        results.push({
-          appointmentId: appointment.id,
-          patientName: patient.name,
-          success: false,
-          error: sendResult.error,
-        });
+        results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: sendResult.error });
         failedCount++;
         console.error("[send-reminders] Failed to send reminder:", sendResult.error);
       }
     }
 
-    // 7) Return summary
     console.log("[send-reminders] Completed. Success:", successCount, "Failed:", failedCount);
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        date: tomorrowDateString,
-        total: totalAppointments,
-        sent: successCount,
-        failed: failedCount,
-        results,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({
+      ok: true,
+      date: tomorrowDateString,
+      total: totalAppointments,
+      sent: successCount,
+      failed: failedCount,
+      results,
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
   } catch (error) {
     console.error("[send-reminders] Unexpected error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: "Internal server error",
-        details: errorMessage,
-        results,
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ ok: false, error: "Internal server error", details: errorMessage, results }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

@@ -22,7 +22,7 @@ const RequestSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, "month debe estar en formato YYYY-MM"),
   durationMinutes: z.number().int().min(1).max(480),
   timezone: z.string().optional().default(DEFAULT_TIMEZONE),
-  debug: z.boolean().optional().default(false),
+  debug: z.boolean().optional().default(true),
 });
 
 type ValidatedRequest = z.infer<typeof RequestSchema>;
