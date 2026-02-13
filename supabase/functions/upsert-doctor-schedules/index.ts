@@ -6,6 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Optional: helpful to confirm which version is deployed
+const BUILD = "upsert-doctor-schedules@2025-12-19_doctor-permission_v1";
+
 // Zod schemas for validation
 const ScheduleItemSchema = z.object({
   day_of_week: z.number().int().min(0).max(6, "day_of_week debe estar entre 0 (Domingo) y 6 (Sábado)"),
@@ -127,7 +130,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5) Validar rol del usuario usando user_roles (admin o secretary)
+    // 5) Parsear y validar body con Zod (lo hacemos ANTES de permisos para poder validar doctorId)
+    const rawBody = await req.json();
+    const validationResult = RequestSchema.safeParse(rawBody);
+
+    if (!validationResult.success) {
+      console.error("[upsert-doctor-schedules] Validation error:", validationResult.error.errors);
+      return new Response(
+        JSON.stringify({
+          error: "Datos de entrada inválidos",
+          details: validationResult.error.errors,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const { doctorId, schedules } = validationResult.data;
+
+    // 6) Validar rol del usuario usando user_roles (admin/secretary/doctor)
     const { data: userRoles, error: roleError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -141,13 +164,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const roles = userRoles.map(r => r.role);
-    const hasPermission = roles.includes("admin") || roles.includes("secretary");
+    const roles = userRoles.map((r) => r.role);
+    const isAdmin = roles.includes("admin");
+    const isSecretary = roles.includes("secretary");
+    const isDoctor = roles.includes("doctor");
 
-    if (!hasPermission) {
-      console.error("[upsert-doctor-schedules] Insufficient permissions. User roles:", roles);
+    if (!isAdmin && !isSecretary && !isDoctor) {
+      console.error("[upsert-doctor-schedules] No valid roles found. User roles:", roles);
       return new Response(
-        JSON.stringify({ error: "Solo administradores y secretarias pueden actualizar horarios" }),
+        JSON.stringify({ error: "Forbidden", message: "No role assigned", build: BUILD }),
         {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -155,33 +180,68 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 6) Parsear y validar body con Zod
-    const rawBody = await req.json();
-    const validationResult = RequestSchema.safeParse(rawBody);
+    // 7) Permisos:
+    // - admin/secretary: pueden actualizar horarios de cualquier doctorId
+    // - doctor: SOLO puede actualizar su propio doctorId (mapeado por doctors.user_id = auth.uid())
+    if (isDoctor && !isAdmin && !isSecretary) {
+      const { data: myDoctor, error: myDoctorErr } = await supabaseAdmin
+        .from("doctors")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (!validationResult.success) {
-      console.error("[upsert-doctor-schedules] Validation error:", validationResult.error.errors);
-      return new Response(
-        JSON.stringify({ 
-          error: "Datos de entrada inválidos", 
-          details: validationResult.error.errors 
-        }), 
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      if (myDoctorErr) {
+        console.error("[upsert-doctor-schedules] Error resolving doctor from user:", myDoctorErr);
+        return new Response(
+          JSON.stringify({ error: "Server error", details: myDoctorErr.message, build: BUILD }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (!myDoctor?.id) {
+        console.error("[upsert-doctor-schedules] Doctor profile not found for user:", user.id);
+        return new Response(
+          JSON.stringify({ error: "Forbidden", message: "Doctor profile not found", build: BUILD }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (doctorId !== myDoctor.id) {
+        console.error("[upsert-doctor-schedules] Doctor attempted to edit another doctor schedule:", {
+          userId: user.id,
+          myDoctorId: myDoctor.id,
+          requestedDoctorId: doctorId,
+        });
+
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            message: "Los médicos solo pueden actualizar su propio horario",
+            build: BUILD,
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
-    const { doctorId, schedules } = validationResult.data;
-
-    console.log("[upsert-doctor-schedules] Request:", { 
-      doctorId, 
-      schedules, 
-      userRoles: roles 
+    console.log("[upsert-doctor-schedules] BUILD:", BUILD);
+    console.log("[upsert-doctor-schedules] Request:", {
+      doctorId,
+      schedulesCount: schedules.length,
+      userRoles: roles,
+      userId: user.id,
     });
 
-    // 7) Validar que el doctor existe
+    // 8) Validar que el doctor existe (ya sea admin/secretary o doctor propio)
     const { data: doctor, error: doctorError } = await supabaseAdmin
       .from("doctors")
       .select("id")
@@ -190,13 +250,13 @@ Deno.serve(async (req) => {
 
     if (doctorError || !doctor) {
       console.error("[upsert-doctor-schedules] Doctor not found:", doctorError);
-      return new Response(JSON.stringify({ error: "Doctor no encontrado" }), {
+      return new Response(JSON.stringify({ error: "Doctor no encontrado", build: BUILD }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 8) Agrupar schedules por día y validar cada día
+    // 9) Agrupar schedules por día y validar cada día
     const schedulesByDay: Record<number, z.infer<typeof ScheduleItemSchema>[]> = {};
 
     for (const schedule of schedules) {
@@ -218,13 +278,13 @@ Deno.serve(async (req) => {
         ? validationError.message
         : "Error de validación";
 
-      return new Response(JSON.stringify({ error: errorMessage }), {
+      return new Response(JSON.stringify({ error: errorMessage, build: BUILD }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 9) Borrar horarios anteriores del doctor
+    // 10) Borrar horarios anteriores del doctor
     const { error: deleteError } = await supabaseAdmin
       .from("doctor_schedules")
       .delete()
@@ -233,7 +293,7 @@ Deno.serve(async (req) => {
     if (deleteError) {
       console.error("[upsert-doctor-schedules] Error deleting old schedules:", deleteError);
       return new Response(
-        JSON.stringify({ error: "Error al borrar horarios anteriores" }),
+        JSON.stringify({ error: "Error al borrar horarios anteriores", build: BUILD }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -243,7 +303,7 @@ Deno.serve(async (req) => {
 
     console.log("[upsert-doctor-schedules] Old schedules deleted successfully");
 
-    // 10) Insertar nuevos horarios si hay alguno
+    // 11) Insertar nuevos horarios si hay alguno
     if (schedules.length > 0) {
       const schedulesToInsert = schedules.map((schedule) => ({
         doctor_id: doctorId,
@@ -259,8 +319,10 @@ Deno.serve(async (req) => {
       if (insertError) {
         console.error("[upsert-doctor-schedules] Error inserting schedules:", insertError);
         return new Response(
-          JSON.stringify({ 
-            error: "Error al insertar nuevos horarios. Los horarios anteriores fueron borrados. Por favor, intente nuevamente." 
+          JSON.stringify({
+            error:
+              "Error al insertar nuevos horarios. Los horarios anteriores fueron borrados. Por favor, intente nuevamente.",
+            build: BUILD,
           }),
           {
             status: 500,
@@ -272,8 +334,8 @@ Deno.serve(async (req) => {
 
     console.log("[upsert-doctor-schedules] Schedules updated successfully");
 
-    // 11) Responder con éxito
-    return new Response(JSON.stringify({ success: true }), {
+    // 12) Responder con éxito
+    return new Response(JSON.stringify({ success: true, build: BUILD }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -282,7 +344,7 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
     return new Response(
-      JSON.stringify({ error: "Internal server error", details: errorMessage }),
+      JSON.stringify({ error: "Internal server error", details: errorMessage, build: BUILD }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
