@@ -173,6 +173,7 @@ serve(async (req) => {
       const { data: doctorData, error: doctorError } = await supabaseAdmin
         .from("doctors")
         .insert({
+          user_id: newUser.user.id,
           name: fullName,
           email: email,
           phone: phone,
