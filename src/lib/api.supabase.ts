@@ -329,6 +329,9 @@ export async function createAppointment(input: {
   durationMinutes?: number;
 }): Promise<Appointment> {
   try {
+    // Resolve organization context for the edge function
+    const orgId = await getActiveOrganizationId();
+
     // Llamar a la Edge Function create-appointment
     const { data, error } = await supabase.functions.invoke('create-appointment', {
       body: {
@@ -338,6 +341,7 @@ export async function createAppointment(input: {
         time: input.time,
         notes: input.notes,
         durationMinutes: input.durationMinutes ?? 60,
+        ...(orgId ? { organizationId: orgId } : {}),
       },
     });
 

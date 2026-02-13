@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 // Optional: helpful to confirm which version is deployed
-const BUILD = "create-appointment@2025-12-19_owner_checks_v1";
+const BUILD = "create-appointment@2026-02-13_multitenant_v1";
 
 // Zod schema for request validation
 const appointmentSchema = z.object({
@@ -18,6 +18,8 @@ const appointmentSchema = z.object({
   time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Time must be in HH:MM or HH:MM:SS format"),
   notes: z.string().max(2000, "Notes must be less than 2000 characters").optional(),
   durationMinutes: z.number().int().min(15).max(480).optional().default(60),
+  organizationId: z.string().uuid("Invalid organization ID format").optional(),
+  calendarId: z.string().uuid("Invalid calendar ID format").optional(),
 });
 
 interface TwilioResponse {
@@ -87,6 +89,8 @@ async function logMessage(
     templateName: string;
     status: "sent" | "failed";
     rawPayload: unknown;
+    organizationId?: string | null;
+    whatsappLineId?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase.from("message_logs").insert({
@@ -102,6 +106,8 @@ async function logMessage(
     type: "confirmation",
     status: params.status,
     raw_payload: params.rawPayload,
+    organization_id: params.organizationId || null,
+    whatsapp_line_id: params.whatsappLineId || null,
   });
 
   if (error) {
@@ -159,18 +165,13 @@ Deno.serve(async (req) => {
       return json(500, { ok: false, error: "Supabase env vars not configured", build: BUILD });
     }
 
-    // Twilio env vars
-    const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioWhatsAppFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
-    const twilioMessagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
-    const twilioTemplateConfirmation = Deno.env.get("TWILIO_TEMPLATE_CONFIRMATION");
-
-    const hasTwilioConfig = twilioAccountSid && twilioAuthToken && twilioWhatsAppFrom && twilioTemplateConfirmation;
-
-    if (!hasTwilioConfig) {
-      console.warn("[create-appointment] Twilio env vars not fully configured - WhatsApp notifications disabled");
-    }
+    // Twilio config: will be resolved later (DB first, env var fallback)
+    let twilioAccountSid: string | undefined;
+    let twilioAuthToken: string | undefined;
+    let twilioWhatsAppFrom: string | undefined;
+    let twilioMessagingServiceSid: string | undefined;
+    let twilioTemplateConfirmation: string | undefined;
+    let resolvedWhatsappLineId: string | undefined;
 
     // 3) Create Supabase client with user's JWT for auth check
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
@@ -205,22 +206,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { doctorId, patientId, date, time, notes, durationMinutes } = validationResult.data;
+    const { doctorId, patientId, date, time, notes, durationMinutes, organizationId: reqOrgId, calendarId: reqCalendarId } = validationResult.data;
     console.log("[create-appointment] BUILD:", BUILD);
-    console.log("[create-appointment] Validated request:", { doctorId, patientId, date, time, durationMinutes });
+    console.log("[create-appointment] Validated request:", { doctorId, patientId, date, time, durationMinutes, reqOrgId, reqCalendarId });
 
-    // 6) Check if user has permission using user_roles table (via RLS)
-    const { data: userRoles, error: roleError } = await supabaseAuth
-      .from("user_roles")
+    // 6) Check if user has permission using org_members first, fallback to user_roles
+    let roles: string[] = [];
+
+    // Try org_members first
+    const { data: orgMembers, error: orgMemberError } = await supabase
+      .from("org_members")
       .select("role")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("is_active", true);
 
-    if (roleError || !userRoles || userRoles.length === 0) {
-      console.error("[create-appointment] Role check failed:", roleError);
-      return json(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+    if (!orgMemberError && orgMembers && orgMembers.length > 0) {
+      roles = orgMembers.map((r: any) => r.role);
+    } else {
+      // Fallback to user_roles
+      const { data: userRoles, error: roleError } = await supabaseAuth
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (roleError || !userRoles || userRoles.length === 0) {
+        console.error("[create-appointment] Role check failed:", roleError);
+        return json(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+      }
+      roles = userRoles.map((r: any) => r.role);
     }
 
-    const roles = userRoles.map((r) => r.role);
     const isAdmin = roles.includes("admin");
     const isSecretary = roles.includes("secretary");
     const isDoctor = roles.includes("doctor");
@@ -305,7 +320,41 @@ Deno.serve(async (req) => {
       return json(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
     }
 
-    // 12) Insert appointment
+    // 12a) Resolve organization_id and calendar_id (infer from doctor if not provided)
+    let resolvedOrgId = reqOrgId || null;
+    let resolvedCalendarId = reqCalendarId || null;
+
+    if (!resolvedOrgId || !resolvedCalendarId) {
+      // Infer from doctor's org membership and calendar
+      const { data: doctorOrg } = await supabase
+        .from("doctors")
+        .select("organization_id")
+        .eq("id", doctorId)
+        .maybeSingle();
+
+      if (doctorOrg?.organization_id && !resolvedOrgId) {
+        resolvedOrgId = doctorOrg.organization_id;
+      }
+
+      if (!resolvedCalendarId && resolvedOrgId) {
+        // Find the calendar for this doctor in this org
+        const { data: calDoc } = await supabase
+          .from("calendar_doctors")
+          .select("calendar_id, calendars!inner(organization_id)")
+          .eq("doctor_id", doctorId)
+          .eq("calendars.organization_id", resolvedOrgId)
+          .limit(1)
+          .maybeSingle();
+
+        if (calDoc?.calendar_id) {
+          resolvedCalendarId = calDoc.calendar_id;
+        }
+      }
+    }
+
+    console.log("[create-appointment] Resolved org/calendar:", { resolvedOrgId, resolvedCalendarId });
+
+    // 12b) Insert appointment
     const { data: appointment, error: insertError } = await supabase
       .from("appointments")
       .insert({
@@ -321,6 +370,8 @@ Deno.serve(async (req) => {
         reminder_24h_sent: false,
         reminder_24h_sent_at: null,
         reschedule_notified_at: null,
+        organization_id: resolvedOrgId,
+        calendar_id: resolvedCalendarId,
       })
       .select()
       .single();
@@ -373,8 +424,41 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 16) Check Twilio configuration
+    // 16) Resolve Twilio credentials: DB whatsapp_lines first, env var fallback
+    if (resolvedOrgId) {
+      const { data: whatsappLine } = await supabase
+        .from("whatsapp_lines")
+        .select("id, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, twilio_template_confirmation")
+        .eq("organization_id", resolvedOrgId)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (whatsappLine?.twilio_account_sid) {
+        twilioAccountSid = whatsappLine.twilio_account_sid;
+        twilioAuthToken = whatsappLine.twilio_auth_token;
+        twilioWhatsAppFrom = whatsappLine.twilio_phone_from;
+        twilioMessagingServiceSid = whatsappLine.twilio_messaging_service_sid || undefined;
+        twilioTemplateConfirmation = whatsappLine.twilio_template_confirmation || undefined;
+        resolvedWhatsappLineId = whatsappLine.id;
+        console.log("[create-appointment] Using WhatsApp creds from DB (whatsapp_lines)");
+      }
+    }
+
+    // Fallback to env vars if DB didn't resolve
+    if (!twilioAccountSid) {
+      twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+      twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+      twilioWhatsAppFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
+      twilioMessagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
+      twilioTemplateConfirmation = Deno.env.get("TWILIO_TEMPLATE_CONFIRMATION");
+      console.log("[create-appointment] Using WhatsApp creds from env vars (fallback)");
+    }
+
+    const hasTwilioConfig = twilioAccountSid && twilioAuthToken && twilioWhatsAppFrom && twilioTemplateConfirmation;
+
     if (!hasTwilioConfig) {
+      console.warn("[create-appointment] Twilio not configured - WhatsApp disabled");
       return json(200, {
         ok: true,
         appointment,
@@ -434,6 +518,8 @@ Deno.serve(async (req) => {
       templateName: twilioTemplateConfirmation!,
       status: messageStatus,
       rawPayload: twilioResult.data,
+      organizationId: resolvedOrgId,
+      whatsappLineId: resolvedWhatsappLineId,
     });
 
     // 21) Return response

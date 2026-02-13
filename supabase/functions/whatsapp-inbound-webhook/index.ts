@@ -365,6 +365,32 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // ===== Multi-tenant: resolve whatsapp_line from TO number =====
+    let resolvedWhatsappLine: any = null;
+    let resolvedOrgId: string | null = null;
+    let resolvedLineId: string | null = null;
+
+    // The TO number is the WhatsApp number this message was sent to (our number)
+    // phone_number in whatsapp_lines is stored as E.164 (e.g., +50493133496)
+    const toE164 = `+504${toLocal}`;
+    const { data: lineData } = await supabase
+      .from("whatsapp_lines")
+      .select("id, organization_id, bot_enabled, bot_greeting")
+      .eq("phone_number", toE164)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (lineData) {
+      resolvedWhatsappLine = lineData;
+      resolvedOrgId = lineData.organization_id;
+      resolvedLineId = lineData.id;
+      console.log("[whatsapp-inbound-webhook] Resolved whatsapp_line:", resolvedLineId, "org:", resolvedOrgId);
+    } else {
+      console.log("[whatsapp-inbound-webhook] No whatsapp_line found for TO:", toE164, "- using legacy behavior");
+    }
+    // ===== End multi-tenant resolution =====
+
     let patient: any = null;
     let appointment: any = null;
 
@@ -476,6 +502,10 @@ Deno.serve(async (req: Request) => {
       unit_price: 0.005,
       total_price: 0.005,
       price_category: "inbound",
+
+      // Multi-tenant
+      organization_id: resolvedOrgId || null,
+      whatsapp_line_id: resolvedLineId || null,
 
       raw_payload: params,
     };

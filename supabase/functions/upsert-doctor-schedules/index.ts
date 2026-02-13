@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Optional: helpful to confirm which version is deployed
-const BUILD = "upsert-doctor-schedules@2025-12-19_doctor-permission_v1";
+const BUILD = "upsert-doctor-schedules@2026-02-13_multitenant_v1";
 
 // Zod schemas for validation
 const ScheduleItemSchema = z.object({
@@ -19,6 +19,7 @@ const ScheduleItemSchema = z.object({
 const RequestSchema = z.object({
   doctorId: z.string().uuid("doctorId debe ser un UUID válido"),
   schedules: z.array(ScheduleItemSchema).max(50, "Máximo 50 horarios permitidos"),
+  calendarId: z.string().uuid("calendarId debe ser un UUID válido").optional(),
 });
 
 const MAX_SLOTS_PER_DAY = 12;
@@ -148,23 +149,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { doctorId, schedules } = validationResult.data;
+    const { doctorId, schedules, calendarId } = validationResult.data;
 
-    // 6) Validar rol del usuario usando user_roles (admin/secretary/doctor)
-    const { data: userRoles, error: roleError } = await supabaseAdmin
-      .from("user_roles")
+    // 6) Validar rol del usuario: org_members first, fallback to user_roles
+    let roles: string[] = [];
+
+    const { data: orgMembers } = await supabaseAdmin
+      .from("org_members")
       .select("role")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("is_active", true);
 
-    if (roleError || !userRoles || userRoles.length === 0) {
-      console.error("[upsert-doctor-schedules] Role check failed:", roleError);
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (orgMembers && orgMembers.length > 0) {
+      roles = orgMembers.map((r: any) => r.role);
+    } else {
+      const { data: userRoles, error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (roleError || !userRoles || userRoles.length === 0) {
+        console.error("[upsert-doctor-schedules] Role check failed:", roleError);
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      roles = userRoles.map((r: any) => r.role);
     }
-
-    const roles = userRoles.map((r) => r.role);
     const isAdmin = roles.includes("admin");
     const isSecretary = roles.includes("secretary");
     const isDoctor = roles.includes("doctor");
@@ -310,6 +322,7 @@ Deno.serve(async (req) => {
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
+        ...(calendarId ? { calendar_id: calendarId } : {}),
       }));
 
       const { error: insertError } = await supabaseAdmin

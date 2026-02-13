@@ -15,6 +15,7 @@ interface Appointment {
   appointment_at: string;
   status: string;
   duration_minutes: number;
+  organization_id: string | null;
 }
 
 interface ReminderResult {
@@ -50,6 +51,7 @@ async function sendReminderMessage(params: {
   appointmentId: string;
   patientId: string;
   doctorId: string;
+  organizationId?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(`${params.functionsBaseUrl}/send-whatsapp-message`, {
@@ -66,6 +68,7 @@ async function sendReminderMessage(params: {
         appointmentId: params.appointmentId,
         patientId: params.patientId,
         doctorId: params.doctorId,
+        ...(params.organizationId ? { organizationId: params.organizationId } : {}),
       }),
     });
 
@@ -121,11 +124,7 @@ Deno.serve(async (req) => {
     }
 
     if (!twilioTemplateReminder) {
-      console.error("[send-reminders] Missing TWILIO_TEMPLATE_REMINDER_24H");
-      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Twilio template not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.warn("[send-reminders] TWILIO_TEMPLATE_REMINDER_24H not set in env. Will rely on DB whatsapp_lines for template.");
     }
 
     // 2) Functions base URL
@@ -147,7 +146,7 @@ Deno.serve(async (req) => {
     // ✅ Extra filter: reminder_24h_sent = false (to hard-prevent duplicates)
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
-      .select("id, doctor_id, patient_id, date, time, appointment_at, status, duration_minutes")
+      .select("id, doctor_id, patient_id, date, time, appointment_at, status, duration_minutes, organization_id")
       .eq("date", tomorrowDateString)
       .in("status", ["agendada", "confirmada", "pending", "confirmed"])
       .eq("reminder_24h_sent", false)
@@ -235,15 +234,17 @@ Deno.serve(async (req) => {
 
       console.log("[send-reminders] Sending reminder to:", whatsappTo);
 
+      // Use env var template as default, send-whatsapp-message will resolve from DB if orgId present
       const sendResult = await sendReminderMessage({
         functionsBaseUrl,
         internalSecret,
         to: whatsappTo,
-        templateName: twilioTemplateReminder,
+        templateName: twilioTemplateReminder || "",
         templateParams,
         appointmentId: appointment.id,
         patientId: patient.id,
         doctorId: doctor.id,
+        organizationId: appointment.organization_id,
       });
 
       if (sendResult.success) {
