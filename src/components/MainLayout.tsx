@@ -85,7 +85,7 @@ export default function MainLayout({
   const getNavigationItems = () => {
     const items = [];
 
-    // Secretary can see: Agenda, Nueva Cita, Pacientes (no Admin)
+    // Secretary can see: Agenda, Nueva Cita, Pacientes, Agenda Semanal (no Admin)
     if (isSecretary) {
       items.push({
         to: '/agenda-secretaria',
@@ -99,6 +99,10 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
+      }, {
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
       });
     }
 
