@@ -8,6 +8,44 @@ import type { WeekSchedule, Slot } from "../types/schedule";
 import { DateTime } from "luxon";
 
 // --------------------------
+// Helper: Get active organization ID from current user session
+// Caches the org ID per session to avoid repeated queries
+// --------------------------
+let _cachedOrgId: string | null = null;
+let _cachedUserId: string | null = null;
+
+async function getActiveOrganizationId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // Return cached if same user
+  if (_cachedUserId === user.id && _cachedOrgId) return _cachedOrgId;
+
+  const { data, error } = await supabase
+    .from("org_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn("[getActiveOrganizationId] Could not resolve org:", error);
+    return null;
+  }
+
+  _cachedUserId = user.id;
+  _cachedOrgId = data.organization_id;
+  return _cachedOrgId;
+}
+
+// Clear org cache on auth state change
+supabase.auth.onAuthStateChange(() => {
+  _cachedOrgId = null;
+  _cachedUserId = null;
+});
+
+// --------------------------
 // Status mapping - No mapping needed, statuses are now stored in Spanish in the database
 // --------------------------
 
@@ -75,6 +113,28 @@ export interface UserWithRelations {
 // Get all users with doctor and specialty info
 // --------------------------
 export async function getAllUsers(): Promise<UserWithRelations[]> {
+  const orgId = await getActiveOrganizationId();
+
+  // Get org members for the active organization (or all if no org)
+  let membersQuery = supabase
+    .from("org_members")
+    .select("user_id, role, doctor_id, secretary_id")
+    .eq("is_active", true);
+
+  if (orgId) membersQuery = membersQuery.eq("organization_id", orgId);
+
+  const { data: membersData, error: membersError } = await membersQuery;
+
+  if (membersError) {
+    console.error("Error getAllUsers:org_members", membersError);
+    throw membersError;
+  }
+
+  if (!membersData || membersData.length === 0) return [];
+
+  // Get user IDs from members
+  const userIds = membersData.map((m: any) => m.user_id);
+
   // Get all users with their related data
   const { data: usersData, error: usersError } = await supabase
     .from("users")
@@ -97,6 +157,7 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
         phone
       )
     `)
+    .in("id", userIds)
     .order("created_at", { ascending: false });
 
   if (usersError) {
@@ -104,34 +165,20 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
     throw usersError;
   }
 
-  if (!usersData || usersData.length === 0) {
-    return [];
-  }
+  if (!usersData || usersData.length === 0) return [];
 
-  // Get all user roles
-  const { data: rolesData, error: rolesError } = await supabase
-    .from("user_roles")
-    .select("user_id, role");
-
-  if (rolesError) {
-    console.error("Error fetching user roles:", rolesError);
-    throw rolesError;
-  }
-
-  // Create a map of user_id to role
+  // Create a map of user_id to role from org_members
   const userRolesMap = new Map<string, string>();
-  if (rolesData) {
-    rolesData.forEach((roleRecord: any) => {
-      if (!userRolesMap.has(roleRecord.user_id)) {
-        userRolesMap.set(roleRecord.user_id, roleRecord.role);
-      }
-    });
-  }
+  membersData.forEach((m: any) => {
+    if (!userRolesMap.has(m.user_id)) {
+      userRolesMap.set(m.user_id, m.role);
+    }
+  });
 
   // Map users with their roles
   return usersData.map((user: any) => {
     const role = userRolesMap.get(user.id);
-    
+
     return {
       id: user.id,
       email: user.email,
@@ -157,8 +204,9 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
 // 1. getTodayAppointments
 // --------------------------
 export async function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {
+  const orgId = await getActiveOrganizationId();
   // Carga las citas del día con relations anidadas (doctor, patient)
-  const { data, error } = await supabase
+  let query = supabase
     .from("appointments")
     .select(
       `
@@ -173,6 +221,10 @@ export async function getTodayAppointments(date: string): Promise<AppointmentWit
     )
     .eq("date", date)
     .order("time", { ascending: true });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error getTodayAppointments:", error);
@@ -215,7 +267,8 @@ export async function getTodayAppointmentsByDoctor(doctorId: string, date: strin
 // Get all appointments for a specific patient
 // --------------------------
 export async function getPatientAppointments(patientId: string): Promise<AppointmentWithDetails[]> {
-  const { data, error } = await supabase
+  const orgId = await getActiveOrganizationId();
+  let query = supabase
     .from("appointments")
     .select(
       `
@@ -231,6 +284,10 @@ export async function getPatientAppointments(patientId: string): Promise<Appoint
     .eq("patient_id", patientId)
     .order("date", { ascending: false })
     .order("time", { ascending: false });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error getPatientAppointments:", error);
@@ -346,12 +403,17 @@ export async function getAvailableSlots(params: {
 // 6. searchPatients
 // --------------------------
 export async function searchPatients(query: string): Promise<Patient[]> {
+  const orgId = await getActiveOrganizationId();
   // Busca por name o phone (simple LIKE)
-  const { data, error } = await supabase
+  let q = supabase
     .from("patients")
     .select("*")
     .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
     .order("name", { ascending: true });
+
+  if (orgId) q = q.eq("organization_id", orgId);
+
+  const { data, error } = await q;
 
   if (error) {
     console.error("Error searchPatients:", error);
@@ -372,7 +434,10 @@ export async function searchPatients(query: string): Promise<Patient[]> {
 // 7. getAllPatients
 // --------------------------
 export async function getAllPatients(): Promise<Patient[]> {
-  const { data, error } = await supabase.from("patients").select("*").order("name", { ascending: true });
+  const orgId = await getActiveOrganizationId();
+  let query = supabase.from("patients").select("*").order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error getAllPatients:", error);
@@ -393,6 +458,7 @@ export async function getAllPatients(): Promise<Patient[]> {
 // 8. createPatient
 // --------------------------
 export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient> {
+  const orgId = await getActiveOrganizationId();
   const { name, phone, email, notes, doctorId } = input;
   const { data, error } = await supabase
     .from("patients")
@@ -403,6 +469,7 @@ export async function createPatient(input: { name: string; phone: string; email?
         email,
         notes,
         doctor_id: doctorId,
+        organization_id: orgId,
       },
     ])
     .select()
@@ -446,11 +513,16 @@ export async function getSpecialties(): Promise<Specialty[]> {
 // 10. getDoctorsBySpecialty
 // --------------------------
 export async function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor[]> {
-  const { data, error } = await supabase
+  const orgId = await getActiveOrganizationId();
+  let query = supabase
     .from("doctors")
     .select("*")
     .eq("specialty_id", specialtyId)
     .order("name", { ascending: true });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error getDoctorsBySpecialty:", error);
@@ -471,7 +543,10 @@ export async function getDoctorsBySpecialty(specialtyId: string): Promise<Doctor
 // 11. getDoctors
 // --------------------------
 export async function getDoctors(): Promise<Doctor[]> {
-  const { data, error } = await supabase.from("doctors").select("*").order("name", { ascending: true });
+  const orgId = await getActiveOrganizationId();
+  let query = supabase.from("doctors").select("*").order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error getDoctors:", error);
@@ -492,8 +567,9 @@ export async function getDoctors(): Promise<Doctor[]> {
 // 11b. searchDoctors
 // --------------------------
 export async function searchDoctors(query: string): Promise<Doctor[]> {
+  const orgId = await getActiveOrganizationId();
   // Busca por nombre de doctor o nombre de especialidad
-  const { data, error } = await supabase
+  let q = supabase
     .from("doctors")
     .select(`
       *,
@@ -503,6 +579,10 @@ export async function searchDoctors(query: string): Promise<Doctor[]> {
     `)
     .or(`name.ilike.%${query}%`)
     .order("name", { ascending: true });
+
+  if (orgId) q = q.eq("organization_id", orgId);
+
+  const { data, error } = await q;
 
   if (error) {
     console.error("Error searchDoctors:", error);
@@ -523,7 +603,7 @@ export async function searchDoctors(query: string): Promise<Doctor[]> {
 
   // Si hay especialidades que coinciden, buscar doctores con esas especialidades
   if (specialtyIds.length > 0) {
-    const { data: doctorsBySpecialty, error: doctorError } = await supabase
+    let q2 = supabase
       .from("doctors")
       .select(`
         *,
@@ -533,6 +613,10 @@ export async function searchDoctors(query: string): Promise<Doctor[]> {
       `)
       .in("specialty_id", specialtyIds)
       .order("name", { ascending: true });
+
+    if (orgId) q2 = q2.eq("organization_id", orgId);
+
+    const { data: doctorsBySpecialty, error: doctorError } = await q2;
 
     if (doctorError) {
       console.error("Error searching doctors by specialty:", doctorError);
@@ -828,11 +912,13 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
     return null;
   }
 
-  // Get user role from user_roles table
+  // Get user role from org_members table
   const { data: roleData, error: roleError } = await supabase
-    .from('user_roles')
+    .from('org_members')
     .select('role')
     .eq('user_id', userId)
+    .eq('is_active', true)
+    .limit(1)
     .maybeSingle();
 
   if (roleError) {
