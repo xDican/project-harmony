@@ -14,6 +14,7 @@ export interface UserContextValue {
   isSecretary: boolean;
   isDoctor: boolean;
   isAdminOrSecretary: boolean;
+  organizationId: string | null;
 }
 
 /**
@@ -93,6 +94,8 @@ export function UserProvider({ children }: UserProviderProps) {
   const isDoctor = user?.role === 'doctor';
   const isAdminOrSecretary = isAdmin || isSecretary;
 
+  const organizationId = user?.organizationId ?? null;
+
   const value: UserContextValue = {
     user,
     loading,
@@ -100,6 +103,7 @@ export function UserProvider({ children }: UserProviderProps) {
     isSecretary,
     isDoctor,
     isAdminOrSecretary,
+    organizationId,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
