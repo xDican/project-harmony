@@ -29,6 +29,10 @@ import WhatsAppSettings from "./pages/WhatsAppSettings";
 import WhatsAppPlantillaNueva from "./pages/WhatsAppPlantillaNueva";
 import WhatsAppPlantillaDetalle from "./pages/WhatsAppPlantillaDetalle";
 import MetaOAuthCallback from "./pages/MetaOAuthCallback";
+import OrganizationSettings from "./pages/OrganizationSettings";
+import ClinicsList from "./pages/ClinicsList";
+import CalendarsList from "./pages/CalendarsList";
+import WhatsAppLinesList from "./pages/WhatsAppLinesList";
 
 const queryClient = new QueryClient();
 
@@ -197,6 +201,26 @@ const App = () => {
             <Route path="/admin/reports/appointments" element={
               <RoleBasedRoute allowedRoles={['admin']}>
                 <AppointmentsReport />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/organization" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <OrganizationSettings />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/clinics" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <ClinicsList />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/calendars" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <CalendarsList />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/whatsapp-lines" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <WhatsAppLinesList />
               </RoleBasedRoute>
             } />
             <Route path="/admin/specialties" element={

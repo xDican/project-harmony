@@ -4,6 +4,7 @@ import type { Patient } from "../types/patient";
 import type { Doctor, Specialty } from "../types/doctor";
 import type { AppointmentWithDetails } from "./api";
 import type { CurrentUser, OrgMembership } from "../types/user";
+import type { Organization, Clinic, CalendarEntry, WhatsAppLine } from "../types/organization";
 import type { WeekSchedule, Slot } from "../types/schedule";
 import { DateTime } from "luxon";
 
@@ -1125,5 +1126,382 @@ export async function updateDoctorSchedules(
     console.error('[updateDoctorSchedules] Edge Function returned failure:', data);
     throw new Error(data?.error || 'Error al guardar horarios');
   }
+}
+
+// ====================================================================
+// ADMIN CRUD: Organizations, Clinics, Calendars, WhatsApp Lines
+// These functions are admin-only and NOT added to api.ts router interface.
+// They are imported directly by admin pages.
+// ====================================================================
+
+// --------------------------
+// Organization
+// --------------------------
+
+export async function getOrganizationDetails(): Promise<Organization | null> {
+  const orgId = await getActiveOrganizationId();
+  if (!orgId) return null;
+
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("*")
+    .eq("id", orgId)
+    .single();
+
+  if (error) {
+    console.error("[getOrganizationDetails] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    ownerUserId: data.owner_user_id,
+    phone: data.phone ?? undefined,
+    email: data.email ?? undefined,
+    countryCode: data.country_code ?? undefined,
+    timezone: data.timezone ?? undefined,
+    billingType: data.billing_type ?? undefined,
+    isActive: data.is_active,
+    trialEndsAt: data.trial_ends_at ?? undefined,
+    createdAt: data.created_at,
+  };
+}
+
+export async function updateOrganization(
+  orgId: string,
+  updates: { name?: string; phone?: string; email?: string; timezone?: string }
+): Promise<Organization> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+  if (updates.email !== undefined) dbUpdates.email = updates.email;
+  if (updates.timezone !== undefined) dbUpdates.timezone = updates.timezone;
+
+  const { data, error } = await supabase
+    .from("organizations")
+    .update(dbUpdates)
+    .eq("id", orgId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[updateOrganization] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    ownerUserId: data.owner_user_id,
+    phone: data.phone ?? undefined,
+    email: data.email ?? undefined,
+    countryCode: data.country_code ?? undefined,
+    timezone: data.timezone ?? undefined,
+    billingType: data.billing_type ?? undefined,
+    isActive: data.is_active,
+    trialEndsAt: data.trial_ends_at ?? undefined,
+    createdAt: data.created_at,
+  };
+}
+
+// --------------------------
+// Clinics
+// --------------------------
+
+export async function getClinicsByOrganization(): Promise<Clinic[]> {
+  const orgId = await getActiveOrganizationId();
+  if (!orgId) return [];
+
+  const { data, error } = await supabase
+    .from("clinics")
+    .select("*")
+    .eq("organization_id", orgId)
+    .order("name");
+
+  if (error) {
+    console.error("[getClinicsByOrganization] Error:", error);
+    throw error;
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    organizationId: row.organization_id,
+    name: row.name,
+    address: row.address ?? undefined,
+    phone: row.phone ?? undefined,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function createClinic(input: {
+  name: string;
+  address?: string;
+  phone?: string;
+}): Promise<Clinic> {
+  const orgId = await getActiveOrganizationId();
+  if (!orgId) throw new Error("No active organization");
+
+  const { data, error } = await supabase
+    .from("clinics")
+    .insert({
+      organization_id: orgId,
+      name: input.name,
+      address: input.address || null,
+      phone: input.phone || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[createClinic] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    name: data.name,
+    address: data.address ?? undefined,
+    phone: data.phone ?? undefined,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+  };
+}
+
+export async function updateClinic(
+  clinicId: string,
+  updates: { name?: string; address?: string; phone?: string; isActive?: boolean }
+): Promise<Clinic> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.address !== undefined) dbUpdates.address = updates.address;
+  if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+  if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+  const { data, error } = await supabase
+    .from("clinics")
+    .update(dbUpdates)
+    .eq("id", clinicId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[updateClinic] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    name: data.name,
+    address: data.address ?? undefined,
+    phone: data.phone ?? undefined,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+  };
+}
+
+// --------------------------
+// Calendars
+// --------------------------
+
+export async function getCalendarsByOrganization(): Promise<CalendarEntry[]> {
+  const orgId = await getActiveOrganizationId();
+  if (!orgId) return [];
+
+  const { data, error } = await supabase
+    .from("calendars")
+    .select(`
+      *,
+      clinic:clinic_id (id, name),
+      calendar_doctors (
+        doctor:doctor_id (id, name)
+      )
+    `)
+    .eq("organization_id", orgId)
+    .order("name");
+
+  if (error) {
+    console.error("[getCalendarsByOrganization] Error:", error);
+    throw error;
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    organizationId: row.organization_id,
+    clinicId: row.clinic_id ?? undefined,
+    name: row.name,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    clinicName: row.clinic?.name ?? undefined,
+    doctors: (row.calendar_doctors || [])
+      .map((cd: any) => cd.doctor)
+      .filter(Boolean)
+      .map((d: any) => ({ id: d.id, name: d.name })),
+  }));
+}
+
+export async function createCalendar(input: {
+  name: string;
+  clinicId?: string;
+}): Promise<CalendarEntry> {
+  const orgId = await getActiveOrganizationId();
+  if (!orgId) throw new Error("No active organization");
+
+  const { data, error } = await supabase
+    .from("calendars")
+    .insert({
+      organization_id: orgId,
+      name: input.name,
+      clinic_id: input.clinicId || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[createCalendar] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    clinicId: data.clinic_id ?? undefined,
+    name: data.name,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+  };
+}
+
+export async function updateCalendar(
+  calendarId: string,
+  updates: { name?: string; clinicId?: string; isActive?: boolean }
+): Promise<CalendarEntry> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.clinicId !== undefined) dbUpdates.clinic_id = updates.clinicId;
+  if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+  const { data, error } = await supabase
+    .from("calendars")
+    .update(dbUpdates)
+    .eq("id", calendarId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[updateCalendar] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    clinicId: data.clinic_id ?? undefined,
+    name: data.name,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+  };
+}
+
+// --------------------------
+// WhatsApp Lines
+// --------------------------
+
+export async function getWhatsAppLinesByOrganization(): Promise<WhatsAppLine[]> {
+  const orgId = await getActiveOrganizationId();
+  if (!orgId) return [];
+
+  const { data, error } = await supabase
+    .from("whatsapp_lines")
+    .select(`
+      *,
+      clinic:clinic_id (id, name)
+    `)
+    .eq("organization_id", orgId)
+    .order("label");
+
+  if (error) {
+    console.error("[getWhatsAppLinesByOrganization] Error:", error);
+    throw error;
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    organizationId: row.organization_id,
+    clinicId: row.clinic_id ?? undefined,
+    label: row.label,
+    phoneNumber: row.phone_number,
+    provider: row.provider,
+    botEnabled: row.bot_enabled,
+    botGreeting: row.bot_greeting ?? undefined,
+    defaultDurationMinutes: row.default_duration_minutes ?? undefined,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    clinicName: row.clinic?.name ?? undefined,
+  }));
+}
+
+export async function updateWhatsAppLine(
+  lineId: string,
+  updates: { label?: string; botEnabled?: boolean; defaultDurationMinutes?: number; isActive?: boolean }
+): Promise<WhatsAppLine> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.label !== undefined) dbUpdates.label = updates.label;
+  if (updates.botEnabled !== undefined) dbUpdates.bot_enabled = updates.botEnabled;
+  if (updates.defaultDurationMinutes !== undefined) dbUpdates.default_duration_minutes = updates.defaultDurationMinutes;
+  if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+  const { data, error } = await supabase
+    .from("whatsapp_lines")
+    .update(dbUpdates)
+    .eq("id", lineId)
+    .select(`
+      *,
+      clinic:clinic_id (id, name)
+    `)
+    .single();
+
+  if (error) {
+    console.error("[updateWhatsAppLine] Error:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    clinicId: data.clinic_id ?? undefined,
+    label: data.label,
+    phoneNumber: data.phone_number,
+    provider: data.provider,
+    botEnabled: data.bot_enabled,
+    botGreeting: (data as any).bot_greeting ?? undefined,
+    defaultDurationMinutes: data.default_duration_minutes ?? undefined,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+    clinicName: (data as any).clinic?.name ?? undefined,
+  };
+}
+
+// --------------------------
+// Org Switching (Step 10b)
+// --------------------------
+
+export async function switchActiveOrganization(newOrgId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('switch-organization', {
+    body: { organizationId: newOrgId },
+  });
+
+  if (error || !data?.success) {
+    throw new Error(data?.error || error?.message || 'Error al cambiar de organizacion');
+  }
+
+  // Clear cached org ID so next API call picks up the new one
+  _cachedOrgId = null;
+  _cachedUserId = null;
 }
 
