@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 // Optional: helpful to confirm which version is deployed
-const BUILD = "create-appointment@2026-02-13_multitenant_v1";
+const BUILD = "create-appointment@2026-02-13_multitenant_v3";
 
 // Zod schema for request validation
 const appointmentSchema = z.object({
@@ -283,22 +283,46 @@ Deno.serve(async (req) => {
     // 9) Build appointment_at timestamp
     const appointmentAt = `${date}T${normalizedTime}`;
 
-    // 10) Validate patient belongs to doctor (doctor-owned patients model)
-    // Also fetch patient data we need later (name/phone) in the same query.
-    const { data: patient, error: patientError } = await supabase
-      .from("patients")
-      .select("id, name, phone, doctor_id")
-      .eq("id", patientId)
-      .eq("doctor_id", doctorId)
-      .maybeSingle();
+    // 10) Validate patient exists and fetch data needed for template.
+    // For admin/secretary: patient must belong to the same organization (multi-tenant model).
+    // For doctor-only: patient must belong to that doctor specifically.
+    let patient: { id: string; name: string; phone: string | null; doctor_id: string | null } | null = null;
 
-    if (patientError) {
-      console.error("[create-appointment] Error validating patient ownership:", patientError);
-      return json(500, { ok: false, error: "Error validando paciente", details: patientError.message, build: BUILD });
-    }
+    if (isDoctor && !isAdmin && !isSecretary) {
+      // Doctor: strict check — patient must belong to this doctor
+      const { data: patientData, error: patientError } = await supabase
+        .from("patients")
+        .select("id, name, phone, doctor_id")
+        .eq("id", patientId)
+        .eq("doctor_id", doctorId)
+        .maybeSingle();
 
-    if (!patient) {
-      return json(403, { ok: false, error: "Paciente no pertenece a este doctor", build: BUILD });
+      if (patientError) {
+        console.error("[create-appointment] Error validating patient ownership:", patientError);
+        return json(500, { ok: false, error: "Error validando paciente", details: patientError.message, build: BUILD });
+      }
+      patient = patientData;
+
+      if (!patient) {
+        return json(403, { ok: false, error: "Paciente no pertenece a este doctor", build: BUILD });
+      }
+    } else {
+      // Admin/Secretary: patient just needs to exist (org-scoped queries already filter by org)
+      const { data: patientData, error: patientError } = await supabase
+        .from("patients")
+        .select("id, name, phone, doctor_id")
+        .eq("id", patientId)
+        .maybeSingle();
+
+      if (patientError) {
+        console.error("[create-appointment] Error fetching patient:", patientError);
+        return json(500, { ok: false, error: "Error validando paciente", details: patientError.message, build: BUILD });
+      }
+
+      if (!patientData) {
+        return json(404, { ok: false, error: "Paciente no encontrado", build: BUILD });
+      }
+      patient = patientData;
     }
 
     // 11) Check for existing appointment in same slot (exclude cancelled)
