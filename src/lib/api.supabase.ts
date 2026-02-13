@@ -3,7 +3,7 @@ import type { Appointment, AppointmentStatus } from "../types/appointment";
 import type { Patient } from "../types/patient";
 import type { Doctor, Specialty } from "../types/doctor";
 import type { AppointmentWithDetails } from "./api";
-import type { CurrentUser } from "../types/user";
+import type { CurrentUser, OrgMembership } from "../types/user";
 import type { WeekSchedule, Slot } from "../types/schedule";
 import { DateTime } from "luxon";
 
@@ -663,23 +663,7 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     return null;
   }
 
-  // 2. Consultar la tabla user_roles para obtener el rol
-  const { data: rolesData, error: rolesError } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (rolesError) {
-    console.error("Error getCurrentUserWithRole:user_roles", rolesError);
-    throw rolesError;
-  }
-
-  if (!rolesData) {
-    return null;
-  }
-
-  // 3. Consultar la tabla users para obtener email y doctor_id
+  // 2. Consultar la tabla users para obtener email y doctor_id
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("id, email, doctor_id")
@@ -695,12 +679,57 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     return null;
   }
 
-  // 4. Mapear a CurrentUser
+  // 3. Consultar org_members con organizations para obtener membresías
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("org_members")
+    .select("organization_id, role, doctor_id, organizations(name)")
+    .eq("user_id", user.id)
+    .eq("is_active", true);
+
+  if (membershipsError) {
+    console.error("Error getCurrentUserWithRole:org_members", membershipsError);
+    throw membershipsError;
+  }
+
+  if (!memberships || memberships.length === 0) {
+    // Fallback: try user_roles for users not yet migrated to org_members
+    const { data: rolesData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!rolesData) return null;
+
+    return {
+      id: userData.id,
+      email: userData.email,
+      role: rolesData.role as CurrentUser["role"],
+      doctorId: userData.doctor_id ?? null,
+      organizationId: "",
+      organizations: [],
+    };
+  }
+
+  // 4. Mapear membresías a OrgMembership[]
+  const organizations: OrgMembership[] = memberships.map((m: any) => ({
+    organizationId: m.organization_id,
+    organizationName: (m.organizations as any)?.name ?? "Unknown",
+    role: m.role as OrgMembership["role"],
+    doctorId: m.doctor_id ?? null,
+  }));
+
+  // 5. Seleccionar la primera org como activa (en el futuro: org switcher)
+  const activeOrg = organizations[0];
+
+  // 6. Mapear a CurrentUser (backward compatible: role y doctorId de la org activa)
   return {
     id: userData.id,
     email: userData.email,
-    role: rolesData.role as CurrentUser["role"],
-    doctorId: userData.doctor_id ?? null,
+    role: activeOrg.role,
+    doctorId: activeOrg.doctorId ?? userData.doctor_id ?? null,
+    organizationId: activeOrg.organizationId,
+    organizations,
   };
 }
 
