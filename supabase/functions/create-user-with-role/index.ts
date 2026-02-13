@@ -55,20 +55,36 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    // Check if user is admin using user_roles table
-    const { data: userRoles, error: roleError } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
+    // Check if user is admin using org_members first, fallback to user_roles
+    let isAdmin = false;
+    let callerOrgId: string | null = null;
 
-    if (roleError || !userRoles || userRoles.length === 0) {
-      console.error("Role check failed:", roleError);
-      throw new Error("Failed to verify user permissions");
+    // Try org_members first
+    const { data: orgMembers } = await supabaseAdmin
+      .from("org_members")
+      .select("role, organization_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true);
+
+    if (orgMembers && orgMembers.length > 0) {
+      isAdmin = orgMembers.some((r: any) => r.role === 'admin');
+      callerOrgId = orgMembers[0].organization_id;
+    } else {
+      // Fallback to user_roles
+      const { data: userRoles, error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (roleError || !userRoles || userRoles.length === 0) {
+        console.error("Role check failed:", roleError);
+        throw new Error("Failed to verify user permissions");
+      }
+      isAdmin = userRoles.some(r => r.role === 'admin');
     }
 
-    const isAdmin = userRoles.some(r => r.role === 'admin');
     if (!isAdmin) {
-      console.error("User is not admin:", userRoles);
+      console.error("User is not admin");
       throw new Error("Only admins can create users");
     }
 
@@ -79,9 +95,10 @@ serve(async (req) => {
     const baseUserSchema = z.object({
       email: z.string().email("Invalid email format").max(255, "Email too long"),
       password: z.string().min(8, "Password must be at least 8 characters"),
-      role: z.enum(["admin", "secretary", "doctor"], { 
+      role: z.enum(["admin", "secretary", "doctor"], {
         errorMap: () => ({ message: "Role must be admin, secretary, or doctor" })
       }),
+      organizationId: z.string().uuid("Invalid organization ID format").optional(),
     });
 
     const doctorUserSchema = baseUserSchema.extend({
@@ -121,7 +138,7 @@ serve(async (req) => {
       );
     }
 
-    const { email, password, role, specialtyId, fullName, phone, prefix } = validationResult.data as {
+    const { email, password, role, specialtyId, fullName, phone, prefix, organizationId } = validationResult.data as {
       email: string;
       password: string;
       role: string;
@@ -129,7 +146,11 @@ serve(async (req) => {
       fullName?: string;
       phone?: string;
       prefix?: string;
+      organizationId?: string;
     };
+
+    // Resolve org: use provided orgId, or fallback to caller's org
+    const resolvedOrgId = organizationId || callerOrgId;
 
     // Create the auth user with admin client
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -157,6 +178,7 @@ serve(async (req) => {
           phone: phone,
           specialty_id: specialtyId,
           prefix: prefix,
+          organization_id: resolvedOrgId || null,
         })
         .select()
         .single();
@@ -186,7 +208,7 @@ serve(async (req) => {
       throw insertError;
     }
 
-    // Insert role into user_roles table
+    // Insert role into user_roles table (kept for backward compat)
     const { error: roleInsertError } = await supabaseAdmin.from("user_roles").insert({
       user_id: newUser.user.id,
       role: role,
@@ -202,6 +224,24 @@ serve(async (req) => {
       throw roleInsertError;
     }
 
+    // Also insert into org_members (multi-tenant)
+    if (resolvedOrgId) {
+      const { error: orgMemberError } = await supabaseAdmin.from("org_members").insert({
+        organization_id: resolvedOrgId,
+        user_id: newUser.user.id,
+        role: role,
+        doctor_id: doctorId || null,
+        is_active: true,
+      });
+
+      if (orgMemberError) {
+        console.error("Error creating org_member (non-fatal):", orgMemberError);
+        // Non-fatal: the user was created successfully, org_member can be fixed later
+      } else {
+        console.log("org_member created for user:", newUser.user.id, "in org:", resolvedOrgId);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -210,6 +250,7 @@ serve(async (req) => {
           email: newUser.user.email,
           role: role,
           doctorId: doctorId,
+          organizationId: resolvedOrgId || null,
         },
       }),
       {

@@ -34,6 +34,8 @@ const RequestSchema = z.object({
   appointmentId: z.string().uuid().optional(),
   patientId: z.string().uuid().optional(),
   doctorId: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
+  whatsappLineId: z.string().uuid().optional(),
 });
 
 interface TwilioResponse {
@@ -195,6 +197,10 @@ async function logMessage(
     totalPrice?: number | null;
     priceCategory?: string | null;
     billable?: boolean;
+
+    // Multi-tenant
+    organizationId?: string | null;
+    whatsappLineId?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase.from("message_logs").insert({
@@ -228,6 +234,10 @@ async function logMessage(
     error_message: params.errorMessage || null,
 
     raw_payload: params.rawPayload,
+
+    // Multi-tenant
+    organization_id: params.organizationId || null,
+    whatsapp_line_id: params.whatsappLineId || null,
   });
 
   if (error) console.error("[send-whatsapp-message] Error logging message:", error);
@@ -303,22 +313,10 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
-    const messagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("[send-whatsapp-message] Missing Supabase env vars");
       return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Supabase" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!accountSid || !authToken || !twilioFrom) {
-      console.error("[send-whatsapp-message] Missing Twilio env vars");
-      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Twilio" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -350,6 +348,8 @@ Deno.serve(async (req) => {
       appointmentId,
       patientId,
       doctorId,
+      organizationId: reqOrgId,
+      whatsappLineId: reqLineId,
     } = validationResult.data;
 
     console.log("[send-whatsapp-message] Request:", {
@@ -358,20 +358,107 @@ Deno.serve(async (req) => {
       templateName,
       hasBody: !!body,
       authMode: auth.mode,
+      reqOrgId,
+      reqLineId,
     });
 
-    // Resolve template (same behavior)
+    // ===== Resolve Twilio credentials: DB first, env var fallback =====
+    let accountSid: string | undefined;
+    let authToken: string | undefined;
+    let twilioFrom: string | undefined;
+    let messagingServiceSid: string | undefined;
+    let resolvedOrgId: string | undefined = reqOrgId;
+    let resolvedLineId: string | undefined = reqLineId;
+
+    // Map for DB-stored template SIDs
+    let dbTemplateConfirmation: string | undefined;
+    let dbTemplateReminder: string | undefined;
+    let dbTemplateReschedule: string | undefined;
+
+    // Strategy 1: Load by whatsappLineId if provided
+    if (reqLineId) {
+      const { data: line } = await supabase
+        .from("whatsapp_lines")
+        .select("*")
+        .eq("id", reqLineId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (line?.twilio_account_sid) {
+        accountSid = line.twilio_account_sid;
+        authToken = line.twilio_auth_token;
+        twilioFrom = line.twilio_phone_from;
+        messagingServiceSid = line.twilio_messaging_service_sid || undefined;
+        dbTemplateConfirmation = line.twilio_template_confirmation || undefined;
+        dbTemplateReminder = line.twilio_template_reminder || undefined;
+        dbTemplateReschedule = line.twilio_template_reschedule || undefined;
+        resolvedOrgId = line.organization_id;
+        console.log("[send-whatsapp-message] Creds loaded from whatsapp_lines by ID");
+      }
+    }
+
+    // Strategy 2: Load by organizationId if no line resolved yet
+    if (!accountSid && reqOrgId) {
+      const { data: line } = await supabase
+        .from("whatsapp_lines")
+        .select("*")
+        .eq("organization_id", reqOrgId)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (line?.twilio_account_sid) {
+        accountSid = line.twilio_account_sid;
+        authToken = line.twilio_auth_token;
+        twilioFrom = line.twilio_phone_from;
+        messagingServiceSid = line.twilio_messaging_service_sid || undefined;
+        dbTemplateConfirmation = line.twilio_template_confirmation || undefined;
+        dbTemplateReminder = line.twilio_template_reminder || undefined;
+        dbTemplateReschedule = line.twilio_template_reschedule || undefined;
+        resolvedLineId = line.id;
+        console.log("[send-whatsapp-message] Creds loaded from whatsapp_lines by org");
+      }
+    }
+
+    // Strategy 3: Fallback to env vars
+    if (!accountSid) {
+      accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+      authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+      twilioFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
+      messagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
+      console.log("[send-whatsapp-message] Using env var fallback for Twilio creds");
+    }
+
+    if (!accountSid || !authToken || !twilioFrom) {
+      console.error("[send-whatsapp-message] No Twilio creds available (DB or env)");
+      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Twilio" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // ===== End credential resolution =====
+
+    // Resolve template: try DB-stored templates first, then env var
     let resolvedTemplateName: string | undefined = templateName;
 
     if (!resolvedTemplateName && type && type !== "generic") {
-      const envVarName = TEMPLATE_ENV_MAP[type];
-      if (envVarName) resolvedTemplateName = Deno.env.get(envVarName) || undefined;
+      // Try DB-stored template SIDs first
+      if (type === "confirmation" && dbTemplateConfirmation) {
+        resolvedTemplateName = dbTemplateConfirmation;
+      } else if (type === "reminder_24h" && dbTemplateReminder) {
+        resolvedTemplateName = dbTemplateReminder;
+      } else if ((type === "reschedule" || type === "reschedule_secretary") && dbTemplateReschedule) {
+        resolvedTemplateName = dbTemplateReschedule;
+      } else {
+        // Fallback to env var
+        const envVarName = TEMPLATE_ENV_MAP[type];
+        if (envVarName) resolvedTemplateName = Deno.env.get(envVarName) || undefined;
+      }
     }
 
     // Only confirmation and reminder_24h templates have an extra required variable: appointment_id
-    // (Other utility templates do NOT include that extra variable.)
-    const confirmationSid = Deno.env.get("TWILIO_TEMPLATE_CONFIRMATION") || undefined;
-    const reminderSid = Deno.env.get("TWILIO_TEMPLATE_REMINDER_24H") || undefined;
+    const confirmationSid = dbTemplateConfirmation || Deno.env.get("TWILIO_TEMPLATE_CONFIRMATION") || undefined;
+    const reminderSid = dbTemplateReminder || Deno.env.get("TWILIO_TEMPLATE_REMINDER_24H") || undefined;
 
     const resolvedNeedsAppointmentId =
       !!resolvedTemplateName &&
@@ -412,7 +499,7 @@ Deno.serve(async (req) => {
     const billing = await getBillingSettings(supabase);
     const windowInfo = await computeServiceWindow(supabase, {
       doctorId,
-      patientWhatsApp: to, // inbound should store from_phone = "whatsapp:+..."
+      patientWhatsApp: to,
       windowHours: billing.windowHours,
     });
 
@@ -434,7 +521,7 @@ Deno.serve(async (req) => {
     if (resolvedTemplateName) {
       twilioResult = await sendTwilioMessage({
         accountSid,
-        authToken,
+        authToken: authToken!,
         from: twilioFrom,
         to,
         contentSid: resolvedTemplateName,
@@ -445,7 +532,7 @@ Deno.serve(async (req) => {
     } else {
       twilioResult = await sendTwilioMessage({
         accountSid,
-        authToken,
+        authToken: authToken!,
         from: twilioFrom,
         to,
         body: body!,
@@ -481,7 +568,11 @@ Deno.serve(async (req) => {
       unitPrice: unitPrice,
       totalPrice: twilioResult.success ? unitPrice : 0,
       priceCategory,
-      billable: twilioResult.success, // si falló, no lo cobramos
+      billable: twilioResult.success,
+
+      // Multi-tenant
+      organizationId: resolvedOrgId,
+      whatsappLineId: resolvedLineId,
     });
 
     // Return
