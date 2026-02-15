@@ -42,6 +42,7 @@ export default function WhatsAppLinesList() {
   // Form fields
   const [formLabel, setFormLabel] = useState('');
   const [formBotEnabled, setFormBotEnabled] = useState(false);
+  const [formBotGreeting, setFormBotGreeting] = useState('');
   const [formDefaultDuration, setFormDefaultDuration] = useState<number | ''>('');
   const [formIsActive, setFormIsActive] = useState(true);
 
@@ -87,6 +88,7 @@ export default function WhatsAppLinesList() {
     setEditingLine(line);
     setFormLabel(line.label);
     setFormBotEnabled(line.botEnabled);
+    setFormBotGreeting(line.botGreeting || '');
     setFormDefaultDuration(line.defaultDurationMinutes || '');
     setFormIsActive(line.isActive);
     setDialogOpen(true);
@@ -109,6 +111,7 @@ export default function WhatsAppLinesList() {
       await updateWhatsAppLine(editingLine.id, {
         label: formLabel.trim(),
         botEnabled: formBotEnabled,
+        botGreeting: formBotGreeting.trim() || undefined,
         defaultDurationMinutes: formDefaultDuration !== '' ? Number(formDefaultDuration) : undefined,
         isActive: formIsActive,
       });
@@ -390,6 +393,24 @@ export default function WhatsAppLinesList() {
                   Bot habilitado
                 </Label>
               </div>
+
+              {formBotEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="wa-bot-greeting">Mensaje de bienvenida del bot</Label>
+                  <Textarea
+                    id="wa-bot-greeting"
+                    value={formBotGreeting}
+                    onChange={(e) => setFormBotGreeting(e.target.value)}
+                    placeholder="Ej: ¡Hola! Soy el asistente virtual de la Clínica. ¿En qué puedo ayudarte hoy?"
+                    disabled={saving}
+                    rows={4}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Este mensaje se enviará cuando un paciente inicie una conversación con el bot.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center space-x-2">
                 <Checkbox
