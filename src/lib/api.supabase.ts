@@ -1448,11 +1448,12 @@ export async function getWhatsAppLinesByOrganization(): Promise<WhatsAppLine[]> 
 
 export async function updateWhatsAppLine(
   lineId: string,
-  updates: { label?: string; botEnabled?: boolean; defaultDurationMinutes?: number; isActive?: boolean }
+  updates: { label?: string; botEnabled?: boolean; botGreeting?: string; defaultDurationMinutes?: number; isActive?: boolean }
 ): Promise<WhatsAppLine> {
   const dbUpdates: Record<string, unknown> = {};
   if (updates.label !== undefined) dbUpdates.label = updates.label;
   if (updates.botEnabled !== undefined) dbUpdates.bot_enabled = updates.botEnabled;
+  if (updates.botGreeting !== undefined) dbUpdates.bot_greeting = updates.botGreeting;
   if (updates.defaultDurationMinutes !== undefined) dbUpdates.default_duration_minutes = updates.defaultDurationMinutes;
   if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
 
