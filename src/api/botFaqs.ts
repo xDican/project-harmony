@@ -22,22 +22,31 @@ export async function getFAQs(params: {
     query = query.eq("is_active", true);
   }
 
+  // FIXED: Apply scope filtering correctly
   // If doctor_id is provided, get doctor + clinic + org FAQs
   if (doctorId) {
+    // Get FAQs where:
+    // 1. doctor_id matches (doctor-level)
+    // 2. clinic_id matches AND doctor_id is null (clinic-level)
+    // 3. Both doctor_id and clinic_id are null (org-level)
     query = query.or(
-      `doctor_id.eq.${doctorId},clinic_id.eq.${clinicId || "null"},and(doctor_id.is.null,clinic_id.is.null)`
+      `doctor_id.eq.${doctorId},and(clinic_id.eq.${clinicId || "null"},doctor_id.is.null),and(doctor_id.is.null,clinic_id.is.null)`
     );
   }
   // If only clinic_id is provided, get clinic + org FAQs
   else if (clinicId) {
-    query = query.or(`clinic_id.eq.${clinicId},and(doctor_id.is.null,clinic_id.is.null)`);
+    query = query.or(
+      `and(clinic_id.eq.${clinicId},doctor_id.is.null),and(doctor_id.is.null,clinic_id.is.null)`
+    );
   }
-  // Otherwise, get only org-level FAQs
+  // Otherwise, get only org-level FAQs (both null)
   else {
     query = query.is("doctor_id", null).is("clinic_id", null);
   }
 
-  const { data, error } = await query.order("scope_priority", { ascending: true }).order("display_order", { ascending: true });
+  const { data, error } = await query
+    .order("scope_priority", { ascending: true })
+    .order("display_order", { ascending: true });
 
   if (error) {
     console.error("Error fetching FAQs:", error);
