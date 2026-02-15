@@ -23,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -54,7 +53,6 @@ export default function BotFAQsPage() {
   const [formAnswer, setFormAnswer] = useState('');
   const [formKeywords, setFormKeywords] = useState('');
   const [formScope, setFormScope] = useState<1 | 2 | 3>(3); // Default to org-level
-  const [formIsActive, setFormIsActive] = useState(true);
   const [formDisplayOrder, setFormDisplayOrder] = useState(0);
 
   // Delete confirmation dialog
@@ -80,7 +78,7 @@ export default function BotFAQsPage() {
       const data = await getFAQs({
         organizationId,
         doctorId: currentDoctorId || undefined,
-        includeInactive: true,
+        includeInactive: false, // Only show active FAQs
       });
       setFaqs(data);
     } catch (err: any) {
@@ -129,7 +127,6 @@ export default function BotFAQsPage() {
     setFormAnswer('');
     setFormKeywords('');
     setFormScope(3); // Default to org-level
-    setFormIsActive(true);
     setFormDisplayOrder(faqs.length);
     setDialogOpen(true);
   };
@@ -140,7 +137,6 @@ export default function BotFAQsPage() {
     setFormAnswer(faq.answer);
     setFormKeywords(faq.keywords?.join(', ') || '');
     setFormScope(faq.scope_priority as 1 | 2 | 3);
-    setFormIsActive(faq.is_active);
     setFormDisplayOrder(faq.display_order);
     setDialogOpen(true);
   };
@@ -180,7 +176,6 @@ export default function BotFAQsPage() {
           question: formQuestion.trim(),
           answer: formAnswer.trim(),
           keywords,
-          is_active: formIsActive,
           display_order: formDisplayOrder,
         });
 
@@ -196,7 +191,6 @@ export default function BotFAQsPage() {
           answer: formAnswer.trim(),
           keywords,
           scope_priority: formScope,
-          is_active: formIsActive,
           display_order: formDisplayOrder,
         };
 
@@ -237,17 +231,19 @@ export default function BotFAQsPage() {
 
     setDeleting(true);
     try {
-      await deleteFAQ(faqToDelete.id, false); // Soft delete
+      await deleteFAQ(faqToDelete.id, true); // Hard delete (permanent)
       toast({
         title: 'FAQ eliminado',
-        description: 'El FAQ se desactivó correctamente',
+        description: 'El FAQ se eliminó permanentemente',
       });
       setDeleteDialogOpen(false);
+      setFaqToDelete(null);
       loadFAQs();
     } catch (err: any) {
+      console.error('Delete FAQ error:', err);
       toast({
-        title: 'Error',
-        description: err.message || 'Error al eliminar FAQ',
+        title: 'Error al eliminar FAQ',
+        description: err.message || err.hint || 'Error desconocido',
         variant: 'destructive',
       });
     } finally {
@@ -363,7 +359,6 @@ export default function BotFAQsPage() {
                       <TableHead>Pregunta</TableHead>
                       <TableHead>Alcance</TableHead>
                       <TableHead>Palabras clave</TableHead>
-                      <TableHead>Estado</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -399,11 +394,6 @@ export default function BotFAQsPage() {
                               </Badge>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={faq.is_active ? 'default' : 'secondary'}>
-                            {faq.is_active ? 'Activo' : 'Inactivo'}
-                          </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -550,17 +540,9 @@ export default function BotFAQsPage() {
                 onChange={(e) => setFormDisplayOrder(parseInt(e.target.value) || 0)}
                 min={0}
               />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is_active"
-                checked={formIsActive}
-                onCheckedChange={(checked) => setFormIsActive(checked as boolean)}
-              />
-              <Label htmlFor="is_active" className="cursor-pointer">
-                FAQ activo
-              </Label>
+              <p className="text-xs text-muted-foreground">
+                Los FAQs se muestran ordenados por este número (menor = primero). Números duplicados están permitidos.
+              </p>
             </div>
           </div>
 
@@ -582,7 +564,7 @@ export default function BotFAQsPage() {
           <DialogHeader>
             <DialogTitle>¿Eliminar FAQ?</DialogTitle>
             <DialogDescription>
-              ¿Estás seguro de que deseas desactivar este FAQ? Los usuarios ya no verán esta pregunta.
+              ¿Estás seguro de que deseas eliminar permanentemente este FAQ? Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
 
