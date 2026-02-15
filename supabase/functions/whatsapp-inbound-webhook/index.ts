@@ -437,18 +437,25 @@ Deno.serve(async (req: Request) => {
           const formattedMessage = formatBotMessage(botData.message, botData.options);
 
           // Send bot response via send-whatsapp-message
-          const sendResponse = await supabase.functions.invoke('send-whatsapp-message', {
-            body: {
-              to: fromWhatsApp,  // Reply to sender
+          const sendWhatsAppUrl = `https://${projectRef}.supabase.co/functions/v1/send-whatsapp-message`;
+          const sendResponse = await fetch(sendWhatsAppUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-internal-secret': INTERNAL_FUNCTION_SECRET,
+            },
+            body: JSON.stringify({
+              to: fromWhatsApp,
               message: formattedMessage,
               type: 'generic',
               whatsappLineId: resolvedLineId,
               organizationId: resolvedOrgId,
-            }
+            }),
           });
 
-          if (sendResponse.error) {
-            console.error("[whatsapp-inbound-webhook] Error sending bot response:", sendResponse.error);
+          if (!sendResponse.ok) {
+            const errorText = await sendResponse.text();
+            console.error("[whatsapp-inbound-webhook] Error sending bot response:", sendResponse.status, errorText);
           }
 
           // Log inbound message
