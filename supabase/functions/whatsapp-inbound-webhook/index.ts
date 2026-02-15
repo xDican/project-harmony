@@ -118,6 +118,16 @@ function extractAppointmentIdFromPayload(params: Record<string, string>): string
 }
 
 /**
+ * Formats bot message with numbered options
+ */
+function formatBotMessage(text: string, options?: string[]): string {
+  if (!options || options.length === 0) return text;
+
+  const menuText = options.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n');
+  return `${text}\n\n${menuText}\n\nResponde con el número de tu opción.`;
+}
+
+/**
  * EXISTENTE: notifica al doctor (se mantiene igual para NO romper tu flujo).
  */
 async function notifyDoctorReschedule(params: {
@@ -390,6 +400,86 @@ Deno.serve(async (req: Request) => {
       console.log("[whatsapp-inbound-webhook] No whatsapp_line found for TO:", toE164, "- using legacy behavior");
     }
     // ===== End multi-tenant resolution =====
+
+    // ===== Bot routing: Check if bot is enabled for this line =====
+    if (lineData && lineData.bot_enabled && resolvedOrgId) {
+      console.log("[whatsapp-inbound-webhook] Bot enabled, routing to bot-handler");
+
+      try {
+        // Call bot-handler edge function directly via fetch
+        const projectRef = new URL(SUPABASE_URL).hostname.split(".")[0];
+        const botHandlerUrl = `https://${projectRef}.supabase.co/functions/v1/bot-handler`;
+
+        const botResponse = await fetch(botHandlerUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            'x-internal-secret': INTERNAL_FUNCTION_SECRET,
+          },
+          body: JSON.stringify({
+            whatsappLineId: resolvedLineId,
+            patientPhone: fromLocal,
+            messageText: bodyText,
+            organizationId: resolvedOrgId,
+          }),
+        });
+
+        if (!botResponse.ok) {
+          const errorText = await botResponse.text();
+          console.error("[whatsapp-inbound-webhook] Bot-handler error:", botResponse.status, errorText);
+          // Fallback to legacy flow
+        } else {
+          const botData = await botResponse.json();
+          console.log("[whatsapp-inbound-webhook] Bot response:", botData);
+
+          // Format bot message with options if present
+          const formattedMessage = formatBotMessage(botData.message, botData.options);
+
+          // Send bot response via send-whatsapp-message
+          const sendWhatsAppUrl = `https://${projectRef}.supabase.co/functions/v1/send-whatsapp-message`;
+          const sendResponse = await fetch(sendWhatsAppUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-internal-secret': INTERNAL_FUNCTION_SECRET,
+            },
+            body: JSON.stringify({
+              to: fromWhatsApp,
+              body: formattedMessage,  // Changed from 'message' to 'body'
+              type: 'generic',
+              whatsappLineId: resolvedLineId,
+              organizationId: resolvedOrgId,
+            }),
+          });
+
+          if (!sendResponse.ok) {
+            const errorText = await sendResponse.text();
+            console.error("[whatsapp-inbound-webhook] Error sending bot response:", sendResponse.status, errorText);
+          }
+
+          // Log inbound message
+          await supabase.from("message_logs").insert({
+            organization_id: resolvedOrgId,
+            whatsapp_line_id: resolvedLineId,
+            to: fromLocal,
+            message: bodyText,
+            type: "inbound_bot",
+            status: "received",
+            direction: "inbound",
+          });
+
+          return new Response(JSON.stringify({ ok: true, botHandled: true }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch (botError) {
+        console.error("[whatsapp-inbound-webhook] Bot handler exception:", botError);
+        // Continue to legacy flow
+      }
+    }
+    // ===== End bot routing =====
 
     let patient: any = null;
     let appointment: any = null;
