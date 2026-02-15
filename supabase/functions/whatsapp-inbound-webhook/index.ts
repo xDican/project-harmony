@@ -414,6 +414,7 @@ Deno.serve(async (req: Request) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             'x-internal-secret': INTERNAL_FUNCTION_SECRET,
           },
           body: JSON.stringify({
