@@ -446,7 +446,7 @@ Deno.serve(async (req: Request) => {
             },
             body: JSON.stringify({
               to: fromWhatsApp,
-              message: formattedMessage,
+              body: formattedMessage,  // Changed from 'message' to 'body'
               type: 'generic',
               whatsappLineId: resolvedLineId,
               organizationId: resolvedOrgId,
