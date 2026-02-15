@@ -33,6 +33,7 @@ import OrganizationSettings from "./pages/OrganizationSettings";
 import ClinicsList from "./pages/ClinicsList";
 import CalendarsList from "./pages/CalendarsList";
 import WhatsAppLinesList from "./pages/WhatsAppLinesList";
+import BotFAQsPage from "./pages/BotFAQsPage";
 
 const queryClient = new QueryClient();
 
@@ -221,6 +222,11 @@ const App = () => {
             <Route path="/admin/whatsapp-lines" element={
               <RoleBasedRoute allowedRoles={['admin']}>
                 <WhatsAppLinesList />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/bot-faqs" element={
+              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+                <BotFAQsPage />
               </RoleBasedRoute>
             } />
             <Route path="/admin/specialties" element={

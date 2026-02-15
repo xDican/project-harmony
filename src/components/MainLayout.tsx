@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ const routeTitles: Record<string, string> = {
   '/admin/clinics': 'Clínicas',
   '/admin/calendars': 'Calendarios',
   '/admin/whatsapp-lines': 'WhatsApp Lines',
+  '/admin/bot-faqs': 'Bot FAQs',
   '/admin/reports/appointments': 'Reporte de Citas'
 };
 const getPageTitle = (pathname: string): string => {
@@ -180,6 +181,10 @@ export default function MainLayout({
       to: '/admin/whatsapp-lines',
       label: 'WhatsApp',
       icon: MessageSquare
+    }, {
+      to: '/admin/bot-faqs',
+      label: 'Bot FAQs',
+      icon: MessageCircleQuestion
     }, {
       to: '/admin/reports/appointments',
       label: 'Reporte de Citas',
