@@ -156,8 +156,8 @@ async function handleBotMessage(
     const expiresAt = DateTime.fromISO(session.expires_at);
 
     if (now > expiresAt) {
-      console.log('[bot-handler] Session expired, creating new one');
-      session = await createSession(whatsappLineId, patientPhone, organizationId, supabase);
+      console.log('[bot-handler] Session expired, resetting');
+      session = await resetSession(session.id, supabase);
     }
   }
 
@@ -257,19 +257,49 @@ async function createSession(
 
   const { data, error } = await supabase
     .from('bot_sessions')
-    .insert({
-      whatsapp_line_id: whatsappLineId,
-      patient_phone: patientPhone,
-      state: 'greeting',
-      context: {},
-      last_message_at: now.toISO(),
-      expires_at: expiresAt.toISO(),
-    })
+    .upsert(
+      {
+        whatsapp_line_id: whatsappLineId,
+        patient_phone: patientPhone,
+        state: 'greeting',
+        context: {},
+        last_message_at: now.toISO(),
+        expires_at: expiresAt.toISO(),
+      },
+      { onConflict: 'whatsapp_line_id,patient_phone' }
+    )
     .select()
     .single();
 
   if (error) {
     console.error('[createSession] Error:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+async function resetSession(
+  sessionId: string,
+  supabase: SupabaseClient
+): Promise<BotSession> {
+  const now = DateTime.now().setZone('America/Tegucigalpa');
+  const expiresAt = now.plus({ minutes: 45 });
+
+  const { data, error } = await supabase
+    .from('bot_sessions')
+    .update({
+      state: 'greeting',
+      context: {},
+      last_message_at: now.toISO(),
+      expires_at: expiresAt.toISO(),
+    })
+    .eq('id', sessionId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[resetSession] Error:', error);
     throw error;
   }
 
