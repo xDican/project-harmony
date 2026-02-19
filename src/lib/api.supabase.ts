@@ -465,20 +465,16 @@ export async function getAllPatients(): Promise<Patient[]> {
 export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient> {
   const orgId = await getActiveOrganizationId();
   const { name, phone, email, notes, doctorId } = input;
-  const { data, error } = await supabase
-    .from("patients")
-    .insert([
-      {
-        name,
-        phone,
-        email,
-        notes,
-        doctor_id: doctorId,
-        organization_id: orgId,
-      },
-    ])
-    .select()
-    .single();
+
+  // Use RPC for find-or-create: if patient with same phone exists in org,
+  // returns existing patient and links the doctor. Otherwise creates new.
+  const { data, error } = await supabase.rpc("find_or_create_patient", {
+    p_name: name,
+    p_phone: phone,
+    p_email: email || null,
+    p_notes: notes || null,
+    p_doctor_id: doctorId || null,
+  });
 
   if (error) {
     console.error("Error createPatient:", error);

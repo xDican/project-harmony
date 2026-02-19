@@ -67,7 +67,7 @@ interface ApiModule {
   getAvailableSlots: (params: { doctorId: string; date: string; durationMinutes?: number }) => Promise<string[]>;
   searchPatients: (query: string) => Promise<Patient[]>;
   getAllPatients: () => Promise<Patient[]>;
-  createPatient: (input: { name: string; phone: string; email?: string; notes?: string }) => Promise<Patient>;
+  createPatient: (input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }) => Promise<Patient>;
   getSpecialties: () => Promise<Specialty[]>;
   getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
   getDoctors: () => Promise<Doctor[]>;
