@@ -17,6 +17,7 @@ export type Database = {
       appointments: {
         Row: {
           appointment_at: string | null
+          calendar_id: string | null
           confirmation_message_sent: boolean
           created_at: string | null
           date: string
@@ -24,6 +25,7 @@ export type Database = {
           duration_minutes: number
           id: string
           notes: string | null
+          organization_id: string
           patient_id: string
           reminder_24h_sent: boolean
           reminder_24h_sent_at: string | null
@@ -33,6 +35,7 @@ export type Database = {
         }
         Insert: {
           appointment_at?: string | null
+          calendar_id?: string | null
           confirmation_message_sent?: boolean
           created_at?: string | null
           date: string
@@ -40,6 +43,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           notes?: string | null
+          organization_id: string
           patient_id: string
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
@@ -49,6 +53,7 @@ export type Database = {
         }
         Update: {
           appointment_at?: string | null
+          calendar_id?: string | null
           confirmation_message_sent?: boolean
           created_at?: string | null
           date?: string
@@ -56,6 +61,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           notes?: string | null
+          organization_id?: string
           patient_id?: string
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
@@ -65,10 +71,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "appointments_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "calendars"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_doctor_id_fkey"
             columns: ["doctor_id"]
             isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -113,8 +133,233 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_faqs: {
+        Row: {
+          answer: string
+          clinic_id: string | null
+          created_at: string
+          display_order: number
+          doctor_id: string | null
+          id: string
+          is_active: boolean
+          keywords: string[] | null
+          organization_id: string
+          question: string
+          scope_priority: number
+          updated_at: string
+        }
+        Insert: {
+          answer: string
+          clinic_id?: string | null
+          created_at?: string
+          display_order?: number
+          doctor_id?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          organization_id: string
+          question: string
+          scope_priority?: number
+          updated_at?: string
+        }
+        Update: {
+          answer?: string
+          clinic_id?: string | null
+          created_at?: string
+          display_order?: number
+          doctor_id?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          organization_id?: string
+          question?: string
+          scope_priority?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_faqs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_faqs_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_faqs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bot_sessions: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          last_message_at: string | null
+          patient_phone: string
+          state: string
+          whatsapp_line_id: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          patient_phone: string
+          state?: string
+          whatsapp_line_id: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          patient_phone?: string
+          state?: string
+          whatsapp_line_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_sessions_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_doctors: {
+        Row: {
+          calendar_id: string
+          doctor_id: string
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          calendar_id: string
+          doctor_id: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Update: {
+          calendar_id?: string
+          doctor_id?: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_doctors_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "calendars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_doctors_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendars: {
+        Row: {
+          clinic_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          clinic_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          organization_id: string
+        }
+        Update: {
+          clinic_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendars_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendars_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinics: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          organization_id: string
+          phone: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          organization_id: string
+          phone?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          organization_id?: string
+          phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       doctor_schedules: {
         Row: {
+          calendar_id: string | null
           day_of_week: number
           doctor_id: string
           end_time: string
@@ -122,6 +367,7 @@ export type Database = {
           start_time: string
         }
         Insert: {
+          calendar_id?: string | null
           day_of_week: number
           doctor_id: string
           end_time: string
@@ -129,6 +375,7 @@ export type Database = {
           start_time: string
         }
         Update: {
+          calendar_id?: string | null
           day_of_week?: number
           doctor_id?: string
           end_time?: string
@@ -136,6 +383,13 @@ export type Database = {
           start_time?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "doctor_schedules_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "calendars"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "doctor_schedules_doctor_id_fkey"
             columns: ["doctor_id"]
@@ -151,6 +405,7 @@ export type Database = {
           email: string | null
           id: string
           name: string
+          organization_id: string
           phone: string | null
           prefix: string | null
           specialty_id: string | null
@@ -161,6 +416,7 @@ export type Database = {
           email?: string | null
           id?: string
           name: string
+          organization_id: string
           phone?: string | null
           prefix?: string | null
           specialty_id?: string | null
@@ -171,12 +427,20 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string
+          organization_id?: string
           phone?: string | null
           prefix?: string | null
           specialty_id?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "doctors_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "doctors_specialty_id_fkey"
             columns: ["specialty_id"]
@@ -201,6 +465,7 @@ export type Database = {
           from_phone: string
           id: string
           is_in_service_window: boolean | null
+          organization_id: string | null
           patient_id: string | null
           price_category: string | null
           provider: string | null
@@ -212,6 +477,7 @@ export type Database = {
           total_price: number | null
           type: string | null
           unit_price: number | null
+          whatsapp_line_id: string | null
         }
         Insert: {
           appointment_id?: string | null
@@ -227,6 +493,7 @@ export type Database = {
           from_phone: string
           id?: string
           is_in_service_window?: boolean | null
+          organization_id?: string | null
           patient_id?: string | null
           price_category?: string | null
           provider?: string | null
@@ -238,6 +505,7 @@ export type Database = {
           total_price?: number | null
           type?: string | null
           unit_price?: number | null
+          whatsapp_line_id?: string | null
         }
         Update: {
           appointment_id?: string | null
@@ -253,6 +521,7 @@ export type Database = {
           from_phone?: string
           id?: string
           is_in_service_window?: boolean | null
+          organization_id?: string | null
           patient_id?: string | null
           price_category?: string | null
           provider?: string | null
@@ -264,6 +533,7 @@ export type Database = {
           total_price?: number | null
           type?: string | null
           unit_price?: number | null
+          whatsapp_line_id?: string | null
         }
         Relationships: [
           {
@@ -281,54 +551,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "message_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "message_logs_patient_id_fkey"
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      meta_connections: {
-        Row: {
-          access_token: string
-          created_at: string | null
-          doctor_id: string
-          expires_at: string | null
-          id: string
-          phone_number_id: string | null
-          token_type: string | null
-          updated_at: string | null
-          waba_id: string | null
-        }
-        Insert: {
-          access_token: string
-          created_at?: string | null
-          doctor_id: string
-          expires_at?: string | null
-          id?: string
-          phone_number_id?: string | null
-          token_type?: string | null
-          updated_at?: string | null
-          waba_id?: string | null
-        }
-        Update: {
-          access_token?: string
-          created_at?: string | null
-          doctor_id?: string
-          expires_at?: string | null
-          id?: string
-          phone_number_id?: string | null
-          token_type?: string | null
-          updated_at?: string | null
-          waba_id?: string | null
-        }
-        Relationships: [
           {
-            foreignKeyName: "meta_connections_doctor_id_fkey"
-            columns: ["doctor_id"]
-            isOneToOne: true
-            referencedRelation: "doctors"
+            foreignKeyName: "message_logs_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
             referencedColumns: ["id"]
           },
         ]
@@ -337,20 +577,131 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          organization_id: string | null
           state: string
           used_at: string | null
         }
         Insert: {
           created_at?: string
           id?: string
+          organization_id?: string | null
           state: string
           used_at?: string | null
         }
         Update: {
           created_at?: string
           id?: string
+          organization_id?: string | null
           state?: string
           used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_oauth_states_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_members: {
+        Row: {
+          created_at: string | null
+          doctor_id: string | null
+          id: string
+          is_active: boolean | null
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          secretary_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          doctor_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          secretary_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          doctor_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          secretary_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_members_secretary_id_fkey"
+            columns: ["secretary_id"]
+            isOneToOne: false
+            referencedRelation: "secretaries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          billing_type: string | null
+          country_code: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          owner_user_id: string | null
+          phone: string | null
+          slug: string
+          timezone: string | null
+          trial_ends_at: string | null
+        }
+        Insert: {
+          billing_type?: string | null
+          country_code?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          owner_user_id?: string | null
+          phone?: string | null
+          slug: string
+          timezone?: string | null
+          trial_ends_at?: string | null
+        }
+        Update: {
+          billing_type?: string | null
+          country_code?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          owner_user_id?: string | null
+          phone?: string | null
+          slug?: string
+          timezone?: string | null
+          trial_ends_at?: string | null
         }
         Relationships: []
       }
@@ -363,7 +714,7 @@ export type Database = {
           id_last_appointment: string | null
           name: string
           notes: string | null
-          organization_id: string | null
+          organization_id: string
           phone: string | null
         }
         Insert: {
@@ -374,7 +725,7 @@ export type Database = {
           id_last_appointment?: string | null
           name: string
           notes?: string | null
-          organization_id?: string | null
+          organization_id: string
           phone?: string | null
         }
         Update: {
@@ -385,7 +736,7 @@ export type Database = {
           id_last_appointment?: string | null
           name?: string
           notes?: string | null
-          organization_id?: string | null
+          organization_id?: string
           phone?: string | null
         }
         Relationships: [
@@ -394,6 +745,13 @@ export type Database = {
             columns: ["doctor_id"]
             isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -443,6 +801,7 @@ export type Database = {
           email: string | null
           id: string
           name: string
+          organization_id: string | null
           phone: string | null
         }
         Insert: {
@@ -450,6 +809,7 @@ export type Database = {
           email?: string | null
           id?: string
           name: string
+          organization_id?: string | null
           phone?: string | null
         }
         Update: {
@@ -457,9 +817,18 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string
+          organization_id?: string | null
           phone?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "secretaries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       specialties: {
         Row: {
@@ -542,6 +911,169 @@ export type Database = {
           },
         ]
       }
+      whatsapp_line_doctors: {
+        Row: {
+          calendar_id: string
+          doctor_id: string
+          id: string
+          whatsapp_line_id: string
+        }
+        Insert: {
+          calendar_id: string
+          doctor_id: string
+          id?: string
+          whatsapp_line_id: string
+        }
+        Update: {
+          calendar_id?: string
+          doctor_id?: string
+          id?: string
+          whatsapp_line_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_line_doctors_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "calendars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_line_doctors_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_line_doctors_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_lines: {
+        Row: {
+          bot_enabled: boolean | null
+          bot_greeting: string | null
+          clinic_id: string | null
+          created_at: string | null
+          default_duration_minutes: number | null
+          id: string
+          is_active: boolean | null
+          label: string
+          meta_access_token: string | null
+          meta_phone_number_id: string | null
+          meta_waba_id: string | null
+          organization_id: string
+          phone_number: string
+          provider: string | null
+          twilio_account_sid: string | null
+          twilio_auth_token: string | null
+          twilio_messaging_service_sid: string | null
+          twilio_phone_from: string | null
+          twilio_template_confirmation: string | null
+          twilio_template_reminder: string | null
+          twilio_template_reschedule: string | null
+        }
+        Insert: {
+          bot_enabled?: boolean | null
+          bot_greeting?: string | null
+          clinic_id?: string | null
+          created_at?: string | null
+          default_duration_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          label: string
+          meta_access_token?: string | null
+          meta_phone_number_id?: string | null
+          meta_waba_id?: string | null
+          organization_id: string
+          phone_number: string
+          provider?: string | null
+          twilio_account_sid?: string | null
+          twilio_auth_token?: string | null
+          twilio_messaging_service_sid?: string | null
+          twilio_phone_from?: string | null
+          twilio_template_confirmation?: string | null
+          twilio_template_reminder?: string | null
+          twilio_template_reschedule?: string | null
+        }
+        Update: {
+          bot_enabled?: boolean | null
+          bot_greeting?: string | null
+          clinic_id?: string | null
+          created_at?: string | null
+          default_duration_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          label?: string
+          meta_access_token?: string | null
+          meta_phone_number_id?: string | null
+          meta_waba_id?: string | null
+          organization_id?: string
+          phone_number?: string
+          provider?: string | null
+          twilio_account_sid?: string | null
+          twilio_auth_token?: string | null
+          twilio_messaging_service_sid?: string | null
+          twilio_phone_from?: string | null
+          twilio_template_confirmation?: string | null
+          twilio_template_reminder?: string | null
+          twilio_template_reschedule?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_lines_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_templates: {
+        Row: {
+          body: string
+          category: string
+          created_at: string
+          id: string
+          language: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          category?: string
+          created_at?: string
+          id?: string
+          language?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string
+          id?: string
+          language?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -607,6 +1139,15 @@ export type Database = {
           total_due: number
           usage_total: number
         }[]
+      }
+      get_user_organizations: { Args: { _user_id: string }; Returns: string[] }
+      has_org_role: {
+        Args: {
+          _org_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
       }
       has_role: {
         Args: {

@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
  * Admin can view all doctors, Doctor can only view their own
  */
 export default function AgendaSemanal() {
-  const { user, loading, isAdmin, isDoctor } = useCurrentUser();
+  const { user, loading, isAdmin, isDoctor, isSecretary, isAdminOrSecretary } = useCurrentUser();
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
@@ -90,8 +90,9 @@ export default function AgendaSemanal() {
   const { data: doctors, isLoading: loadingDoctors } = useDoctors();
 
   // Determine the doctorId to use for fetching appointments
-  const doctorIdToFetch = isDoctor 
-    ? user?.doctorId || undefined 
+  // Doctors see only their own, admin/secretary can filter by doctor or see all
+  const doctorIdToFetch = (isDoctor && !isAdminOrSecretary)
+    ? user?.doctorId || undefined
     : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
 
   // Fetch appointments for the week
@@ -154,7 +155,7 @@ export default function AgendaSemanal() {
   }
 
   // Permission check
-  if (!isAdmin && !isDoctor) {
+  if (!isAdmin && !isDoctor && !isSecretary) {
     return (
       <MainLayout>
         <div className="container mx-auto p-6 max-w-4xl">
@@ -263,8 +264,8 @@ export default function AgendaSemanal() {
         {/* SCROLLABLE CONTENT - Appointments list */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-4 py-4">
-            {/* Doctor Selection (only for admin) */}
-            {isAdmin && (
+            {/* Doctor Selection (for admin and secretary) */}
+            {isAdminOrSecretary && (
               <div className="mb-6">
                 <Label className="text-base font-semibold text-foreground mb-3 block">
                   Médico

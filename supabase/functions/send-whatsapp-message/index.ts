@@ -3,29 +3,40 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-internal-secret",
 };
 
-// Message types and their corresponding env var names
 const TEMPLATE_ENV_MAP: Record<string, string> = {
   confirmation: "TWILIO_TEMPLATE_CONFIRMATION",
   reminder_24h: "TWILIO_TEMPLATE_REMINDER_24H",
+  // Legacy alias: keep reschedule pointing to secretary template for backward compatibility.
   reschedule: "TWILIO_TEMPLATE_RESCHEDULE_SECRETARY",
+  reschedule_secretary: "TWILIO_TEMPLATE_RESCHEDULE_SECRETARY",
+  reschedule_patient: "TWILIO_TEMPLATE_RESCHEDULE_PATIENT",
+  confirmation_patient: "TWILIO_TEMPLATE_CONFIRMATION_PATIENT",
 };
 
-// Zod schema for request validation
+const TYPES_REQUIRE_APPOINTMENT_ID = new Set(["confirmation", "reminder_24h"]);
+
+
 const RequestSchema = z.object({
-  to: z.string().regex(/^whatsapp:\+\d{10,15}$/, "to debe ser formato whatsapp:+<número>"),
-  type: z.enum(["confirmation", "reminder_24h", "reschedule", "generic"]).optional().default("generic"),
+  to: z
+    .string()
+    .regex(/^whatsapp:\+\d{10,15}$/, "to debe ser formato whatsapp:+<número>"),
+  type: z
+    .enum(["confirmation", "reminder_24h", "reschedule", "reschedule_secretary", "reschedule_patient", "confirmation_patient", "generic"])
+    .optional()
+    .default("generic"),
   templateName: z.string().optional(),
   templateParams: z.record(z.string()).optional(),
   body: z.string().optional(),
   appointmentId: z.string().uuid().optional(),
   patientId: z.string().uuid().optional(),
   doctorId: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
+  whatsappLineId: z.string().uuid().optional(),
 });
-
-type RequestBody = z.infer<typeof RequestSchema>;
 
 interface TwilioResponse {
   sid?: string;
@@ -35,9 +46,6 @@ interface TwilioResponse {
   message?: string;
 }
 
-/**
- * Sends a WhatsApp message via Twilio API
- */
 async function sendTwilioMessage(params: {
   accountSid: string;
   authToken: string;
@@ -48,11 +56,20 @@ async function sendTwilioMessage(params: {
   contentVariables?: Record<string, string>;
   messagingServiceSid?: string;
 }): Promise<{ success: boolean; data: TwilioResponse }> {
-  const { accountSid, authToken, from, to, body, contentSid, contentVariables, messagingServiceSid } = params;
+  const {
+    accountSid,
+    authToken,
+    from,
+    to,
+    body,
+    contentSid,
+    contentVariables,
+    messagingServiceSid,
+  } = params;
 
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const twilioUrl =
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
 
-  // Build form data
   const formData = new URLSearchParams();
   formData.append("To", to);
   formData.append("From", from);
@@ -61,14 +78,12 @@ async function sendTwilioMessage(params: {
     formData.append("MessagingServiceSid", messagingServiceSid);
   }
 
-  // If using a template (Content API)
   if (contentSid) {
     formData.append("ContentSid", contentSid);
     if (contentVariables) {
       formData.append("ContentVariables", JSON.stringify(contentVariables));
     }
   } else if (body) {
-    // Plain text message
     formData.append("Body", body);
   }
 
@@ -84,16 +99,81 @@ async function sendTwilioMessage(params: {
   });
 
   const data: TwilioResponse = await response.json();
+  return { success: response.ok, data };
+}
+
+/**
+ * MV1 Settings:
+ * - per_message_price = Twilio fee
+ * - meta_fee_outside_window = extra fuera de ventana (flat)
+ * - window_hours = 24 por defecto
+ */
+async function getBillingSettings(
+  supabase: any,
+): Promise<{ twilioFee: number; metaFeeOutsideWindow: number; windowHours: number }> {
+  const { data, error } = await supabase
+    .from("billing_settings")
+    .select("per_message_price, meta_fee_outside_window, window_hours")
+    .eq("is_active", true)
+    .order("effective_from", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(
+      "[send-whatsapp-message] billing_settings query failed, defaults used:",
+      error,
+    );
+    return { twilioFee: 0.005, metaFeeOutsideWindow: 0, windowHours: 24 };
+  }
 
   return {
-    success: response.ok,
-    data,
+    twilioFee: Number(data?.per_message_price ?? 0.005),
+    metaFeeOutsideWindow: Number((data as any)?.meta_fee_outside_window ?? 0),
+    windowHours: Number((data as any)?.window_hours ?? 24),
   };
 }
 
 /**
- * Inserts a record into message_logs table
+ * MV1: Dentro de ventana si hubo inbound del paciente en las últimas N horas.
+ * IMPORTANT: Para que esto funcione, inbound debe guardar from_phone igual que el outbound guarda to_phone
+ * (ej: "whatsapp:+504...").
  */
+async function computeServiceWindow(
+  supabase: any,
+  params: { doctorId?: string; patientWhatsApp: string; windowHours: number },
+): Promise<{ isInWindow: boolean; lastInboundAt: string | null }> {
+  const { doctorId, patientWhatsApp, windowHours } = params;
+
+  // Si no tenemos doctorId no podemos aislar por doctor (y tampoco queremos "adivinar").
+  if (!doctorId) return { isInWindow: false, lastInboundAt: null };
+
+  const { data, error } = await supabase
+    .from("message_logs")
+    .select("created_at")
+    .eq("doctor_id", doctorId)
+    .eq("direction", "inbound")
+    .eq("from_phone", patientWhatsApp)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[send-whatsapp-message] computeServiceWindow failed:", error);
+    return { isInWindow: false, lastInboundAt: null };
+  }
+
+  const lastInboundAt: string | null = data?.created_at ?? null;
+  if (!lastInboundAt) return { isInWindow: false, lastInboundAt: null };
+
+  const last = new Date(lastInboundAt);
+  const now = new Date();
+  const diffMs = now.getTime() - last.getTime();
+  const isInWindow = diffMs <= windowHours * 60 * 60 * 1000;
+
+  return { isInWindow, lastInboundAt };
+}
+
 async function logMessage(
   supabase: any,
   params: {
@@ -105,53 +185,134 @@ async function logMessage(
     body?: string;
     templateName?: string;
     type: string;
-    status: "sent" | "failed";
+    status: "queued" | "failed"; // <- mantenemos queued/failed como pediste
+    providerMessageId?: string | null;
+    errorCode?: string | number | null;
+    errorMessage?: string | null;
     rawPayload: unknown;
+
+    // MV1
+    isInServiceWindow?: boolean | null;
+    unitPrice?: number | null;
+    totalPrice?: number | null;
+    priceCategory?: string | null;
+    billable?: boolean;
+
+    // Multi-tenant
+    organizationId?: string | null;
+    whatsappLineId?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase.from("message_logs").insert({
     appointment_id: params.appointmentId || null,
     patient_id: params.patientId || null,
     doctor_id: params.doctorId || null,
+
     direction: "outbound",
     channel: "whatsapp",
     to_phone: params.toPhone,
     from_phone: params.fromPhone,
+
     body: params.body || null,
     template_name: params.templateName || null,
     type: params.type,
+
     status: params.status,
+    provider: "twilio",
+    provider_message_id: params.providerMessageId || null,
+
+    // MV1 extras
+    is_in_service_window: params.isInServiceWindow ?? null,
+    unit_price: params.unitPrice ?? null,
+    total_price: params.totalPrice ?? null,
+    price_category: params.priceCategory ?? null,
+    billable: params.billable ?? true,
+
+    error_code: params.errorCode !== undefined && params.errorCode !== null
+      ? String(params.errorCode)
+      : null,
+    error_message: params.errorMessage || null,
+
     raw_payload: params.rawPayload,
+
+    // Multi-tenant
+    organization_id: params.organizationId || null,
+    whatsapp_line_id: params.whatsappLineId || null,
   });
 
-  if (error) {
-    console.error("[send-whatsapp-message] Error logging message:", error);
+  if (error) console.error("[send-whatsapp-message] Error logging message:", error);
+}
+
+/**
+ * Auth strategy:
+ * - If x-internal-secret is present: must match INTERNAL_FUNCTION_SECRET (for server-to-server calls like send-reminders)
+ * - Else: require apikey header to match SUPABASE_ANON_KEY (so frontend calls are allowed but endpoint isn't fully open)
+ */
+function authorize(
+  req: Request,
+): { ok: boolean; mode: "internal" | "apikey"; error?: string } {
+  const internalSecretHeader = req.headers.get("x-internal-secret") ||
+    req.headers.get("X-Internal-Secret") || "";
+  const internalSecretEnv = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
+
+  if (internalSecretHeader) {
+    if (!internalSecretEnv) {
+      return {
+        ok: false,
+        mode: "internal",
+        error: "Server misconfigured: missing INTERNAL_FUNCTION_SECRET",
+      };
+    }
+    if (internalSecretHeader !== internalSecretEnv) {
+      return { ok: false, mode: "internal", error: "Unauthorized" };
+    }
+    return { ok: true, mode: "internal" };
   }
+
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const apiKeyHeader = req.headers.get("apikey") ||
+    req.headers.get("x-api-key") || "";
+
+  if (!anonKey) {
+    return {
+      ok: false,
+      mode: "apikey",
+      error: "Server misconfigured: missing SUPABASE_ANON_KEY",
+    };
+  }
+  if (!apiKeyHeader) {
+    return { ok: false, mode: "apikey", error: "Missing apikey header" };
+  }
+  if (apiKeyHeader !== anonKey) {
+    return { ok: false, mode: "apikey", error: "Invalid apikey" };
+  }
+
+  return { ok: true, mode: "apikey" };
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method === "GET") {
+    return new Response(
+      JSON.stringify({ ok: true, message: "send-whatsapp-message alive" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
-    // 1) Validate Authorization
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ ok: false, error: "Missing Authorization header" }), {
-        status: 401,
+    const auth = authorize(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ ok: false, error: auth.error || "Unauthorized" }), {
+        status: auth.error?.startsWith("Server misconfigured") ? 500 : 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 2) Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
-    const messagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("[send-whatsapp-message] Missing Supabase env vars");
@@ -161,18 +322,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!accountSid || !authToken || !twilioFrom) {
-      console.error("[send-whatsapp-message] Missing Twilio env vars");
-      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Twilio" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // 3) Create Supabase client with service role for logging
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 4) Parse and validate request body
     const rawBody = await req.json();
     const validationResult = RequestSchema.safeParse(rawBody);
 
@@ -188,54 +339,200 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { to, type, templateName, templateParams, body, appointmentId, patientId, doctorId } = validationResult.data;
+    const {
+      to,
+      type,
+      templateName,
+      templateParams,
+      body,
+      appointmentId,
+      patientId,
+      doctorId,
+      organizationId: reqOrgId,
+      whatsappLineId: reqLineId,
+    } = validationResult.data;
 
-    console.log("[send-whatsapp-message] Request:", { to, type, templateName, hasBody: !!body });
+    console.log("[send-whatsapp-message] Request:", {
+      to,
+      type,
+      templateName,
+      hasBody: !!body,
+      authMode: auth.mode,
+      reqOrgId,
+      reqLineId,
+    });
 
-    // 5) Determine template to use
-    let resolvedTemplateName: string | undefined = templateName;
+    // ===== Resolve Twilio credentials: DB first, env var fallback =====
+    let accountSid: string | undefined;
+    let authToken: string | undefined;
+    let twilioFrom: string | undefined;
+    let messagingServiceSid: string | undefined;
+    let resolvedOrgId: string | undefined = reqOrgId;
+    let resolvedLineId: string | undefined = reqLineId;
 
-    if (!resolvedTemplateName && type && type !== "generic") {
-      const envVarName = TEMPLATE_ENV_MAP[type];
-      if (envVarName) {
-        resolvedTemplateName = Deno.env.get(envVarName);
+    // Map for DB-stored template SIDs
+    let dbTemplateConfirmation: string | undefined;
+    let dbTemplateReminder: string | undefined;
+    let dbTemplateReschedule: string | undefined;
+
+    // Strategy 1: Load by whatsappLineId if provided
+    if (reqLineId) {
+      const { data: line } = await supabase
+        .from("whatsapp_lines")
+        .select("*")
+        .eq("id", reqLineId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (line?.twilio_account_sid) {
+        accountSid = line.twilio_account_sid;
+        authToken = line.twilio_auth_token;
+        twilioFrom = line.twilio_phone_from;
+        messagingServiceSid = line.twilio_messaging_service_sid || undefined;
+        dbTemplateConfirmation = line.twilio_template_confirmation || undefined;
+        dbTemplateReminder = line.twilio_template_reminder || undefined;
+        dbTemplateReschedule = line.twilio_template_reschedule || undefined;
+        resolvedOrgId = line.organization_id;
+        console.log("[send-whatsapp-message] Creds loaded from whatsapp_lines by ID");
       }
     }
 
-    // 6) Validate we have either template or body
-    if (!resolvedTemplateName && !body) {
+    // Strategy 2: Load by organizationId if no line resolved yet
+    if (!accountSid && reqOrgId) {
+      const { data: line } = await supabase
+        .from("whatsapp_lines")
+        .select("*")
+        .eq("organization_id", reqOrgId)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (line?.twilio_account_sid) {
+        accountSid = line.twilio_account_sid;
+        authToken = line.twilio_auth_token;
+        twilioFrom = line.twilio_phone_from;
+        messagingServiceSid = line.twilio_messaging_service_sid || undefined;
+        dbTemplateConfirmation = line.twilio_template_confirmation || undefined;
+        dbTemplateReminder = line.twilio_template_reminder || undefined;
+        dbTemplateReschedule = line.twilio_template_reschedule || undefined;
+        resolvedLineId = line.id;
+        console.log("[send-whatsapp-message] Creds loaded from whatsapp_lines by org");
+      }
+    }
+
+    // Strategy 3: Fallback to env vars
+    if (!accountSid) {
+      accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+      authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+      twilioFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
+      messagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
+      console.log("[send-whatsapp-message] Using env var fallback for Twilio creds");
+    }
+
+    if (!accountSid || !authToken || !twilioFrom) {
+      console.error("[send-whatsapp-message] No Twilio creds available (DB or env)");
+      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Twilio" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // ===== End credential resolution =====
+
+    // Resolve template: try DB-stored templates first, then env var
+    let resolvedTemplateName: string | undefined = templateName;
+
+    if (!resolvedTemplateName && type && type !== "generic") {
+      // Try DB-stored template SIDs first
+      if (type === "confirmation" && dbTemplateConfirmation) {
+        resolvedTemplateName = dbTemplateConfirmation;
+      } else if (type === "reminder_24h" && dbTemplateReminder) {
+        resolvedTemplateName = dbTemplateReminder;
+      } else if ((type === "reschedule" || type === "reschedule_secretary") && dbTemplateReschedule) {
+        resolvedTemplateName = dbTemplateReschedule;
+      } else {
+        // Fallback to env var
+        const envVarName = TEMPLATE_ENV_MAP[type];
+        if (envVarName) resolvedTemplateName = Deno.env.get(envVarName) || undefined;
+      }
+    }
+
+    // Only confirmation and reminder_24h templates have an extra required variable: appointment_id
+    const confirmationSid = dbTemplateConfirmation || Deno.env.get("TWILIO_TEMPLATE_CONFIRMATION") || undefined;
+    const reminderSid = dbTemplateReminder || Deno.env.get("TWILIO_TEMPLATE_REMINDER_24H") || undefined;
+
+    const resolvedNeedsAppointmentId =
+      !!resolvedTemplateName &&
+      (TYPES_REQUIRE_APPOINTMENT_ID.has(type) ||
+        resolvedTemplateName === confirmationSid ||
+        resolvedTemplateName === reminderSid);
+
+    if (resolvedNeedsAppointmentId && !appointmentId) {
       return new Response(
         JSON.stringify({
           ok: false,
-          error: "Debe proporcionar templateName, un type válido con plantilla configurada, o body",
+          error: "appointmentId es requerido para enviar confirmation o reminder_24h.",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 7) Send message via Twilio
+    const finalTemplateParams: Record<string, string> | undefined = resolvedTemplateName
+      ? { ...(templateParams ?? {}) }
+      : undefined;
+
+    if (resolvedNeedsAppointmentId && finalTemplateParams) {
+      finalTemplateParams["appointment_id"] = appointmentId!;
+    }
+
+    if (!resolvedTemplateName && !body) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error:
+            "Debe proporcionar templateName, un type válido con plantilla configurada, o body",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ===== MV1 cost estimation =====
+    const billing = await getBillingSettings(supabase);
+    const windowInfo = await computeServiceWindow(supabase, {
+      doctorId,
+      patientWhatsApp: to,
+      windowHours: billing.windowHours,
+    });
+
+    const isTemplate = !!resolvedTemplateName;
+    const extraFee = (!windowInfo.isInWindow && isTemplate)
+      ? billing.metaFeeOutsideWindow
+      : 0;
+
+    const unitPrice = billing.twilioFee + extraFee;
+    const priceCategory = windowInfo.isInWindow
+      ? "in_window"
+      : (isTemplate ? "outside_window_template" : "outside_window_freeform");
+    // =================================
+
+    // Send via Twilio
     let twilioResult: { success: boolean; data: TwilioResponse };
     let messageBody: string | undefined;
 
     if (resolvedTemplateName) {
-      // Using template - Twilio Content API
-      // Note: For WhatsApp templates, you need to use ContentSid (the template's SID in Twilio)
-      // If your templates are pre-approved WhatsApp templates, use them directly
       twilioResult = await sendTwilioMessage({
         accountSid,
-        authToken,
+        authToken: authToken!,
         from: twilioFrom,
         to,
         contentSid: resolvedTemplateName,
-        contentVariables: templateParams,
+        contentVariables: finalTemplateParams,
         messagingServiceSid: messagingServiceSid || undefined,
       });
       messageBody = `template:${resolvedTemplateName}`;
     } else {
-      // Plain text message
       twilioResult = await sendTwilioMessage({
         accountSid,
-        authToken,
+        authToken: authToken!,
         from: twilioFrom,
         to,
         body: body!,
@@ -246,8 +543,10 @@ Deno.serve(async (req) => {
 
     console.log("[send-whatsapp-message] Twilio response:", JSON.stringify(twilioResult.data));
 
-    // 8) Log the message
-    const status = twilioResult.success ? "sent" : "failed";
+    const twilioSid = twilioResult.data.sid || null;
+
+    // IMPORTANT: You asked queued/failed here.
+    const logStatus: "queued" | "failed" = twilioResult.success ? "queued" : "failed";
 
     await logMessage(supabase, {
       appointmentId,
@@ -258,35 +557,51 @@ Deno.serve(async (req) => {
       body: messageBody,
       templateName: resolvedTemplateName,
       type,
-      status,
+      status: logStatus,
+      providerMessageId: twilioSid,
+      errorCode: twilioResult.data.error_code ?? null,
+      errorMessage: twilioResult.data.error_message || twilioResult.data.message || null,
       rawPayload: twilioResult.data,
+
+      // MV1 fields
+      isInServiceWindow: windowInfo.isInWindow,
+      unitPrice: unitPrice,
+      totalPrice: twilioResult.success ? unitPrice : 0,
+      priceCategory,
+      billable: twilioResult.success,
+
+      // Multi-tenant
+      organizationId: resolvedOrgId,
+      whatsappLineId: resolvedLineId,
     });
 
-    // 9) Return response
+    // Return
     if (twilioResult.success) {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          status: "sent",
-          twilioSid: twilioResult.data.sid,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ ok: true, status: "queued", twilioSid }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     } else {
-      const errorMessage = twilioResult.data.error_message || twilioResult.data.message || "Error al enviar mensaje";
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: errorMessage,
-          errorCode: twilioResult.data.error_code,
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const errorMessage =
+        twilioResult.data.error_message || twilioResult.data.message ||
+        "Error al enviar mensaje";
+      return new Response(JSON.stringify({
+        ok: false,
+        error: errorMessage,
+        errorCode: twilioResult.data.error_code,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
   } catch (error) {
     console.error("[send-whatsapp-message] Unexpected error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ ok: false, error: "Internal server error", details: errorMessage }), {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: "Internal server error",
+      details: errorMessage,
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

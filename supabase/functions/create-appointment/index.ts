@@ -15,6 +15,8 @@ const appointmentSchema = z.object({
   time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Time must be in HH:MM or HH:MM:SS format"),
   notes: z.string().max(2000, "Notes must be less than 2000 characters").optional(),
   durationMinutes: z.number().int().min(15).max(480).optional().default(60),
+  organizationId: z.string().uuid("Invalid organization ID format").optional(),
+  calendarId: z.string().uuid("Invalid calendar ID format").optional(),
 });
 
 /**
@@ -140,14 +142,28 @@ Deno.serve(async (req) => {
     const { data: userRoles, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("is_active", true);
 
     if (roleError || !userRoles || userRoles.length === 0) {
       console.error("[create-appointment] Role check failed:", { roleError, userRoles, userId: user.id });
       return jsonResponse(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+    if (!orgMemberError && orgMembers && orgMembers.length > 0) {
+      roles = orgMembers.map((r: any) => r.role);
+    } else {
+      // Fallback to user_roles
+      const { data: userRoles, error: roleError } = await supabaseAuth
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (roleError || !userRoles || userRoles.length === 0) {
+        console.error("[create-appointment] Role check failed:", roleError);
+        return json(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+      }
+      roles = userRoles.map((r: any) => r.role);
     }
 
-    const roles = userRoles.map((r) => r.role);
     const isAdmin = roles.includes("admin");
     const isSecretary = roles.includes("secretary");
     const isDoctor = roles.includes("doctor");
@@ -267,7 +283,41 @@ Deno.serve(async (req) => {
       return jsonResponse(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
     }
 
-    // 12) Insert appointment
+    // 12a) Resolve organization_id and calendar_id (infer from doctor if not provided)
+    let resolvedOrgId = reqOrgId || null;
+    let resolvedCalendarId = reqCalendarId || null;
+
+    if (!resolvedOrgId || !resolvedCalendarId) {
+      // Infer from doctor's org membership and calendar
+      const { data: doctorOrg } = await supabase
+        .from("doctors")
+        .select("organization_id")
+        .eq("id", doctorId)
+        .maybeSingle();
+
+      if (doctorOrg?.organization_id && !resolvedOrgId) {
+        resolvedOrgId = doctorOrg.organization_id;
+      }
+
+      if (!resolvedCalendarId && resolvedOrgId) {
+        // Find the calendar for this doctor in this org
+        const { data: calDoc } = await supabase
+          .from("calendar_doctors")
+          .select("calendar_id, calendars!inner(organization_id)")
+          .eq("doctor_id", doctorId)
+          .eq("calendars.organization_id", resolvedOrgId)
+          .limit(1)
+          .maybeSingle();
+
+        if (calDoc?.calendar_id) {
+          resolvedCalendarId = calDoc.calendar_id;
+        }
+      }
+    }
+
+    console.log("[create-appointment] Resolved org/calendar:", { resolvedOrgId, resolvedCalendarId });
+
+    // 12b) Insert appointment
     const { data: appointment, error: insertError } = await supabase
       .from("appointments")
       .insert({
@@ -284,6 +334,8 @@ Deno.serve(async (req) => {
         reminder_24h_sent: false,
         reminder_24h_sent_at: null,
         reschedule_notified_at: null,
+        organization_id: resolvedOrgId,
+        calendar_id: resolvedCalendarId,
       })
       .select()
       .single();

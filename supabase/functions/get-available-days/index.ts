@@ -22,7 +22,8 @@ const RequestSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, "month debe estar en formato YYYY-MM"),
   durationMinutes: z.number().int().min(1).max(480),
   timezone: z.string().optional().default(DEFAULT_TIMEZONE),
-  debug: z.boolean().optional().default(false),
+  debug: z.boolean().optional().default(true),
+  calendarId: z.string().uuid("calendarId debe ser un UUID válido").optional(),
 });
 
 type ValidatedRequest = z.infer<typeof RequestSchema>;
@@ -229,8 +230,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { doctorId, month, durationMinutes, timezone, debug } =
-      validationResult.data as ValidatedRequest;
+    const { doctorId, month, durationMinutes, timezone, debug, calendarId } =
+      validationResult.data as ValidatedRequest & { calendarId?: string };
 
     console.log("[get-available-days] Request:", {
       doctorId,
@@ -267,11 +268,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 6) Query A: Obtener schedules del doctor (max 7 filas)
-    const { data: schedules, error: scheduleError } = await supabase
+    // 6) Query A: Obtener schedules del doctor (max 7 filas, optionally filtered by calendar)
+    let scheduleQuery = supabase
       .from("doctor_schedules")
       .select("day_of_week, start_time, end_time")
       .eq("doctor_id", doctorId);
+
+    if (calendarId) {
+      scheduleQuery = scheduleQuery.eq("calendar_id", calendarId);
+    }
+
+    const { data: schedules, error: scheduleError } = await scheduleQuery;
 
     if (scheduleError) {
       console.error(

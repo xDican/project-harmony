@@ -1,130 +1,95 @@
 
 
-## Plan: i18n minimal para flujo WhatsApp (ES + EN)
+## Plan: Conectar plantillas WhatsApp a Edge Functions reales
 
 ### Resumen
-Crear un sistema de internacionalizacion ligero con un diccionario ES/EN y una funcion `t(key)`, luego reemplazar todos los strings hardcodeados en las 4 paginas de WhatsApp.
-
----
-
-### Archivos a crear
-
-#### 1. `src/lib/i18n.ts` - Utilidad de internacionalizacion
-
-Contenido:
-- Tipo `Lang = 'es' | 'en'`
-- Diccionario `translations` con claves para todos los textos visibles (~50 keys)
-- Funcion `getLang()`: lee `?lang=` del URL > `localStorage.app_lang` > default `'es'`
-- Funcion `setLang(lang)`: guarda en `localStorage.app_lang`
-- Funcion `t(key)`: devuelve `translations[key][getLang()]`
-
-Ejemplo de estructura del diccionario:
-
-```typescript
-const translations: Record<string, Record<Lang, string>> = {
-  // WhatsAppSettings
-  'ws.title': { es: 'Configuracion de WhatsApp', en: 'WhatsApp Settings' },
-  'ws.meta_title': { es: 'Conexion con Meta', en: 'Meta Connection' },
-  'ws.connected': { es: 'Conectado', en: 'Connected' },
-  'ws.not_connected': { es: 'No conectado', en: 'Not connected' },
-  'ws.meta_desc': { es: 'Esta conexion es obligatoria para la revision de Meta.', en: 'This connection is required for Meta App Review.' },
-  'ws.connect_btn': { es: 'Conectar WhatsApp Business', en: 'Connect WhatsApp Business' },
-  'ws.no_auth_url': { es: 'No se recibio la URL de autorizacion.', en: 'Authorization URL not received.' },
-  'ws.templates_title': { es: 'Plantillas de Mensajes', en: 'Message Templates' },
-  'ws.templates_desc': { es: 'Requerido para la revision de Meta', en: 'Required for Meta App Review' },
-  'ws.create_template': { es: 'Crear plantilla', en: 'Create template' },
-  'ws.mock_banner': { es: 'Backend no conectado aun. Ejecutando en modo demostracion.', en: 'Backend not connected yet. Running in demo mode.' },
-  'ws.no_templates': { es: 'Aun no hay plantillas creadas.', en: 'No templates created yet.' },
-  'ws.col_name': { es: 'Nombre', en: 'Name' },
-  'ws.col_category': { es: 'Categoria', en: 'Category' },
-  'ws.col_language': { es: 'Idioma', en: 'Language' },
-  'ws.col_status': { es: 'Estado', en: 'Status' },
-  'ws.col_updated': { es: 'Actualizacion', en: 'Updated' },
-  // Status labels
-  'status.approved': { es: 'Aprobada', en: 'Approved' },
-  'status.pending': { es: 'Pendiente', en: 'Pending' },
-  'status.rejected': { es: 'Rechazada', en: 'Rejected' },
-  'status.draft': { es: 'Borrador', en: 'Draft' },
-  // Callback page
-  'cb.connecting': { es: 'Conectando WhatsApp...', en: 'Connecting WhatsApp...' },
-  'cb.do_not_close': { es: 'No cierre esta ventana.', en: 'Do not close this window.' },
-  'cb.success': { es: 'Conectado correctamente', en: 'Connected successfully' },
-  'cb.redirecting': { es: 'Redirigiendo a configuracion...', en: 'Redirecting to settings...' },
-  'cb.error': { es: 'Error de conexion', en: 'Connection error' },
-  'cb.back': { es: 'Volver a configuracion', en: 'Back to settings' },
-  'cb.missing_params': { es: 'Faltan parametros de autorizacion (code o state).', en: 'Missing authorization parameters (code or state).' },
-  'cb.not_completed': { es: 'La conexion no se completo correctamente.', en: 'The connection was not completed successfully.' },
-  // Create template page
-  'ct.title': { es: 'Crear plantilla', en: 'Create template' },
-  'ct.name_label': { es: 'Nombre de la plantilla *', en: 'Template name *' },
-  'ct.category_label': { es: 'Categoria', en: 'Category' },
-  'ct.language_label': { es: 'Idioma', en: 'Language' },
-  'ct.body_label': { es: 'Cuerpo del mensaje *', en: 'Message body *' },
-  'ct.body_hint': { es: 'Use {{1}}, {{2}} para variables dinamicas.', en: 'Use {{1}}, {{2}} for dynamic variables.' },
-  'ct.cancel': { es: 'Cancelar', en: 'Cancel' },
-  'ct.submit': { es: 'Crear plantilla', en: 'Create template' },
-  'ct.success': { es: 'Plantilla creada correctamente', en: 'Template created successfully' },
-  // Template detail page
-  'td.not_found': { es: 'Plantilla no encontrada.', en: 'Template not found.' },
-  'td.back': { es: 'Volver', en: 'Back' },
-  'td.category': { es: 'Categoria', en: 'Category' },
-  'td.language': { es: 'Idioma', en: 'Language' },
-  'td.status': { es: 'Estado', en: 'Status' },
-  'td.updated': { es: 'Ultima actualizacion', en: 'Last updated' },
-  'td.body': { es: 'Cuerpo del mensaje', en: 'Message body' },
-  'td.use_btn': { es: 'Usar en confirmacion de cita', en: 'Use for appointment confirmation' },
-};
-```
+Actualizar `src/lib/whatsappApi.ts` para incluir el token de autorizacion del usuario en las llamadas, agregar `getTemplate(id)` como llamada al backend, y cambiar la logica de fallback para que solo use mock mode en caso de 404. Actualizar la pagina de detalle para cargar desde el backend.
 
 ---
 
 ### Archivos a modificar
 
-#### 2. `src/pages/WhatsAppSettings.tsx`
+#### 1. `src/lib/whatsappApi.ts`
 
-- Import `t`, `getLang`, `setLang` from `@/lib/i18n`
-- Add `lang` state initialized with `getLang()`
-- Add language toggle `ES | EN` in the page header (using `ToggleGroup` from existing UI components)
-- Replace all hardcoded strings with `t('key')` calls
-- Replace `statusLabel` object with `t('status.approved')`, etc.
-- Change date locale based on lang (`'es-MX'` vs `'en-US'`)
+**Cambios:**
 
-#### 3. `src/pages/MetaOAuthCallback.tsx`
+- Actualizar `getAuthHeaders()` para incluir el token JWT del usuario autenticado (obtenido de `supabase.auth.getSession()`)
+- Importar el cliente supabase desde `@/integrations/supabase/client`
 
-- Import `t` from `@/lib/i18n`
-- Replace all hardcoded strings with `t('key')` calls
+```typescript
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'apikey': '<anon_key>',
+  };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+  return headers;
+}
+```
 
-#### 4. `src/pages/WhatsAppPlantillaNueva.tsx`
+- Hacer `getAuthHeaders` asincrona y actualizar todas las llamadas que la usan (await)
 
-- Import `t` from `@/lib/i18n`
-- Replace all hardcoded strings with `t('key')` calls
-- Toast messages use `t()` as well
+- **`listTemplates()`**: cambiar el catch para solo hacer fallback a mock si el status es 404. Si es otro error (500, 401, etc.), devolver `{ data: null, error: "mensaje", isMockMode: false }`
 
-#### 5. `src/pages/WhatsAppPlantillaDetalle.tsx`
+- **`createTemplate()`**: misma logica -- solo fallback a mock en 404. Otros errores se muestran al usuario.
 
-- Import `t` from `@/lib/i18n`
-- Replace all hardcoded strings with `t('key')` calls
-- Status labels use `t('status.*')`
-- Date locale based on `getLang()`
+- **Agregar `getTemplate(id)`**: nueva funcion asincrona
+
+```typescript
+export async function getTemplate(id: string): Promise<ApiResult<WhatsAppTemplate>> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${FUNCTIONS_URL}/templates-get?id=${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers,
+    });
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const data = await res.json();
+    return { data: data.template ?? data, error: null, isMockMode: false };
+  } catch {
+    // Fallback to local mock
+    const local = getTemplateById(id);
+    return { data: local, error: local ? null : 'Template not found', isMockMode: !!local };
+  }
+}
+```
+
+- Mantener `getTemplateById` como funcion sincorna de fallback interno
 
 ---
 
-### Componente de cambio de idioma (dentro de WhatsAppSettings)
+#### 2. `src/pages/WhatsAppPlantillaDetalle.tsx`
 
-Ubicacion: junto al titulo `h1` en la cabecera de la pagina.
+**Cambios:**
+- Cambiar de carga sincrona (`getTemplateById`) a carga asincrona (`getTemplate`)
+- Agregar estados: `loading`, `template`, `error`
+- Usar `useEffect` para cargar el template al montar
+- Mostrar spinner mientras carga
+- Mostrar error si falla
 
-```
-[Configuracion de WhatsApp]          [ES | EN]
-```
+---
 
-Usando `ToggleGroup` de Radix (ya disponible en el proyecto) con `type="single"`:
-- Al cambiar: llama `setLang(value)`, actualiza estado local para re-render inmediato
-- Pequeno y discreto, no modifica el layout
+#### 3. `src/pages/WhatsAppPlantillaNueva.tsx`
+
+**Cambio minimo:**
+- El `createTemplate` ya se usa correctamente, solo se beneficia del fix en `whatsappApi.ts` (auth headers + error handling mejorado)
+- Agregar manejo del caso donde `result.error` existe (ya esta implementado)
 
 ---
 
 ### Lo que NO cambia
-- Rutas (siguen siendo `/configuracion/whatsapp`, etc.)
-- Estructura visual / UX
-- Logica de negocio
-- whatsappApi.ts (los mensajes de error de API se mantienen tecnicos)
+- Rutas
+- UI/UX visual
+- i18n
+- WhatsAppSettings.tsx (ya usa `listTemplates` correctamente, solo se beneficia del fix en whatsappApi)
+- MetaOAuthCallback.tsx
+
+### Resultado esperado
+- Las plantillas se cargan desde el backend real cuando las Edge Functions responden
+- El banner de mock mode solo aparece si el endpoint devuelve 404
+- Errores reales (401, 500) se muestran al usuario como mensajes de error
+- La pagina de detalle carga desde `templates-get?id=` en vez de localStorage
+

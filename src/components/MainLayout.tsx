@@ -4,10 +4,11 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
+import OrgSwitcher from '@/components/OrgSwitcher';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -19,6 +20,11 @@ const routeTitles: Record<string, string> = {
   '/configuracion': 'Configuración',
   '/configuracion/whatsapp': 'WhatsApp Business',
   '/admin/users': 'Usuarios',
+  '/admin/organization': 'Organización',
+  '/admin/clinics': 'Clínicas',
+  '/admin/calendars': 'Calendarios',
+  '/admin/whatsapp-lines': 'WhatsApp Lines',
+  '/admin/bot-faqs': 'Bot FAQs',
   '/admin/reports/appointments': 'Reporte de Citas'
 };
 const getPageTitle = (pathname: string): string => {
@@ -80,7 +86,7 @@ export default function MainLayout({
   const getNavigationItems = () => {
     const items = [];
 
-    // Secretary can see: Agenda, Nueva Cita, Pacientes (no Admin)
+    // Secretary can see: Agenda, Nueva Cita, Pacientes, Agenda Semanal (no Admin)
     if (isSecretary) {
       items.push({
         to: '/agenda-secretaria',
@@ -94,6 +100,10 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
+      }, {
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
       });
     }
 
@@ -156,6 +166,26 @@ export default function MainLayout({
       label: 'Usuarios',
       icon: UserPlus
     }, {
+      to: '/admin/organization',
+      label: 'Organización',
+      icon: Building2
+    }, {
+      to: '/admin/clinics',
+      label: 'Clínicas',
+      icon: Hospital
+    }, {
+      to: '/admin/calendars',
+      label: 'Calendarios',
+      icon: CalendarDays
+    }, {
+      to: '/admin/whatsapp-lines',
+      label: 'WhatsApp',
+      icon: MessageSquare
+    }, {
+      to: '/admin/bot-faqs',
+      label: 'Bot FAQs',
+      icon: MessageCircleQuestion
+    }, {
       to: '/admin/reports/appointments',
       label: 'Reporte de Citas',
       icon: FileText
@@ -200,6 +230,7 @@ export default function MainLayout({
                 <div className="border-b pb-4 -mt-2 items-center justify-center flex flex-col mx-0 my-0 gap-0">
                   <h2 className="font-semibold text-foreground text-xl text-center">Menú</h2>
                 </div>
+                <OrgSwitcher />
                 <div className="mt-4 flex-1">
                   <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
                 </div>
@@ -230,6 +261,7 @@ export default function MainLayout({
               <span className="sr-only">Cerrar sesión</span>
             </Button>
           </div>
+          <OrgSwitcher />
           <div className="flex-1 overflow-auto py-6 px-4">
             <NavigationLinks />
           </div>

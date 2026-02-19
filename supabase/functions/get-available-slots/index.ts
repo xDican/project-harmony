@@ -12,6 +12,7 @@ const RequestSchema = z.object({
   doctorId: z.string().uuid("doctorId debe ser un UUID válido"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date debe estar en formato YYYY-MM-DD"),
   durationMinutes: z.number().int().min(15).max(480).optional().default(60),
+  calendarId: z.string().uuid("calendarId debe ser un UUID válido").optional(),
 });
 
 const DEFAULT_DURATION_MINUTES = 60;
@@ -86,8 +87,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { doctorId, date, durationMinutes } = validationResult.data;
-    console.log("[get-available-slots] Request:", { doctorId, date, durationMinutes });
+    const { doctorId, date, durationMinutes, calendarId } = validationResult.data;
+    console.log("[get-available-slots] Request:", { doctorId, date, durationMinutes, calendarId });
 
     // 5) Verify doctor exists
     const { data: doctor, error: doctorError } = await supabase
@@ -108,12 +109,18 @@ Deno.serve(async (req) => {
     const requestedDate = DateTime.fromISO(date);
     const dayOfWeek = requestedDate.weekday % 7; // Luxon: 1=Monday...7=Sunday -> convert to 0=Sunday...6=Saturday
 
-    // 7) Fetch doctor's schedules for that day
-    const { data: schedules, error: scheduleError } = await supabase
+    // 7) Fetch doctor's schedules for that day (optionally filter by calendar)
+    let scheduleQuery = supabase
       .from("doctor_schedules")
       .select("start_time, end_time")
       .eq("doctor_id", doctorId)
       .eq("day_of_week", dayOfWeek);
+
+    if (calendarId) {
+      scheduleQuery = scheduleQuery.eq("calendar_id", calendarId);
+    }
+
+    const { data: schedules, error: scheduleError } = await scheduleQuery;
 
     if (scheduleError) {
       console.error("[get-available-slots] Error fetching schedules:", scheduleError);

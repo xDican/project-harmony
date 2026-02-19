@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { getCurrentUserWithRole } from '../lib/api';
+import { switchActiveOrganization } from '../lib/api.supabase';
 import { supabase } from '../lib/supabaseClient';
 import type { CurrentUser, UserRole } from '../types/user';
 import type { Session } from '@supabase/supabase-js';
@@ -14,6 +15,8 @@ export interface UserContextValue {
   isSecretary: boolean;
   isDoctor: boolean;
   isAdminOrSecretary: boolean;
+  organizationId: string | null;
+  switchOrganization: ((newOrgId: string) => Promise<void>) | null;
 }
 
 /**
@@ -42,7 +45,7 @@ export function UserProvider({ children }: UserProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
-        
+
         // Fetch user with role when session changes
         if (session?.user) {
           getCurrentUserWithRole()
@@ -66,7 +69,7 @@ export function UserProvider({ children }: UserProviderProps) {
     // Check for existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      
+
       if (session?.user) {
         getCurrentUserWithRole()
           .then((currentUser) => {
@@ -87,11 +90,26 @@ export function UserProvider({ children }: UserProviderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
+  /**
+   * Switch the active organization.
+   * Calls the edge function, then re-fetches user data to update role/orgId.
+   */
+  const switchOrganization = useCallback(async (newOrgId: string) => {
+    // Call edge function to switch active org in DB
+    await switchActiveOrganization(newOrgId);
+
+    // Re-fetch user with updated org context
+    const updatedUser = await getCurrentUserWithRole();
+    setUser(updatedUser);
+  }, []);
+
   // Calculate role flags based on user.role
   const isAdmin = user?.role === 'admin';
   const isSecretary = user?.role === 'secretary';
   const isDoctor = user?.role === 'doctor';
   const isAdminOrSecretary = isAdmin || isSecretary;
+
+  const organizationId = user?.organizationId ?? null;
 
   const value: UserContextValue = {
     user,
@@ -100,6 +118,8 @@ export function UserProvider({ children }: UserProviderProps) {
     isSecretary,
     isDoctor,
     isAdminOrSecretary,
+    organizationId,
+    switchOrganization: user ? switchOrganization : null,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
@@ -111,10 +131,10 @@ export function UserProvider({ children }: UserProviderProps) {
  */
 export function useCurrentUser(): UserContextValue {
   const context = useContext(UserContext);
-  
+
   if (context === undefined) {
     throw new Error('useCurrentUser must be used within a UserProvider');
   }
-  
+
   return context;
 }
