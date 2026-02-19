@@ -357,32 +357,35 @@ export type Database = {
       patients: {
         Row: {
           created_at: string | null
-          doctor_id: string
+          doctor_id: string | null
           email: string | null
           id: string
           id_last_appointment: string | null
           name: string
           notes: string | null
+          organization_id: string | null
           phone: string | null
         }
         Insert: {
           created_at?: string | null
-          doctor_id: string
+          doctor_id?: string | null
           email?: string | null
           id?: string
           id_last_appointment?: string | null
           name: string
           notes?: string | null
+          organization_id?: string | null
           phone?: string | null
         }
         Update: {
           created_at?: string | null
-          doctor_id?: string
+          doctor_id?: string | null
           email?: string | null
           id?: string
           id_last_appointment?: string | null
           name?: string
           notes?: string | null
+          organization_id?: string | null
           phone?: string | null
         }
         Relationships: [
@@ -391,6 +394,45 @@ export type Database = {
             columns: ["doctor_id"]
             isOneToOne: false
             referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doctor_patients: {
+        Row: {
+          id: string
+          doctor_id: string
+          patient_id: string
+          organization_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          doctor_id: string
+          patient_id: string
+          organization_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          doctor_id?: string
+          patient_id?: string
+          organization_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_patients_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_patients_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
             referencedColumns: ["id"]
           },
         ]

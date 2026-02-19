@@ -1,14 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { handleCors, jsonResponse } from "../_shared/cors.ts";
+import { normalizeToE164 } from "../_shared/phone.ts";
+import { formatAppointmentDateTime } from "../_shared/datetime.ts";
 
-// Optional: helpful to confirm which version is deployed
-const BUILD = "create-appointment@2025-12-19_owner_checks_v1";
+const BUILD = "create-appointment@2026-02-19_junction_v1";
 
 // Zod schema for request validation
 const appointmentSchema = z.object({
@@ -20,133 +17,78 @@ const appointmentSchema = z.object({
   durationMinutes: z.number().int().min(15).max(480).optional().default(60),
 });
 
-interface TwilioResponse {
-  sid?: string;
-  status?: string;
-  error_code?: number;
-  error_message?: string;
-  message?: string;
-}
-
 /**
- * Sends a WhatsApp message via Twilio API
+ * Sends a WhatsApp confirmation via the messaging-gateway Edge Function.
+ * The gateway handles provider selection (Twilio/Meta), template resolution, and logging.
  */
-async function sendTwilioWhatsApp(params: {
-  accountSid: string;
-  authToken: string;
-  from: string;
-  to: string;
-  contentSid: string;
-  contentVariables: Record<string, string>;
-  messagingServiceSid?: string;
-}): Promise<{ success: boolean; data: TwilioResponse }> {
-  const { accountSid, authToken, from, to, contentSid, contentVariables, messagingServiceSid } = params;
+async function sendConfirmationViaGateway(params: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  anonKey: string;
+  patientPhone: string;
+  patientName: string;
+  doctorDisplayName: string;
+  formattedDateTime: string;
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+}): Promise<{ success: boolean; providerMessageId?: string; error?: string }> {
+  try {
+    const projectRef = new URL(params.supabaseUrl).hostname.split(".")[0];
+    const gatewayUrl = `https://${projectRef}.supabase.co/functions/v1/messaging-gateway`;
 
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const response = await fetch(gatewayUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${params.serviceRoleKey}`,
+        apikey: params.anonKey,
+      },
+      body: JSON.stringify({
+        to: normalizeToE164(params.patientPhone),
+        type: "confirmation",
+        templateParams: {
+          "1": params.patientName,
+          "2": params.doctorDisplayName,
+          "3": params.formattedDateTime,
+        },
+        appointmentId: params.appointmentId,
+        patientId: params.patientId,
+        doctorId: params.doctorId,
+      }),
+    });
 
-  const formData = new URLSearchParams();
-  formData.append("To", to);
-  formData.append("From", from);
-  formData.append("ContentSid", contentSid);
-  formData.append("ContentVariables", JSON.stringify(contentVariables));
+    const data = await response.json();
 
-  if (messagingServiceSid) {
-    formData.append("MessagingServiceSid", messagingServiceSid);
+    if (!response.ok || !data.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return {
+      success: true,
+      providerMessageId: data.providerMessageId,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
-
-  const credentials = btoa(`${accountSid}:${authToken}`);
-
-  const response = await fetch(twilioUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString(),
-  });
-
-  const data: TwilioResponse = await response.json();
-
-  return {
-    success: response.ok,
-    data,
-  };
-}
-
-/**
- * Logs a message to the message_logs table
- */
-async function logMessage(
-  supabase: any,
-  params: {
-    appointmentId: string;
-    patientId: string;
-    doctorId: string;
-    toPhone: string;
-    fromPhone: string;
-    templateName: string;
-    status: "sent" | "failed";
-    rawPayload: unknown;
-  },
-): Promise<void> {
-  const { error } = await supabase.from("message_logs").insert({
-    appointment_id: params.appointmentId,
-    patient_id: params.patientId,
-    doctor_id: params.doctorId,
-    direction: "outbound",
-    channel: "whatsapp",
-    to_phone: params.toPhone,
-    from_phone: params.fromPhone,
-    body: `template:${params.templateName}`,
-    template_name: params.templateName,
-    type: "confirmation",
-    status: params.status,
-    raw_payload: params.rawPayload,
-  });
-
-  if (error) {
-    console.error("[create-appointment] Error logging message:", error);
-  }
-}
-
-/**
- * Formats a date string to dd/MM/yyyy format
- */
-function formatDateForTemplate(dateStr: string): string {
-  const dt = DateTime.fromISO(dateStr);
-  return dt.toFormat("dd/MM/yyyy");
-}
-
-/**
- * Formats time to 12-hour format with AM/PM
- */
-function formatTimeForTemplate(timeStr: string): string {
-  // Parse HH:MM or HH:MM:SS
-  const [hours, minutes] = timeStr.split(":").map(Number);
-  const period = hours >= 12 ? "PM" : "AM";
-  const hours12 = hours % 12 || 12;
-  return `${hours12}:${String(minutes).padStart(2, "0")} ${period}`;
-}
-
-function json(status: number, payload: unknown) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 }
 
 Deno.serve(async (req) => {
-  // Preflight CORS
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
   try {
     // 1) Validate Authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       console.error("[create-appointment] Missing Authorization header");
-      return json(401, { ok: false, error: "Missing Authorization header", build: BUILD });
+      return jsonResponse(401, { ok: false, error: "Missing Authorization header", build: BUILD });
     }
 
     // 2) Get environment variables
@@ -156,20 +98,7 @@ Deno.serve(async (req) => {
 
     if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
       console.error("[create-appointment] Missing Supabase env vars");
-      return json(500, { ok: false, error: "Supabase env vars not configured", build: BUILD });
-    }
-
-    // Twilio env vars
-    const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    const twilioWhatsAppFrom = Deno.env.get("TWILIO_WHATSAPP_FROM");
-    const twilioMessagingServiceSid = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID");
-    const twilioTemplateConfirmation = Deno.env.get("TWILIO_TEMPLATE_CONFIRMATION");
-
-    const hasTwilioConfig = twilioAccountSid && twilioAuthToken && twilioWhatsAppFrom && twilioTemplateConfirmation;
-
-    if (!hasTwilioConfig) {
-      console.warn("[create-appointment] Twilio env vars not fully configured - WhatsApp notifications disabled");
+      return jsonResponse(500, { ok: false, error: "Supabase env vars not configured", build: BUILD });
     }
 
     // 3) Create Supabase client with user's JWT for auth check
@@ -188,16 +117,16 @@ Deno.serve(async (req) => {
 
     if (userError || !user) {
       console.error("[create-appointment] Auth error:", userError);
-      return json(401, { ok: false, error: "Unauthorized", build: BUILD });
+      return jsonResponse(401, { ok: false, error: "Unauthorized", build: BUILD });
     }
 
-    // 5) Parse and validate request body FIRST (we need doctorId/patientId)
+    // 5) Parse and validate request body
     const body = await req.json();
     const validationResult = appointmentSchema.safeParse(body);
 
     if (!validationResult.success) {
       console.error("[create-appointment] Validation failed:", validationResult.error.errors);
-      return json(400, {
+      return jsonResponse(400, {
         ok: false,
         error: "Validation failed",
         details: validationResult.error.errors,
@@ -206,18 +135,16 @@ Deno.serve(async (req) => {
     }
 
     const { doctorId, patientId, date, time, notes, durationMinutes } = validationResult.data;
-    console.log("[create-appointment] BUILD:", BUILD);
-    console.log("[create-appointment] Validated request:", { doctorId, patientId, date, time, durationMinutes });
 
-    // 6) Check if user has permission using user_roles table (via RLS)
-    const { data: userRoles, error: roleError } = await supabaseAuth
+    // 6) Check if user has permission using user_roles table (service role to bypass RLS)
+    const { data: userRoles, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id);
 
     if (roleError || !userRoles || userRoles.length === 0) {
-      console.error("[create-appointment] Role check failed:", roleError);
-      return json(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+      console.error("[create-appointment] Role check failed:", { roleError, userRoles, userId: user.id });
+      return jsonResponse(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
     }
 
     const roles = userRoles.map((r) => r.role);
@@ -228,7 +155,7 @@ Deno.serve(async (req) => {
     const hasPermission = isAdmin || isSecretary || isDoctor;
     if (!hasPermission) {
       console.error("[create-appointment] User lacks permission:", roles);
-      return json(403, { ok: false, error: "Insufficient permissions.", build: BUILD });
+      return jsonResponse(403, { ok: false, error: "Insufficient permissions.", build: BUILD });
     }
 
     // 7) If doctor (and not admin/secretary), enforce doctorId matches doctors.user_id
@@ -241,7 +168,7 @@ Deno.serve(async (req) => {
 
       if (myDoctorErr) {
         console.error("[create-appointment] Error resolving doctor from user:", myDoctorErr);
-        return json(500, { ok: false, error: "Error resolving doctor", details: myDoctorErr.message, build: BUILD });
+        return jsonResponse(500, { ok: false, error: "Error resolving doctor", details: myDoctorErr.message, build: BUILD });
       }
 
       if (!myDoctor?.id || myDoctor.id !== doctorId) {
@@ -250,7 +177,7 @@ Deno.serve(async (req) => {
           myDoctorId: myDoctor?.id,
           requestedDoctorId: doctorId,
         });
-        return json(403, {
+        return jsonResponse(403, {
           ok: false,
           error: "Forbidden",
           message: "Los médicos solo pueden crear citas para su propio doctorId",
@@ -268,22 +195,57 @@ Deno.serve(async (req) => {
     // 9) Build appointment_at timestamp
     const appointmentAt = `${date}T${normalizedTime}`;
 
-    // 10) Validate patient belongs to doctor (doctor-owned patients model)
-    // Also fetch patient data we need later (name/phone) in the same query.
+    // 10) Fetch doctor's organization_id
+    const { data: doctorOrg, error: doctorOrgError } = await supabase
+      .from("doctors")
+      .select("organization_id")
+      .eq("id", doctorId)
+      .single();
+
+    if (doctorOrgError || !doctorOrg?.organization_id) {
+      console.error("[create-appointment] Error fetching doctor org:", doctorOrgError);
+      return jsonResponse(500, { ok: false, error: "Error resolviendo organización del doctor", build: BUILD });
+    }
+
+    // 10b) Fetch patient by ID (org-level, not doctor-specific)
     const { data: patient, error: patientError } = await supabase
       .from("patients")
-      .select("id, name, phone, doctor_id")
+      .select("id, name, phone, organization_id")
       .eq("id", patientId)
-      .eq("doctor_id", doctorId)
       .maybeSingle();
 
     if (patientError) {
-      console.error("[create-appointment] Error validating patient ownership:", patientError);
-      return json(500, { ok: false, error: "Error validando paciente", details: patientError.message, build: BUILD });
+      console.error("[create-appointment] Error fetching patient:", patientError);
+      return jsonResponse(500, { ok: false, error: "Error validando paciente", details: patientError.message, build: BUILD });
     }
 
     if (!patient) {
-      return json(403, { ok: false, error: "Paciente no pertenece a este doctor", build: BUILD });
+      return jsonResponse(404, { ok: false, error: "Paciente no encontrado", build: BUILD });
+    }
+
+    // 10c) Validate patient belongs to same organization as doctor
+    if (patient.organization_id !== doctorOrg.organization_id) {
+      console.error("[create-appointment] Org mismatch:", {
+        patientOrg: patient.organization_id,
+        doctorOrg: doctorOrg.organization_id,
+      });
+      return jsonResponse(403, { ok: false, error: "Paciente no pertenece a la organización del doctor", build: BUILD });
+    }
+
+    // 10d) Auto-link doctor ↔ patient in junction table (idempotent)
+    const { error: linkError } = await supabase
+      .from("doctor_patients")
+      .upsert(
+        {
+          doctor_id: doctorId,
+          patient_id: patientId,
+          organization_id: doctorOrg.organization_id,
+        },
+        { onConflict: "doctor_id,patient_id" }
+      );
+
+    if (linkError) {
+      console.warn("[create-appointment] Non-fatal: failed to upsert doctor_patients link:", linkError);
     }
 
     // 11) Check for existing appointment in same slot (exclude cancelled)
@@ -297,12 +259,12 @@ Deno.serve(async (req) => {
 
     if (existingError) {
       console.error("[create-appointment] Error checking existing appointments:", existingError);
-      return json(500, { ok: false, error: "Error al verificar citas existentes", build: BUILD });
+      return jsonResponse(500, { ok: false, error: "Error al verificar citas existentes", build: BUILD });
     }
 
     if (existingAppointments && existingAppointments.length > 0) {
       console.warn("[create-appointment] Slot already occupied");
-      return json(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
+      return jsonResponse(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
     }
 
     // 12) Insert appointment
@@ -311,6 +273,7 @@ Deno.serve(async (req) => {
       .insert({
         doctor_id: doctorId,
         patient_id: patientId,
+        organization_id: doctorOrg.organization_id,
         date,
         time: normalizedTime,
         notes: notes || null,
@@ -328,13 +291,12 @@ Deno.serve(async (req) => {
     if (insertError) {
       console.error("[create-appointment] Error inserting appointment:", insertError);
 
-      // If you added a unique index (doctor_id, date, time), a race condition can produce a 23505
       const code = (insertError as any)?.code;
       if (code === "23505") {
-        return json(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
+        return jsonResponse(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
       }
 
-      return json(500, { ok: false, error: "Error al crear la cita", details: insertError.message, build: BUILD });
+      return jsonResponse(500, { ok: false, error: "Error al crear la cita", details: insertError.message, build: BUILD });
     }
 
     console.log("[create-appointment] Appointment created:", appointment.id);
@@ -348,7 +310,7 @@ Deno.serve(async (req) => {
 
     if (doctorError || !doctor) {
       console.error("[create-appointment] Error fetching doctor:", doctorError);
-      return json(200, {
+      return jsonResponse(200, {
         ok: true,
         appointment,
         whatsappSent: false,
@@ -364,7 +326,7 @@ Deno.serve(async (req) => {
     // 15) Check if patient has a phone number
     if (!patient.phone) {
       console.warn("[create-appointment] Patient has no phone number");
-      return json(200, {
+      return jsonResponse(200, {
         ok: true,
         appointment,
         whatsappSent: false,
@@ -373,93 +335,50 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 16) Check Twilio configuration
-    if (!hasTwilioConfig) {
-      return json(200, {
-        ok: true,
-        appointment,
-        whatsappSent: false,
-        whatsappError: "Twilio no está configurado",
-        build: BUILD,
-      });
-    }
+    // 16) Format appointment date/time for template
+    const formattedDateTime = formatAppointmentDateTime(date, normalizedTime);
 
-    // 17) Format phone number for WhatsApp
-    let whatsappTo = patient.phone;
-    if (!whatsappTo.startsWith("whatsapp:")) {
-      if (!whatsappTo.startsWith("+")) {
-        // Assume Honduras (+504) if no country code
-        whatsappTo = `+504${whatsappTo.replace(/\D/g, "")}`;
-      }
-      whatsappTo = `whatsapp:${whatsappTo}`;
-    }
-
-    // 18) Build template parameters
-    const formattedDate = formatDateForTemplate(date);
-    const formattedTime = formatTimeForTemplate(normalizedTime);
-
-    const templateParams = {
-      "1": patient.name,
-      "2": doctorDisplayName,
-      "3": `${formattedDate} a las ${formattedTime}`,
-    };
-
-    console.log("[create-appointment] Sending WhatsApp confirmation:", {
-      to: whatsappTo,
-      templateParams,
+    console.log("[create-appointment] Sending WhatsApp confirmation via gateway:", {
+      to: patient.phone,
+      templateParams: { "1": patient.name, "2": doctorDisplayName, "3": formattedDateTime },
     });
 
-    // 19) Send WhatsApp message
-    const twilioResult = await sendTwilioWhatsApp({
-      accountSid: twilioAccountSid!,
-      authToken: twilioAuthToken!,
-      from: twilioWhatsAppFrom!,
-      to: whatsappTo,
-      contentSid: twilioTemplateConfirmation!,
-      contentVariables: templateParams,
-      messagingServiceSid: twilioMessagingServiceSid || undefined,
-    });
-
-    console.log("[create-appointment] Twilio response:", JSON.stringify(twilioResult.data));
-
-    // 20) Log the message
-    const messageStatus = twilioResult.success ? "sent" : "failed";
-
-    await logMessage(supabase, {
+    // 17) Send WhatsApp confirmation via messaging-gateway
+    const gatewayResult = await sendConfirmationViaGateway({
+      supabaseUrl,
+      serviceRoleKey: supabaseServiceKey,
+      anonKey: supabaseAnonKey,
+      patientPhone: patient.phone,
+      patientName: patient.name,
+      doctorDisplayName,
+      formattedDateTime,
       appointmentId: appointment.id,
       patientId: patient.id,
       doctorId: doctor.id,
-      toPhone: whatsappTo,
-      fromPhone: twilioWhatsAppFrom!,
-      templateName: twilioTemplateConfirmation!,
-      status: messageStatus,
-      rawPayload: twilioResult.data,
     });
 
-    // 21) Return response
-    if (twilioResult.success) {
-      return json(200, {
+    // 18) Return response
+    if (gatewayResult.success) {
+      return jsonResponse(200, {
         ok: true,
         appointment,
         whatsappSent: true,
-        twilioSid: twilioResult.data.sid,
+        providerMessageId: gatewayResult.providerMessageId,
         build: BUILD,
       });
     } else {
-      const whatsappError = twilioResult.data.error_message || twilioResult.data.message || "Error enviando WhatsApp";
-      console.error("[create-appointment] WhatsApp send failed:", whatsappError);
-
-      return json(200, {
+      console.error("[create-appointment] WhatsApp send failed:", gatewayResult.error);
+      return jsonResponse(200, {
         ok: true,
         appointment,
         whatsappSent: false,
-        whatsappError,
+        whatsappError: gatewayResult.error || "Error enviando WhatsApp",
         build: BUILD,
       });
     }
   } catch (error) {
     console.error("[create-appointment] Unexpected error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return json(500, { ok: false, error: "Error interno del servidor", details: errorMessage, build: BUILD });
+    return jsonResponse(500, { ok: false, error: "Error interno del servidor", details: errorMessage, build: BUILD });
   }
 });
