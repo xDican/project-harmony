@@ -155,19 +155,49 @@ Deno.serve(async (req) => {
   if (cors) return cors;
 
   try {
-    // 1) Auth check
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return jsonResponse(401, { ok: false, error: "Missing Authorization header" });
-    }
-
-    // 2) Environment
+    // 1) Environment (needed for auth check)
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("[messaging-gateway] Missing Supabase env vars");
       return jsonResponse(500, { ok: false, error: "Server configuration error" });
+    }
+
+    // 2) Auth — triple mode
+    //    A) x-internal-secret: function-to-function calls (meta-webhook, send-reminders, create-appointment)
+    //    B) Bearer <service_role_key>: cron jobs or direct server calls
+    //    C) Bearer <valid JWT>: frontend calls via supabase.functions.invoke
+    const internalSecret = req.headers.get("x-internal-secret") || "";
+    const expectedSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
+    const authHeader = req.headers.get("Authorization") || "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+
+    let isAuthenticated = false;
+
+    // Mode A: internal secret
+    if (internalSecret && expectedSecret && internalSecret === expectedSecret) {
+      isAuthenticated = true;
+    }
+
+    // Mode B: service role key
+    if (!isAuthenticated && authHeader === `Bearer ${supabaseServiceKey}`) {
+      isAuthenticated = true;
+    }
+
+    // Mode C: valid user JWT
+    if (!isAuthenticated && authHeader.startsWith("Bearer ")) {
+      try {
+        const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user }, error: authError } = await authClient.auth.getUser();
+        if (user && !authError) isAuthenticated = true;
+      } catch { /* invalid token */ }
+    }
+
+    if (!isAuthenticated) {
+      return jsonResponse(401, { ok: false, error: "Unauthorized" });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

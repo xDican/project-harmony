@@ -312,6 +312,7 @@ async function sendIntentNotification(
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
   const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
   const gatewayUrl = `https://${projectRef}.supabase.co/functions/v1/messaging-gateway`;
 
@@ -332,6 +333,7 @@ async function sendIntentNotification(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
+        "x-internal-secret": internalSecret,
         apikey: anonKey,
       },
       body: JSON.stringify({
@@ -358,6 +360,7 @@ async function sendIntentNotification(
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceKey}`,
+          "x-internal-secret": internalSecret,
           apikey: anonKey,
         },
         body: JSON.stringify({
@@ -380,6 +383,7 @@ async function sendIntentNotification(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
+        "x-internal-secret": internalSecret,
         apikey: anonKey,
       },
       body: JSON.stringify({

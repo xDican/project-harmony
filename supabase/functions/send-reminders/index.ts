@@ -37,6 +37,7 @@ async function sendReminderMessage(params: {
   gatewayUrl: string;
   serviceRoleKey: string;
   anonKey: string;
+  internalSecret: string;
   to: string;
   templateParams: Record<string, string>;
   appointmentId: string;
@@ -50,6 +51,7 @@ async function sendReminderMessage(params: {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${params.serviceRoleKey}`,
+        "x-internal-secret": params.internalSecret,
         apikey: params.anonKey,
       },
       body: JSON.stringify({
@@ -95,6 +97,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
 
     if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
       console.error("[send-reminders] Missing Supabase env vars");
@@ -223,6 +226,7 @@ Deno.serve(async (req) => {
         gatewayUrl,
         serviceRoleKey: supabaseServiceKey,
         anonKey: supabaseAnonKey,
+        internalSecret,
         to: normalizeToE164(patient.phone),
         templateParams,
         appointmentId: appointment.id,

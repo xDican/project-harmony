@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return jsonResponse(500, { ok: false, error: "Server configuration error" });
@@ -38,6 +39,7 @@ Deno.serve(async (req) => {
       headers: {
         "Content-Type": "application/json",
         Authorization: req.headers.get("Authorization") || `Bearer ${supabaseServiceKey}`,
+        "x-internal-secret": internalSecret,
         apikey: supabaseAnonKey || "",
       },
       body,
