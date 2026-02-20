@@ -174,6 +174,8 @@ async function handleIncomingMessage(
   metadata: MetaChangeValue["metadata"],
   message: MetaMessage,
   contacts: MetaContact[] | undefined,
+  lineId?: string,
+  lineOrgId?: string,
 ): Promise<void> {
   const fromPhone = normalizeToE164(message.from);
   const toPhone = metadata?.display_phone_number
@@ -261,6 +263,8 @@ async function handleIncomingMessage(
     appointmentId: appointment?.id,
     patientId: patient?.id,
     doctorId: appointment?.doctor_id,
+    organizationId: lineOrgId,
+    whatsappLineId: lineId,
     rawPayload: message,
   });
 
@@ -509,6 +513,22 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // 3.5) Resolve whatsapp_line from webhook metadata (for org/line context in logs)
+    let activeLineId: string | undefined;
+    let activeLineOrgId: string | undefined;
+    const phoneNumberId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    if (phoneNumberId) {
+      const { data: wline } = await supabase
+        .from("whatsapp_lines")
+        .select("id, organization_id")
+        .eq("meta_phone_number_id", phoneNumberId)
+        .eq("is_active", true)
+        .maybeSingle();
+      activeLineId = wline?.id;
+      activeLineOrgId = wline?.organization_id ?? undefined;
+      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId);
+    }
+
     // 4) Process all entries
     for (const entry of payload.entry || []) {
       for (const change of entry.changes || []) {
@@ -517,7 +537,7 @@ Deno.serve(async (req) => {
         // Incoming messages
         if (value.messages) {
           for (const message of value.messages) {
-            await handleIncomingMessage(supabase, value.metadata, message, value.contacts);
+            await handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId);
           }
         }
 

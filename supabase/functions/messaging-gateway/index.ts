@@ -77,7 +77,7 @@ async function getActiveLine(
   const { data, error } = await supabase
     .from("whatsapp_lines")
     .select(
-      "id, phone_number, provider, is_active, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, meta_waba_id, meta_phone_number_id, meta_access_token",
+      "id, phone_number, provider, is_active, organization_id, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, meta_waba_id, meta_phone_number_id, meta_access_token",
     )
     .eq("is_active", true)
     .limit(1)
@@ -328,6 +328,8 @@ Deno.serve(async (req) => {
       appointmentId,
       patientId,
       doctorId,
+      organizationId: line.organization_id ?? undefined,
+      whatsappLineId: line.id,
       rawPayload: result,
       errorCode: result.errorCode,
       errorMessage: result.error,

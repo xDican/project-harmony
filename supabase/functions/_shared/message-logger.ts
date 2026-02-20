@@ -19,6 +19,8 @@ export interface LogMessageParams {
   appointmentId?: string;
   patientId?: string;
   doctorId?: string;
+  organizationId?: string;
+  whatsappLineId?: string;
   rawPayload?: unknown;
   errorCode?: string;
   errorMessage?: string;
@@ -46,6 +48,8 @@ export async function logMessage(
     appointment_id: params.appointmentId ?? null,
     patient_id: params.patientId ?? null,
     doctor_id: params.doctorId ?? null,
+    organization_id: params.organizationId ?? null,
+    whatsapp_line_id: params.whatsappLineId ?? null,
     raw_payload: params.rawPayload ?? null,
     error_code: params.errorCode ?? null,
     error_message: params.errorMessage ?? null,

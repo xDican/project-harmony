@@ -76,6 +76,7 @@ export interface WhatsAppLineRow {
   phone_number: string;
   provider: "twilio" | "meta";
   is_active: boolean;
+  organization_id: string | null;
   // Twilio
   twilio_account_sid: string | null;
   twilio_auth_token: string | null;
