@@ -9,51 +9,29 @@
 
 ### Cutover completado
 - `whatsapp_lines.provider = 'meta'`, credenciales Meta configuradas
-- 46 mensajes Meta procesados (35 outbound, 11 inbound)
-- 32 delivered, 3 failed en últimos 3 días
-- meta-webhook v8 y messaging-gateway v7 activos
+- meta-webhook v9 y messaging-gateway v8 activos
+- 745 message_logs: 0 con `organization_id = NULL`, 0 con `whatsapp_line_id = NULL` (backfill aplicado)
 
-### Ya completado (sesiones anteriores)
+### Ya completado
 | Paso | Descripción | Estado |
 |------|-------------|--------|
 | Paso 1 | RLS en `template_mappings` y `whatsapp_templates` | ✅ Migración aplicada |
 | Paso 2 | Triple-mode auth en gateway + `INTERNAL_FUNCTION_SECRET` | ✅ Deployado en 5 funciones |
 | Fase 3 | Cutover a Meta (credenciales, webhook, flip) | ✅ En producción |
+| Paso 3 | Enrich `message_logs` con `organization_id` y `whatsapp_line_id` | ✅ Deployado + backfill |
 
-### Problemas detectados
-1. **message_logs sin org/line**: Los 46 mensajes Meta tienen `organization_id = NULL` y `whatsapp_line_id = NULL`
-2. **meta-webhook sin idempotencia**: reintentos de Meta pueden causar duplicados
-3. **CORS wildcard**: Todas las funciones usan `Access-Control-Allow-Origin: *`
-4. **Security advisor**: `bot_sessions`, `meta_oauth_states` sin RLS policies; `bot_analytics_summary` SECURITY DEFINER; funciones con search_path mutable
-5. **Twilio legacy activo**: `whatsapp-inbound-webhook` y `twilio-message-status-webhook` siguen deployados y accesibles
+### Problemas pendientes
+1. **meta-webhook sin idempotencia**: reintentos de Meta pueden causar duplicados
+2. **CORS wildcard**: Todas las funciones usan `Access-Control-Allow-Origin: *`
+3. **Security advisor**: `bot_sessions`, `meta_oauth_states` sin RLS policies; `bot_analytics_summary` SECURITY DEFINER; funciones con search_path mutable
+4. **Twilio legacy activo**: `whatsapp-inbound-webhook` y `twilio-message-status-webhook` siguen deployados y accesibles
 
 ---
 
 ## PASOS PENDIENTES
 
-### Paso 3: Enriquecer `message_logs` con `organization_id` y `whatsapp_line_id`
-- **Prioridad:** ALTA — rompe billing multi-tenant y reportes por org
-- **Scope:** `message-logger.ts` + `messaging-gateway/index.ts` + `meta-webhook/index.ts`
-- **Cambios:**
-  - `message-logger.ts`: agregar `organizationId` y `whatsappLineId` al interface y al insert
-  - `messaging-gateway/index.ts`: pasar `line.organization_id` y `line.id` al logger; agregar `organization_id` al select de `getActiveLine()`
-  - `meta-webhook/index.ts`: buscar línea por `meta_phone_number_id`, pasar org_id y line_id a `logMessage()`
-- **Backfill SQL post-deploy:**
-  ```sql
-  -- Backfill: asignar org y line a todos los logs sin ellos
-  UPDATE message_logs ml
-  SET whatsapp_line_id = wl.id, organization_id = wl.organization_id
-  FROM whatsapp_lines wl
-  WHERE ml.whatsapp_line_id IS NULL AND wl.is_active = true;
-
-  -- Backfill inbound sin org: resolver desde paciente
-  UPDATE message_logs ml
-  SET organization_id = p.organization_id
-  FROM patients p
-  WHERE ml.organization_id IS NULL AND ml.patient_id = p.id;
-  ```
-- **Deploy:** messaging-gateway + meta-webhook
-- **QA:** Crear cita → verificar que `message_logs` nuevo tiene `organization_id` y `whatsapp_line_id` NOT NULL
+### ~~Paso 3: Enriquecer `message_logs` con `organization_id` y `whatsapp_line_id`~~
+✅ **COMPLETADO** — messaging-gateway v8, meta-webhook v9. Backfill: 745/745 registros actualizados.
 
 ---
 
@@ -111,9 +89,8 @@
 ## ORDEN DE EJECUCIÓN
 
 ```
-Inmediato:     [Paso 3] → [Paso 5 + Paso 6 en paralelo]
+✅ Completado: Paso 3
+Siguiente:     [Paso 5 + Paso 6 en paralelo]
 Cuando se sepa URL frontend: [Paso 7]
 Después de 1+ semana estable: [Paso 12]
 ```
-
-### Tiempo estimado: ~3h de desarrollo para Pasos 3+5+6
