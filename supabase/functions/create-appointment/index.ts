@@ -5,7 +5,7 @@ import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
 import { formatDateForTemplate, formatTimeForTemplate } from "../_shared/datetime.ts";
 
-const BUILD = "create-appointment@2026-02-19_junction_v1";
+const BUILD = "create-appointment@2026-02-20_auth_hardening_v1";
 
 // Zod schema for request validation
 const appointmentSchema = z.object({
@@ -27,6 +27,7 @@ async function sendConfirmationViaGateway(params: {
   supabaseUrl: string;
   serviceRoleKey: string;
   anonKey: string;
+  internalSecret: string;
   patientPhone: string;
   patientName: string;
   doctorDisplayName: string;
@@ -45,6 +46,7 @@ async function sendConfirmationViaGateway(params: {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${params.serviceRoleKey}`,
+        "x-internal-secret": params.internalSecret,
         apikey: params.anonKey,
       },
       body: JSON.stringify({
@@ -99,6 +101,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
 
     if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
       console.error("[create-appointment] Missing Supabase env vars");
@@ -138,34 +141,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { doctorId, patientId, date, time, notes, durationMinutes } = validationResult.data;
+    const { doctorId, patientId, date, time, notes, durationMinutes, organizationId: reqOrgId, calendarId: reqCalendarId } = validationResult.data;
 
     // 6) Check if user has permission using user_roles table (service role to bypass RLS)
     const { data: userRoles, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
-      .eq("is_active", true);
+      .eq("user_id", user.id);
 
     if (roleError || !userRoles || userRoles.length === 0) {
       console.error("[create-appointment] Role check failed:", { roleError, userRoles, userId: user.id });
       return jsonResponse(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
-    if (!orgMemberError && orgMembers && orgMembers.length > 0) {
-      roles = orgMembers.map((r: any) => r.role);
-    } else {
-      // Fallback to user_roles
-      const { data: userRoles, error: roleError } = await supabaseAuth
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      if (roleError || !userRoles || userRoles.length === 0) {
-        console.error("[create-appointment] Role check failed:", roleError);
-        return json(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
-      }
-      roles = userRoles.map((r: any) => r.role);
     }
 
+    const roles = userRoles.map((r: any) => r.role);
     const isAdmin = roles.includes("admin");
     const isSecretary = roles.includes("secretary");
     const isDoctor = roles.includes("doctor");
@@ -250,7 +239,7 @@ Deno.serve(async (req) => {
       return jsonResponse(403, { ok: false, error: "Paciente no pertenece a la organización del doctor", build: BUILD });
     }
 
-    // 10d) Auto-link doctor ↔ patient in junction table (idempotent)
+    // 10d) Auto-link doctor <-> patient in junction table (idempotent)
     const { error: linkError } = await supabase
       .from("doctor_patients")
       .upsert(
@@ -285,35 +274,21 @@ Deno.serve(async (req) => {
       return jsonResponse(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
     }
 
-    // 12a) Resolve organization_id and calendar_id (infer from doctor if not provided)
-    let resolvedOrgId = reqOrgId || null;
+    // 12a) Resolve calendar_id (infer from doctor if not provided)
+    let resolvedOrgId = reqOrgId || doctorOrg.organization_id;
     let resolvedCalendarId = reqCalendarId || null;
 
-    if (!resolvedOrgId || !resolvedCalendarId) {
-      // Infer from doctor's org membership and calendar
-      const { data: doctorOrg } = await supabase
-        .from("doctors")
-        .select("organization_id")
-        .eq("id", doctorId)
+    if (!resolvedCalendarId && resolvedOrgId) {
+      const { data: calDoc } = await supabase
+        .from("calendar_doctors")
+        .select("calendar_id, calendars!inner(organization_id)")
+        .eq("doctor_id", doctorId)
+        .eq("calendars.organization_id", resolvedOrgId)
+        .limit(1)
         .maybeSingle();
 
-      if (doctorOrg?.organization_id && !resolvedOrgId) {
-        resolvedOrgId = doctorOrg.organization_id;
-      }
-
-      if (!resolvedCalendarId && resolvedOrgId) {
-        // Find the calendar for this doctor in this org
-        const { data: calDoc } = await supabase
-          .from("calendar_doctors")
-          .select("calendar_id, calendars!inner(organization_id)")
-          .eq("doctor_id", doctorId)
-          .eq("calendars.organization_id", resolvedOrgId)
-          .limit(1)
-          .maybeSingle();
-
-        if (calDoc?.calendar_id) {
-          resolvedCalendarId = calDoc.calendar_id;
-        }
+      if (calDoc?.calendar_id) {
+        resolvedCalendarId = calDoc.calendar_id;
       }
     }
 
@@ -325,7 +300,8 @@ Deno.serve(async (req) => {
       .insert({
         doctor_id: doctorId,
         patient_id: patientId,
-        organization_id: doctorOrg.organization_id,
+        organization_id: resolvedOrgId,
+        calendar_id: resolvedCalendarId,
         date,
         time: normalizedTime,
         notes: notes || null,
@@ -336,8 +312,6 @@ Deno.serve(async (req) => {
         reminder_24h_sent: false,
         reminder_24h_sent_at: null,
         reschedule_notified_at: null,
-        organization_id: resolvedOrgId,
-        calendar_id: resolvedCalendarId,
       })
       .select()
       .single();
@@ -403,6 +377,7 @@ Deno.serve(async (req) => {
       supabaseUrl,
       serviceRoleKey: supabaseServiceKey,
       anonKey: supabaseAnonKey,
+      internalSecret,
       patientPhone: patient.phone,
       patientName: patient.name,
       doctorDisplayName,
