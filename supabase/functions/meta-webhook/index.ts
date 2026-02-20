@@ -17,6 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
 import { logMessage } from "../_shared/message-logger.ts";
+import { formatTimeForTemplate } from "../_shared/datetime.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -188,6 +189,18 @@ async function handleIncomingMessage(
 
   console.log("[meta-webhook] Inbound from:", fromPhone, "body:", body, "appointmentFromPayload:", appointmentIdFromPayload, "contact:", contactName);
 
+  // Idempotency: skip if this exact message was already processed
+  const { data: existingLog } = await supabase
+    .from("message_logs")
+    .select("id")
+    .eq("provider_message_id", message.id)
+    .maybeSingle();
+
+  if (existingLog) {
+    console.log("[meta-webhook] Duplicate message skipped:", message.id);
+    return;
+  }
+
   // Find patient by phone
   // Patients may be stored as local 8-digit (33899824) or E164 (+50433899824),
   // so we try both formats.
@@ -330,8 +343,6 @@ async function sendIntentNotification(
 
     if (!appt) return;
 
-    const { formatTimeForTemplate } = await import("../_shared/datetime.ts");
-
     await fetch(gatewayUrl, {
       method: "POST",
       headers: {
@@ -406,6 +417,14 @@ async function sendIntentNotification(
 // Status update handling
 // ---------------------------------------------------------------------------
 
+// Forward-only progression: higher rank = further along delivery lifecycle
+const STATUS_RANK: Record<string, number> = {
+  sent: 1,
+  failed: 1,
+  delivered: 2,
+  read: 3,
+};
+
 async function handleStatusUpdate(
   supabase: ReturnType<typeof createClient>,
   status: MetaStatus,
@@ -421,6 +440,22 @@ async function handleStatusUpdate(
   };
 
   const mappedStatus = statusMap[status.status] || status.status;
+
+  // Forward-only: fetch current status and skip if we'd go backwards
+  const { data: currentLog } = await supabase
+    .from("message_logs")
+    .select("status")
+    .eq("provider_message_id", status.id)
+    .maybeSingle();
+
+  if (currentLog) {
+    const currentRank = STATUS_RANK[currentLog.status] ?? 0;
+    const newRank = STATUS_RANK[mappedStatus] ?? 0;
+    if (newRank < currentRank) {
+      console.log("[meta-webhook] Skipping backward status:", currentLog.status, "->", mappedStatus);
+      return;
+    }
+  }
 
   const updatePayload: Record<string, unknown> = {
     status: mappedStatus,
@@ -529,24 +564,25 @@ Deno.serve(async (req) => {
       console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId);
     }
 
-    // 4) Process all entries
+    // 4) Process all entries — messages and statuses run in parallel per change
     for (const entry of payload.entry || []) {
       for (const change of entry.changes || []) {
         const value = change.value;
+        const tasks: Promise<void>[] = [];
 
-        // Incoming messages
         if (value.messages) {
           for (const message of value.messages) {
-            await handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId);
+            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId));
           }
         }
 
-        // Status updates
         if (value.statuses) {
           for (const status of value.statuses) {
-            await handleStatusUpdate(supabase, status);
+            tasks.push(handleStatusUpdate(supabase, status));
           }
         }
+
+        await Promise.allSettled(tasks);
       }
     }
 
