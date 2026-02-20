@@ -1,10 +1,15 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { DateTime } from "https://esm.sh/luxon@3.4.4";
+/**
+ * Send Reminders — Cron job that sends 24-hour appointment reminders.
+ *
+ * Finds tomorrow's appointments (Honduras timezone) that haven't received
+ * a reminder yet, and sends them via the messaging-gateway.
+ */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
-};
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+
+import { handleCors, jsonResponse } from "../_shared/cors.ts";
+import { normalizeToE164 } from "../_shared/phone.ts";
+import { formatDateForTemplate, formatTimeForTemplate, tomorrowHonduras } from "../_shared/datetime.ts";
 
 interface Appointment {
   id: string;
@@ -25,28 +30,14 @@ interface ReminderResult {
   error?: string;
 }
 
-function formatAppointmentDate(date: string): string {
-  const dt = DateTime.fromISO(date);
-  return dt.toFormat("dd/MM/yyyy");
-}
-
-function formatAppointmentTime(date: string, time: string): string {
-  const dt = DateTime.fromISO(`${date}T${time}`);
-  const hours = dt.hour;
-  const minutes = dt.minute;
-  const period = hours >= 12 ? "PM" : "AM";
-  const hours12 = hours % 12 || 12;
-  return `${hours12}:${String(minutes).padStart(2, "0")} ${period}`;
-}
-
 /**
- * Calls send-whatsapp-message using INTERNAL_FUNCTION_SECRET (server-to-server).
+ * Sends a reminder via the messaging-gateway Edge Function
  */
 async function sendReminderMessage(params: {
-  functionsBaseUrl: string;
-  internalSecret: string;
+  gatewayUrl: string;
+  serviceRoleKey: string;
+  anonKey: string;
   to: string;
-  templateName: string;
   templateParams: Record<string, string>;
   appointmentId: string;
   patientId: string;
@@ -54,16 +45,16 @@ async function sendReminderMessage(params: {
   organizationId?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${params.functionsBaseUrl}/send-whatsapp-message`, {
+    const response = await fetch(params.gatewayUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-internal-secret": params.internalSecret,
+        Authorization: `Bearer ${params.serviceRoleKey}`,
+        apikey: params.anonKey,
       },
       body: JSON.stringify({
         to: params.to,
         type: "reminder_24h",
-        templateName: params.templateName,
         templateParams: params.templateParams,
         appointmentId: params.appointmentId,
         patientId: params.patientId,
@@ -91,9 +82,8 @@ async function sendReminderMessage(params: {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const cors = handleCors(req);
+  if (cors) return cors;
 
   const results: ReminderResult[] = [];
   let totalAppointments = 0;
@@ -101,49 +91,31 @@ Deno.serve(async (req) => {
   let failedCount = 0;
 
   try {
-    // 1) Env vars
+    // 1) Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const twilioTemplateReminder = Deno.env.get("TWILIO_TEMPLATE_REMINDER_24H");
-    const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
       console.error("[send-reminders] Missing Supabase env vars");
-      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: Supabase" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(500, { ok: false, error: "Server configuration error: Supabase" });
     }
 
-    if (!internalSecret) {
-      console.error("[send-reminders] Missing INTERNAL_FUNCTION_SECRET");
-      return new Response(JSON.stringify({ ok: false, error: "Server configuration error: INTERNAL_FUNCTION_SECRET" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!twilioTemplateReminder) {
-      console.warn("[send-reminders] TWILIO_TEMPLATE_REMINDER_24H not set in env. Will rely on DB whatsapp_lines for template.");
-    }
-
-    // 2) Functions base URL
+    // 2) Derive gateway URL
     const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-    const functionsBaseUrl = `https://${projectRef}.supabase.co/functions/v1`;
-    console.log("[send-reminders] Functions base URL:", functionsBaseUrl);
+    const gatewayUrl = `https://${projectRef}.supabase.co/functions/v1/messaging-gateway`;
 
-    // 3) Supabase client (service role)
+    console.log("[send-reminders] Gateway URL:", gatewayUrl);
+
+    // 3) Create Supabase client with service role
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 4) Tomorrow (HN timezone)
-    const now = DateTime.now().setZone("America/Tegucigalpa");
-    const tomorrowDateString = now.plus({ days: 1 }).toFormat("yyyy-MM-dd");
+    // 4) Calculate tomorrow's date (Honduras timezone)
+    const tomorrowDateString = tomorrowHonduras();
 
-    console.log("[send-reminders] Today:", now.toFormat("yyyy-MM-dd"));
     console.log("[send-reminders] Looking for appointments on:", tomorrowDateString);
 
-    // 5) Fetch appointments
-    // ✅ Extra filter: reminder_24h_sent = false (to hard-prevent duplicates)
+    // 5) Get tomorrow's appointments that need reminders
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
       .select("id, doctor_id, patient_id, date, time, appointment_at, status, duration_minutes, organization_id")
@@ -154,34 +126,29 @@ Deno.serve(async (req) => {
 
     if (appointmentsError) {
       console.error("[send-reminders] Error fetching appointments:", appointmentsError);
-      return new Response(JSON.stringify({ ok: false, error: "Error fetching appointments" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(500, { ok: false, error: "Error fetching appointments" });
     }
 
     if (!appointments || appointments.length === 0) {
       console.log("[send-reminders] No appointments found for tomorrow");
-      return new Response(JSON.stringify({
+      return jsonResponse(200, {
         ok: true,
         message: "No appointments to remind",
         date: tomorrowDateString,
         total: 0,
         sent: 0,
         failed: 0,
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     totalAppointments = appointments.length;
     console.log("[send-reminders] Found", totalAppointments, "appointments to process");
 
-    // 6) Loop
+    // 6) Process each appointment
     for (const appointment of appointments as Appointment[]) {
       console.log("[send-reminders] Processing appointment:", appointment.id);
 
+      // Get patient data
       const { data: patient, error: patientError } = await supabase
         .from("patients")
         .select("id, name, phone")
@@ -190,18 +157,30 @@ Deno.serve(async (req) => {
 
       if (patientError || !patient) {
         console.error("[send-reminders] Error fetching patient:", patientError);
-        results.push({ appointmentId: appointment.id, patientName: "Unknown", success: false, error: "Patient not found" });
+        results.push({
+          appointmentId: appointment.id,
+          patientName: "Unknown",
+          success: false,
+          error: "Patient not found",
+        });
         failedCount++;
         continue;
       }
 
+      // Check if patient has phone
       if (!patient.phone) {
         console.warn("[send-reminders] Patient has no phone:", patient.id);
-        results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: "No phone number" });
+        results.push({
+          appointmentId: appointment.id,
+          patientName: patient.name,
+          success: false,
+          error: "No phone number",
+        });
         failedCount++;
         continue;
       }
 
+      // Get doctor data
       const { data: doctor, error: doctorError } = await supabase
         .from("doctors")
         .select("id, name, prefix")
@@ -210,36 +189,41 @@ Deno.serve(async (req) => {
 
       if (doctorError || !doctor) {
         console.error("[send-reminders] Error fetching doctor:", doctorError);
-        results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: "Doctor not found" });
+        results.push({
+          appointmentId: appointment.id,
+          patientName: patient.name,
+          success: false,
+          error: "Doctor not found",
+        });
         failedCount++;
         continue;
       }
 
-      const doctorDisplayName = doctor.prefix ? `${doctor.prefix} ${doctor.name}` : `Dr. ${doctor.name}`;
-      const formattedDate = formatAppointmentDate(appointment.date);
-      const formattedTime = formatAppointmentTime(appointment.date, appointment.time);
+      // Build doctor display name
+      const doctorDisplayName = doctor.prefix
+        ? `${doctor.prefix} ${doctor.name}`
+        : `Dr. ${doctor.name}`;
 
+      // Format appointment date/time — 4 params: paciente, médico, fecha, hora
+      const formattedDate = formatDateForTemplate(appointment.date);
+      const formattedTime = formatTimeForTemplate(appointment.time);
+
+      // Build template params
       const templateParams = {
         "1": patient.name,
         "2": doctorDisplayName,
         "3": formattedDate,
         "4": formattedTime,
-        "5": `c-${appointment.id}`,  // c- prefix for "Confirmar" button
-        "6": `r-${appointment.id}`,  // r- prefix for "Reagendar" button
       };
 
-      // patient.phone is stored as 8 digits; build WhatsApp E.164
-      const digits = patient.phone.replace(/\D/g, "");
-      const whatsappTo = `whatsapp:+504${digits}`;
+      console.log("[send-reminders] Sending reminder to:", patient.phone);
 
-      console.log("[send-reminders] Sending reminder to:", whatsappTo);
-
-      // Use env var template as default, send-whatsapp-message will resolve from DB if orgId present
+      // Send reminder via messaging-gateway
       const sendResult = await sendReminderMessage({
-        functionsBaseUrl,
-        internalSecret,
-        to: whatsappTo,
-        templateName: twilioTemplateReminder || "",
+        gatewayUrl,
+        serviceRoleKey: supabaseServiceKey,
+        anonKey: supabaseAnonKey,
+        to: normalizeToE164(patient.phone),
         templateParams,
         appointmentId: appointment.id,
         patientId: patient.id,
@@ -248,14 +232,12 @@ Deno.serve(async (req) => {
       });
 
       if (sendResult.success) {
-        const nowIso = DateTime.now().setZone("America/Tegucigalpa").toISO();
-
-        // ✅ Update BOTH flags (prevents duplicates even if one gets out of sync)
+        // Update appointment to mark reminder as sent (both flags)
         const { error: updateError } = await supabase
           .from("appointments")
           .update({
             reminder_24h_sent: true,
-            reminder_24h_sent_at: nowIso,
+            reminder_24h_sent_at: new Date().toISOString(),
           })
           .eq("id", appointment.id);
 
@@ -263,36 +245,44 @@ Deno.serve(async (req) => {
           console.error("[send-reminders] Error updating appointment:", updateError);
         }
 
-        results.push({ appointmentId: appointment.id, patientName: patient.name, success: true });
+        results.push({
+          appointmentId: appointment.id,
+          patientName: patient.name,
+          success: true,
+        });
         successCount++;
         console.log("[send-reminders] Reminder sent successfully for:", appointment.id);
       } else {
-        results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: sendResult.error });
+        results.push({
+          appointmentId: appointment.id,
+          patientName: patient.name,
+          success: false,
+          error: sendResult.error,
+        });
         failedCount++;
         console.error("[send-reminders] Failed to send reminder:", sendResult.error);
       }
     }
 
+    // 7) Return summary
     console.log("[send-reminders] Completed. Success:", successCount, "Failed:", failedCount);
 
-    return new Response(JSON.stringify({
+    return jsonResponse(200, {
       ok: true,
       date: tomorrowDateString,
       total: totalAppointments,
       sent: successCount,
       failed: failedCount,
       results,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
     console.error("[send-reminders] Unexpected error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ ok: false, error: "Internal server error", details: errorMessage, results }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return jsonResponse(500, {
+      ok: false,
+      error: "Internal server error",
+      details: errorMessage,
+      results,
     });
   }
 });

@@ -3,7 +3,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
-import { formatAppointmentDateTime } from "../_shared/datetime.ts";
+import { formatDateForTemplate, formatTimeForTemplate } from "../_shared/datetime.ts";
 
 const BUILD = "create-appointment@2026-02-19_junction_v1";
 
@@ -30,7 +30,8 @@ async function sendConfirmationViaGateway(params: {
   patientPhone: string;
   patientName: string;
   doctorDisplayName: string;
-  formattedDateTime: string;
+  formattedDate: string;
+  formattedTime: string;
   appointmentId: string;
   patientId: string;
   doctorId: string;
@@ -52,7 +53,8 @@ async function sendConfirmationViaGateway(params: {
         templateParams: {
           "1": params.patientName,
           "2": params.doctorDisplayName,
-          "3": params.formattedDateTime,
+          "3": params.formattedDate,
+          "4": params.formattedTime,
         },
         appointmentId: params.appointmentId,
         patientId: params.patientId,
@@ -387,12 +389,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 16) Format appointment date/time for template
-    const formattedDateTime = formatAppointmentDateTime(date, normalizedTime);
+    // 16) Format appointment date/time for template (4 params: nombre, médico, fecha, hora)
+    const formattedDate = formatDateForTemplate(date);
+    const formattedTime = formatTimeForTemplate(normalizedTime);
 
     console.log("[create-appointment] Sending WhatsApp confirmation via gateway:", {
       to: patient.phone,
-      templateParams: { "1": patient.name, "2": doctorDisplayName, "3": formattedDateTime },
+      templateParams: { "1": patient.name, "2": doctorDisplayName, "3": formattedDate, "4": formattedTime },
     });
 
     // 17) Send WhatsApp confirmation via messaging-gateway
@@ -403,7 +406,8 @@ Deno.serve(async (req) => {
       patientPhone: patient.phone,
       patientName: patient.name,
       doctorDisplayName,
-      formattedDateTime,
+      formattedDate,
+      formattedTime,
       appointmentId: appointment.id,
       patientId: patient.id,
       doctorId: doctor.id,
