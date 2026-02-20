@@ -19,12 +19,13 @@
 | Paso 2 | Triple-mode auth en gateway + `INTERNAL_FUNCTION_SECRET` | ✅ Deployado en 5 funciones |
 | Fase 3 | Cutover a Meta (credenciales, webhook, flip) | ✅ En producción |
 | Paso 3 | Enrich `message_logs` con `organization_id` y `whatsapp_line_id` | ✅ Deployado + backfill |
+| Paso 5 | meta-webhook: import estático + `Promise.allSettled` | ✅ Deployado v10 |
+| Paso 6 | meta-webhook: idempotencia inbound + forward-only status | ✅ Deployado v10 |
 
 ### Problemas pendientes
-1. **meta-webhook sin idempotencia**: reintentos de Meta pueden causar duplicados
-2. **CORS wildcard**: Todas las funciones usan `Access-Control-Allow-Origin: *`
-3. **Security advisor**: `bot_sessions`, `meta_oauth_states` sin RLS policies; `bot_analytics_summary` SECURITY DEFINER; funciones con search_path mutable
-4. **Twilio legacy activo**: `whatsapp-inbound-webhook` y `twilio-message-status-webhook` siguen deployados y accesibles
+1. **CORS wildcard**: Todas las funciones usan `Access-Control-Allow-Origin: *`
+2. **Security advisor**: `bot_sessions`, `meta_oauth_states` sin RLS policies; `bot_analytics_summary` SECURITY DEFINER; funciones con search_path mutable
+3. **Twilio legacy activo**: `whatsapp-inbound-webhook` y `twilio-message-status-webhook` siguen deployados y accesibles
 
 ---
 
@@ -32,6 +33,16 @@
 
 ### ~~Paso 3: Enriquecer `message_logs` con `organization_id` y `whatsapp_line_id`~~
 ✅ **COMPLETADO** — messaging-gateway v8, meta-webhook v9. Backfill: 745/745 registros actualizados.
+
+---
+
+### ~~Paso 5: Optimizar meta-webhook (paralelo + static imports)~~
+✅ **COMPLETADO** — meta-webhook v10. Import estático de `formatTimeForTemplate`; loops → `Promise.allSettled`.
+
+---
+
+### ~~Paso 6: Idempotencia en meta-webhook~~
+✅ **COMPLETADO** — meta-webhook v10. Check de `provider_message_id` antes de procesar mensajes inbound; `STATUS_RANK` para progresión forward-only en status updates.
 
 ---
 
@@ -89,8 +100,7 @@
 ## ORDEN DE EJECUCIÓN
 
 ```
-✅ Completado: Paso 3
-Siguiente:     [Paso 5 + Paso 6 en paralelo]
-Cuando se sepa URL frontend: [Paso 7]
-Después de 1+ semana estable: [Paso 12]
+✅ Completados: Paso 3, Paso 5, Paso 6
+Cuando se sepa URL frontend: [Paso 7 - CORS]
+Después de 1+ semana estable: [Paso 12 - Decommission Twilio]
 ```
