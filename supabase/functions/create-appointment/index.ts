@@ -147,8 +147,7 @@ Deno.serve(async (req) => {
     const { data: userRoles, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
-      .eq("is_active", true);
+      .eq("user_id", user.id);
 
     if (roleError || !userRoles || userRoles.length === 0) {
       console.error("[create-appointment] Role check failed:", { roleError, userRoles, userId: user.id });
