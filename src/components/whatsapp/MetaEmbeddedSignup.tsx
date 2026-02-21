@@ -8,6 +8,9 @@ import { t } from '@/lib/i18n';
 const META_APP_ID = import.meta.env.VITE_META_APP_ID as string;
 const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID as string;
 
+// Module-level flag — persists across re-mounts in the same SPA session
+let fbInitialized = false;
+
 declare global {
   interface Window {
     fbAsyncInit?: () => void;
@@ -37,38 +40,47 @@ interface Props {
 }
 
 export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
-  const [sdkLoaded, setSdkLoaded] = useState(false);
+  const [sdkLoaded, setSdkLoaded] = useState(fbInitialized);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionInfoRef = useRef<MetaSessionInfo | null>(null);
 
   // Cargar el Facebook SDK dinámicamente
   useEffect(() => {
-    function onSDKReady() {
-      // Siempre llamar init() antes de marcar el SDK como listo,
-      // incluso si window.FB ya existía de una carga previa.
+    if (fbInitialized) return; // Already initialized in this SPA session
+
+    function doInit() {
+      if (!META_APP_ID) {
+        setError('Configuración de Meta incompleta. Contacta al soporte.');
+        return;
+      }
       window.FB!.init({
         appId: META_APP_ID,
         autoLogAppEvents: true,
-        xfbml: false,
+        xfbml: true,
         version: 'v21.0',
       });
+      fbInitialized = true;
       setSdkLoaded(true);
     }
 
     if (window.FB) {
-      onSDKReady();
+      doInit();
       return;
     }
 
-    window.fbAsyncInit = onSDKReady;
+    window.fbAsyncInit = doInit;
 
-    const script = document.createElement('script');
-    script.src = 'https://connect.facebook.net/en_US/sdk.js';
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = 'anonymous';
-    document.body.appendChild(script);
+    // Avoid loading the script multiple times using an ID
+    if (!document.getElementById('facebook-jssdk')) {
+      const script = document.createElement('script');
+      script.id = 'facebook-jssdk';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      document.body.appendChild(script);
+    }
   }, []);
 
   // Escuchar mensajes de Meta con la info de WABA y número
@@ -140,7 +152,7 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
   }
 
   function handleConnectClick() {
-    if (!window.FB) {
+    if (!window.FB || !fbInitialized) {
       setError('SDK de Meta no disponible. Recarga la página.');
       return;
     }
