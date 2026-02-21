@@ -66,6 +66,37 @@ export async function exchangeOAuth(code: string, state: string, redirectUri: st
   }
 }
 
+// ─── Embedded Signup ─────────────────────────────────────
+
+export interface EmbeddedSignupResult {
+  line_id: string;
+  phone_number: string;
+  verified_name: string;
+}
+
+export async function embeddedSignup(params: {
+  code: string;
+  waba_id: string;
+  phone_number_id: string;
+}): Promise<ApiResult<EmbeddedSignupResult>> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${FUNCTIONS_URL}/meta-embedded-signup`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { data: null, error: `Error ${res.status}: ${text}`, isMockMode: false };
+    }
+    const data = await res.json();
+    return { data, error: null, isMockMode: false };
+  } catch (e: any) {
+    return { data: null, error: e.message || 'Error al conectar WhatsApp', isMockMode: false };
+  }
+}
+
 // ─── Mock helpers (fallback only for 404) ────────────────
 
 const MOCK_STORAGE_KEY = 'whatsapp_templates_mock';
