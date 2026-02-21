@@ -110,7 +110,7 @@ export default function WhatsAppSettings() {
                 Verificando conexión...
               </div>
             ) : connectedLine ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">{t('mes.connected_phone')}:</span>
@@ -121,6 +121,9 @@ export default function WhatsAppSettings() {
                   <span className="text-muted-foreground">{t('mes.connected_name')}:</span>
                   <span className="font-medium">{connectedLine.label}</span>
                 </div>
+                <Button variant="outline" size="sm" onClick={() => setConnectedLine(null)}>
+                  {t('mes.reconnect')}
+                </Button>
               </div>
             ) : (
               <MetaEmbeddedSignup onSuccess={handleConnected} />

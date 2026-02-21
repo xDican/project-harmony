@@ -93,7 +93,53 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  async function handleConnectClick() {
+  async function handleLoginResponse(response: FBLoginResponse) {
+    if (response.status === 'not_authorized') {
+      setError(t('mes.denied'));
+      setLoading(false);
+      onError?.(t('mes.denied'));
+      return;
+    }
+
+    const code = response.authResponse?.code;
+    if (!code) {
+      setError(t('mes.cancel'));
+      setLoading(false);
+      onError?.(t('mes.cancel'));
+      return;
+    }
+
+    // Esperar brevemente a que llegue el message event con session info
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const sessionInfo = sessionInfoRef.current;
+    if (!sessionInfo) {
+      const errMsg = 'No se recibió información de WABA. Intenta nuevamente.';
+      setError(errMsg);
+      setLoading(false);
+      onError?.(errMsg);
+      return;
+    }
+
+    const result = await embeddedSignup({
+      code,
+      waba_id: sessionInfo.waba_id,
+      phone_number_id: sessionInfo.phone_number_id,
+    });
+
+    if (result.error || !result.data) {
+      const errMsg = result.error ?? 'Error desconocido';
+      setError(errMsg);
+      setLoading(false);
+      onError?.(errMsg);
+      return;
+    }
+
+    setLoading(false);
+    onSuccess(result.data);
+  }
+
+  function handleConnectClick() {
     if (!window.FB) {
       setError('SDK de Meta no disponible. Recarga la página.');
       return;
@@ -104,50 +150,9 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
     sessionInfoRef.current = null;
 
     window.FB.login(
-      async (response: FBLoginResponse) => {
-        if (response.status === 'not_authorized') {
-          setError(t('mes.denied'));
-          setLoading(false);
-          onError?.(t('mes.denied'));
-          return;
-        }
-
-        const code = response.authResponse?.code;
-        if (!code) {
-          setError(t('mes.cancel'));
-          setLoading(false);
-          onError?.(t('mes.cancel'));
-          return;
-        }
-
-        // Esperar brevemente a que llegue el message event con session info
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const sessionInfo = sessionInfoRef.current;
-        if (!sessionInfo) {
-          const errMsg = 'No se recibió información de WABA. Intenta nuevamente.';
-          setError(errMsg);
-          setLoading(false);
-          onError?.(errMsg);
-          return;
-        }
-
-        const result = await embeddedSignup({
-          code,
-          waba_id: sessionInfo.waba_id,
-          phone_number_id: sessionInfo.phone_number_id,
-        });
-
-        if (result.error || !result.data) {
-          const errMsg = result.error ?? 'Error desconocido';
-          setError(errMsg);
-          setLoading(false);
-          onError?.(errMsg);
-          return;
-        }
-
-        setLoading(false);
-        onSuccess(result.data);
+      (response: FBLoginResponse) => {
+        // FB.login requires a synchronous callback — async logic is handled separately
+        handleLoginResponse(response);
       },
       {
         config_id: META_CONFIG_ID,
