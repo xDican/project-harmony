@@ -44,12 +44,9 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
 
   // Cargar el Facebook SDK dinámicamente
   useEffect(() => {
-    if (window.FB) {
-      setSdkLoaded(true);
-      return;
-    }
-
-    window.fbAsyncInit = function () {
+    function onSDKReady() {
+      // Siempre llamar init() antes de marcar el SDK como listo,
+      // incluso si window.FB ya existía de una carga previa.
       window.FB!.init({
         appId: META_APP_ID,
         autoLogAppEvents: true,
@@ -57,7 +54,14 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
         version: 'v21.0',
       });
       setSdkLoaded(true);
-    };
+    }
+
+    if (window.FB) {
+      onSDKReady();
+      return;
+    }
+
+    window.fbAsyncInit = onSDKReady;
 
     const script = document.createElement('script');
     script.src = 'https://connect.facebook.net/en_US/sdk.js';
@@ -65,10 +69,6 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
     script.defer = true;
     script.crossOrigin = 'anonymous';
     document.body.appendChild(script);
-
-    return () => {
-      // Cleanup: no eliminamos el script porque podría ser usado por otras instancias
-    };
   }, []);
 
   // Escuchar mensajes de Meta con la info de WABA y número
