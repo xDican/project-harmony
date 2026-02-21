@@ -27,6 +27,7 @@ const translations: Record<string, Record<Lang, string>> = {
   'mes.denied':          { es: 'Permiso denegado por Meta',       en: 'Permission denied by Meta' },
   'mes.connected_phone': { es: 'Número conectado',                en: 'Connected number' },
   'mes.connected_name':  { es: 'Nombre verificado',               en: 'Verified name' },
+  'mes.reconnect':       { es: 'Reconectar',                       en: 'Reconnect' },
   'mes.success':         { es: 'WhatsApp conectado correctamente', en: 'WhatsApp connected successfully' },
   // Status labels
   'status.approved': { es: 'Aprobada', en: 'Approved' },
