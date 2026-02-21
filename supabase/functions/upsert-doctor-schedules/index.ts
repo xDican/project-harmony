@@ -348,7 +348,7 @@ Deno.serve(async (req) => {
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
-        ...(calendarId ? { calendar_id: calendarId } : {}),
+        ...(resolvedCalendarId ? { calendar_id: resolvedCalendarId } : {}),
       }));
 
       const { error: insertError } = await supabaseAdmin
