@@ -34,6 +34,8 @@ import ClinicsList from "./pages/ClinicsList";
 import CalendarsList from "./pages/CalendarsList";
 import WhatsAppLinesList from "./pages/WhatsAppLinesList";
 import BotFAQsPage from "./pages/BotFAQsPage";
+import ActivationPanel from "./pages/ActivationPanel";
+import SuperAdminRoute from "./components/SuperAdminRoute";
 
 const queryClient = new QueryClient();
 
@@ -258,6 +260,13 @@ const App = () => {
               </RoleBasedRoute>
             } />
             
+            {/* Internal superadmin routes */}
+            <Route path="/internal/activations" element={
+              <SuperAdminRoute>
+                <ActivationPanel />
+              </SuperAdminRoute>
+            } />
+
             {/* Debug routes */}
             <Route path="/debug-whatsapp" element={
               <RoleBasedRoute allowedRoles={['admin', 'secretary', 'doctor']}>
