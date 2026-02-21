@@ -50,6 +50,8 @@ export default function WhatsAppSettings() {
       .select('phone_number, label')
       .eq('is_active', true)
       .eq('provider', 'meta')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
     setConnectedLine(data ?? null);
     setLineLoading(false);

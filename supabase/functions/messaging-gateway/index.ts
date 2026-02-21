@@ -70,7 +70,7 @@ const GatewayRequestSchema = z.object({
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Find the first active whatsapp_line (we currently have one line) */
+/** Find the most recently created active whatsapp_line */
 async function getActiveLine(
   supabase: ReturnType<typeof createClient>,
 ): Promise<WhatsAppLineRow | null> {
@@ -80,6 +80,7 @@ async function getActiveLine(
       "id, phone_number, provider, is_active, organization_id, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, meta_waba_id, meta_phone_number_id, meta_access_token",
     )
     .eq("is_active", true)
+    .order("created_at", { ascending: false })
     .limit(1)
     .single();
 
