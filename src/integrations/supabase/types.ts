@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      activation_audit_log: {
+        Row: {
+          action: string
+          created_at: string | null
+          details: Json | null
+          id: string
+          organization_id: string
+          performed_by: string | null
+          performed_by_email: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          organization_id: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          organization_id?: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_audit_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           appointment_at: string | null
@@ -132,6 +170,82 @@ export type Database = {
           window_hours?: number
         }
         Relationships: []
+      }
+      bot_conversation_logs: {
+        Row: {
+          bot_response: string | null
+          created_at: string | null
+          direction: string
+          id: string
+          intent_detected: string | null
+          metadata: Json | null
+          options_shown: string[] | null
+          organization_id: string
+          patient_phone: string
+          response_time_ms: number | null
+          session_id: string
+          state_after: string
+          state_before: string
+          user_message: string | null
+          whatsapp_line_id: string
+        }
+        Insert: {
+          bot_response?: string | null
+          created_at?: string | null
+          direction: string
+          id?: string
+          intent_detected?: string | null
+          metadata?: Json | null
+          options_shown?: string[] | null
+          organization_id: string
+          patient_phone: string
+          response_time_ms?: number | null
+          session_id: string
+          state_after: string
+          state_before: string
+          user_message?: string | null
+          whatsapp_line_id: string
+        }
+        Update: {
+          bot_response?: string | null
+          created_at?: string | null
+          direction?: string
+          id?: string
+          intent_detected?: string | null
+          metadata?: Json | null
+          options_shown?: string[] | null
+          organization_id?: string
+          patient_phone?: string
+          response_time_ms?: number | null
+          session_id?: string
+          state_after?: string
+          state_before?: string
+          user_message?: string | null
+          whatsapp_line_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_conversation_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_conversation_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "bot_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_conversation_logs_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bot_faqs: {
         Row: {
@@ -353,6 +467,45 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doctor_patients: {
+        Row: {
+          created_at: string | null
+          doctor_id: string
+          id: string
+          organization_id: string
+          patient_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          doctor_id: string
+          id?: string
+          organization_id: string
+          patient_id: string
+        }
+        Update: {
+          created_at?: string | null
+          doctor_id?: string
+          id?: string
+          organization_id?: string
+          patient_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_patients_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_patients_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
             referencedColumns: ["id"]
           },
         ]
@@ -662,13 +815,18 @@ export type Database = {
       }
       organizations: {
         Row: {
+          billing_status: string | null
           billing_type: string | null
           country_code: string | null
           created_at: string | null
+          daily_message_cap: number | null
           email: string | null
           id: string
           is_active: boolean | null
+          messaging_enabled: boolean | null
+          monthly_message_cap: number | null
           name: string
+          onboarding_status: string | null
           owner_user_id: string | null
           phone: string | null
           slug: string
@@ -676,13 +834,18 @@ export type Database = {
           trial_ends_at: string | null
         }
         Insert: {
+          billing_status?: string | null
           billing_type?: string | null
           country_code?: string | null
           created_at?: string | null
+          daily_message_cap?: number | null
           email?: string | null
           id?: string
           is_active?: boolean | null
+          messaging_enabled?: boolean | null
+          monthly_message_cap?: number | null
           name: string
+          onboarding_status?: string | null
           owner_user_id?: string | null
           phone?: string | null
           slug: string
@@ -690,13 +853,18 @@ export type Database = {
           trial_ends_at?: string | null
         }
         Update: {
+          billing_status?: string | null
           billing_type?: string | null
           country_code?: string | null
           created_at?: string | null
+          daily_message_cap?: number | null
           email?: string | null
           id?: string
           is_active?: boolean | null
+          messaging_enabled?: boolean | null
+          monthly_message_cap?: number | null
           name?: string
+          onboarding_status?: string | null
           owner_user_id?: string | null
           phone?: string | null
           slug?: string
@@ -756,45 +924,6 @@ export type Database = {
           },
         ]
       }
-      doctor_patients: {
-        Row: {
-          id: string
-          doctor_id: string
-          patient_id: string
-          organization_id: string
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          doctor_id: string
-          patient_id: string
-          organization_id: string
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          doctor_id?: string
-          patient_id?: string
-          organization_id?: string
-          created_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "doctor_patients_doctor_id_fkey"
-            columns: ["doctor_id"]
-            isOneToOne: false
-            referencedRelation: "doctors"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "doctor_patients_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       secretaries: {
         Row: {
           created_at: string | null
@@ -850,6 +979,50 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      template_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          logical_type: string
+          parameter_order: string[]
+          provider: string
+          template_language: string
+          template_name: string
+          whatsapp_line_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logical_type: string
+          parameter_order?: string[]
+          provider?: string
+          template_language?: string
+          template_name: string
+          whatsapp_line_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logical_type?: string
+          parameter_order?: string[]
+          provider?: string
+          template_language?: string
+          template_name?: string
+          whatsapp_line_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_mappings_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -1076,7 +1249,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      bot_analytics_summary: {
+        Row: {
+          bookings_completed: number | null
+          expired_sessions: number | null
+          handoffs: number | null
+          in_progress: number | null
+          reschedules_completed: number | null
+          session_date: string | null
+          total_sessions: number | null
+          unique_patients: number | null
+          whatsapp_line_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_sessions_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       current_app_role: {
@@ -1094,6 +1288,17 @@ export type Database = {
       }
       current_doctor_id: { Args: never; Returns: string }
       current_per_message_price: { Args: never; Returns: number }
+      find_or_create_patient: {
+        Args: {
+          p_doctor_id?: string
+          p_email?: string
+          p_name: string
+          p_notes?: string
+          p_organization_id?: string
+          p_phone: string
+        }
+        Returns: Json
+      }
       get_message_usage: {
         Args: { period_end: string; period_start: string }
         Returns: {

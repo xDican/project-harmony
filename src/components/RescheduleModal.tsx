@@ -28,6 +28,7 @@ interface RescheduleModalProps {
   onOpenChange: (open: boolean) => void;
   appointmentId: string;
   doctorId: string;
+  calendarId?: string;
   currentDate: string;
   currentTime: string;
   currentDuration?: number;
@@ -47,6 +48,7 @@ export function RescheduleModal({
   onOpenChange,
   appointmentId,
   doctorId,
+  calendarId,
   currentDate,
   currentTime,
   currentDuration = 60,
@@ -98,6 +100,7 @@ export function RescheduleModal({
         doctorId,
         month: monthString,
         durationMinutes: duration,
+        calendarId,
       });
       setAvailableDaysMap(daysMap);
       
@@ -142,6 +145,7 @@ export function RescheduleModal({
       doctorId,
       date: dateString,
       durationMinutes,
+      calendarId,
     })
       .then((slots) => {
         // Filter slots to show only future times if the selected date is today

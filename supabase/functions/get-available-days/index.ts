@@ -268,7 +268,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 6) Query A: Obtener schedules del doctor (max 7 filas, optionally filtered by calendar)
+    // 6) Query A: Obtener schedules del doctor (primary source: doctor_schedules)
     let scheduleQuery = supabase
       .from("doctor_schedules")
       .select("day_of_week, start_time, end_time")
@@ -304,6 +304,40 @@ Deno.serve(async (req) => {
         "[get-available-days] Schedules loaded:",
         schedules?.length ?? 0
       );
+    }
+
+    // 6b) SHADOW: also fetch from calendar_schedules (non-blocking)
+    let shadowScheduleMap: Map<number, ScheduleRow> | null = null;
+    try {
+      let resolvedCalendarId = calendarId;
+      if (!resolvedCalendarId) {
+        const { data: cdRow } = await supabase
+          .from("calendar_doctors")
+          .select("calendar_id")
+          .eq("doctor_id", doctorId)
+          .eq("is_active", true)
+          .maybeSingle();
+        resolvedCalendarId = cdRow?.calendar_id ?? undefined;
+      }
+      if (resolvedCalendarId) {
+        const { data: calSchedules, error: calScheduleError } = await supabase
+          .from("calendar_schedules")
+          .select("day_of_week, start_time, end_time")
+          .eq("calendar_id", resolvedCalendarId);
+        if (calScheduleError) {
+          console.warn("[get-available-days][shadow] Error fetching calendar_schedules:", calScheduleError);
+        } else {
+          shadowScheduleMap = new Map<number, ScheduleRow>();
+          for (const s of calSchedules ?? []) {
+            shadowScheduleMap.set(s.day_of_week, s as ScheduleRow);
+          }
+          console.log("[get-available-days][shadow] Shadow schedules loaded:", calSchedules?.length ?? 0);
+        }
+      } else {
+        console.warn("[get-available-days][shadow] No calendarId resolved for doctor:", doctorId);
+      }
+    } catch (shadowErr) {
+      console.warn("[get-available-days][shadow] Unexpected error:", shadowErr);
     }
 
     // 7) Query B: Obtener citas del doctor en el mes completo
@@ -441,7 +475,56 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 10) Respuesta exitosa
+    // 10) SHADOW: compute canFit from calendar_schedules and compare per-day
+    if (shadowScheduleMap !== null) {
+      try {
+        const mismatches: string[] = [];
+        for (const { date, dow, dt } of daysInMonth) {
+          const shadowSchedule = shadowScheduleMap.get(dow);
+          let shadowCanFit = false;
+          let shadowWorking = false;
+
+          if (shadowSchedule) {
+            const startMinutes = timeToMinutes(shadowSchedule.start_time);
+            const endMinutes = timeToMinutes(shadowSchedule.end_time);
+            if (startMinutes < endMinutes) {
+              shadowWorking = true;
+              const workStart = dt.set({ hour: Math.floor(startMinutes / 60), minute: startMinutes % 60, second: 0, millisecond: 0 });
+              const workEnd = dt.set({ hour: Math.floor(endMinutes / 60), minute: endMinutes % 60, second: 0, millisecond: 0 });
+              const dayAppointments = appointmentsByDate.get(date) || [];
+              const occupiedIntervals: Interval[] = dayAppointments.map((apt) => {
+                const normalizedTime = apt.time.substring(0, 5);
+                const aptStart = DateTime.fromISO(`${apt.date}T${normalizedTime}:00`, { zone: timezone });
+                const aptEnd = aptStart.plus({ minutes: apt.duration_minutes ?? 60 });
+                return { startMs: aptStart.toMillis(), endMs: aptEnd.toMillis() };
+              });
+              const gaps = calculateGaps(workStart.toMillis(), workEnd.toMillis(), occupiedIntervals);
+              shadowCanFit = gaps.some((gap) => gap.durationMinutes >= durationMinutes);
+            }
+          }
+
+          const primaryResult = results.find((r) => r.date === date);
+          const primaryCanFit = primaryResult?.canFit ?? false;
+          const primaryWorking = primaryResult?.working ?? false;
+
+          if (shadowWorking !== primaryWorking || shadowCanFit !== primaryCanFit) {
+            mismatches.push(
+              `${date}(dow=${dow}): primary={working:${primaryWorking},canFit:${primaryCanFit}} shadow={working:${shadowWorking},canFit:${shadowCanFit}}`
+            );
+          }
+        }
+
+        if (mismatches.length > 0) {
+          console.warn("[get-available-days][shadow-diff] MISMATCH", { doctorId, month, mismatches });
+        } else {
+          console.log("[get-available-days][shadow] OK - sources match", { doctorId, month });
+        }
+      } catch (shadowCompErr) {
+        console.warn("[get-available-days][shadow] Error computing shadow results:", shadowCompErr);
+      }
+    }
+
+    // 11) Respuesta exitosa
     console.log(
       `[get-available-days] Completed: ${results.length} days processed`
     );
