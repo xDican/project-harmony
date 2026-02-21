@@ -19,6 +19,7 @@ import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { getAvailableSlots, getAvailableDays, createPatient, createAppointment, getDoctorById } from '@/lib/api';
 import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
 import { useCurrentUser } from '@/context/UserContext';
+import { supabase } from '@/lib/supabaseClient';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
 
@@ -38,6 +39,7 @@ export default function NuevaCita() {
   // Core selection state
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [selectedCalendarId, setSelectedCalendarId] = useState<string | undefined>();
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   
@@ -107,6 +109,7 @@ export default function NuevaCita() {
         doctorId,
         month: monthString,
         durationMinutes: duration,
+        calendarId: selectedCalendarId,
       });
       setAvailableDaysMap(daysMap);
       
@@ -127,14 +130,14 @@ export default function NuevaCita() {
     } finally {
       setIsLoadingDays(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, selectedCalendarId]);
 
   // Trigger fetch when doctor, duration, or month changes
   useEffect(() => {
     if (selectedDoctor) {
       fetchAvailableDays(selectedDoctor.id, currentMonth, durationMinutes);
     }
-  }, [selectedDoctor, currentMonth, durationMinutes, fetchAvailableDays]);
+  }, [selectedDoctor, currentMonth, durationMinutes, selectedCalendarId, fetchAvailableDays]);
 
   // Fetch available slots when doctor, date, or duration changes
   useEffect(() => {
@@ -146,7 +149,8 @@ export default function NuevaCita() {
       getAvailableSlots({
         doctorId: selectedDoctor.id,
         date: dateString,
-        durationMinutes: durationMinutes
+        durationMinutes: durationMinutes,
+        calendarId: selectedCalendarId,
       })
         .then(slots => {
           // Filter slots to show only future times if the selected date is today
@@ -171,7 +175,21 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setSelectedSlot(null);
     }
-  }, [selectedDoctor, selectedDate, durationMinutes]);
+  }, [selectedDoctor, selectedDate, durationMinutes, selectedCalendarId]);
+
+  // Fetch calendarId when doctor changes
+  useEffect(() => {
+    setSelectedCalendarId(undefined);
+    if (!selectedDoctor) return;
+    supabase
+      .from('calendar_doctors')
+      .select('calendar_id')
+      .eq('doctor_id', selectedDoctor.id)
+      .eq('is_active', true)
+      .maybeSingle()
+      .then(({ data }) => setSelectedCalendarId(data?.calendar_id ?? undefined))
+      .catch(() => {}); // non-blocking; backend auto-resolves as fallback
+  }, [selectedDoctor?.id]);
 
   // Reset date, slots, and available days when doctor changes
   useEffect(() => {

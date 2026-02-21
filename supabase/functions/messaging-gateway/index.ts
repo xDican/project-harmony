@@ -77,7 +77,7 @@ async function getActiveLine(
   const { data, error } = await supabase
     .from("whatsapp_lines")
     .select(
-      "id, phone_number, provider, is_active, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, meta_waba_id, meta_phone_number_id, meta_access_token",
+      "id, phone_number, provider, is_active, organization_id, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, meta_waba_id, meta_phone_number_id, meta_access_token",
     )
     .eq("is_active", true)
     .limit(1)
@@ -236,6 +236,44 @@ Deno.serve(async (req) => {
       return jsonResponse(500, { ok: false, error: "No active WhatsApp line configured" });
     }
 
+    // 4b) Kill switch: check messaging_enabled for this org
+    if (line.organization_id) {
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("messaging_enabled")
+        .eq("id", line.organization_id)
+        .single();
+
+      if (org && org.messaging_enabled === false) {
+        console.warn("[messaging-gateway] Messaging disabled for org:", line.organization_id);
+
+        // Log the blocked attempt
+        await logMessage(supabase, {
+          direction: "outbound",
+          toPhone: normalizedTo,
+          fromPhone: line.phone_number,
+          body: body ?? (type && type !== "generic" ? `template:${type}` : undefined),
+          type,
+          status: "failed",
+          provider: line.provider,
+          appointmentId,
+          patientId,
+          doctorId,
+          organizationId: line.organization_id,
+          whatsappLineId: line.id,
+          errorCode: "MESSAGING_DISABLED",
+          errorMessage: "Organization messaging is disabled",
+          rawPayload: { blocked: true, reason: "MESSAGING_DISABLED" },
+        });
+
+        return jsonResponse(403, {
+          ok: false,
+          error: "Messaging is disabled for this organization",
+          errorCode: "MESSAGING_DISABLED",
+        });
+      }
+    }
+
     const provider = buildProvider(line);
     if (!provider) {
       return jsonResponse(500, {
@@ -328,6 +366,8 @@ Deno.serve(async (req) => {
       appointmentId,
       patientId,
       doctorId,
+      organizationId: line.organization_id ?? undefined,
+      whatsappLineId: line.id,
       rawPayload: result,
       errorCode: result.errorCode,
       errorMessage: result.error,

@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     const requestedDate = DateTime.fromISO(date);
     const dayOfWeek = requestedDate.weekday % 7; // Luxon: 1=Monday...7=Sunday -> convert to 0=Sunday...6=Saturday
 
-    // 7) Fetch doctor's schedules for that day (optionally filter by calendar)
+    // 7) Fetch doctor's schedules for that day (primary source: doctor_schedules)
     let scheduleQuery = supabase
       .from("doctor_schedules")
       .select("start_time, end_time")
@@ -136,6 +136,37 @@ Deno.serve(async (req) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // 7b) SHADOW: also fetch from calendar_schedules for comparison (non-blocking)
+    let shadowSchedules: Array<{ start_time: string; end_time: string }> | null = null;
+    try {
+      let resolvedCalendarId = calendarId;
+      if (!resolvedCalendarId) {
+        const { data: cdRow } = await supabase
+          .from("calendar_doctors")
+          .select("calendar_id")
+          .eq("doctor_id", doctorId)
+          .eq("is_active", true)
+          .maybeSingle();
+        resolvedCalendarId = cdRow?.calendar_id ?? undefined;
+      }
+      if (resolvedCalendarId) {
+        const { data: calSchedules, error: calScheduleError } = await supabase
+          .from("calendar_schedules")
+          .select("start_time, end_time")
+          .eq("calendar_id", resolvedCalendarId)
+          .eq("day_of_week", dayOfWeek);
+        if (calScheduleError) {
+          console.warn("[get-available-slots][shadow] Error fetching calendar_schedules:", calScheduleError);
+        } else {
+          shadowSchedules = calSchedules ?? [];
+        }
+      } else {
+        console.warn("[get-available-slots][shadow] No calendarId resolved for doctor:", doctorId);
+      }
+    } catch (shadowErr) {
+      console.warn("[get-available-slots][shadow] Unexpected error:", shadowErr);
     }
 
     // 8) Fetch existing appointments (exclude cancelled)
@@ -207,6 +238,42 @@ Deno.serve(async (req) => {
     const uniqueSorted = Array.from(new Set(availableSlots)).sort((a, b) => a.localeCompare(b));
 
     console.log("[get-available-slots] Available slots:", uniqueSorted.length);
+
+    // 11b) SHADOW: compute slots from calendar_schedules and compare
+    if (shadowSchedules !== null) {
+      try {
+        const shadowSlots: string[] = [];
+        for (const schedule of shadowSchedules) {
+          const workStart = buildDateTime(date, schedule.start_time);
+          const workEnd = buildDateTime(date, schedule.end_time);
+          const workEndMs = workEnd.toMillis();
+          let slotStart = workStart;
+          while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
+            const slotStartMs = slotStart.toMillis();
+            const slotEndMs = slotStart.plus({ minutes: durationMinutes }).toMillis();
+            const hasOverlap = occupiedIntervals.some(({ startMs: aptStartMs, endMs: aptEndMs }) => {
+              return slotStartMs < aptEndMs && aptStartMs < slotEndMs;
+            });
+            if (!hasOverlap) {
+              shadowSlots.push(formatToHHMM(slotStart));
+            }
+            slotStart = slotStart.plus({ minutes: SLOT_GRANULARITY_MINUTES });
+          }
+        }
+        const shadowSorted = Array.from(new Set(shadowSlots)).sort((a, b) => a.localeCompare(b));
+        if (JSON.stringify(uniqueSorted) !== JSON.stringify(shadowSorted)) {
+          console.warn("[get-available-slots][shadow-diff] MISMATCH", {
+            doctorId, date, dayOfWeek,
+            primary: uniqueSorted,
+            shadow: shadowSorted,
+          });
+        } else {
+          console.log("[get-available-slots][shadow] OK - sources match", { doctorId, date, count: uniqueSorted.length });
+        }
+      } catch (shadowCompErr) {
+        console.warn("[get-available-slots][shadow] Error computing shadow slots:", shadowCompErr);
+      }
+    }
 
     return new Response(JSON.stringify({ slots: uniqueSorted }), {
       status: 200,

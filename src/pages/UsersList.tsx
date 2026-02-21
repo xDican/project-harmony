@@ -14,7 +14,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { formatPhoneForDisplay } from '@/lib/utils';
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
+  admin: 'Propietario',
   secretary: 'Secretaria',
   doctor: 'Doctor',
 };

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Trash2, Plus } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import { updateDoctorSchedules, getDoctorById, getDoctorSchedules } from '@/lib/api';
+import { supabase } from '@/lib/supabaseClient';
 import { toast } from '@/hooks/use-toast';
 
 // Tipos
@@ -43,6 +44,7 @@ export default function DoctorSchedulePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [doctorName, setDoctorName] = useState('');
   const [doctorSpecialty, setDoctorSpecialty] = useState('');
+  const [calendarId, setCalendarId] = useState<string | undefined>();
 
   // Estado inicial (vacío hasta cargar)
   const [schedule, setSchedule] = useState<WeekSchedule>({
@@ -89,6 +91,15 @@ export default function DoctorSchedulePage() {
         // Cargar horarios existentes
         const schedules = await getDoctorSchedules(doctorId);
         setSchedule(schedules as WeekSchedule);
+
+        // Resolver calendarId para dual-write explícito
+        const { data: cdRow } = await supabase
+          .from('calendar_doctors')
+          .select('calendar_id')
+          .eq('doctor_id', doctorId)
+          .eq('is_active', true)
+          .maybeSingle();
+        setCalendarId(cdRow?.calendar_id ?? undefined);
       } catch (error) {
         console.error('Error loading doctor data:', error);
         toast({
@@ -175,7 +186,7 @@ export default function DoctorSchedulePage() {
 
     setIsSaving(true);
     try {
-      await updateDoctorSchedules(doctorId, schedule);
+      await updateDoctorSchedules(doctorId, schedule, calendarId);
       
       toast({
         title: 'Horarios guardados',

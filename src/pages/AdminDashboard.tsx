@@ -57,7 +57,7 @@ export default function AdminDashboard() {
       <div className="container mx-auto p-6 max-w-7xl">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Panel de Administración</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-2">Panel de Propietario</h1>
           <p className="text-muted-foreground">
             Estadísticas y métricas del sistema
           </p>

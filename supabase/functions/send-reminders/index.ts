@@ -118,14 +118,32 @@ Deno.serve(async (req) => {
 
     console.log("[send-reminders] Looking for appointments on:", tomorrowDateString);
 
-    // 5) Get tomorrow's appointments that need reminders
-    const { data: appointments, error: appointmentsError } = await supabase
+    // 4b) Pre-fetch orgs with messaging disabled to skip their appointments
+    const { data: disabledOrgs } = await supabase
+      .from("organizations")
+      .select("id")
+      .eq("messaging_enabled", false);
+
+    const disabledOrgIds = (disabledOrgs ?? []).map((o: { id: string }) => o.id);
+
+    if (disabledOrgIds.length > 0) {
+      console.log("[send-reminders] Skipping appointments for disabled orgs:", disabledOrgIds);
+    }
+
+    // 5) Get tomorrow's appointments that need reminders (excluding disabled orgs)
+    let appointmentsQuery = supabase
       .from("appointments")
       .select("id, doctor_id, patient_id, date, time, appointment_at, status, duration_minutes, organization_id")
       .eq("date", tomorrowDateString)
       .in("status", ["agendada", "confirmada", "pending", "confirmed"])
       .eq("reminder_24h_sent", false)
       .is("reminder_24h_sent_at", null);
+
+    if (disabledOrgIds.length > 0) {
+      appointmentsQuery = appointmentsQuery.not("organization_id", "in", `(${disabledOrgIds.join(",")})`);
+    }
+
+    const { data: appointments, error: appointmentsError } = await appointmentsQuery;
 
     if (appointmentsError) {
       console.error("[send-reminders] Error fetching appointments:", appointmentsError);

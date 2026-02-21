@@ -17,6 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
 import { logMessage } from "../_shared/message-logger.ts";
+import { formatTimeForTemplate } from "../_shared/datetime.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -174,6 +175,9 @@ async function handleIncomingMessage(
   metadata: MetaChangeValue["metadata"],
   message: MetaMessage,
   contacts: MetaContact[] | undefined,
+  lineId?: string,
+  lineOrgId?: string,
+  botEnabled?: boolean,
 ): Promise<void> {
   const fromPhone = normalizeToE164(message.from);
   const toPhone = metadata?.display_phone_number
@@ -184,7 +188,57 @@ async function handleIncomingMessage(
   const appointmentIdFromPayload = extractAppointmentIdFromPayload(message);
   const contactName = contacts?.[0]?.profile?.name;
 
-  console.log("[meta-webhook] Inbound from:", fromPhone, "body:", body, "appointmentFromPayload:", appointmentIdFromPayload, "contact:", contactName);
+  console.log("[meta-webhook] Inbound from:", fromPhone, "body:", body, "appointmentFromPayload:", appointmentIdFromPayload, "contact:", contactName, "botEnabled:", botEnabled);
+
+  // Idempotency: skip if this exact message was already processed
+  const { data: existingLog } = await supabase
+    .from("message_logs")
+    .select("id")
+    .eq("provider_message_id", message.id)
+    .maybeSingle();
+
+  if (existingLog) {
+    console.log("[meta-webhook] Duplicate message skipped:", message.id);
+    return;
+  }
+
+  // BOT FLOW: route to bot-handler when bot is enabled AND it's not a button
+  // confirmation reply (those still use the legacy appointment-update flow).
+  if (botEnabled && lineId && lineOrgId && !appointmentIdFromPayload) {
+    // Quick patient lookup for log enrichment (optional — failures are non-fatal)
+    let patientIdForLog: string | undefined;
+    if (fromPhone) {
+      const localPhone = fromPhone.replace(/^\+504/, "");
+      const phonesToCheck = localPhone !== fromPhone ? [fromPhone, localPhone] : [fromPhone];
+      const { data: p } = await supabase
+        .from("patients")
+        .select("id")
+        .in("phone", phonesToCheck)
+        .limit(1)
+        .maybeSingle();
+      patientIdForLog = p?.id;
+    }
+
+    // Log inbound message
+    await logMessage(supabase, {
+      direction: "inbound",
+      toPhone,
+      fromPhone,
+      body: body || null,
+      type: "patient_reply",
+      status: "received",
+      provider: "meta",
+      providerMessageId: message.id,
+      patientId: patientIdForLog,
+      organizationId: lineOrgId,
+      whatsappLineId: lineId,
+      rawPayload: message,
+    });
+
+    // Dispatch to bot-handler and send response
+    await routeToBotHandler(fromPhone, body, lineId, lineOrgId, patientIdForLog);
+    return;
+  }
 
   // Find patient by phone
   // Patients may be stored as local 8-digit (33899824) or E164 (+50433899824),
@@ -261,6 +315,8 @@ async function handleIncomingMessage(
     appointmentId: appointment?.id,
     patientId: patient?.id,
     doctorId: appointment?.doctor_id,
+    organizationId: lineOrgId,
+    whatsappLineId: lineId,
     rawPayload: message,
   });
 
@@ -325,8 +381,6 @@ async function sendIntentNotification(
       .single();
 
     if (!appt) return;
-
-    const { formatTimeForTemplate } = await import("../_shared/datetime.ts");
 
     await fetch(gatewayUrl, {
       method: "POST",
@@ -399,8 +453,103 @@ async function sendIntentNotification(
 }
 
 // ---------------------------------------------------------------------------
+// Bot routing
+// ---------------------------------------------------------------------------
+
+/**
+ * Calls bot-handler and sends its response back to the patient via messaging-gateway.
+ * Both calls are fire-and-forget from the webhook perspective — errors are logged only.
+ */
+async function routeToBotHandler(
+  fromPhone: string,
+  messageText: string,
+  lineId: string,
+  orgId: string,
+  patientId?: string,
+): Promise<void> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+  const botHandlerUrl = `https://${projectRef}.supabase.co/functions/v1/bot-handler`;
+  const gatewayUrl = `https://${projectRef}.supabase.co/functions/v1/messaging-gateway`;
+
+  try {
+    // 1) Call bot-handler
+    const botRes = await fetch(botHandlerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": internalSecret,
+      },
+      body: JSON.stringify({
+        whatsappLineId: lineId,
+        patientPhone: fromPhone,
+        messageText: messageText || "",
+        organizationId: orgId,
+      }),
+    });
+
+    if (!botRes.ok) {
+      const errText = await botRes.text();
+      console.error("[meta-webhook] bot-handler error:", botRes.status, errText);
+      return;
+    }
+
+    const botData = await botRes.json();
+    console.log("[meta-webhook] bot-handler response:", { nextState: botData.nextState, hasMessage: !!botData.message });
+
+    if (!botData.message) return;
+
+    // 2) Format message — append numbered options if present
+    let fullMessage: string = botData.message;
+    if (Array.isArray(botData.options) && botData.options.length > 0) {
+      const optLines = (botData.options as string[])
+        .map((opt, i) => `${i + 1}. ${opt}`)
+        .join("\n");
+      fullMessage = `${fullMessage}\n\n${optLines}`;
+    }
+
+    // 3) Send via messaging-gateway
+    const gwRes = await fetch(gatewayUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        "x-internal-secret": internalSecret,
+        apikey: anonKey,
+      },
+      body: JSON.stringify({
+        to: fromPhone,
+        body: fullMessage,
+        type: "generic",
+        ...(patientId ? { patientId } : {}),
+      }),
+    });
+
+    if (!gwRes.ok) {
+      const errText = await gwRes.text();
+      console.error("[meta-webhook] messaging-gateway error:", gwRes.status, errText);
+    } else {
+      console.log("[meta-webhook] Bot response sent to:", fromPhone);
+    }
+  } catch (err) {
+    console.error("[meta-webhook] routeToBotHandler unexpected error:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Status update handling
 // ---------------------------------------------------------------------------
+
+// Forward-only progression: higher rank = further along delivery lifecycle
+const STATUS_RANK: Record<string, number> = {
+  sent: 1,
+  failed: 1,
+  delivered: 2,
+  read: 3,
+};
 
 async function handleStatusUpdate(
   supabase: ReturnType<typeof createClient>,
@@ -417,6 +566,22 @@ async function handleStatusUpdate(
   };
 
   const mappedStatus = statusMap[status.status] || status.status;
+
+  // Forward-only: fetch current status and skip if we'd go backwards
+  const { data: currentLog } = await supabase
+    .from("message_logs")
+    .select("status")
+    .eq("provider_message_id", status.id)
+    .maybeSingle();
+
+  if (currentLog) {
+    const currentRank = STATUS_RANK[currentLog.status] ?? 0;
+    const newRank = STATUS_RANK[mappedStatus] ?? 0;
+    if (newRank < currentRank) {
+      console.log("[meta-webhook] Skipping backward status:", currentLog.status, "->", mappedStatus);
+      return;
+    }
+  }
 
   const updatePayload: Record<string, unknown> = {
     status: mappedStatus,
@@ -509,24 +674,43 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 4) Process all entries
+    // 3.5) Resolve whatsapp_line from webhook metadata (for org/line context in logs)
+    let activeLineId: string | undefined;
+    let activeLineOrgId: string | undefined;
+    let activeLineBotEnabled = false;
+    const phoneNumberId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    if (phoneNumberId) {
+      const { data: wline } = await supabase
+        .from("whatsapp_lines")
+        .select("id, organization_id, bot_enabled")
+        .eq("meta_phone_number_id", phoneNumberId)
+        .eq("is_active", true)
+        .maybeSingle();
+      activeLineId = wline?.id;
+      activeLineOrgId = wline?.organization_id ?? undefined;
+      activeLineBotEnabled = wline?.bot_enabled ?? false;
+      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled);
+    }
+
+    // 4) Process all entries — messages and statuses run in parallel per change
     for (const entry of payload.entry || []) {
       for (const change of entry.changes || []) {
         const value = change.value;
+        const tasks: Promise<void>[] = [];
 
-        // Incoming messages
         if (value.messages) {
           for (const message of value.messages) {
-            await handleIncomingMessage(supabase, value.metadata, message, value.contacts);
+            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled));
           }
         }
 
-        // Status updates
         if (value.statuses) {
           for (const status of value.statuses) {
-            await handleStatusUpdate(supabase, status);
+            tasks.push(handleStatusUpdate(supabase, status));
           }
         }
+
+        await Promise.allSettled(tasks);
       }
     }
 

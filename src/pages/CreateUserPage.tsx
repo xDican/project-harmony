@@ -185,7 +185,7 @@ export default function CreateUserPage() {
                     <SelectValue placeholder="Selecciona un rol" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="admin">Propietario</SelectItem>
                     <SelectItem value="secretary">Secretaria</SelectItem>
                     <SelectItem value="doctor">Doctor</SelectItem>
                   </SelectContent>

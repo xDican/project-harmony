@@ -618,7 +618,7 @@ async function handleBookingSelectWeek(
   session.context.durationMinutes = durationMinutes;
 
   // Get available weeks
-  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase);
+  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId);
 
   if (weeks.length === 0) {
     return {
@@ -669,7 +669,8 @@ async function handleBookingSelectDay(
     session.context.doctorId,
     selectedWeek.weekStart,
     session.context.durationMinutes || 60,
-    supabase
+    supabase,
+    session.context.calendarId
   );
 
   if (days.length === 0) {
@@ -766,7 +767,8 @@ async function showHourSlots(
     session.context.durationMinutes || 60,
     page,
     PAGE_SIZE,
-    supabase
+    supabase,
+    session.context.calendarId
   );
 
   if (result.slots.length === 0) {
@@ -918,7 +920,8 @@ async function createAppointmentWithPatient(
     session.context.doctorId,
     session.context.selectedDate,
     session.context.durationMinutes || 60,
-    supabase
+    supabase,
+    session.context.calendarId
   );
 
   if (!slotsCheck.includes(session.context.selectedTime)) {
@@ -1245,7 +1248,7 @@ async function handleCancelConfirm(
     session.context.isReschedule = true; // Flag to know we're rescheduling
 
     // Go to week selection (reuse booking flow)
-    const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase);
+    const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId);
 
     if (weeks.length === 0) {
       return {
@@ -1410,7 +1413,8 @@ async function searchFAQ(
 async function getAvailableWeeks(
   doctorId: string,
   durationMinutes: number,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  calendarId?: string
 ): Promise<{ weekStart: string; weekLabel: string }[]> {
   const timezone = 'America/Tegucigalpa';
   const now = DateTime.now().setZone(timezone);
@@ -1427,7 +1431,8 @@ async function getAvailableWeeks(
       weekStart.toISODate() || '',
       weekEnd.toISODate() || '',
       durationMinutes,
-      supabase
+      supabase,
+      calendarId
     );
 
     if (hasSlots) {
@@ -1447,8 +1452,16 @@ async function weekHasAvailableSlots(
   weekStart: string,
   weekEnd: string,
   durationMinutes: number,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  calendarId?: string
 ): Promise<boolean> {
+  if (calendarId) {
+    const { data: schedules } = await supabase
+      .from('calendar_schedules')
+      .select('day_of_week')
+      .eq('calendar_id', calendarId);
+    return !!(schedules && schedules.length > 0);
+  }
   const { data: schedules } = await supabase
     .from('doctor_schedules')
     .select('day_of_week')
@@ -1462,7 +1475,8 @@ async function getAvailableDaysInWeek(
   doctorId: string,
   weekStart: string,
   durationMinutes: number,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  calendarId?: string
 ): Promise<{ date: string; label: string }[]> {
   const timezone = 'America/Tegucigalpa';
   const weekStartDt = DateTime.fromISO(weekStart, { zone: timezone });
@@ -1477,7 +1491,7 @@ async function getAvailableDaysInWeek(
     if (date < now.startOf('day')) continue;
 
     // Check if this day has available slots
-    const slots = await getAvailableSlotsForDate(doctorId, dateStr, durationMinutes, supabase);
+    const slots = await getAvailableSlotsForDate(doctorId, dateStr, durationMinutes, supabase, calendarId);
 
     if (slots.length > 0) {
       const label = date.toFormat('EEEE dd MMM', { locale: 'es' });
@@ -1494,9 +1508,10 @@ async function getAvailableHoursForDate(
   durationMinutes: number,
   page: number,
   pageSize: number,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  calendarId?: string
 ): Promise<{ slots: string[]; hasMore: boolean; totalSlots: number }> {
-  const allSlots = await getAvailableSlotsForDate(doctorId, date, durationMinutes, supabase);
+  const allSlots = await getAvailableSlotsForDate(doctorId, date, durationMinutes, supabase, calendarId);
   const totalSlots = allSlots.length;
   const startIdx = (page - 1) * pageSize;
   const endIdx = startIdx + pageSize;
@@ -1512,12 +1527,14 @@ async function getAvailableHoursForDate(
 /**
  * Replicates the logic from get-available-slots edge function
  * using the service role client (no JWT needed).
+ * Uses calendar_schedules when calendarId is provided, else falls back to doctor_schedules.
  */
 async function getAvailableSlotsForDate(
   doctorId: string,
   date: string,
   durationMinutes: number,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  calendarId?: string
 ): Promise<string[]> {
   const SLOT_GRANULARITY = 30;
 
@@ -1525,14 +1542,27 @@ async function getAvailableSlotsForDate(
   const requestedDate = DateTime.fromISO(date);
   const dayOfWeek = requestedDate.weekday % 7;
 
-  // Fetch doctor schedules for this day
-  const { data: schedules, error: schedError } = await supabase
-    .from('doctor_schedules')
-    .select('start_time, end_time')
-    .eq('doctor_id', doctorId)
-    .eq('day_of_week', dayOfWeek);
+  // Fetch schedules for this day: calendar_schedules if calendarId provided, else doctor_schedules
+  let schedules: Array<{ start_time: string; end_time: string }> | null = null;
+  if (calendarId) {
+    const { data, error } = await supabase
+      .from('calendar_schedules')
+      .select('start_time, end_time')
+      .eq('calendar_id', calendarId)
+      .eq('day_of_week', dayOfWeek);
+    if (error) return [];
+    schedules = data;
+  } else {
+    const { data, error: schedError } = await supabase
+      .from('doctor_schedules')
+      .select('start_time, end_time')
+      .eq('doctor_id', doctorId)
+      .eq('day_of_week', dayOfWeek);
+    if (schedError) return [];
+    schedules = data;
+  }
 
-  if (schedError || !schedules || schedules.length === 0) return [];
+  if (!schedules || schedules.length === 0) return [];
 
   // Fetch existing appointments for this date (exclude cancelled)
   const { data: appointments } = await supabase

@@ -387,12 +387,14 @@ export async function getAvailableSlots(params: {
   doctorId: string;
   date: string;
   durationMinutes?: number;
+  calendarId?: string;
 }): Promise<string[]> {
   const { data, error } = await supabase.functions.invoke('get-available-slots', {
     body: {
       doctorId: params.doctorId,
       date: params.date,
       durationMinutes: params.durationMinutes ?? 60,
+      ...(params.calendarId ? { calendarId: params.calendarId } : {}),
     },
   });
 
@@ -1099,7 +1101,8 @@ function flattenWeekSchedule(weekSchedule: WeekSchedule): Array<{
  */
 export async function updateDoctorSchedules(
   doctorId: string,
-  weekSchedule: WeekSchedule
+  weekSchedule: WeekSchedule,
+  calendarId?: string
 ): Promise<void> {
   // Convertir weekSchedule a formato de BD
   const schedules = flattenWeekSchedule(weekSchedule);
@@ -1109,6 +1112,7 @@ export async function updateDoctorSchedules(
     body: {
       doctorId,
       schedules,
+      ...(calendarId ? { calendarId } : {}),
     },
   });
 

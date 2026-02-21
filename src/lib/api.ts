@@ -357,14 +357,16 @@ export async function getAvailableDays(params: {
   doctorId: string;
   month: string;
   durationMinutes: number;
+  calendarId?: string;
 }): Promise<Record<string, { canFit: boolean; working: boolean }>> {
   const { supabase } = await import('@/integrations/supabase/client');
-  
+
   const { data, error } = await supabase.functions.invoke('get-available-days', {
     body: {
       doctorId: params.doctorId,
       month: params.month,
       durationMinutes: params.durationMinutes,
+      ...(params.calendarId ? { calendarId: params.calendarId } : {}),
     },
   });
 

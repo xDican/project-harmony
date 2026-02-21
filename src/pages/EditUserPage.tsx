@@ -219,7 +219,7 @@ export default function EditUserPage() {
                   <Input
                     id="role"
                     value={
-                      user.role === 'admin' ? 'Administrador' :
+                      user.role === 'admin' ? 'Propietario' :
                       user.role === 'secretary' ? 'Secretaria' :
                       user.role === 'doctor' ? 'Doctor' : user.role
                     }
