@@ -19,6 +19,15 @@ const translations: Record<string, Record<Lang, string>> = {
   'ws.col_language': { es: 'Idioma', en: 'Language' },
   'ws.col_status': { es: 'Estado', en: 'Status' },
   'ws.col_updated': { es: 'Actualización', en: 'Updated' },
+  // MetaEmbeddedSignup component
+  'mes.btn':             { es: 'Conectar WhatsApp',               en: 'Connect WhatsApp' },
+  'mes.connecting':      { es: 'Conectando...',                   en: 'Connecting...' },
+  'mes.loading_sdk':     { es: 'Cargando...',                     en: 'Loading...' },
+  'mes.cancel':          { es: 'Proceso cancelado',               en: 'Process cancelled' },
+  'mes.denied':          { es: 'Permiso denegado por Meta',       en: 'Permission denied by Meta' },
+  'mes.connected_phone': { es: 'Número conectado',                en: 'Connected number' },
+  'mes.connected_name':  { es: 'Nombre verificado',               en: 'Verified name' },
+  'mes.success':         { es: 'WhatsApp conectado correctamente', en: 'WhatsApp connected successfully' },
   // Status labels
   'status.approved': { es: 'Aprobada', en: 'Approved' },
   'status.pending': { es: 'Pendiente', en: 'Pending' },

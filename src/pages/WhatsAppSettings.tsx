@@ -6,19 +6,25 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Plus, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, Plus, CheckCircle2, XCircle, AlertTriangle, Phone, Building2 } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { startOAuth, listTemplates, type WhatsAppTemplate } from '@/lib/whatsappApi';
+import { listTemplates, type WhatsAppTemplate, type EmbeddedSignupResult } from '@/lib/whatsappApi';
+import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import { useToast } from '@/hooks/use-toast';
 import { t, getLang, setLang, statusLabel, getDateLocale, type Lang } from '@/lib/i18n';
+import { supabase } from '@/integrations/supabase/client';
+
+interface ConnectedLine {
+  phone_number: string;
+  label: string;
+}
 
 export default function WhatsAppSettings() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [lang, setLangState] = useState<Lang>(getLang);
-  const [isConnected, setIsConnected] = useState(() => localStorage.getItem('meta_connected') === 'true');
-  const [connectLoading, setConnectLoading] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectedLine, setConnectedLine] = useState<ConnectedLine | null>(null);
+  const [lineLoading, setLineLoading] = useState(true);
 
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -26,6 +32,7 @@ export default function WhatsAppSettings() {
   const [isMockMode, setIsMockMode] = useState(false);
 
   useEffect(() => {
+    loadConnectedLine();
     loadTemplates();
   }, []);
 
@@ -34,6 +41,18 @@ export default function WhatsAppSettings() {
       setLang(value);
       setLangState(value);
     }
+  }
+
+  async function loadConnectedLine() {
+    setLineLoading(true);
+    const { data } = await supabase
+      .from('whatsapp_lines')
+      .select('phone_number, label')
+      .eq('is_active', true)
+      .eq('provider', 'meta')
+      .maybeSingle();
+    setConnectedLine(data ?? null);
+    setLineLoading(false);
   }
 
   async function loadTemplates() {
@@ -46,22 +65,12 @@ export default function WhatsAppSettings() {
     setTemplatesLoading(false);
   }
 
-  async function handleConnect() {
-    setConnectLoading(true);
-    setConnectError(null);
-    const redirectUri = `${window.location.origin}/auth/meta/callback`;
-    const result = await startOAuth(redirectUri);
-    if (result.error) {
-      setConnectError(result.error);
-      setConnectLoading(false);
-      return;
-    }
-    if (result.data?.authorize_url) {
-      window.location.href = result.data.authorize_url;
-    } else {
-      setConnectError(t('ws.no_auth_url'));
-      setConnectLoading(false);
-    }
+  function handleConnected(result: EmbeddedSignupResult) {
+    setConnectedLine({ phone_number: result.phone_number, label: result.verified_name });
+    toast({
+      title: t('mes.success'),
+      description: `${result.verified_name} · ${result.phone_number}`,
+    });
   }
 
   return (
@@ -80,7 +89,9 @@ export default function WhatsAppSettings() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">{t('ws.meta_title')}</CardTitle>
-              {isConnected ? (
+              {lineLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : connectedLine ? (
                 <Badge variant="default" className="gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" /> {t('ws.connected')}
                 </Badge>
@@ -92,16 +103,28 @@ export default function WhatsAppSettings() {
             </div>
             <CardDescription>{t('ws.meta_desc')}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {connectError && (
-              <Alert variant="destructive">
-                <AlertDescription>{connectError}</AlertDescription>
-              </Alert>
+          <CardContent>
+            {lineLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Verificando conexión...
+              </div>
+            ) : connectedLine ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">{t('mes.connected_phone')}:</span>
+                  <span className="font-medium">{connectedLine.phone_number}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">{t('mes.connected_name')}:</span>
+                  <span className="font-medium">{connectedLine.label}</span>
+                </div>
+              </div>
+            ) : (
+              <MetaEmbeddedSignup onSuccess={handleConnected} />
             )}
-            <Button onClick={handleConnect} disabled={connectLoading}>
-              {connectLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {t('ws.connect_btn')}
-            </Button>
           </CardContent>
         </Card>
 
