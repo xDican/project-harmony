@@ -6,17 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Plus, CheckCircle2, XCircle, AlertTriangle, Phone, Building2 } from 'lucide-react';
+import { Loader2, Plus, CheckCircle2, XCircle, AlertTriangle, Phone, Building2, RefreshCw } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { listTemplates, type WhatsAppTemplate, type EmbeddedSignupResult } from '@/lib/whatsappApi';
+import { listTemplates, activateWhatsAppLine, type WhatsAppTemplate, type EmbeddedSignupResult } from '@/lib/whatsappApi';
 import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import { useToast } from '@/hooks/use-toast';
 import { t, getLang, setLang, statusLabel, getDateLocale, type Lang } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ConnectedLine {
+  id: string;
   phone_number: string;
   label: string;
+  meta_registered: boolean;
 }
 
 export default function WhatsAppSettings() {
@@ -25,6 +27,7 @@ export default function WhatsAppSettings() {
   const [lang, setLangState] = useState<Lang>(getLang);
   const [connectedLine, setConnectedLine] = useState<ConnectedLine | null>(null);
   const [lineLoading, setLineLoading] = useState(true);
+  const [activating, setActivating] = useState(false);
 
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -47,7 +50,7 @@ export default function WhatsAppSettings() {
     setLineLoading(true);
     const { data } = await supabase
       .from('whatsapp_lines')
-      .select('phone_number, label')
+      .select('id, phone_number, label, meta_registered')
       .eq('is_active', true)
       .eq('provider', 'meta')
       .order('created_at', { ascending: false })
@@ -55,6 +58,19 @@ export default function WhatsAppSettings() {
       .maybeSingle();
     setConnectedLine(data ?? null);
     setLineLoading(false);
+  }
+
+  async function handleActivate() {
+    if (!connectedLine) return;
+    setActivating(true);
+    const result = await activateWhatsAppLine(connectedLine.id);
+    setActivating(false);
+    if (result.error) {
+      toast({ title: 'Error al activar', description: result.error, variant: 'destructive' });
+    } else {
+      setConnectedLine({ ...connectedLine, meta_registered: true });
+      toast({ title: 'Número activado', description: `${connectedLine.phone_number} está listo para enviar mensajes.` });
+    }
   }
 
   async function loadTemplates() {
@@ -68,7 +84,12 @@ export default function WhatsAppSettings() {
   }
 
   function handleConnected(result: EmbeddedSignupResult) {
-    setConnectedLine({ phone_number: result.phone_number, label: result.verified_name });
+    setConnectedLine({
+      id: result.line_id,
+      phone_number: result.phone_number,
+      label: result.verified_name,
+      meta_registered: result.meta_registered ?? false,
+    });
     toast({
       title: t('mes.success'),
       description: `${result.verified_name} · ${result.phone_number}`,
@@ -123,6 +144,23 @@ export default function WhatsAppSettings() {
                   <span className="text-muted-foreground">{t('mes.connected_name')}:</span>
                   <span className="font-medium">{connectedLine.label}</span>
                 </div>
+                {connectedLine.meta_registered ? (
+                  <Badge variant="default" className="gap-1 w-fit">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Número activado
+                  </Badge>
+                ) : (
+                  <div className="space-y-2">
+                    <Badge variant="secondary" className="gap-1 w-fit border-amber-400 text-amber-700 bg-amber-50">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Pendiente de activación
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      El número está conectado pero aún no está registrado en la API de WhatsApp. Actívalo para poder enviar mensajes.
+                    </p>
+                    <Button size="sm" onClick={handleActivate} disabled={activating}>
+                      {activating ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Activando...</> : <><RefreshCw className="h-4 w-4 mr-2" /> Activar número</>}
+                    </Button>
+                  </div>
+                )}
                 <Button variant="outline" size="sm" onClick={() => setConnectedLine(null)}>
                   {t('mes.reconnect')}
                 </Button>

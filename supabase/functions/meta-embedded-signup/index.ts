@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-21_v1";
+const BUILD = "meta-embedded-signup@2026-02-21_v3";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
@@ -328,12 +328,50 @@ Deno.serve(async (req) => {
       console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
     }
 
-    // 10) Responder con éxito
+    // 10) Auto-register phone number with Meta Cloud API
+    let metaRegistered = false;
+    try {
+      const pin = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
+
+      const registerRes = await fetch(
+        `${GRAPH_BASE}/${phone_number_id}/register`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+        },
+      );
+      const registerData = await registerRes.json().catch(() => ({}));
+
+      if (registerRes.ok) {
+        metaRegistered = true;
+        await supabaseAdmin
+          .from("whatsapp_lines")
+          .update({ meta_registered: true, meta_registration_pin: pin })
+          .eq("id", lineId);
+        console.log("[meta-embedded-signup] Phone registered with Meta Cloud API");
+      } else {
+        console.warn("[meta-embedded-signup] Registration failed (non-blocking):", registerData?.error?.message);
+        // Save PIN anyway so UI can retry with same PIN
+        await supabaseAdmin
+          .from("whatsapp_lines")
+          .update({ meta_registration_pin: pin })
+          .eq("id", lineId);
+      }
+    } catch (regErr) {
+      console.warn("[meta-embedded-signup] Registration error (non-blocking):", regErr);
+    }
+
+    // 11) Responder con éxito
     return json({
       success: true,
       line_id: lineId,
       phone_number: displayPhoneNumber,
       verified_name: verifiedName,
+      meta_registered: metaRegistered,
       build: BUILD,
     });
   } catch (err) {

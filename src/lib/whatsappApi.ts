@@ -72,6 +72,12 @@ export interface EmbeddedSignupResult {
   line_id: string;
   phone_number: string;
   verified_name: string;
+  meta_registered?: boolean;
+}
+
+export interface ActivateLineResult {
+  phone_number: string;
+  registered: boolean;
 }
 
 export async function embeddedSignup(params: {
@@ -94,6 +100,24 @@ export async function embeddedSignup(params: {
     return { data, error: null, isMockMode: false };
   } catch (e: any) {
     return { data: null, error: e.message || 'Error al conectar WhatsApp', isMockMode: false };
+  }
+}
+
+export async function activateWhatsAppLine(lineId: string): Promise<ApiResult<ActivateLineResult>> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${FUNCTIONS_URL}/activate-whatsapp-line`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ line_id: lineId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { data: null, error: data?.error ?? `Error ${res.status}`, isMockMode: false };
+    }
+    return { data, error: null, isMockMode: false };
+  } catch (e: any) {
+    return { data: null, error: e.message || 'Error al activar el número', isMockMode: false };
   }
 }
 
