@@ -36,6 +36,11 @@ import WhatsAppLinesList from "./pages/WhatsAppLinesList";
 import BotFAQsPage from "./pages/BotFAQsPage";
 import ActivationPanel from "./pages/ActivationPanel";
 import SuperAdminRoute from "./components/SuperAdminRoute";
+import Register from "./pages/Register";
+import StepClinic from "./pages/onboarding/StepClinic";
+import StepDoctor from "./pages/onboarding/StepDoctor";
+import StepSchedule from "./pages/onboarding/StepSchedule";
+import StepSummary from "./pages/onboarding/StepSummary";
 
 const queryClient = new QueryClient();
 
@@ -74,10 +79,11 @@ const App = () => {
   }
 
   /**
-   * HomeRedirect - Redirects to appropriate page based on user role
+   * OnboardingRoute - Requires auth but not an established org.
+   * Redirects to /login if unauthenticated, to /agenda-semanal if org is already active.
    */
-  function HomeRedirect() {
-    const { user, loading } = useCurrentUser();
+  function OnboardingRoute({ children }: { children: React.ReactNode }) {
+    const { user, loading, isNewUser, onboardingStatus } = useCurrentUser();
 
     if (loading) {
       return (
@@ -87,11 +93,48 @@ const App = () => {
       );
     }
 
-    if (!user) {
+    // Not authenticated at all
+    if (!user && !isNewUser) {
       return <Navigate to="/login" replace />;
     }
 
-    // Redirect all authenticated users to agenda semanal
+    // Already fully active — send to the app
+    if (onboardingStatus === 'active') {
+      return <Navigate to="/agenda-semanal" replace />;
+    }
+
+    return <>{children}</>;
+  }
+
+  /**
+   * HomeRedirect - Redirects to appropriate page based on user role and onboarding state
+   */
+  function HomeRedirect() {
+    const { user, loading, isNewUser, onboardingStatus } = useCurrentUser();
+
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
+      );
+    }
+
+    // Not authenticated
+    if (!user && !isNewUser) {
+      return <Navigate to="/login" replace />;
+    }
+
+    // Authenticated but without org → start onboarding
+    if (isNewUser) {
+      return <Navigate to="/onboarding/clinic" replace />;
+    }
+
+    // In onboarding → redirect to onboarding start (each step self-redirects)
+    if (onboardingStatus && onboardingStatus !== 'active') {
+      return <Navigate to="/onboarding/clinic" replace />;
+    }
+
     return <Navigate to="/agenda-semanal" replace />;
   }
 
@@ -104,7 +147,14 @@ const App = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/" element={<HomeRedirect />} />
+
+            {/* Onboarding wizard — auth required, no org required */}
+            <Route path="/onboarding/clinic" element={<OnboardingRoute><StepClinic /></OnboardingRoute>} />
+            <Route path="/onboarding/doctor" element={<OnboardingRoute><StepDoctor /></OnboardingRoute>} />
+            <Route path="/onboarding/schedule" element={<OnboardingRoute><StepSchedule /></OnboardingRoute>} />
+            <Route path="/onboarding/summary" element={<OnboardingRoute><StepSummary /></OnboardingRoute>} />
             
             {/* Secretary, Admin, and Doctor routes */}
             <Route path="/agenda-secretaria" element={

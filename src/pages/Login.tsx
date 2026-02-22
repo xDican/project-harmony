@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useCurrentUser } from '@/context/UserContext';
 import { Button } from '@/components/ui/button';
@@ -14,19 +14,32 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { user, loading: userLoading } = useCurrentUser();
+  const { user, loading: userLoading, isNewUser, onboardingStatus } = useCurrentUser();
 
   // Redirigir si el usuario ya está autenticado
   useEffect(() => {
-    if (!userLoading && user) {
-      // Mostrar notificación con el rol del usuario
+    if (userLoading) return;
+
+    // Usuario autenticado sin org → onboarding
+    if (isNewUser) {
+      navigate('/onboarding/clinic', { replace: true });
+      return;
+    }
+
+    if (user) {
+      // Usuario en proceso de onboarding → wizard
+      if (onboardingStatus && onboardingStatus !== 'active') {
+        navigate('/onboarding/clinic', { replace: true });
+        return;
+      }
+      // Usuario normal → app
       toast.info(`Login exitoso - Rol: ${user.role}`, {
         description: `Usuario: ${user.email}`,
         duration: 4000,
       });
-      navigate('/agenda-secretaria', { replace: true });
+      navigate('/agenda-semanal', { replace: true });
     }
-  }, [user, userLoading, navigate]);
+  }, [user, userLoading, isNewUser, onboardingStatus, navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -101,6 +114,13 @@ export default function Login() {
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </Button>
         </form>
+
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          ¿Nuevo por aquí?{' '}
+          <Link to="/register" className="text-primary underline underline-offset-4">
+            Crear cuenta
+          </Link>
+        </p>
       </div>
     </div>
   );
