@@ -193,9 +193,10 @@ serve(async (req) => {
       }
 
       // Upsert user_roles for backward compatibility
+      // Constraint is UNIQUE(user_id, role), so we must use both columns in onConflict
       await supabaseAdmin
         .from("user_roles")
-        .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id" });
+        .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role", ignoreDuplicates: true });
 
       return new Response(JSON.stringify({ organization_id: orgId, clinic_id: clinicId }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -370,12 +371,13 @@ serve(async (req) => {
         });
       }
 
-      // Dual-write to doctor_schedules
+      // Dual-write to doctor_schedules (include calendar_id so get-available-slots can filter correctly)
       const doctorSchedules = schedules.map((s) => ({
         doctor_id: doctorId,
         day_of_week: s.day_of_week,
         start_time: s.start_time,
         end_time: s.end_time,
+        calendar_id: calendarId,
       }));
 
       const { error: dsError } = await supabaseAdmin

@@ -143,18 +143,29 @@ Deno.serve(async (req) => {
 
     const { doctorId, patientId, date, time, notes, durationMinutes, organizationId: reqOrgId, calendarId: reqCalendarId } = validationResult.data;
 
-    // 6) Check if user has permission using user_roles table (service role to bypass RLS)
-    const { data: userRoles, error: roleError } = await supabase
-      .from("user_roles")
+    // 6) Check user permissions: org_members first, fallback to user_roles (same pattern as upsert-doctor-schedules)
+    let roles: string[] = [];
+
+    const { data: orgMembers, error: orgMembersError } = await supabase
+      .from("org_members")
       .select("role")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("is_active", true);
 
-    if (roleError || !userRoles || userRoles.length === 0) {
-      console.error("[create-appointment] Role check failed:", { roleError, userRoles, userId: user.id });
-      return jsonResponse(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+    if (!orgMembersError && orgMembers && orgMembers.length > 0) {
+      roles = orgMembers.map((r: any) => r.role);
+    } else {
+      const { data: userRoles, error: roleError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (roleError || !userRoles || userRoles.length === 0) {
+        console.error("[create-appointment] Role check failed:", { roleError, userRoles, orgMembersError, userId: user.id });
+        return jsonResponse(403, { ok: false, error: "Failed to verify user permissions", build: BUILD });
+      }
+      roles = userRoles.map((r: any) => r.role);
     }
-
-    const roles = userRoles.map((r: any) => r.role);
     const isAdmin = roles.includes("admin");
     const isSecretary = roles.includes("secretary");
     const isDoctor = roles.includes("doctor");
