@@ -39,11 +39,15 @@ interface Props {
   onError?: (error: string) => void;
 }
 
+// Known Meta/Facebook origins that can send the WA_EMBEDDED_SIGNUP message
+const META_TRUSTED_ORIGINS = ['facebook.com', 'facebook.net', 'fbcdn.net', 'meta.com'];
+
 export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
   const [sdkLoaded, setSdkLoaded] = useState(fbInitialized);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionInfoRef = useRef<MetaSessionInfo | null>(null);
+  const flowActiveRef = useRef(false);
 
   // Cargar el Facebook SDK dinámicamente
   useEffect(() => {
@@ -86,17 +90,27 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
   // Escuchar mensajes de Meta con la info de WABA y número
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (!event.origin.includes('facebook.com')) return;
+      // Log ALL messages while flow is active (helps diagnose origin issues)
+      if (flowActiveRef.current) {
+        const dataPreview = typeof event.data === 'string'
+          ? event.data.substring(0, 300)
+          : JSON.stringify(event.data).substring(0, 300);
+        console.log('[MetaEmbeddedSignup] postMessage during flow — origin:', event.origin, '| data:', dataPreview);
+      }
+
+      // Accept messages from any Meta/Facebook domain
+      const isTrusted = META_TRUSTED_ORIGINS.some((o) => event.origin.includes(o));
+      if (!isTrusted) return;
 
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data?.type === 'WA_EMBEDDED_SIGNUP') {
-          console.log('[MetaEmbeddedSignup] WA_EMBEDDED_SIGNUP received:', data);
+          console.log('[MetaEmbeddedSignup] WA_EMBEDDED_SIGNUP received:', JSON.stringify(data));
           const { waba_id, phone_number_id } = data.data ?? {};
           if (waba_id && phone_number_id) {
             sessionInfoRef.current = { waba_id, phone_number_id };
           } else {
-            console.warn('[MetaEmbeddedSignup] WA_EMBEDDED_SIGNUP data incompleto:', data.data);
+            console.warn('[MetaEmbeddedSignup] WA_EMBEDDED_SIGNUP data incompleto:', JSON.stringify(data.data));
           }
         }
       } catch {
@@ -144,6 +158,8 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
         }
       }, 50);
     });
+    flowActiveRef.current = false;
+
     if (!sessionInfo) {
       const errMsg = 'No se recibió información de WABA. Intenta nuevamente.';
       setError(errMsg);
@@ -179,6 +195,7 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
     setLoading(true);
     setError(null);
     sessionInfoRef.current = null;
+    flowActiveRef.current = true;
 
     window.FB.login(
       (response: FBLoginResponse) => {
