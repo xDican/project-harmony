@@ -15,6 +15,9 @@ export interface UserContextValue {
   isSecretary: boolean;
   isDoctor: boolean;
   isAdminOrSecretary: boolean;
+  isAdminDoctor: boolean;
+  adminView: 'doctor' | 'admin';
+  setAdminView: (v: 'doctor' | 'admin') => void;
   organizationId: string | null;
   switchOrganization: ((newOrgId: string) => Promise<void>) | null;
 }
@@ -108,6 +111,16 @@ export function UserProvider({ children }: UserProviderProps) {
   const isSecretary = user?.role === 'secretary';
   const isDoctor = user?.role === 'doctor';
   const isAdminOrSecretary = isAdmin || isSecretary;
+  const isAdminDoctor = isAdmin && !!user?.doctorId;
+
+  const ADMIN_VIEW_KEY = 'admin_view_preference';
+  const [adminView, setAdminViewState] = useState<'doctor' | 'admin'>(() =>
+    (localStorage.getItem(ADMIN_VIEW_KEY) as 'doctor' | 'admin') ?? 'doctor'
+  );
+  const setAdminView = (v: 'doctor' | 'admin') => {
+    localStorage.setItem(ADMIN_VIEW_KEY, v);
+    setAdminViewState(v);
+  };
 
   const organizationId = user?.organizationId ?? null;
 
@@ -118,6 +131,9 @@ export function UserProvider({ children }: UserProviderProps) {
     isSecretary,
     isDoctor,
     isAdminOrSecretary,
+    isAdminDoctor,
+    adminView,
+    setAdminView,
     organizationId,
     switchOrganization: user ? switchOrganization : null,
   };

@@ -130,32 +130,32 @@ const App = () => {
             
             {/* Doctor routes (independent doctor mode) */}
             <Route path="/configuracion" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <ConfiguracionMedico />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/perfil" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <PerfilMedico />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/uso-mensajes" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <UsoMensajes />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/whatsapp" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <WhatsAppSettings />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/whatsapp/plantillas/nueva" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <WhatsAppPlantillaNueva />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/whatsapp/plantillas/:id" element={
-              <RoleBasedRoute allowedRoles={['doctor']}>
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <WhatsAppPlantillaDetalle />
               </RoleBasedRoute>
             } />
