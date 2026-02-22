@@ -113,9 +113,6 @@ export function UserProvider({ children }: UserProviderProps) {
   const isDoctor = user?.role === 'doctor';
   const isAdminOrSecretary = isAdmin || isSecretary;
   const isAdminDoctor = isAdmin && !!user?.doctorId;
-  // True when the user should experience the app as a doctor:
-  // either they ARE a doctor, or they're an admin-doctor in Vista Médico
-  const isDoctorView = isDoctor || (isAdminDoctor && adminView === 'doctor');
 
   const ADMIN_VIEW_KEY = 'admin_view_preference';
   const [adminView, setAdminViewState] = useState<'doctor' | 'admin'>(() =>
@@ -125,6 +122,10 @@ export function UserProvider({ children }: UserProviderProps) {
     localStorage.setItem(ADMIN_VIEW_KEY, v);
     setAdminViewState(v);
   };
+
+  // True when the user should experience the app as a doctor:
+  // either they ARE a doctor, or they're an admin-doctor in Vista Médico
+  const isDoctorView = isDoctor || (isAdminDoctor && adminView === 'doctor');
 
   const organizationId = user?.organizationId ?? null;
 
