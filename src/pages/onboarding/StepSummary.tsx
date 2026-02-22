@@ -5,16 +5,21 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import OnboardingLayout from './OnboardingLayout';
 import { getOnboardingStatus, completeOnboarding } from '@/lib/api.supabase';
+import { useCurrentUser } from '@/context/UserContext';
 
 export default function StepSummary() {
   const navigate = useNavigate();
+  const { loading: userLoading } = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [alreadyRequested, setAlreadyRequested] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Verify we're at the right step — wait for auth to settle first
   useEffect(() => {
+    if (userLoading) return;
+
     getOnboardingStatus()
       .then(({ step, onboarding_status }) => {
         if (step === 'clinic') navigate('/onboarding/clinic', { replace: true });
@@ -25,7 +30,7 @@ export default function StepSummary() {
       })
       .catch(() => {})
       .finally(() => setChecking(false));
-  }, [navigate]);
+  }, [navigate, userLoading]);
 
   const handleRequestActivation = async () => {
     setError(null);

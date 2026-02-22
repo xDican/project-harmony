@@ -7,16 +7,20 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import OnboardingLayout from './OnboardingLayout';
 import { getOnboardingStatus, setupClinic } from '@/lib/api.supabase';
+import { useCurrentUser } from '@/context/UserContext';
 
 export default function StepClinic() {
   const navigate = useNavigate();
+  const { loading: userLoading } = useCurrentUser();
   const [clinicName, setClinicName] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Verify we're at the right step
+  // Verify we're at the right step — wait for auth to settle first
   useEffect(() => {
+    if (userLoading) return; // session may still be initializing from email confirmation
+
     getOnboardingStatus()
       .then(({ step }) => {
         if (step === 'doctor') navigate('/onboarding/doctor', { replace: true });
@@ -28,7 +32,7 @@ export default function StepClinic() {
         // Proceed — user may legitimately be at start
       })
       .finally(() => setChecking(false));
-  }, [navigate]);
+  }, [navigate, userLoading]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
