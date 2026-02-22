@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-21_v3";
+const BUILD = "meta-embedded-signup@2026-02-22_v4";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
@@ -279,8 +279,12 @@ Deno.serve(async (req) => {
       console.log("[meta-embedded-signup] Old lines deactivated for org:", orgId);
     }
 
-    // 9) Copy template_mappings from previous active line (if any), else create empty defaults
+    // 9) Copy template_mappings from previous active line (if any),
+    //    or preserve existing mappings on this line (reconnect same number),
+    //    or create empty defaults for a brand new line.
     let mappings;
+
+    // Priority 1: copy from a different previous line
     if (previousActiveLineId) {
       const { data: prevMappings } = await supabaseAdmin
         .from("template_mappings")
@@ -303,7 +307,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Priority 2: same line already has configured mappings — don't overwrite them
     if (!mappings) {
+      const { data: existingMappings } = await supabaseAdmin
+        .from("template_mappings")
+        .select("logical_type, template_name, template_language, parameter_order, is_active")
+        .eq("whatsapp_line_id", lineId)
+        .eq("provider", "meta")
+        .neq("template_name", "");
+
+      if (existingMappings && existingMappings.length > 0) {
+        console.log("[meta-embedded-signup] Same line reconnected — keeping", existingMappings.length, "existing template_mappings");
+        // Skip upsert entirely: existing mappings are already correct
+        mappings = null;
+      }
+    }
+
+    // Priority 3: brand new line — create empty defaults
+    if (mappings === undefined) {
       mappings = DEFAULT_LOGICAL_TYPES.map((logicalType) => ({
         whatsapp_line_id: lineId,
         logical_type: logicalType,
@@ -315,12 +336,20 @@ Deno.serve(async (req) => {
       }));
     }
 
-    const { error: mappingsError } = await supabaseAdmin
-      .from("template_mappings")
-      .upsert(mappings, {
-        onConflict: "whatsapp_line_id,logical_type,provider",
-        ignoreDuplicates: false,
-      });
+    if (mappings !== null) {
+      const { error: mappingsError } = await supabaseAdmin
+        .from("template_mappings")
+        .upsert(mappings, {
+          onConflict: "whatsapp_line_id,logical_type,provider",
+          ignoreDuplicates: false,
+        });
+
+      if (mappingsError) {
+        console.warn("[meta-embedded-signup] Error upserting template_mappings (non-blocking):", mappingsError);
+      } else {
+        console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
+      }
+    }
 
     if (mappingsError) {
       console.warn("[meta-embedded-signup] Error upserting template_mappings (non-blocking):", mappingsError);
