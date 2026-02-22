@@ -751,6 +751,8 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
   }
 
   // 2. Consultar la tabla users para obtener email y doctor_id
+  // Puede no existir para usuarios de auto-registro sin trigger en Supabase;
+  // en ese caso usamos el auth user como fallback.
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("id, email, doctor_id")
@@ -762,9 +764,9 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     throw userError;
   }
 
-  if (!userData) {
-    return null;
-  }
+  // Fallback para usuarios de auto-registro que no tienen fila en public.users
+  const resolvedEmail = userData?.email ?? user.email ?? '';
+  const resolvedDoctorId = userData?.doctor_id ?? null;
 
   // 3. Consultar org_members con organizations para obtener membresías
   const { data: memberships, error: membershipsError } = await supabase
@@ -779,7 +781,11 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
   }
 
   if (!memberships || memberships.length === 0) {
-    // Fallback: try user_roles for users not yet migrated to org_members
+    // Sin org membership — retornar null solo si tampoco hay fila en users
+    // (usuario brand-new que aún no completó el paso 1 del wizard)
+    if (!userData) return null;
+
+    // Fallback: buscar en user_roles (usuarios migrados sin org_members)
     const { data: rolesData } = await supabase
       .from("user_roles")
       .select("role")
@@ -789,10 +795,10 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     if (!rolesData) return null;
 
     return {
-      id: userData.id,
-      email: userData.email,
+      id: user.id,
+      email: resolvedEmail,
       role: rolesData.role as CurrentUser["role"],
-      doctorId: userData.doctor_id ?? null,
+      doctorId: resolvedDoctorId,
       organizationId: "",
       organizations: [],
     } as CurrentUser;
@@ -812,10 +818,10 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
 
   // 6. Mapear a CurrentUser (backward compatible: role y doctorId de la org activa)
   return {
-    id: userData.id,
-    email: userData.email,
+    id: user.id,
+    email: resolvedEmail,
     role: activeOrg.role,
-    doctorId: activeOrg.doctorId ?? userData.doctor_id ?? null,
+    doctorId: activeOrg.doctorId ?? resolvedDoctorId,
     organizationId: activeOrg.organizationId,
     organizations,
     // Extra field for onboarding — accessed via (currentUser as any).onboardingStatus in UserContext
