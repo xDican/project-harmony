@@ -769,7 +769,7 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
   // 3. Consultar org_members con organizations para obtener membresías
   const { data: memberships, error: membershipsError } = await supabase
     .from("org_members")
-    .select("organization_id, role, doctor_id, organizations(name)")
+    .select("organization_id, role, doctor_id, organizations(name, onboarding_status)")
     .eq("user_id", user.id)
     .eq("is_active", true);
 
@@ -795,7 +795,7 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
       doctorId: userData.doctor_id ?? null,
       organizationId: "",
       organizations: [],
-    };
+    } as CurrentUser;
   }
 
   // 4. Mapear membresías a OrgMembership[]
@@ -808,6 +808,7 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
 
   // 5. Seleccionar la primera org como activa (en el futuro: org switcher)
   const activeOrg = organizations[0];
+  const activeOrgRow = memberships[0] as any;
 
   // 6. Mapear a CurrentUser (backward compatible: role y doctorId de la org activa)
   return {
@@ -817,7 +818,9 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     doctorId: activeOrg.doctorId ?? userData.doctor_id ?? null,
     organizationId: activeOrg.organizationId,
     organizations,
-  };
+    // Extra field for onboarding — accessed via (currentUser as any).onboardingStatus in UserContext
+    onboardingStatus: activeOrgRow.organizations?.onboarding_status ?? 'active',
+  } as CurrentUser;
 }
 
 // --------------------------
@@ -1504,5 +1507,98 @@ export async function switchActiveOrganization(newOrgId: string): Promise<void> 
   // Clear cached org ID so next API call picks up the new one
   _cachedOrgId = null;
   _cachedUserId = null;
+}
+
+// ====================================================================
+// ONBOARDING HELPERS
+// ====================================================================
+
+/**
+ * Detect the current onboarding step for the authenticated user.
+ * Uses fetch directly because supabase.functions.invoke doesn't support GET with query params.
+ */
+export async function getOnboardingStatus(): Promise<{ step: string; organization_id?: string; onboarding_status?: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('No active session');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/onboarding-setup?step=status`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+      },
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error fetching onboarding status');
+  return data;
+}
+
+/**
+ * Step 1 — Create clinic, organization, and org_member for the current user.
+ */
+export async function setupClinic(clinicName: string): Promise<{ organization_id: string; clinic_id: string }> {
+  const { data, error } = await supabase.functions.invoke('onboarding-setup', {
+    body: { step: 'clinic', clinicName },
+  });
+
+  if (error) throw new Error(error.message || 'Error al crear la clínica');
+  if (data?.error) throw new Error(data.error);
+
+  _cachedOrgId = null;
+  _cachedUserId = null;
+
+  return data as { organization_id: string; clinic_id: string };
+}
+
+/**
+ * Step 2 — Create doctor profile for the current user.
+ */
+export async function setupDoctor(input: {
+  name: string;
+  prefix?: string;
+  phone?: string;
+}): Promise<{ doctor_id: string }> {
+  const { data, error } = await supabase.functions.invoke('onboarding-setup', {
+    body: { step: 'doctor', ...input },
+  });
+
+  if (error) throw new Error(error.message || 'Error al crear el perfil del médico');
+  if (data?.error) throw new Error(data.error);
+
+  return data as { doctor_id: string };
+}
+
+/**
+ * Step 3 — Create calendar and schedules.
+ */
+export async function setupSchedule(
+  schedules: Array<{ day_of_week: number; start_time: string; end_time: string }>
+): Promise<{ calendar_id: string }> {
+  const { data, error } = await supabase.functions.invoke('onboarding-setup', {
+    body: { step: 'schedule', schedules },
+  });
+
+  if (error) throw new Error(error.message || 'Error al guardar los horarios');
+  if (data?.error) throw new Error(data.error);
+
+  return data as { calendar_id: string };
+}
+
+/**
+ * Step 4 — Mark onboarding as ready_to_activate.
+ */
+export async function completeOnboarding(): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('onboarding-setup', {
+    body: { step: 'complete' },
+  });
+
+  if (error) throw new Error(error.message || 'Error al enviar la solicitud');
+  if (data?.error) throw new Error(data.error);
 }
 

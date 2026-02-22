@@ -21,6 +21,10 @@ export interface UserContextValue {
   isDoctorView: boolean;
   organizationId: string | null;
   switchOrganization: ((newOrgId: string) => Promise<void>) | null;
+  /** True when authenticated but has no organization yet (new user in onboarding) */
+  isNewUser: boolean;
+  /** Onboarding status of the active org: 'setup_in_progress' | 'ready_to_activate' | 'active' | null */
+  onboardingStatus: string | null;
 }
 
 /**
@@ -43,6 +47,20 @@ export function UserProvider({ children }: UserProviderProps) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState<string | null>(null);
+
+  const handleUserFetch = useCallback((currentUser: CurrentUser | null) => {
+    if (currentUser) {
+      setUser(currentUser);
+      setIsNewUser(false);
+      setOnboardingStatus((currentUser as any).onboardingStatus ?? 'active');
+    } else {
+      setUser(null);
+      setIsNewUser(true);
+      setOnboardingStatus(null);
+    }
+  }, []);
 
   useEffect(() => {
     // Set up auth state listener
@@ -53,18 +71,20 @@ export function UserProvider({ children }: UserProviderProps) {
         // Fetch user with role when session changes
         if (session?.user) {
           getCurrentUserWithRole()
-            .then((currentUser) => {
-              setUser(currentUser);
-            })
+            .then(handleUserFetch)
             .catch((error) => {
               console.error('Error fetching current user:', error);
               setUser(null);
+              setIsNewUser(false);
+              setOnboardingStatus(null);
             })
             .finally(() => {
               setLoading(false);
             });
         } else {
           setUser(null);
+          setIsNewUser(false);
+          setOnboardingStatus(null);
           setLoading(false);
         }
       }
@@ -76,12 +96,12 @@ export function UserProvider({ children }: UserProviderProps) {
 
       if (session?.user) {
         getCurrentUserWithRole()
-          .then((currentUser) => {
-            setUser(currentUser);
-          })
+          .then(handleUserFetch)
           .catch((error) => {
             console.error('Error fetching current user:', error);
             setUser(null);
+            setIsNewUser(false);
+            setOnboardingStatus(null);
           })
           .finally(() => {
             setLoading(false);
@@ -92,7 +112,7 @@ export function UserProvider({ children }: UserProviderProps) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [handleUserFetch]);
 
   /**
    * Switch the active organization.
@@ -142,6 +162,8 @@ export function UserProvider({ children }: UserProviderProps) {
     isDoctorView,
     organizationId,
     switchOrganization: user ? switchOrganization : null,
+    isNewUser,
+    onboardingStatus,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
