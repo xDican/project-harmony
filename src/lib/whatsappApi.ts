@@ -82,8 +82,8 @@ export interface ActivateLineResult {
 
 export async function embeddedSignup(params: {
   code: string;
-  waba_id: string;
-  phone_number_id: string;
+  waba_id?: string;
+  phone_number_id?: string;
 }): Promise<ApiResult<EmbeddedSignupResult>> {
   try {
     const headers = await getAuthHeaders();

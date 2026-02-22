@@ -161,17 +161,14 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
     flowActiveRef.current = false;
 
     if (!sessionInfo) {
-      const errMsg = 'No se recibió información de WABA. Intenta nuevamente.';
-      setError(errMsg);
-      setLoading(false);
-      onError?.(errMsg);
-      return;
+      // On mobile browsers the popup opens as a new tab, so postMessage never arrives.
+      // Let the EF discover waba_id / phone_number_id via Meta's debug_token API.
+      console.warn('[MetaEmbeddedSignup] sessionInfo not received — proceeding without it (mobile fallback)');
     }
 
     const result = await embeddedSignup({
       code,
-      waba_id: sessionInfo.waba_id,
-      phone_number_id: sessionInfo.phone_number_id,
+      ...(sessionInfo ? { waba_id: sessionInfo.waba_id, phone_number_id: sessionInfo.phone_number_id } : {}),
     });
 
     if (result.error || !result.data) {
