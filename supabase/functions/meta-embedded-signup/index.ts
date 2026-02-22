@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-21_v1";
+const BUILD = "meta-embedded-signup@2026-02-22_v4";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
@@ -166,6 +166,18 @@ Deno.serve(async (req) => {
       console.warn("[meta-embedded-signup] WABA subscription error (non-blocking):", subErr);
     }
 
+    // 7b) Capture previous active line for template migration (before any changes)
+    const { data: previousLine } = await supabaseAdmin
+      .from("whatsapp_lines")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("is_active", true)
+      .eq("provider", "meta")
+      .neq("meta_phone_number_id", phone_number_id)
+      .limit(1)
+      .maybeSingle();
+    const previousActiveLineId = previousLine?.id ?? null;
+
     // 8) Upsert whatsapp_lines
     const { data: existingLine } = await supabaseAdmin
       .from("whatsapp_lines")
@@ -254,37 +266,141 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 9) Crear template_mappings por defecto (is_active=false)
-    const defaultMappings = DEFAULT_LOGICAL_TYPES.map((logicalType) => ({
-      whatsapp_line_id: lineId,
-      logical_type: logicalType,
-      provider: "meta",
-      template_name: "",
-      template_language: "es",
-      parameter_order: [],
-      is_active: false,
-    }));
+    // 8b) Deactivate all OTHER lines in this org
+    const { error: deactivateError } = await supabaseAdmin
+      .from("whatsapp_lines")
+      .update({ is_active: false })
+      .eq("organization_id", orgId)
+      .neq("id", lineId);
 
-    const { error: mappingsError } = await supabaseAdmin
-      .from("template_mappings")
-      .upsert(defaultMappings, {
-        onConflict: "whatsapp_line_id,logical_type,provider",
-        ignoreDuplicates: true,
-      });
-
-    if (mappingsError) {
-      // Non-blocking: log pero no fallar
-      console.warn("[meta-embedded-signup] Error creating template_mappings (non-blocking):", mappingsError);
+    if (deactivateError) {
+      console.warn("[meta-embedded-signup] Error deactivating old lines (non-blocking):", deactivateError);
     } else {
-      console.log("[meta-embedded-signup] template_mappings defaults created for line:", lineId);
+      console.log("[meta-embedded-signup] Old lines deactivated for org:", orgId);
     }
 
-    // 10) Responder con éxito
+    // 9) Copy template_mappings from previous active line (if any),
+    //    or preserve existing mappings on this line (reconnect same number),
+    //    or create empty defaults for a brand new line.
+    let mappings;
+
+    // Priority 1: copy from a different previous line
+    if (previousActiveLineId) {
+      const { data: prevMappings } = await supabaseAdmin
+        .from("template_mappings")
+        .select("logical_type, template_name, template_language, parameter_order")
+        .eq("whatsapp_line_id", previousActiveLineId)
+        .eq("provider", "meta")
+        .eq("is_active", true);
+
+      if (prevMappings && prevMappings.length > 0) {
+        mappings = prevMappings.map((m) => ({
+          whatsapp_line_id: lineId,
+          logical_type: m.logical_type,
+          provider: "meta",
+          template_name: m.template_name,
+          template_language: m.template_language,
+          parameter_order: m.parameter_order,
+          is_active: !!m.template_name,
+        }));
+        console.log("[meta-embedded-signup] Copying", mappings.length, "template_mappings from previous line:", previousActiveLineId);
+      }
+    }
+
+    // Priority 2: same line already has configured mappings — don't overwrite them
+    if (!mappings) {
+      const { data: existingMappings } = await supabaseAdmin
+        .from("template_mappings")
+        .select("logical_type, template_name, template_language, parameter_order, is_active")
+        .eq("whatsapp_line_id", lineId)
+        .eq("provider", "meta")
+        .neq("template_name", "");
+
+      if (existingMappings && existingMappings.length > 0) {
+        console.log("[meta-embedded-signup] Same line reconnected — keeping", existingMappings.length, "existing template_mappings");
+        // Skip upsert entirely: existing mappings are already correct
+        mappings = null;
+      }
+    }
+
+    // Priority 3: brand new line — create empty defaults
+    if (mappings === undefined) {
+      mappings = DEFAULT_LOGICAL_TYPES.map((logicalType) => ({
+        whatsapp_line_id: lineId,
+        logical_type: logicalType,
+        provider: "meta",
+        template_name: "",
+        template_language: "es",
+        parameter_order: [],
+        is_active: false,
+      }));
+    }
+
+    if (mappings !== null) {
+      const { error: mappingsError } = await supabaseAdmin
+        .from("template_mappings")
+        .upsert(mappings, {
+          onConflict: "whatsapp_line_id,logical_type,provider",
+          ignoreDuplicates: false,
+        });
+
+      if (mappingsError) {
+        console.warn("[meta-embedded-signup] Error upserting template_mappings (non-blocking):", mappingsError);
+      } else {
+        console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
+      }
+    }
+
+    if (mappingsError) {
+      console.warn("[meta-embedded-signup] Error upserting template_mappings (non-blocking):", mappingsError);
+    } else {
+      console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
+    }
+
+    // 10) Auto-register phone number with Meta Cloud API
+    let metaRegistered = false;
+    try {
+      const pin = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
+
+      const registerRes = await fetch(
+        `${GRAPH_BASE}/${phone_number_id}/register`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+        },
+      );
+      const registerData = await registerRes.json().catch(() => ({}));
+
+      if (registerRes.ok) {
+        metaRegistered = true;
+        await supabaseAdmin
+          .from("whatsapp_lines")
+          .update({ meta_registered: true, meta_registration_pin: pin })
+          .eq("id", lineId);
+        console.log("[meta-embedded-signup] Phone registered with Meta Cloud API");
+      } else {
+        console.warn("[meta-embedded-signup] Registration failed (non-blocking):", registerData?.error?.message);
+        // Save PIN anyway so UI can retry with same PIN
+        await supabaseAdmin
+          .from("whatsapp_lines")
+          .update({ meta_registration_pin: pin })
+          .eq("id", lineId);
+      }
+    } catch (regErr) {
+      console.warn("[meta-embedded-signup] Registration error (non-blocking):", regErr);
+    }
+
+    // 11) Responder con éxito
     return json({
       success: true,
       line_id: lineId,
       phone_number: displayPhoneNumber,
       verified_name: verifiedName,
+      meta_registered: metaRegistered,
       build: BUILD,
     });
   } catch (err) {
