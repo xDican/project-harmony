@@ -351,12 +351,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (mappingsError) {
-      console.warn("[meta-embedded-signup] Error upserting template_mappings (non-blocking):", mappingsError);
-    } else {
-      console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
-    }
-
     // 10) Auto-register phone number with Meta Cloud API
     let metaRegistered = false;
     try {
