@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import OnboardingLayout from './OnboardingLayout';
 import { getOnboardingStatus, setupSchedule } from '@/lib/api.supabase';
+import { useCurrentUser } from '@/context/UserContext';
 
 type Slot = { id: string; start_time: string; end_time: string };
 type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
@@ -35,12 +36,16 @@ const emptySchedule = (): WeekSchedule => ({
 
 export default function StepSchedule() {
   const navigate = useNavigate();
+  const { loading: userLoading } = useCurrentUser();
   const [schedule, setSchedule] = useState<WeekSchedule>(emptySchedule());
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Verify we're at the right step — wait for auth to settle first
   useEffect(() => {
+    if (userLoading) return;
+
     getOnboardingStatus()
       .then(({ step }) => {
         if (step === 'clinic') navigate('/onboarding/clinic', { replace: true });
@@ -50,7 +55,7 @@ export default function StepSchedule() {
       })
       .catch(() => {})
       .finally(() => setChecking(false));
-  }, [navigate]);
+  }, [navigate, userLoading]);
 
   const handleAddSlot = (day: DayKey) => {
     setSchedule((prev) => ({

@@ -15,11 +15,13 @@ import { toast } from '@/hooks/use-toast';
 import OnboardingLayout from './OnboardingLayout';
 import { getOnboardingStatus, setupDoctor } from '@/lib/api.supabase';
 import { supabase } from '@/lib/supabaseClient';
+import { useCurrentUser } from '@/context/UserContext';
 
 const PREFIXES = ['Dr.', 'Dra.', 'Lic.', 'Mtro.', 'Mtra.', 'Otro'];
 
 export default function StepDoctor() {
   const navigate = useNavigate();
+  const { loading: userLoading } = useCurrentUser();
   const [name, setName] = useState('');
   const [prefix, setPrefix] = useState('Dr.');
   const [phone, setPhone] = useState('');
@@ -33,8 +35,12 @@ export default function StepDoctor() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) setEmail(user.email);
     });
+  }, []);
 
-    // Verify we're at the right step
+  // Verify we're at the right step — wait for auth to settle first
+  useEffect(() => {
+    if (userLoading) return;
+
     getOnboardingStatus()
       .then(({ step }) => {
         if (step === 'clinic') navigate('/onboarding/clinic', { replace: true });
@@ -44,7 +50,7 @@ export default function StepDoctor() {
       })
       .catch(() => {})
       .finally(() => setChecking(false));
-  }, [navigate]);
+  }, [navigate, userLoading]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

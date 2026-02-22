@@ -135,6 +135,11 @@ serve(async (req) => {
 
       const slug = `${slugify(clinicName)}-${randomSuffix()}`;
 
+      // Ensure public.users row exists (self-service users may not have one if no trigger)
+      await supabaseAdmin
+        .from("users")
+        .upsert({ id: userId, email: user.email ?? "" }, { onConflict: "id" });
+
       // Insert organization
       const { data: orgData, error: orgError } = await supabaseAdmin
         .from("organizations")
