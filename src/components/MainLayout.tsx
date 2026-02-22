@@ -64,7 +64,10 @@ export default function MainLayout({
     isAdmin,
     isSecretary,
     isDoctor,
-    isAdminOrSecretary
+    isAdminOrSecretary,
+    isAdminDoctor,
+    adminView,
+    setAdminView,
   } = useCurrentUser();
 
   // Keep admin menu open if current route is an admin route
@@ -86,7 +89,7 @@ export default function MainLayout({
   const getNavigationItems = () => {
     const items = [];
 
-    // Secretary can see: Agenda, Nueva Cita, Pacientes, Agenda Semanal (no Admin)
+    // Secretary
     if (isSecretary) {
       items.push({
         to: '/agenda-secretaria',
@@ -107,8 +110,29 @@ export default function MainLayout({
       });
     }
 
-    // Admin can see: Agenda, Nueva Cita, Pacientes, Admin Dashboard
-    if (isAdmin) {
+    // Admin-doctor in Vista Médico: show doctor nav
+    if (isAdminDoctor && adminView === 'doctor') {
+      items.push({
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
+      }, {
+        to: '/citas/nueva',
+        label: 'Nueva Cita',
+        icon: PlusCircle
+      }, {
+        to: '/pacientes',
+        label: 'Pacientes',
+        icon: Users
+      }, {
+        to: '/configuracion',
+        label: 'Mi Configuración',
+        icon: Settings
+      });
+    }
+
+    // Admin (not in doctor view): Agenda, Nueva Cita, Pacientes, Agenda Semanal + Propietario submenu
+    if (isAdmin && !(isAdminDoctor && adminView === 'doctor')) {
       items.push({
         to: '/agenda-secretaria',
         label: 'Agenda de Hoy',
@@ -128,7 +152,7 @@ export default function MainLayout({
       });
     }
 
-    // Doctor (independent mode) can see: Agenda Médico, Agenda Semanal, Nueva Cita, Pacientes, Configuración
+    // Doctor (independent, not admin)
     if (isDoctor && !isAdmin) {
       items.push({
         to: '/agenda-semanal',
@@ -196,8 +220,8 @@ export default function MainLayout({
             <span>{item.label}</span>
           </NavLink>)}
 
-        {/* Admin collapsible menu */}
-        {isAdmin && <Collapsible open={adminMenuOpen} onOpenChange={setAdminMenuOpen}>
+        {/* Admin collapsible menu — hidden when admin-doctor is in Vista Médico */}
+        {isAdmin && !(isAdminDoctor && adminView === 'doctor') && <Collapsible open={adminMenuOpen} onOpenChange={setAdminMenuOpen}>
             <CollapsibleTrigger className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors w-full">
               <Settings className="h-5 w-5" />
               <span className="flex-1 text-left">Propietario</span>
@@ -210,6 +234,36 @@ export default function MainLayout({
                 </NavLink>)}
             </CollapsibleContent>
           </Collapsible>}
+
+        {/* Vista toggle — only for admin-doctors */}
+        {isAdminDoctor && (
+          <div className="mt-4 pt-3 border-t">
+            <div className="flex rounded-md border overflow-hidden text-xs">
+              <button
+                className={cn(
+                  "flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors",
+                  adminView === 'doctor'
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+                onClick={() => setAdminView('doctor')}
+              >
+                <Stethoscope className="h-3 w-3" /> Médico
+              </button>
+              <button
+                className={cn(
+                  "flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors",
+                  adminView === 'admin'
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+                onClick={() => setAdminView('admin')}
+              >
+                <Building2 className="h-3 w-3" /> Propietario
+              </button>
+            </div>
+          </div>
+        )}
       </nav>;
   };
   return <div className="min-h-screen flex flex-col md:flex-row">
