@@ -90,10 +90,13 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
 
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.data) {
-          const { waba_id, phone_number_id } = data.data;
+        if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+          console.log('[MetaEmbeddedSignup] WA_EMBEDDED_SIGNUP received:', data);
+          const { waba_id, phone_number_id } = data.data ?? {};
           if (waba_id && phone_number_id) {
             sessionInfoRef.current = { waba_id, phone_number_id };
+          } else {
+            console.warn('[MetaEmbeddedSignup] WA_EMBEDDED_SIGNUP data incompleto:', data.data);
           }
         }
       } catch {
@@ -121,10 +124,26 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
       return;
     }
 
-    // Esperar brevemente a que llegue el message event con session info
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const sessionInfo = sessionInfoRef.current;
+    // Esperar a que llegue el message event con session info.
+    // El mensaje WA_EMBEDDED_SIGNUP puede llegar antes o después del callback de FB.login,
+    // así que esperamos activamente en lugar de usar un delay fijo.
+    const sessionInfo = await new Promise<MetaSessionInfo | null>((resolve) => {
+      if (sessionInfoRef.current) {
+        resolve(sessionInfoRef.current);
+        return;
+      }
+      const timeout = setTimeout(() => {
+        console.warn('[MetaEmbeddedSignup] Timeout esperando WA_EMBEDDED_SIGNUP (3s)');
+        resolve(null);
+      }, 3000);
+      const poll = setInterval(() => {
+        if (sessionInfoRef.current) {
+          clearTimeout(timeout);
+          clearInterval(poll);
+          resolve(sessionInfoRef.current);
+        }
+      }, 50);
+    });
     if (!sessionInfo) {
       const errMsg = 'No se recibió información de WABA. Intenta nuevamente.';
       setError(errMsg);
