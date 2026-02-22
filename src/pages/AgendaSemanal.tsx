@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
  * Admin can view all doctors, Doctor can only view their own
  */
 export default function AgendaSemanal() {
-  const { user, loading, isAdmin, isDoctor, isSecretary, isAdminOrSecretary } = useCurrentUser();
+  const { user, loading, isAdmin, isDoctor, isSecretary, isAdminOrSecretary, isDoctorView } = useCurrentUser();
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
@@ -91,7 +91,7 @@ export default function AgendaSemanal() {
 
   // Determine the doctorId to use for fetching appointments
   // Doctors see only their own, admin/secretary can filter by doctor or see all
-  const doctorIdToFetch = (isDoctor && !isAdminOrSecretary)
+  const doctorIdToFetch = isDoctorView
     ? user?.doctorId || undefined
     : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
 
@@ -264,8 +264,8 @@ export default function AgendaSemanal() {
         {/* SCROLLABLE CONTENT - Appointments list */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-4 py-4">
-            {/* Doctor Selection (for admin and secretary) */}
-            {isAdminOrSecretary && (
+            {/* Doctor Selection (for admin/secretary, hidden when in Vista Médico) */}
+            {isAdminOrSecretary && !isDoctorView && (
               <div className="mb-6">
                 <Label className="text-base font-semibold text-foreground mb-3 block">
                   Médico

@@ -34,7 +34,7 @@ import type { Doctor } from '@/types/doctor';
  * 5. Seleccionar horario del día elegido
  */
 export default function NuevaCita() {
-  const { user, isDoctor } = useCurrentUser();
+  const { user, isDoctor, isDoctorView } = useCurrentUser();
   
   // Core selection state
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -77,7 +77,7 @@ export default function NuevaCita() {
 
   // Auto-fill doctor for logged-in doctors
   useEffect(() => {
-    if (isDoctor && user?.doctorId && !selectedDoctor) {
+    if (isDoctorView && user?.doctorId && !selectedDoctor) {
       setIsLoadingDoctor(true);
       getDoctorById(user.doctorId)
         .then((doctor) => {
@@ -92,7 +92,7 @@ export default function NuevaCita() {
           setIsLoadingDoctor(false);
         });
     }
-  }, [isDoctor, user?.doctorId, selectedDoctor]);
+  }, [isDoctorView, user?.doctorId, selectedDoctor]);
 
   /**
    * Fetch available days when doctor, duration, or month changes
@@ -358,7 +358,7 @@ export default function NuevaCita() {
   const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
 
   // Step numbering helper
-  const getStepNumber = (baseStep: number) => isDoctor ? baseStep - 1 : baseStep;
+  const getStepNumber = (baseStep: number) => isDoctorView ? baseStep - 1 : baseStep;
 
   return (
     <MainLayout>
@@ -376,8 +376,8 @@ export default function NuevaCita() {
             />
           </section>
 
-          {/* Step 2: Doctor Selection (hidden for doctors) */}
-          {!isDoctor && (
+          {/* Step 2: Doctor Selection (hidden for doctors and admin in Vista Médico) */}
+          {!isDoctorView && (
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
                 2. Seleccionar Médico
