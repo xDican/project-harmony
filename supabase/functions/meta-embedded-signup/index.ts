@@ -6,14 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-22_v4";
+const BUILD = "meta-embedded-signup@2026-02-22_v6";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 const RequestSchema = z.object({
   code: z.string().min(1, "code es requerido"),
-  waba_id: z.string().min(1, "waba_id es requerido"),
-  phone_number_id: z.string().min(1, "phone_number_id es requerido"),
+  // waba_id and phone_number_id are optional: when absent (mobile browsers where
+  // WA_EMBEDDED_SIGNUP postMessage never arrives), the EF discovers them via debug_token.
+  waba_id: z.string().optional(),
+  phone_number_id: z.string().optional(),
 });
 
 // Logical types for default template_mappings
@@ -76,7 +78,7 @@ Deno.serve(async (req) => {
     if (!validation.success) {
       return json({ error: "Datos inválidos", details: validation.error.errors }, 400);
     }
-    const { code, waba_id, phone_number_id } = validation.data;
+    const { code, waba_id: rawWabaId, phone_number_id: rawPhoneNumberId } = validation.data;
 
     // 3) Obtener organization_id del usuario
     const { data: orgMember } = await supabaseAdmin
@@ -134,6 +136,56 @@ Deno.serve(async (req) => {
       console.log("[meta-embedded-signup] Long-lived token obtained");
     } else {
       console.warn("[meta-embedded-signup] Long-lived token exchange failed, using short-lived:", llData);
+    }
+
+    // 5b) Discover waba_id / phone_number_id if not provided by the frontend
+    // (Mobile browsers open the OAuth popup as a new tab, breaking postMessage)
+    let waba_id = rawWabaId;
+    let phone_number_id = rawPhoneNumberId;
+
+    if (!waba_id || !phone_number_id) {
+      console.log("[meta-embedded-signup] waba_id/phone_number_id not provided — discovering via debug_token");
+
+      const debugRes = await fetch(
+        `${GRAPH_BASE}/debug_token?input_token=${accessToken}&access_token=${metaAppId}|${metaAppSecret}`,
+      );
+      const debugData = await debugRes.json().catch(() => ({}));
+
+      if (!debugRes.ok || !debugData.data?.granular_scopes) {
+        console.error("[meta-embedded-signup] debug_token failed:", debugData);
+        return json({
+          error: "No se pudo obtener información de WABA. Completa el proceso de configuración de WhatsApp Business.",
+          detail: debugData?.error?.message,
+        }, 400);
+      }
+
+      // Find the WABA ID from granular_scopes (whatsapp_business_management scope contains target WABA IDs)
+      interface GranularScope { scope: string; target_ids?: string[] }
+      const wabaScope = (debugData.data.granular_scopes as GranularScope[])
+        .find((s) => s.scope === "whatsapp_business_management");
+
+      if (!wabaScope?.target_ids?.length) {
+        console.error("[meta-embedded-signup] No WABA IDs in token scopes:", JSON.stringify(debugData.data.granular_scopes));
+        return json({ error: "El token no tiene acceso a ningún WABA. Completa el proceso de configuración de WhatsApp Business." }, 400);
+      }
+
+      waba_id = wabaScope.target_ids[0];
+      console.log("[meta-embedded-signup] Discovered waba_id:", waba_id);
+
+      if (!phone_number_id) {
+        const phonesRes = await fetch(
+          `${GRAPH_BASE}/${waba_id}/phone_numbers?fields=id,display_phone_number&access_token=${accessToken}`,
+        );
+        const phonesData = await phonesRes.json().catch(() => ({}));
+
+        if (!phonesRes.ok || !phonesData.data?.length) {
+          console.error("[meta-embedded-signup] phone_numbers fetch failed:", phonesData);
+          return json({ error: "No se encontraron números de teléfono en el WABA", detail: phonesData?.error?.message }, 400);
+        }
+
+        phone_number_id = phonesData.data[0].id;
+        console.log("[meta-embedded-signup] Discovered phone_number_id:", phone_number_id, "from", phonesData.data.length, "numbers");
+      }
     }
 
     // 6) Obtener detalles del número de teléfono desde Meta
@@ -349,12 +401,6 @@ Deno.serve(async (req) => {
       } else {
         console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
       }
-    }
-
-    if (mappingsError) {
-      console.warn("[meta-embedded-signup] Error upserting template_mappings (non-blocking):", mappingsError);
-    } else {
-      console.log("[meta-embedded-signup] template_mappings upserted for line:", lineId);
     }
 
     // 10) Auto-register phone number with Meta Cloud API
