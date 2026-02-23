@@ -64,25 +64,32 @@ const GatewayRequestSchema = z.object({
   appointmentId: z.string().uuid().optional(),
   patientId: z.string().uuid().optional(),
   doctorId: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
 });
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Find the most recently created active whatsapp_line */
+/** Find the active whatsapp_line for the given organization (or globally newest if no org provided) */
 async function getActiveLine(
   supabase: ReturnType<typeof createClient>,
+  organizationId?: string,
 ): Promise<WhatsAppLineRow | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("whatsapp_lines")
     .select(
       "id, phone_number, provider, is_active, organization_id, twilio_account_sid, twilio_auth_token, twilio_phone_from, twilio_messaging_service_sid, meta_waba_id, meta_phone_number_id, meta_access_token",
     )
     .eq("is_active", true)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+    .limit(1);
+
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { data, error } = await query.single();
 
   if (error) {
     console.error("[messaging-gateway] Error fetching whatsapp_line:", error);
@@ -224,13 +231,14 @@ Deno.serve(async (req) => {
       appointmentId,
       patientId,
       doctorId,
+      organizationId,
     } = parsed.data;
 
     const normalizedTo = normalizeToE164(to);
-    console.log("[messaging-gateway] Request:", { to: normalizedTo, type, hasBody: !!body });
+    console.log("[messaging-gateway] Request:", { to: normalizedTo, type, hasBody: !!body, organizationId });
 
-    // 4) Resolve whatsapp line
-    const line = await getActiveLine(supabase);
+    // 4) Resolve whatsapp line (scoped to org when provided)
+    const line = await getActiveLine(supabase, organizationId);
 
     if (!line) {
       console.error("[messaging-gateway] No active whatsapp_line found");

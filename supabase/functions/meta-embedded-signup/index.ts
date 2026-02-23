@@ -18,13 +18,14 @@ const RequestSchema = z.object({
   phone_number_id: z.string().optional(),
 });
 
-// Logical types for default template_mappings
-const DEFAULT_LOGICAL_TYPES = [
-  "confirmation",
-  "reminder_24h",
-  "reschedule_doctor",
-  "patient_confirmed",
-  "patient_reschedule",
+// Canonical template mappings — same approved templates used across all WABAs connected through this App.
+// Whenever a brand new line has no prior mappings to copy, these are applied immediately (is_active=true).
+const CANONICAL_TEMPLATE_MAPPINGS = [
+  { logical_type: "confirmation",       template_name: "notificacion_creacion_cita_utility_hx0e54700971a4adf2d4f4fcb8f021beff", template_language: "es_MX" },
+  { logical_type: "reminder_24h",       template_name: "notificacion_24h_antes_utility_hx9f009d3fb6845f75c34a1868b98e64a6",    template_language: "es_MX" },
+  { logical_type: "reschedule_doctor",  template_name: "notificacion_reagenda_medico_utility_hx95828e73090fb5a66e3157fe33ac956d", template_language: "es_MX" },
+  { logical_type: "patient_confirmed",  template_name: "confirmacion_cita_utility_hx7ef2d47944d28ef80f84a9bacb89d587",          template_language: "es_MX" },
+  { logical_type: "patient_reschedule", template_name: "paciente_solicita_reagenda_utility_hxe08b07d4ae63dbd73e11709817ac2f75", template_language: "es_MX" },
 ];
 
 function json(data: unknown, status = 200) {
@@ -375,17 +376,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Priority 3: brand new line — create empty defaults
+    // Priority 3: brand new line — apply canonical templates so the line works immediately
     if (mappings === undefined) {
-      mappings = DEFAULT_LOGICAL_TYPES.map((logicalType) => ({
+      mappings = CANONICAL_TEMPLATE_MAPPINGS.map((t) => ({
         whatsapp_line_id: lineId,
-        logical_type: logicalType,
+        logical_type: t.logical_type,
         provider: "meta",
-        template_name: "",
-        template_language: "es",
+        template_name: t.template_name,
+        template_language: t.template_language,
         parameter_order: [],
-        is_active: false,
+        is_active: true,
       }));
+      console.log("[meta-embedded-signup] Applying canonical template mappings for brand new line:", lineId);
     }
 
     if (mappings !== null) {
