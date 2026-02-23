@@ -36,6 +36,7 @@ async function sendConfirmationViaGateway(params: {
   appointmentId: string;
   patientId: string;
   doctorId: string;
+  organizationId: string;
 }): Promise<{ success: boolean; providerMessageId?: string; error?: string }> {
   try {
     const projectRef = new URL(params.supabaseUrl).hostname.split(".")[0];
@@ -52,6 +53,7 @@ async function sendConfirmationViaGateway(params: {
       body: JSON.stringify({
         to: normalizeToE164(params.patientPhone),
         type: "confirmation",
+        organizationId: params.organizationId,
         templateParams: {
           "1": params.patientName,
           "2": params.doctorDisplayName,
@@ -397,6 +399,7 @@ Deno.serve(async (req) => {
       appointmentId: appointment.id,
       patientId: patient.id,
       doctorId: doctor.id,
+      organizationId: resolvedOrgId,
     });
 
     // 18) Return response
