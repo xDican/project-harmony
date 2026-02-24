@@ -444,10 +444,11 @@ export async function searchPatients(query: string, doctorId?: string): Promise<
 // --------------------------
 // 7. getAllPatients
 // --------------------------
-export async function getAllPatients(): Promise<Patient[]> {
+export async function getAllPatients(doctorId?: string): Promise<Patient[]> {
   const orgId = await getActiveOrganizationId();
   let query = supabase.from("patients").select("*").order("name", { ascending: true });
   if (orgId) query = query.eq("organization_id", orgId);
+  if (doctorId) query = query.eq("doctor_id", doctorId);
   const { data, error } = await query;
 
   if (error) {
