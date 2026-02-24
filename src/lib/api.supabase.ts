@@ -328,7 +328,7 @@ export async function createAppointment(input: {
   notes?: string;
   status?: AppointmentStatus;
   durationMinutes?: number;
-}): Promise<Appointment> {
+}): Promise<{ appointment: Appointment; whatsappSent: boolean; whatsappError?: string }> {
   try {
     // Resolve organization context for the edge function
     const orgId = await getActiveOrganizationId();
@@ -360,14 +360,17 @@ export async function createAppointment(input: {
       throw new Error('Respuesta inválida del servidor');
     }
 
-    // Log WhatsApp status for debugging
     if (data.whatsappSent) {
       console.log('[createAppointment] WhatsApp enviado:', data.twilioSid);
     } else if (data.whatsappError) {
       console.warn('[createAppointment] WhatsApp no enviado:', data.whatsappError);
     }
 
-    return mapAppointment(data.appointment);
+    return {
+      appointment: mapAppointment(data.appointment),
+      whatsappSent: !!data.whatsappSent,
+      whatsappError: data.whatsappError ?? undefined,
+    };
   } catch (error: any) {
     console.error('Error createAppointment:', error);
     throw error;
@@ -409,7 +412,7 @@ export async function getAvailableSlots(params: {
 // --------------------------
 // 6. searchPatients
 // --------------------------
-export async function searchPatients(query: string): Promise<Patient[]> {
+export async function searchPatients(query: string, doctorId?: string): Promise<Patient[]> {
   const orgId = await getActiveOrganizationId();
   // Busca por name o phone (simple LIKE)
   let q = supabase
@@ -419,6 +422,7 @@ export async function searchPatients(query: string): Promise<Patient[]> {
     .order("name", { ascending: true });
 
   if (orgId) q = q.eq("organization_id", orgId);
+  if (doctorId) q = q.eq("doctor_id", doctorId);
 
   const { data, error } = await q;
 
@@ -844,6 +848,7 @@ export async function createUserWithRole(input: {
   fullName?: string;
   phone?: string;
   prefix?: string;
+  calendarId?: string;
 }): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
     // Get the current session to include the JWT token
@@ -976,15 +981,17 @@ export async function updateUser(
     specialtyId?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  // First, get the user to check their role and related IDs
+  // Get role and related IDs from org_members (users table has no role column)
+  const orgId = await getActiveOrganizationId();
   const { data: userData, error: userError } = await supabase
-    .from('users')
+    .from('org_members')
     .select('role, doctor_id, secretary_id')
-    .eq('id', userId)
+    .eq('user_id', userId)
+    .eq('organization_id', orgId ?? '')
     .maybeSingle();
 
   if (userError || !userData) {
-    console.error('[updateUser] Error fetching user:', userError);
+    console.error('[updateUser] Error fetching user from org_members:', userError);
     return { success: false, error: 'Usuario no encontrado' };
   }
 
@@ -1435,6 +1442,82 @@ export async function updateCalendar(
     isActive: data.is_active,
     createdAt: data.created_at,
   };
+}
+
+// --------------------------
+// Calendar Schedules
+// --------------------------
+
+export async function getCalendarSchedules(calendarId: string): Promise<WeekSchedule> {
+  const { data, error } = await supabase
+    .from("calendar_schedules")
+    .select("*")
+    .eq("calendar_id", calendarId)
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    console.error("Error getCalendarSchedules:", error);
+    throw error;
+  }
+
+  const weekSchedule: WeekSchedule = {
+    sunday: [],
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+  };
+
+  (data || []).forEach((row: any) => {
+    const dayKey = DAY_MAP[row.day_of_week];
+    if (dayKey) {
+      weekSchedule[dayKey].push({
+        id: row.id,
+        start_time: row.start_time.substring(0, 5),
+        end_time: row.end_time.substring(0, 5),
+      });
+    }
+  });
+
+  return weekSchedule;
+}
+
+export async function updateCalendarSchedules(
+  calendarId: string,
+  weekSchedule: WeekSchedule
+): Promise<void> {
+  const schedules = flattenWeekSchedule(weekSchedule);
+
+  const { error: deleteError } = await supabase
+    .from("calendar_schedules")
+    .delete()
+    .eq("calendar_id", calendarId);
+
+  if (deleteError) {
+    console.error("[updateCalendarSchedules] Delete error:", deleteError);
+    throw deleteError;
+  }
+
+  if (schedules.length === 0) return;
+
+  const { error: insertError } = await supabase
+    .from("calendar_schedules")
+    .insert(
+      schedules.map((s) => ({
+        calendar_id: calendarId,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+      }))
+    );
+
+  if (insertError) {
+    console.error("[updateCalendarSchedules] Insert error:", insertError);
+    throw insertError;
+  }
 }
 
 // --------------------------

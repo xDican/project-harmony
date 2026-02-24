@@ -106,17 +106,23 @@ serve(async (req) => {
       fullName: z.string().min(2, "Name too short").max(100, "Name too long"),
       phone: z.string().regex(/^[\d\s\-+()]+$/, "Invalid phone format").max(20, "Phone too long"),
       prefix: z.string().max(20, "Prefix too long"),
+      calendarId: z.string().uuid("Invalid calendar ID format").optional(),
+    });
+
+    const secretaryUserSchema = baseUserSchema.extend({
+      fullName: z.string().min(2, "Name too short").max(100, "Name too long"),
+      phone: z.string().regex(/^[\d\s\-+()]+$/, "Invalid phone format").max(20, "Phone too long").optional(),
     });
 
     // Validate based on role
     let validationResult;
     const partialParse = baseUserSchema.safeParse(body);
-    
+
     if (!partialParse.success) {
       return new Response(
-        JSON.stringify({ 
-          error: "Validation failed", 
-          details: partialParse.error.errors 
+        JSON.stringify({
+          error: "Validation failed",
+          details: partialParse.error.errors
         }),
         { status: 400, headers: corsHeaders }
       );
@@ -124,6 +130,8 @@ serve(async (req) => {
 
     if (partialParse.data.role === "doctor") {
       validationResult = doctorUserSchema.safeParse(body);
+    } else if (partialParse.data.role === "secretary") {
+      validationResult = secretaryUserSchema.safeParse(body);
     } else {
       validationResult = baseUserSchema.safeParse(body);
     }
@@ -138,7 +146,7 @@ serve(async (req) => {
       );
     }
 
-    const { email, password, role, specialtyId, fullName, phone, prefix, organizationId } = validationResult.data as {
+    const { email, password, role, specialtyId, fullName, phone, prefix, organizationId, calendarId } = validationResult.data as {
       email: string;
       password: string;
       role: string;
@@ -147,6 +155,7 @@ serve(async (req) => {
       phone?: string;
       prefix?: string;
       organizationId?: string;
+      calendarId?: string;
     };
 
     // Resolve org: use provided orgId, or fallback to caller's org
@@ -191,6 +200,38 @@ serve(async (req) => {
       }
 
       doctorId = doctorData.id;
+
+      // If a calendarId was provided, link the doctor to the calendar
+      if (calendarId) {
+        const { error: calDocError } = await supabaseAdmin
+          .from("calendar_doctors")
+          .insert({ calendar_id: calendarId, doctor_id: doctorId, is_active: true });
+        if (calDocError) {
+          console.error("Error linking doctor to calendar (non-fatal):", calDocError);
+          // Non-fatal: doctor was created, calendar link can be fixed later
+        }
+      }
+    }
+
+    // If role is secretary, create the secretary record
+    let secretaryId = null;
+    if (role === "secretary" && fullName) {
+      const { data: secretaryData, error: secretaryError } = await supabaseAdmin
+        .from("secretaries")
+        .insert({
+          name: fullName,
+          email: email,
+          phone: phone || null,
+          organization_id: resolvedOrgId || null,
+        })
+        .select()
+        .single();
+
+      if (secretaryError) {
+        await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+        throw secretaryError;
+      }
+      secretaryId = secretaryData.id;
     }
 
     // Insert into users table (without role field)
@@ -198,14 +239,13 @@ serve(async (req) => {
       id: newUser.user.id,
       email: email,
       doctor_id: doctorId,
+      secretary_id: secretaryId,
     });
 
     if (insertError) {
-      // Rollback: delete the auth user and doctor if created
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-      if (doctorId) {
-        await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
-      }
+      if (doctorId) await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
+      if (secretaryId) await supabaseAdmin.from("secretaries").delete().eq("id", secretaryId);
       throw insertError;
     }
 
@@ -232,6 +272,7 @@ serve(async (req) => {
         user_id: newUser.user.id,
         role: role,
         doctor_id: doctorId || null,
+        secretary_id: secretaryId || null,
         is_active: true,
       });
 

@@ -66,7 +66,7 @@ export default function UsersList() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter((user) => {
-        const name = user.doctor?.name?.toLowerCase() || '';
+        const name = (user.doctor?.name || user.secretary?.name || '').toLowerCase();
         const email = user.email.toLowerCase();
         return name.includes(query) || email.includes(query);
       });
@@ -288,7 +288,7 @@ export default function UsersList() {
                                 ) : (
                                   <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                 )}
-                                {user.doctor?.name || user.email}
+                                {user.doctor?.name || user.secretary?.name || user.email}
                               </div>
                             </TableCell>
                               <TableCell>
@@ -387,7 +387,7 @@ function UserCard({ user, onEdit, onSchedule }: UserCardProps) {
             <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           )}
           <span className="text-base font-semibold text-foreground">
-            {user.doctor?.name || user.email}
+            {user.doctor?.name || user.secretary?.name || user.email}
           </span>
         </div>
         <Badge variant={ROLE_VARIANTS[user.role] || 'outline'}>

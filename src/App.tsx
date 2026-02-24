@@ -32,6 +32,7 @@ import MetaOAuthCallback from "./pages/MetaOAuthCallback";
 import OrganizationSettings from "./pages/OrganizationSettings";
 import ClinicsList from "./pages/ClinicsList";
 import CalendarsList from "./pages/CalendarsList";
+import CalendarSchedulePage from "./pages/CalendarSchedulePage";
 import WhatsAppLinesList from "./pages/WhatsAppLinesList";
 import BotFAQsPage from "./pages/BotFAQsPage";
 import ActivationPanel from "./pages/ActivationPanel";
@@ -269,6 +270,11 @@ const App = () => {
             <Route path="/admin/calendars" element={
               <RoleBasedRoute allowedRoles={['admin']}>
                 <CalendarsList />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/calendars/:calendarId/schedule" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <CalendarSchedulePage />
               </RoleBasedRoute>
             } />
             <Route path="/admin/whatsapp-lines" element={

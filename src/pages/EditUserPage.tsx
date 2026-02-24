@@ -18,7 +18,8 @@ import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '
 export default function EditUserPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
-  const { isAdmin } = useCurrentUser();
+  const { isAdmin, isDoctor, user: currentUser } = useCurrentUser();
+  const isOwnProfile = isDoctor && currentUser?.id === userId;
   
   const [user, setUser] = useState<UserWithRelations | null>(null);
   const [fullName, setFullName] = useState('');
@@ -133,7 +134,7 @@ export default function EditUserPage() {
     }
   };
 
-  if (!isAdmin) {
+  if (!isAdmin && !isOwnProfile) {
     return (
       <MainLayout>
         <div className="p-6">
@@ -219,7 +220,7 @@ export default function EditUserPage() {
                   <Input
                     id="role"
                     value={
-                      user.role === 'admin' ? 'Propietario' :
+                      user.role === 'admin' ? 'Administrador' :
                       user.role === 'secretary' ? 'Secretaria' :
                       user.role === 'doctor' ? 'Doctor' : user.role
                     }
@@ -229,7 +230,8 @@ export default function EditUserPage() {
                 </div>
               </div>
 
-              {/* Datos del perfil Section */}
+              {/* Datos del perfil Section — not applicable for admin */}
+              {user.role !== 'admin' && (
               <div className="space-y-4">
                 <h3 className="text-sm font-medium">Datos del perfil</h3>
                 <Separator />
@@ -293,6 +295,7 @@ export default function EditUserPage() {
                   </>
                 )}
               </div>
+              )}
 
               {error && (
                 <Alert variant="destructive">

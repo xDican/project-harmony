@@ -201,26 +201,28 @@ export default function AgendaSemanal() {
                 variant="outline"
                 size="sm"
                 onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
-                className="gap-1 text-xs md:text-sm"
+                className="gap-1 text-xs md:text-sm min-w-[7rem] sm:min-w-[9rem]"
               >
                 <ChevronLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Semana </span>anterior
               </Button>
-              {!isCurrentWeek && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleGoToToday}
-                  className="text-xs md:text-sm"
-                >
-                  Hoy
-                </Button>
-              )}
+              <div className="min-w-[3.5rem] flex justify-center">
+                {!isCurrentWeek && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGoToToday}
+                    className="text-xs md:text-sm w-full"
+                  >
+                    Hoy
+                  </Button>
+                )}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
-                className="gap-1 text-xs md:text-sm"
+                className="gap-1 text-xs md:text-sm min-w-[7rem] sm:min-w-[9rem]"
               >
                 <span className="hidden sm:inline">Semana </span>siguiente
                 <ChevronRight className="h-4 w-4" />

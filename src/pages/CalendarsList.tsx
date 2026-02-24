@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '@/context/UserContext';
 import MainLayout from '@/components/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ import {
   getClinicsByOrganization,
 } from '@/lib/api.supabase';
 import type { CalendarEntry, Clinic } from '@/types/organization';
-import { Loader2, Search, Plus, Edit, CalendarDays } from 'lucide-react';
+import { Loader2, Search, Plus, Edit, CalendarDays, Clock } from 'lucide-react';
 
 const NO_CLINIC_VALUE = '__none__';
 
@@ -34,6 +35,7 @@ export default function CalendarsList() {
   const { isAdmin } = useCurrentUser();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   const [calendars, setCalendars] = useState<CalendarEntry[]>([]);
   const [filteredCalendars, setFilteredCalendars] = useState<CalendarEntry[]>([]);
@@ -240,6 +242,7 @@ export default function CalendarsList() {
                           key={calendar.id}
                           calendar={calendar}
                           onEdit={() => openEditDialog(calendar)}
+                          onSchedule={() => navigate(`/admin/calendars/${calendar.id}/schedule`)}
                         />
                       ))}
                       {totalPages > 1 && (
@@ -322,14 +325,24 @@ export default function CalendarsList() {
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openEditDialog(calendar)}
-                                  >
-                                    <Edit className="h-4 w-4 mr-1" />
-                                    Editar
-                                  </Button>
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => navigate(`/admin/calendars/${calendar.id}/schedule`)}
+                                    >
+                                      <Clock className="h-4 w-4 mr-1" />
+                                      Horarios
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => openEditDialog(calendar)}
+                                    >
+                                      <Edit className="h-4 w-4 mr-1" />
+                                      Editar
+                                    </Button>
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             );
@@ -453,9 +466,10 @@ export default function CalendarsList() {
 interface CalendarCardProps {
   calendar: CalendarEntry;
   onEdit: () => void;
+  onSchedule: () => void;
 }
 
-function CalendarCard({ calendar, onEdit }: CalendarCardProps) {
+function CalendarCard({ calendar, onEdit, onSchedule }: CalendarCardProps) {
   const doctorNames = calendar.doctors?.map((d) => d.name) || [];
 
   return (
@@ -489,6 +503,10 @@ function CalendarCard({ calendar, onEdit }: CalendarCardProps) {
 
       {/* Line 3: Actions */}
       <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={onSchedule} className="flex-1">
+          <Clock className="h-4 w-4 mr-1" />
+          Horarios
+        </Button>
         <Button variant="outline" size="sm" onClick={onEdit} className="flex-1">
           <Edit className="h-4 w-4 mr-1" />
           Editar
