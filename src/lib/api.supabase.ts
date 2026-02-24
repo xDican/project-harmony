@@ -1361,6 +1361,26 @@ export async function createCalendar(input: {
   const orgId = await getActiveOrganizationId();
   if (!orgId) throw new Error("No active organization");
 
+  // Check calendar limit
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("max_calendars")
+    .eq("id", orgId)
+    .single();
+
+  const maxCalendars = org?.max_calendars ?? 1;
+
+  const { count } = await supabase
+    .from("calendars")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId);
+
+  if ((count ?? 0) >= maxCalendars) {
+    throw new Error(
+      `Has alcanzado el limite de ${maxCalendars} calendario${maxCalendars === 1 ? "" : "s"}. Contacta al administrador para aumentar tu plan.`
+    );
+  }
+
   const { data, error } = await supabase
     .from("calendars")
     .insert({
