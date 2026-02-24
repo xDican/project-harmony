@@ -973,9 +973,31 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
   }
 
   // Handle doctor data - it may come as array or null
-  const doctorData: any = Array.isArray(data.doctor) ? data.doctor[0] : data.doctor;
-  const secretaryData: any = Array.isArray(data.secretary) ? data.secretary[0] : data.secretary;
-  
+  let doctorData: any = Array.isArray(data.doctor) ? data.doctor[0] : data.doctor;
+  let secretaryData: any = Array.isArray(data.secretary) ? data.secretary[0] : data.secretary;
+
+  // For admin users, users.doctor_id is often NULL — fallback to org_members.doctor_id
+  if (!doctorData && roleData?.role === 'admin') {
+    const { data: omData } = await supabase
+      .from('org_members')
+      .select('doctor_id')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .not('doctor_id', 'is', null)
+      .maybeSingle();
+
+    if (omData?.doctor_id) {
+      const { data: docRow } = await supabase
+        .from('doctors')
+        .select('id, name, phone, specialty_id, specialty:specialty_id ( name )')
+        .eq('id', omData.doctor_id)
+        .maybeSingle();
+      if (docRow) {
+        doctorData = docRow;
+      }
+    }
+  }
+
   // Transform the data to match UserWithRelations interface
   return {
     id: data.id,
@@ -987,8 +1009,8 @@ export async function getUserById(userId: string): Promise<UserWithRelations | n
       name: doctorData.name,
       phone: doctorData.phone,
       specialtyId: doctorData.specialty_id,
-      specialtyName: Array.isArray(doctorData.specialty) && doctorData.specialty.length > 0 
-        ? doctorData.specialty[0].name 
+      specialtyName: Array.isArray(doctorData.specialty) && doctorData.specialty.length > 0
+        ? doctorData.specialty[0].name
         : undefined,
     } : undefined,
     secretary: secretaryData ? {
@@ -1072,8 +1094,36 @@ export async function updateUser(
     }
   }
 
-  // For admin role, we don't have a separate table yet
-  // Just return success for now
+  // Admin with a doctor profile (owner who went through onboarding)
+  if (userData.role === 'admin' && userData.doctor_id) {
+    try {
+      const { data: updateResult, error: functionError } = await supabase.functions.invoke('update-doctor', {
+        body: {
+          doctorId: userData.doctor_id,
+          name: data.name,
+          phone: data.phone,
+          specialtyId: data.specialtyId,
+        },
+      });
+
+      if (functionError) {
+        console.error('[updateUser] Error calling update-doctor for admin:', functionError);
+        return { success: false, error: functionError.message || 'Error al actualizar el perfil' };
+      }
+
+      if (updateResult?.error) {
+        console.error('[updateUser] Error from update-doctor for admin:', updateResult.error);
+        return { success: false, error: updateResult.error };
+      }
+
+      if (!updateResult?.success) {
+        return { success: false, error: 'Error al actualizar el perfil' };
+      }
+    } catch (err: any) {
+      console.error('[updateUser] Exception calling update-doctor for admin:', err);
+      return { success: false, error: err.message || 'Error al actualizar el perfil' };
+    }
+  }
 
   return { success: true };
 }
