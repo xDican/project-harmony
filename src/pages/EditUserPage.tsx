@@ -66,6 +66,11 @@ export default function EditUserPage() {
         } else if (userData.role === 'secretary' && userData.secretary) {
           setFullName(userData.secretary.name || '');
           setPhone(formatPhoneForDisplay(userData.secretary.phone) || '');
+        } else if (userData.role === 'admin' && userData.doctor) {
+          // Admin/owner who also has a doctor profile (went through onboarding)
+          setFullName(userData.doctor.name || '');
+          setPhone(formatPhoneForDisplay(userData.doctor.phone) || '');
+          setSpecialtyId(userData.doctor.specialtyId || '');
         }
       } catch (err: any) {
         console.error('Error loading user:', err);
@@ -85,8 +90,10 @@ export default function EditUserPage() {
 
     if (!user) return;
 
+    const isDoctorProfile = user.role === 'doctor' || (user.role === 'admin' && !!user.doctor);
+
     // Validation based on role
-    if (user.role === 'doctor') {
+    if (isDoctorProfile) {
       if (!fullName.trim()) {
         setError('El nombre completo es obligatorio');
         return;
@@ -178,6 +185,8 @@ export default function EditUserPage() {
     );
   }
 
+  const isDoctorProfile = user.role === 'doctor' || (user.role === 'admin' && !!user.doctor);
+
   return (
     <MainLayout>
       <div className="p-6 max-w-2xl mx-auto">
@@ -230,14 +239,14 @@ export default function EditUserPage() {
                 </div>
               </div>
 
-              {/* Datos del perfil Section — not applicable for admin */}
-              {user.role !== 'admin' && (
+              {/* Datos del perfil Section — shown for doctor, secretary, and admin with doctor profile */}
+              {(user.role !== 'admin' || !!user.doctor) && (
               <div className="space-y-4">
                 <h3 className="text-sm font-medium">Datos del perfil</h3>
                 <Separator />
 
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">Nombre completo {user.role === 'doctor' && '*'}</Label>
+                  <Label htmlFor="fullName">Nombre completo {isDoctorProfile && '*'}</Label>
                   <Input
                     id="fullName"
                     type="text"
@@ -249,7 +258,7 @@ export default function EditUserPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono {user.role === 'doctor' && '*'}</Label>
+                  <Label htmlFor="phone">Teléfono {isDoctorProfile && '*'}</Label>
                   <Input
                     id="phone"
                     type="tel"
@@ -261,7 +270,7 @@ export default function EditUserPage() {
                   />
                 </div>
 
-                {user.role === 'doctor' && (
+                {isDoctorProfile && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="specialty">Especialidad *</Label>
