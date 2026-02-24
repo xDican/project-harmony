@@ -109,28 +109,73 @@ Deno.serve(async (req) => {
     const requestedDate = DateTime.fromISO(date);
     const dayOfWeek = requestedDate.weekday % 7; // Luxon: 1=Monday...7=Sunday -> convert to 0=Sunday...6=Saturday
 
-    // 7) Fetch doctor's schedules for that day (primary source: doctor_schedules)
-    let scheduleQuery = supabase
-      .from("doctor_schedules")
-      .select("start_time, end_time")
-      .eq("doctor_id", doctorId)
-      .eq("day_of_week", dayOfWeek);
+    // 7) Fetch schedules — primary: calendar_schedules, fallback: doctor_schedules
+    let schedules: Array<{ start_time: string; end_time: string }> = [];
 
     if (calendarId) {
-      scheduleQuery = scheduleQuery.eq("calendar_id", calendarId);
+      // Specific calendar requested
+      const { data, error } = await supabase
+        .from("calendar_schedules")
+        .select("start_time, end_time")
+        .eq("calendar_id", calendarId)
+        .eq("day_of_week", dayOfWeek);
+
+      if (error) {
+        console.error("[get-available-slots] Error fetching calendar_schedules:", error);
+        return new Response(JSON.stringify({ error: "Error al obtener horarios del calendario" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      schedules = data || [];
+    } else {
+      // No calendarId — aggregate from all active calendars for this doctor
+      const { data: calDoctors, error: cdError } = await supabase
+        .from("calendar_doctors")
+        .select("calendar_id")
+        .eq("doctor_id", doctorId)
+        .eq("is_active", true);
+
+      if (cdError) {
+        console.error("[get-available-slots] Error fetching calendar_doctors:", cdError);
+      }
+
+      if (calDoctors && calDoctors.length > 0) {
+        const calendarIds = calDoctors.map((cd: any) => cd.calendar_id);
+        const { data, error } = await supabase
+          .from("calendar_schedules")
+          .select("start_time, end_time")
+          .in("calendar_id", calendarIds)
+          .eq("day_of_week", dayOfWeek);
+
+        if (error) {
+          console.error("[get-available-slots] Error fetching calendar_schedules:", error);
+        } else {
+          schedules = data || [];
+        }
+      }
     }
 
-    const { data: schedules, error: scheduleError } = await scheduleQuery;
+    // Fallback to doctor_schedules if no calendar_schedules found
+    if (schedules.length === 0) {
+      console.log("[get-available-slots] No calendar_schedules, falling back to doctor_schedules");
+      const { data, error: fallbackError } = await supabase
+        .from("doctor_schedules")
+        .select("start_time, end_time")
+        .eq("doctor_id", doctorId)
+        .eq("day_of_week", dayOfWeek);
 
-    if (scheduleError) {
-      console.error("[get-available-slots] Error fetching schedules:", scheduleError);
-      return new Response(JSON.stringify({ error: "Error al obtener horarios del doctor" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (fallbackError) {
+        console.error("[get-available-slots] Error fetching doctor_schedules:", fallbackError);
+        return new Response(JSON.stringify({ error: "Error al obtener horarios del doctor" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      schedules = data || [];
     }
 
-    if (!schedules || schedules.length === 0) {
+    if (schedules.length === 0) {
       console.log("[get-available-slots] No schedules found for day:", dayOfWeek);
       return new Response(JSON.stringify({ slots: [] }), {
         status: 200,
@@ -138,42 +183,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 7b) SHADOW: also fetch from calendar_schedules for comparison (non-blocking)
-    let shadowSchedules: Array<{ start_time: string; end_time: string }> | null = null;
-    try {
-      let resolvedCalendarId = calendarId;
-      if (!resolvedCalendarId) {
-        const { data: cdRow } = await supabase
+    // 8) Fetch existing appointments — co-work: check ALL doctors on the same calendar(s)
+    let appointmentDoctorIds: string[] = [doctorId];
+
+    if (calendarId) {
+      // Specific calendar: get all doctors on this calendar
+      const { data: calDocRows } = await supabase
+        .from("calendar_doctors")
+        .select("doctor_id")
+        .eq("calendar_id", calendarId)
+        .eq("is_active", true);
+      if (calDocRows && calDocRows.length > 0) {
+        appointmentDoctorIds = [...new Set(calDocRows.map((r: any) => r.doctor_id))];
+      }
+    } else if (schedules.length > 0) {
+      // No specific calendar — use all calendars the doctor belongs to
+      const { data: calDocs } = await supabase
+        .from("calendar_doctors")
+        .select("calendar_id")
+        .eq("doctor_id", doctorId)
+        .eq("is_active", true);
+
+      if (calDocs && calDocs.length > 0) {
+        const calIds = calDocs.map((cd: any) => cd.calendar_id);
+        const { data: allCalDocs } = await supabase
           .from("calendar_doctors")
-          .select("calendar_id")
-          .eq("doctor_id", doctorId)
-          .eq("is_active", true)
-          .maybeSingle();
-        resolvedCalendarId = cdRow?.calendar_id ?? undefined;
-      }
-      if (resolvedCalendarId) {
-        const { data: calSchedules, error: calScheduleError } = await supabase
-          .from("calendar_schedules")
-          .select("start_time, end_time")
-          .eq("calendar_id", resolvedCalendarId)
-          .eq("day_of_week", dayOfWeek);
-        if (calScheduleError) {
-          console.warn("[get-available-slots][shadow] Error fetching calendar_schedules:", calScheduleError);
-        } else {
-          shadowSchedules = calSchedules ?? [];
+          .select("doctor_id")
+          .in("calendar_id", calIds)
+          .eq("is_active", true);
+        if (allCalDocs && allCalDocs.length > 0) {
+          appointmentDoctorIds = [...new Set(allCalDocs.map((r: any) => r.doctor_id))];
         }
-      } else {
-        console.warn("[get-available-slots][shadow] No calendarId resolved for doctor:", doctorId);
       }
-    } catch (shadowErr) {
-      console.warn("[get-available-slots][shadow] Unexpected error:", shadowErr);
     }
 
-    // 8) Fetch existing appointments (exclude cancelled)
+    console.log("[get-available-slots] Co-work doctor IDs:", appointmentDoctorIds.length);
+
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
       .select("time, duration_minutes")
-      .eq("doctor_id", doctorId)
+      .in("doctor_id", appointmentDoctorIds)
       .eq("date", date)
       .not("status", "in", '("cancelled","canceled","cancelada")');
 
@@ -238,42 +287,6 @@ Deno.serve(async (req) => {
     const uniqueSorted = Array.from(new Set(availableSlots)).sort((a, b) => a.localeCompare(b));
 
     console.log("[get-available-slots] Available slots:", uniqueSorted.length);
-
-    // 11b) SHADOW: compute slots from calendar_schedules and compare
-    if (shadowSchedules !== null) {
-      try {
-        const shadowSlots: string[] = [];
-        for (const schedule of shadowSchedules) {
-          const workStart = buildDateTime(date, schedule.start_time);
-          const workEnd = buildDateTime(date, schedule.end_time);
-          const workEndMs = workEnd.toMillis();
-          let slotStart = workStart;
-          while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
-            const slotStartMs = slotStart.toMillis();
-            const slotEndMs = slotStart.plus({ minutes: durationMinutes }).toMillis();
-            const hasOverlap = occupiedIntervals.some(({ startMs: aptStartMs, endMs: aptEndMs }) => {
-              return slotStartMs < aptEndMs && aptStartMs < slotEndMs;
-            });
-            if (!hasOverlap) {
-              shadowSlots.push(formatToHHMM(slotStart));
-            }
-            slotStart = slotStart.plus({ minutes: SLOT_GRANULARITY_MINUTES });
-          }
-        }
-        const shadowSorted = Array.from(new Set(shadowSlots)).sort((a, b) => a.localeCompare(b));
-        if (JSON.stringify(uniqueSorted) !== JSON.stringify(shadowSorted)) {
-          console.warn("[get-available-slots][shadow-diff] MISMATCH", {
-            doctorId, date, dayOfWeek,
-            primary: uniqueSorted,
-            shadow: shadowSorted,
-          });
-        } else {
-          console.log("[get-available-slots][shadow] OK - sources match", { doctorId, date, count: uniqueSorted.length });
-        }
-      } catch (shadowCompErr) {
-        console.warn("[get-available-slots][shadow] Error computing shadow slots:", shadowCompErr);
-      }
-    }
 
     return new Response(JSON.stringify({ slots: uniqueSorted }), {
       status: 200,

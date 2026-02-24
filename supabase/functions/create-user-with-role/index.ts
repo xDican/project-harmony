@@ -214,30 +214,6 @@ serve(async (req) => {
           throw new Error(`Error al asignar calendario: ${calDocError.message}`);
         }
 
-        // Copy calendar schedules to doctor_schedules so doctor is bookable immediately
-        const { data: calSchedules } = await supabaseAdmin
-          .from("calendar_schedules")
-          .select("day_of_week, start_time, end_time")
-          .eq("calendar_id", calendarId);
-
-        if (calSchedules && calSchedules.length > 0) {
-          const doctorSchedules = calSchedules.map((cs: any) => ({
-            doctor_id: doctorId,
-            day_of_week: cs.day_of_week,
-            start_time: cs.start_time,
-            end_time: cs.end_time,
-            calendar_id: calendarId,
-          }));
-
-          const { error: dsError } = await supabaseAdmin
-            .from("doctor_schedules")
-            .insert(doctorSchedules);
-
-          if (dsError) {
-            console.error("Error copying calendar schedules to doctor_schedules:", dsError);
-            // Non-fatal: doctor is created and linked, schedules can be configured manually
-          }
-        }
       }
     }
 
