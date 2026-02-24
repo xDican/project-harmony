@@ -1,15 +1,18 @@
+import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/MainLayout';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/context/UserContext';
 import { getDoctorById } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
-import { User, Mail, Phone, Stethoscope, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, Stethoscope, Loader2, Pencil } from 'lucide-react';
 import { formatPhoneForDisplay } from '@/lib/utils';
 
 /**
  * PerfilMedico - Profile page for doctors showing their complete information
  */
 export default function PerfilMedico() {
+  const navigate = useNavigate();
   const { user } = useCurrentUser();
 
   const { data: doctor, isLoading } = useQuery({
@@ -76,6 +79,17 @@ export default function PerfilMedico() {
             </div>
           </div>
         </Card>
+
+          <div className="mt-4">
+            <Button
+              onClick={() => navigate('/configuracion/perfil/editar')}
+              className="w-full"
+              variant="outline"
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar perfil
+            </Button>
+          </div>
       </div>
     </MainLayout>
   );

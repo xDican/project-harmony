@@ -207,8 +207,11 @@ serve(async (req) => {
           .from("calendar_doctors")
           .insert({ calendar_id: calendarId, doctor_id: doctorId, is_active: true });
         if (calDocError) {
-          console.error("Error linking doctor to calendar (non-fatal):", calDocError);
-          // Non-fatal: doctor was created, calendar link can be fixed later
+          console.error("Error linking doctor to calendar:", calDocError);
+          // Rollback: delete doctor + auth user
+          await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
+          await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+          throw new Error(`Error al asignar calendario: ${calDocError.message}`);
         }
       }
     }
@@ -265,7 +268,7 @@ serve(async (req) => {
       throw roleInsertError;
     }
 
-    // Also insert into org_members (multi-tenant)
+    // Also insert into org_members (multi-tenant) — CRITICAL for app to work
     if (resolvedOrgId) {
       const { error: orgMemberError } = await supabaseAdmin.from("org_members").insert({
         organization_id: resolvedOrgId,
@@ -277,10 +280,17 @@ serve(async (req) => {
       });
 
       if (orgMemberError) {
-        console.error("Error creating org_member (non-fatal):", orgMemberError);
-        // Non-fatal: the user was created successfully, org_member can be fixed later
-      } else {
-        console.log("org_member created for user:", newUser.user.id, "in org:", resolvedOrgId);
+        console.error("Error creating org_member:", orgMemberError);
+        // Full rollback
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", newUser.user.id);
+        await supabaseAdmin.from("users").delete().eq("id", newUser.user.id);
+        if (doctorId && calendarId) {
+          await supabaseAdmin.from("calendar_doctors").delete().eq("doctor_id", doctorId).eq("calendar_id", calendarId);
+        }
+        if (doctorId) await supabaseAdmin.from("doctors").delete().eq("id", doctorId);
+        if (secretaryId) await supabaseAdmin.from("secretaries").delete().eq("id", secretaryId);
+        await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
+        throw new Error(`Error al crear membresia de organizacion: ${orgMemberError.message}`);
       }
     }
 
