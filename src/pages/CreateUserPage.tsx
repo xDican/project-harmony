@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createUserWithRole, getSpecialties } from "@/lib/api";
+import { getCalendarsByOrganization } from "@/lib/api.supabase";
 import type { Specialty } from "@/types/doctor";
 import type { UserRole } from "@/types/user";
+import type { CalendarEntry } from "@/types/organization";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { formatPhoneInput, formatPhoneForStorage } from "@/lib/utils";
 
@@ -24,26 +26,35 @@ export default function CreateUserPage() {
   const [prefix, setPrefix] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [calendarId, setCalendarId] = useState("");
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [calendars, setCalendars] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSpecialties, setLoadingSpecialties] = useState(false);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load specialties on mount
+  // Load specialties and calendars on mount
   useEffect(() => {
-    async function loadSpecialties() {
+    async function loadData() {
       setLoadingSpecialties(true);
+      setLoadingCalendars(true);
       try {
-        const data = await getSpecialties();
-        setSpecialties(data);
+        const [specialtiesData, calendarsData] = await Promise.all([
+          getSpecialties(),
+          getCalendarsByOrganization(),
+        ]);
+        setSpecialties(specialtiesData);
+        setCalendars(calendarsData);
       } catch (err) {
-        console.error("Error loading specialties:", err);
+        console.error("Error loading form data:", err);
       } finally {
         setLoadingSpecialties(false);
+        setLoadingCalendars(false);
       }
     }
-    loadSpecialties();
+    loadData();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,6 +112,7 @@ export default function CreateUserPage() {
         fullName: (role === "doctor" || role === "secretary") ? fullName.trim() : undefined,
         phone: (role === "doctor" || role === "secretary") ? formatPhoneForStorage(phone) : undefined,
         prefix: role === "doctor" ? prefix : undefined,
+        calendarId: role === "doctor" && calendarId ? calendarId : undefined,
       });
 
       setSuccess("Usuario creado exitosamente");
@@ -113,6 +125,7 @@ export default function CreateUserPage() {
       setPrefix("");
       setFullName("");
       setPhone("");
+      setCalendarId("");
 
       // Redirect after 1.5 seconds
       setTimeout(() => {
@@ -187,6 +200,7 @@ export default function CreateUserPage() {
                       setPrefix("");
                       setFullName("");
                       setPhone("");
+                      setCalendarId("");
                     }
                   }}
                   disabled={loading}
@@ -281,6 +295,22 @@ export default function CreateUserPage() {
                         {specialties.map((specialty) => (
                           <SelectItem key={specialty.id} value={specialty.id}>
                             {specialty.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="calendar">Calendario</Label>
+                    <Select value={calendarId} onValueChange={setCalendarId} disabled={loading || loadingCalendars}>
+                      <SelectTrigger id="calendar">
+                        <SelectValue placeholder={loadingCalendars ? "Cargando..." : "Selecciona un calendario (opcional)"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {calendars.map((cal) => (
+                          <SelectItem key={cal.id} value={cal.id}>
+                            {cal.name}{cal.clinicName ? ` — ${cal.clinicName}` : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -106,6 +106,7 @@ serve(async (req) => {
       fullName: z.string().min(2, "Name too short").max(100, "Name too long"),
       phone: z.string().regex(/^[\d\s\-+()]+$/, "Invalid phone format").max(20, "Phone too long"),
       prefix: z.string().max(20, "Prefix too long"),
+      calendarId: z.string().uuid("Invalid calendar ID format").optional(),
     });
 
     const secretaryUserSchema = baseUserSchema.extend({
@@ -145,7 +146,7 @@ serve(async (req) => {
       );
     }
 
-    const { email, password, role, specialtyId, fullName, phone, prefix, organizationId } = validationResult.data as {
+    const { email, password, role, specialtyId, fullName, phone, prefix, organizationId, calendarId } = validationResult.data as {
       email: string;
       password: string;
       role: string;
@@ -154,6 +155,7 @@ serve(async (req) => {
       phone?: string;
       prefix?: string;
       organizationId?: string;
+      calendarId?: string;
     };
 
     // Resolve org: use provided orgId, or fallback to caller's org
@@ -198,6 +200,17 @@ serve(async (req) => {
       }
 
       doctorId = doctorData.id;
+
+      // If a calendarId was provided, link the doctor to the calendar
+      if (calendarId) {
+        const { error: calDocError } = await supabaseAdmin
+          .from("calendar_doctors")
+          .insert({ calendar_id: calendarId, doctor_id: doctorId, is_active: true });
+        if (calDocError) {
+          console.error("Error linking doctor to calendar (non-fatal):", calDocError);
+          // Non-fatal: doctor was created, calendar link can be fixed later
+        }
+      }
     }
 
     // If role is secretary, create the secretary record
