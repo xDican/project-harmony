@@ -77,6 +77,16 @@ export default function CreateUserPage() {
       return;
     }
 
+    if (role === "secretary" && !fullName) {
+      setError("El nombre es obligatorio para el rol de secretaria");
+      return;
+    }
+
+    if (role === "secretary" && !phone) {
+      setError("El teléfono es obligatorio para el rol de secretaria");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -88,8 +98,8 @@ export default function CreateUserPage() {
         password,
         role,
         specialtyId: role === "doctor" ? specialtyId : undefined,
-        fullName: formattedName,
-        phone: role === "doctor" ? formatPhoneForStorage(phone) : undefined,
+        fullName: (role === "doctor" || role === "secretary") ? fullName.trim() : undefined,
+        phone: (role === "doctor" || role === "secretary") ? formatPhoneForStorage(phone) : undefined,
         prefix: role === "doctor" ? prefix : undefined,
       });
 
@@ -185,12 +195,40 @@ export default function CreateUserPage() {
                     <SelectValue placeholder="Selecciona un rol" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">Propietario</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
                     <SelectItem value="secretary">Secretaria</SelectItem>
                     <SelectItem value="doctor">Doctor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {(role === "secretary") && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Nombre completo *</Label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Ana López"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Teléfono *</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                      placeholder="1234-5678"
+                      maxLength={9}
+                      disabled={loading}
+                    />
+                  </div>
+                </>
+              )}
 
               {role === "doctor" && (
                 <>
@@ -201,8 +239,9 @@ export default function CreateUserPage() {
                         <SelectValue placeholder="Selecciona un prefijo" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="el Dr.">el Dr.</SelectItem>
-                        <SelectItem value="la Dra.">la Dra.</SelectItem>
+                        <SelectItem value="Dr.">Dr.</SelectItem>
+                        <SelectItem value="Dra.">Dra.</SelectItem>
+                        <SelectItem value="Lic.">Lic.</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
