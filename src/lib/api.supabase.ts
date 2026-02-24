@@ -414,7 +414,20 @@ export async function getAvailableSlots(params: {
 // --------------------------
 export async function searchPatients(query: string, doctorId?: string): Promise<Patient[]> {
   const orgId = await getActiveOrganizationId();
-  // Busca por name o phone (simple LIKE)
+
+  // When filtering by doctor, resolve patient IDs via doctor_patients junction
+  // to catch patients shared between doctors (same phone, different doctor_id owner)
+  let patientIds: string[] | null = null;
+  if (doctorId) {
+    const { data: dpRows, error: dpError } = await supabase
+      .from("doctor_patients")
+      .select("patient_id")
+      .eq("doctor_id", doctorId);
+    if (dpError) throw dpError;
+    patientIds = (dpRows ?? []).map((r: any) => r.patient_id as string);
+    if (patientIds.length === 0) return [];
+  }
+
   let q = supabase
     .from("patients")
     .select("*")
@@ -422,7 +435,7 @@ export async function searchPatients(query: string, doctorId?: string): Promise<
     .order("name", { ascending: true });
 
   if (orgId) q = q.eq("organization_id", orgId);
-  if (doctorId) q = q.eq("doctor_id", doctorId);
+  if (patientIds) q = q.in("id", patientIds);
 
   const { data, error } = await q;
 
@@ -446,9 +459,23 @@ export async function searchPatients(query: string, doctorId?: string): Promise<
 // --------------------------
 export async function getAllPatients(doctorId?: string): Promise<Patient[]> {
   const orgId = await getActiveOrganizationId();
+
+  // When filtering by doctor, resolve patient IDs via doctor_patients junction
+  // to catch patients shared between doctors (same phone, different doctor_id owner)
+  let patientIds: string[] | null = null;
+  if (doctorId) {
+    const { data: dpRows, error: dpError } = await supabase
+      .from("doctor_patients")
+      .select("patient_id")
+      .eq("doctor_id", doctorId);
+    if (dpError) throw dpError;
+    patientIds = (dpRows ?? []).map((r: any) => r.patient_id as string);
+    if (patientIds.length === 0) return [];
+  }
+
   let query = supabase.from("patients").select("*").order("name", { ascending: true });
   if (orgId) query = query.eq("organization_id", orgId);
-  if (doctorId) query = query.eq("doctor_id", doctorId);
+  if (patientIds) query = query.in("id", patientIds);
   const { data, error } = await query;
 
   if (error) {
