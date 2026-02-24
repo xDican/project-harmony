@@ -311,7 +311,7 @@ export default function NuevaCita() {
     try {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
       
-      await createAppointment({
+      const result = await createAppointment({
         doctorId: selectedDoctor.id,
         patientId: selectedPatient.id,
         date: dateString,
@@ -332,6 +332,11 @@ export default function NuevaCita() {
             <p><strong>Fecha:</strong> {displayDate}</p>
             <p><strong>Hora:</strong> {selectedSlot}</p>
             <p><strong>Duración:</strong> {displayDuration}</p>
+            {!result.whatsappSent && (
+              <p className="text-muted-foreground text-xs mt-1">
+                WhatsApp no enviado{result.whatsappError ? `: ${result.whatsappError}` : ': no hay línea configurada'}.
+              </p>
+            )}
           </div>
         ),
       });

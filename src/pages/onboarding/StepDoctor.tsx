@@ -17,14 +17,13 @@ import { getOnboardingStatus, setupDoctor } from '@/lib/api.supabase';
 import { supabase } from '@/lib/supabaseClient';
 import { useCurrentUser } from '@/context/UserContext';
 
-const PREFIXES = ['Dr.', 'Dra.', 'Lic.', 'Mtro.', 'Mtra.', 'Otro'];
+const PREFIXES = ['Dr.', 'Dra.', 'Lic.'];
 
 export default function StepDoctor() {
   const navigate = useNavigate();
   const { loading: userLoading } = useCurrentUser();
   const [name, setName] = useState('');
   const [prefix, setPrefix] = useState('Dr.');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -63,7 +62,7 @@ export default function StepDoctor() {
 
     setLoading(true);
     try {
-      await setupDoctor({ name: name.trim(), prefix, phone: phone.trim() || undefined });
+      await setupDoctor({ name: name.trim(), prefix });
       navigate('/onboarding/schedule');
     } catch (err: any) {
       setError(err.message || 'Error al guardar el perfil. Intenta de nuevo.');
@@ -142,18 +141,6 @@ export default function StepDoctor() {
             <p className="text-xs text-muted-foreground">
               El email es el de tu cuenta y no se puede cambiar aquí.
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="phone">Teléfono (opcional)</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Ej: +52 55 1234 5678"
-              disabled={loading}
-            />
           </div>
 
           {error && (

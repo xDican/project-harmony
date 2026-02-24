@@ -92,6 +92,10 @@ export default function MainLayout({
     // Secretary
     if (isSecretary) {
       items.push({
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
+      }, {
         to: '/agenda-secretaria',
         label: 'Agenda de Hoy',
         icon: Calendar
@@ -103,10 +107,6 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
-      }, {
-        to: '/agenda-semanal',
-        label: 'Agenda Semanal',
-        icon: CalendarDays
       });
     }
 
@@ -131,9 +131,13 @@ export default function MainLayout({
       });
     }
 
-    // Admin (not in doctor view): Agenda, Nueva Cita, Pacientes, Agenda Semanal + Propietario submenu
+    // Admin (not in doctor view): Agenda Semanal primero, Agenda de Hoy, Nueva Cita, Pacientes
     if (isAdmin && !(isAdminDoctor && adminView === 'doctor')) {
       items.push({
+        to: '/agenda-semanal',
+        label: 'Agenda Semanal',
+        icon: CalendarDays
+      }, {
         to: '/agenda-secretaria',
         label: 'Agenda de Hoy',
         icon: Calendar
@@ -145,10 +149,6 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
-      }, {
-        to: '/agenda-semanal',
-        label: 'Agenda Semanal',
-        icon: CalendarDays
       });
     }
 

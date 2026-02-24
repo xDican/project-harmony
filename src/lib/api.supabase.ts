@@ -328,7 +328,7 @@ export async function createAppointment(input: {
   notes?: string;
   status?: AppointmentStatus;
   durationMinutes?: number;
-}): Promise<Appointment> {
+}): Promise<{ appointment: Appointment; whatsappSent: boolean; whatsappError?: string }> {
   try {
     // Resolve organization context for the edge function
     const orgId = await getActiveOrganizationId();
@@ -360,14 +360,17 @@ export async function createAppointment(input: {
       throw new Error('Respuesta inválida del servidor');
     }
 
-    // Log WhatsApp status for debugging
     if (data.whatsappSent) {
       console.log('[createAppointment] WhatsApp enviado:', data.twilioSid);
     } else if (data.whatsappError) {
       console.warn('[createAppointment] WhatsApp no enviado:', data.whatsappError);
     }
 
-    return mapAppointment(data.appointment);
+    return {
+      appointment: mapAppointment(data.appointment),
+      whatsappSent: !!data.whatsappSent,
+      whatsappError: data.whatsappError ?? undefined,
+    };
   } catch (error: any) {
     console.error('Error createAppointment:', error);
     throw error;
@@ -976,15 +979,17 @@ export async function updateUser(
     specialtyId?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  // First, get the user to check their role and related IDs
+  // Get role and related IDs from org_members (users table has no role column)
+  const orgId = await getActiveOrganizationId();
   const { data: userData, error: userError } = await supabase
-    .from('users')
+    .from('org_members')
     .select('role, doctor_id, secretary_id')
-    .eq('id', userId)
+    .eq('user_id', userId)
+    .eq('organization_id', orgId ?? '')
     .maybeSingle();
 
   if (userError || !userData) {
-    console.error('[updateUser] Error fetching user:', userError);
+    console.error('[updateUser] Error fetching user from org_members:', userError);
     return { success: false, error: 'Usuario no encontrado' };
   }
 

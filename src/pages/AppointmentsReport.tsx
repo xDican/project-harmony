@@ -35,11 +35,13 @@ export default function AppointmentsReport() {
   
   // Estados para filtros
   const [fromDate, setFromDate] = useState<Date>(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 7);
-    return date;
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [toDate, setToDate] = useState<Date>(() => new Date());
+  const [toDate, setToDate] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  });
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
@@ -296,10 +298,10 @@ export default function AppointmentsReport() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="pending">Pendiente</SelectItem>
-                      <SelectItem value="confirmed">Confirmada</SelectItem>
-                      <SelectItem value="completed">Completada</SelectItem>
-                      <SelectItem value="canceled">Cancelada</SelectItem>
+                      <SelectItem value="agendada">Agendada</SelectItem>
+                      <SelectItem value="confirmada">Confirmada</SelectItem>
+                      <SelectItem value="cancelada">Cancelada</SelectItem>
+                      <SelectItem value="reagendar">Por reagendar</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

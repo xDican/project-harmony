@@ -21,7 +21,7 @@ const RequestSchema = z.object({
 // Canonical template mappings — same approved templates used across all WABAs connected through this App.
 // Whenever a brand new line has no prior mappings to copy, these are applied immediately (is_active=true).
 const CANONICAL_TEMPLATE_MAPPINGS = [
-  { logical_type: "confirmation",       template_name: "notificacion_creacion_cita_utility_hx0e54700971a4adf2d4f4fcb8f021beff", template_language: "es_MX" },
+  { logical_type: "confirmation",       template_name: "notificacion_creacion_cita_utility_hx0e54700971a4adf2d4f4fcb8f021beff_", template_language: "es_MX" },
   { logical_type: "reminder_24h",       template_name: "notificacion_24h_antes_utility_hx9f009d3fb6845f75c34a1868b98e64a6",    template_language: "es_MX" },
   { logical_type: "reschedule_doctor",  template_name: "notificacion_reagenda_medico_utility_hx95828e73090fb5a66e3157fe33ac956d", template_language: "es_MX" },
   { logical_type: "patient_confirmed",  template_name: "confirmacion_cita_utility_hx7ef2d47944d28ef80f84a9bacb89d587",          template_language: "es_MX" },
