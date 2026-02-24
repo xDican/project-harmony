@@ -88,6 +88,11 @@ export default function CreateUserPage() {
       return;
     }
 
+    if (role === "doctor" && !calendarId) {
+      setError("El calendario es obligatorio para el rol de doctor");
+      return;
+    }
+
     if (role === "secretary" && !fullName) {
       setError("El nombre es obligatorio para el rol de secretaria");
       return;
@@ -305,7 +310,7 @@ export default function CreateUserPage() {
                     <Label htmlFor="calendar">Calendario</Label>
                     <Select value={calendarId} onValueChange={setCalendarId} disabled={loading || loadingCalendars}>
                       <SelectTrigger id="calendar">
-                        <SelectValue placeholder={loadingCalendars ? "Cargando..." : "Selecciona un calendario (opcional)"} />
+                        <SelectValue placeholder={loadingCalendars ? "Cargando..." : "Selecciona un calendario"} />
                       </SelectTrigger>
                       <SelectContent>
                         {calendars.map((cal) => (
