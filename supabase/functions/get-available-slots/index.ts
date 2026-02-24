@@ -53,10 +53,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2) Environment variables
+    // 2) Environment variables - use service role to bypass RLS (co-work needs cross-doctor visibility)
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    if (!supabaseUrl || !supabaseAnonKey) {
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseServiceKey) {
       console.error("[get-available-slots] Missing Supabase env vars");
       return new Response(JSON.stringify({ error: "Supabase env vars not configured" }), {
         status: 500,
@@ -64,10 +64,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3) Create Supabase client with user's JWT
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // 3) Create Supabase client with service role (verify_jwt at gateway handles auth)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 4) Parse and validate request body with Zod
     const rawBody = await req.json();
