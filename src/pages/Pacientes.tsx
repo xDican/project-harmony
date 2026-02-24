@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { getAllPatients, createPatient } from '@/lib/api';
+import { getAllPatients, createPatient, getDoctors } from '@/lib/api';
 import type { Patient } from '@/types/patient';
+import type { Doctor } from '@/types/doctor';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCurrentUser } from '@/context/UserContext';
 import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
@@ -30,17 +32,33 @@ export default function Pacientes() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Doctor filter (only used by secretary/admin)
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [filterDoctorId, setFilterDoctorId] = useState<string>('');
+
   // Create patient dialog state
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [newPatientEmail, setNewPatientEmail] = useState('');
   const [newPatientNotes, setNewPatientNotes] = useState('');
+  const [newPatientDoctorId, setNewPatientDoctorId] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
 
-  // Load patients on mount
+  // Load doctors list for secretary/admin
   useEffect(() => {
-    getAllPatients()
+    if (user?.role !== 'doctor') {
+      getDoctors().then(setDoctors).catch(console.error);
+    }
+  }, [user?.role]);
+
+  // Load patients — doctors see only their own; secretary/admin use filter
+  useEffect(() => {
+    setIsLoading(true);
+    const doctorId = user?.role === 'doctor'
+      ? (user.doctorId ?? undefined)
+      : (filterDoctorId || undefined);
+    getAllPatients(doctorId)
       .then(data => {
         setPatients(data);
       })
@@ -50,7 +68,7 @@ export default function Pacientes() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, []);
+  }, [user?.role, user?.doctorId, filterDoctorId]);
 
   // Filter patients based on search query
   const filteredPatients = useMemo(() => {
@@ -88,6 +106,19 @@ export default function Pacientes() {
       return;
     }
 
+    const assignedDoctorId = user?.role === 'doctor'
+      ? (user.doctorId ?? undefined)
+      : (newPatientDoctorId || undefined);
+
+    if (user?.role !== 'doctor' && !assignedDoctorId) {
+      toast({
+        variant: 'destructive',
+        title: 'Médico requerido',
+        description: 'Debes seleccionar un médico para asignar el paciente',
+      });
+      return;
+    }
+
     setIsCreating(true);
     try {
       await createPatient({
@@ -95,7 +126,7 @@ export default function Pacientes() {
         phone: formatPhoneForStorage(newPatientPhone.trim()),
         email: newPatientEmail.trim() || undefined,
         notes: newPatientNotes.trim() || undefined,
-        doctorId: user?.doctorId ?? undefined,
+        doctorId: assignedDoctorId,
       });
 
       toast({
@@ -103,8 +134,11 @@ export default function Pacientes() {
         description: 'El paciente ha sido creado exitosamente',
       });
 
-      // Refresh patients list
-      const data = await getAllPatients();
+      // Refresh patients list keeping current filter
+      const currentFilterDoctorId = user?.role === 'doctor'
+        ? (user.doctorId ?? undefined)
+        : (filterDoctorId || undefined);
+      const data = await getAllPatients(currentFilterDoctorId);
       setPatients(data);
 
       // Close dialog and reset form
@@ -113,6 +147,7 @@ export default function Pacientes() {
       setNewPatientPhone('');
       setNewPatientEmail('');
       setNewPatientNotes('');
+      setNewPatientDoctorId('');
     } catch (error) {
       console.error('Error creating patient:', error);
       toast({
@@ -147,6 +182,31 @@ export default function Pacientes() {
         </div>
 
         <div>
+            {/* Doctor filter (secretary/admin only) */}
+            {user?.role !== 'doctor' && doctors.length > 0 && (
+              <div className="mb-4">
+                <Select
+                  value={filterDoctorId || 'all'}
+                  onValueChange={(val) => {
+                    setFilterDoctorId(val === 'all' ? '' : val);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los médicos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los médicos</SelectItem>
+                    {doctors.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.prefix ? `${d.prefix} ${d.name}` : d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Search Input */}
             <div className="mb-6">
               <div className="relative">
@@ -313,6 +373,23 @@ export default function Pacientes() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              {user?.role !== 'doctor' && (
+                <div className="space-y-2">
+                  <Label>Médico *</Label>
+                  <Select value={newPatientDoctorId} onValueChange={setNewPatientDoctorId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un médico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.prefix ? `${d.prefix} ${d.name}` : d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="name">Nombre *</Label>
                 <Input
