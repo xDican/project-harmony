@@ -1445,6 +1445,82 @@ export async function updateCalendar(
 }
 
 // --------------------------
+// Calendar Schedules
+// --------------------------
+
+export async function getCalendarSchedules(calendarId: string): Promise<WeekSchedule> {
+  const { data, error } = await supabase
+    .from("calendar_schedules")
+    .select("*")
+    .eq("calendar_id", calendarId)
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    console.error("Error getCalendarSchedules:", error);
+    throw error;
+  }
+
+  const weekSchedule: WeekSchedule = {
+    sunday: [],
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+  };
+
+  (data || []).forEach((row: any) => {
+    const dayKey = DAY_MAP[row.day_of_week];
+    if (dayKey) {
+      weekSchedule[dayKey].push({
+        id: row.id,
+        start_time: row.start_time.substring(0, 5),
+        end_time: row.end_time.substring(0, 5),
+      });
+    }
+  });
+
+  return weekSchedule;
+}
+
+export async function updateCalendarSchedules(
+  calendarId: string,
+  weekSchedule: WeekSchedule
+): Promise<void> {
+  const schedules = flattenWeekSchedule(weekSchedule);
+
+  const { error: deleteError } = await supabase
+    .from("calendar_schedules")
+    .delete()
+    .eq("calendar_id", calendarId);
+
+  if (deleteError) {
+    console.error("[updateCalendarSchedules] Delete error:", deleteError);
+    throw deleteError;
+  }
+
+  if (schedules.length === 0) return;
+
+  const { error: insertError } = await supabase
+    .from("calendar_schedules")
+    .insert(
+      schedules.map((s) => ({
+        calendar_id: calendarId,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+      }))
+    );
+
+  if (insertError) {
+    console.error("[updateCalendarSchedules] Insert error:", insertError);
+    throw insertError;
+  }
+}
+
+// --------------------------
 // WhatsApp Lines
 // --------------------------
 
