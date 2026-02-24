@@ -10,8 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { getUserById, updateUser, getSpecialties } from '@/lib/api';
+import { getCalendarsByOrganization } from '@/lib/api.supabase';
 import type { Specialty } from '@/types/doctor';
 import type { UserWithRelations } from '@/lib/api';
+import type { CalendarEntry } from '@/types/organization';
+import { supabase } from '@/lib/supabaseClient';
 import { Loader2, ArrowLeft, Calendar } from 'lucide-react';
 import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 
@@ -29,7 +32,11 @@ export default function EditUserPage() {
   const [phone, setPhone] = useState('');
   const [specialtyId, setSpecialtyId] = useState('');
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
-  
+  const [calendarId, setCalendarId] = useState('');
+  const [currentCalendarId, setCurrentCalendarId] = useState('');
+  const [calendars, setCalendars] = useState<CalendarEntry[]>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [loadingSpecialties, setLoadingSpecialties] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,9 +54,10 @@ export default function EditUserPage() {
 
       try {
         setLoading(true);
-        const [userData, specialtiesData] = await Promise.all([
+        const [userData, specialtiesData, calendarsData] = await Promise.all([
           getUserById(userId),
           getSpecialties(),
+          getCalendarsByOrganization(),
         ]);
 
         if (!userData) {
@@ -60,12 +68,24 @@ export default function EditUserPage() {
 
         setUser(userData);
         setSpecialties(specialtiesData);
+        setCalendars(calendarsData);
 
         // Pre-fill form based on role
         if (userData.role === 'doctor' && userData.doctor) {
           setFullName(userData.doctor.name || '');
           setPhone(formatPhoneForDisplay(userData.doctor.phone) || '');
           setSpecialtyId(userData.doctor.specialtyId || '');
+          // Load current calendar assignment
+          const { data: cdRow } = await supabase
+            .from('calendar_doctors')
+            .select('calendar_id')
+            .eq('doctor_id', userData.doctor.id)
+            .eq('is_active', true)
+            .maybeSingle();
+          if (cdRow?.calendar_id) {
+            setCalendarId(cdRow.calendar_id);
+            setCurrentCalendarId(cdRow.calendar_id);
+          }
         } else if (userData.role === 'secretary' && userData.secretary) {
           setFullName(userData.secretary.name || '');
           setPhone(formatPhoneForDisplay(userData.secretary.phone) || '');
@@ -74,6 +94,17 @@ export default function EditUserPage() {
           setFullName(userData.doctor.name || '');
           setPhone(formatPhoneForDisplay(userData.doctor.phone) || '');
           setSpecialtyId(userData.doctor.specialtyId || '');
+          // Load current calendar assignment
+          const { data: cdRow } = await supabase
+            .from('calendar_doctors')
+            .select('calendar_id')
+            .eq('doctor_id', userData.doctor.id)
+            .eq('is_active', true)
+            .maybeSingle();
+          if (cdRow?.calendar_id) {
+            setCalendarId(cdRow.calendar_id);
+            setCurrentCalendarId(cdRow.calendar_id);
+          }
         }
       } catch (err: any) {
         console.error('Error loading user:', err);
@@ -130,6 +161,25 @@ export default function EditUserPage() {
       });
 
       if (result.success) {
+        // Update calendar assignment if changed
+        const doctorId = user.doctor?.id;
+        if (isDoctorProfile && doctorId && calendarId !== currentCalendarId) {
+          // Deactivate previous assignment
+          await supabase
+            .from('calendar_doctors')
+            .update({ is_active: false })
+            .eq('doctor_id', doctorId)
+            .eq('is_active', true);
+
+          // Insert new assignment if a calendar is selected
+          if (calendarId) {
+            await supabase
+              .from('calendar_doctors')
+              .insert({ calendar_id: calendarId, doctor_id: doctorId, is_active: true });
+          }
+          setCurrentCalendarId(calendarId);
+        }
+
         setSuccess(isOwnProfile ? 'Perfil actualizado exitosamente' : 'Usuario actualizado exitosamente');
         setTimeout(() => {
           navigate(backPath);
@@ -295,15 +345,37 @@ export default function EditUserPage() {
                       </Select>
                     </div>
 
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => navigate(`/admin/doctors/${user.doctor?.id}/schedule`)}
-                      className="w-full"
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      Configurar horarios
-                    </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="calendar">Calendario</Label>
+                      <Select
+                        value={calendarId}
+                        onValueChange={setCalendarId}
+                        disabled={saving || loadingCalendars}
+                      >
+                        <SelectTrigger id="calendar">
+                          <SelectValue placeholder={loadingCalendars ? 'Cargando...' : 'Selecciona un calendario'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {calendars.map((cal) => (
+                            <SelectItem key={cal.id} value={cal.id}>
+                              {cal.name}{cal.clinicName ? ` — ${cal.clinicName}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {calendarId && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => navigate(`/admin/calendars/${calendarId}/schedule`)}
+                        className="w-full"
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Configurar horarios
+                      </Button>
+                    )}
                   </>
                 )}
               </div>

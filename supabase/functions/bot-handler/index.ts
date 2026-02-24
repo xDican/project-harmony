@@ -1564,11 +1564,41 @@ async function getAvailableSlotsForDate(
 
   if (!schedules || schedules.length === 0) return [];
 
-  // Fetch existing appointments for this date (exclude cancelled)
+  // Fetch existing appointments — co-work: check ALL doctors on the same calendar
+  let appointmentDoctorIds: string[] = [doctorId];
+
+  if (calendarId) {
+    const { data: calDocRows } = await supabase
+      .from('calendar_doctors')
+      .select('doctor_id')
+      .eq('calendar_id', calendarId)
+      .eq('is_active', true);
+    if (calDocRows && calDocRows.length > 0) {
+      appointmentDoctorIds = [...new Set(calDocRows.map((r: any) => r.doctor_id))];
+    }
+  } else {
+    const { data: calDocs } = await supabase
+      .from('calendar_doctors')
+      .select('calendar_id')
+      .eq('doctor_id', doctorId)
+      .eq('is_active', true);
+    if (calDocs && calDocs.length > 0) {
+      const calIds = calDocs.map((cd: any) => cd.calendar_id);
+      const { data: allCalDocs } = await supabase
+        .from('calendar_doctors')
+        .select('doctor_id')
+        .in('calendar_id', calIds)
+        .eq('is_active', true);
+      if (allCalDocs && allCalDocs.length > 0) {
+        appointmentDoctorIds = [...new Set(allCalDocs.map((r: any) => r.doctor_id))];
+      }
+    }
+  }
+
   const { data: appointments } = await supabase
     .from('appointments')
     .select('time, duration_minutes')
-    .eq('doctor_id', doctorId)
+    .in('doctor_id', appointmentDoctorIds)
     .eq('date', date)
     .not('status', 'in', '("cancelled","canceled","cancelada")');
 

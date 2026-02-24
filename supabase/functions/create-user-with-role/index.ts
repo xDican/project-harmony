@@ -213,6 +213,7 @@ serve(async (req) => {
           await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
           throw new Error(`Error al asignar calendario: ${calDocError.message}`);
         }
+
       }
     }
 

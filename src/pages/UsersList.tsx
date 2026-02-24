@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getAllUsers, type UserWithRelations } from '@/lib/api';
-import { Loader2, Search, Plus, Edit, Calendar, User, Stethoscope } from 'lucide-react';
+import { Loader2, Search, Plus, Edit, User, Stethoscope } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatPhoneForDisplay } from '@/lib/utils';
 
@@ -212,11 +212,6 @@ export default function UsersList() {
                                   key={user.id}
                                   user={user}
                                   onEdit={() => navigate(`/admin/users/${user.id}/edit`)}
-                                  onSchedule={
-                                    user.role === 'doctor' && user.doctor
-                                      ? () => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)
-                                      : undefined
-                                  }
                                 />
                               ))}
                               {totalPages > 1 && (
@@ -312,16 +307,6 @@ export default function UsersList() {
                                     <Edit className="h-4 w-4 mr-1" />
                                     Editar
                                   </Button>
-                                  {user.role === 'doctor' && user.doctor && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => navigate(`/admin/doctors/${user.doctor!.id}/schedule`)}
-                                    >
-                                      <Calendar className="h-4 w-4 mr-1" />
-                                      Horarios
-                                    </Button>
-                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -372,10 +357,9 @@ export default function UsersList() {
 interface UserCardProps {
   user: UserWithRelations;
   onEdit: () => void;
-  onSchedule?: () => void;
 }
 
-function UserCard({ user, onEdit, onSchedule }: UserCardProps) {
+function UserCard({ user, onEdit }: UserCardProps) {
   return (
     <div className="border-b last:border-b-0 py-3 px-4 hover:bg-muted/30 transition-colors">
       {/* Line 1: Name and Role Badge */}
@@ -416,17 +400,6 @@ function UserCard({ user, onEdit, onSchedule }: UserCardProps) {
           <Edit className="h-4 w-4 mr-1" />
           Editar
         </Button>
-        {onSchedule && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSchedule}
-            className="flex-1"
-          >
-            <Calendar className="h-4 w-4 mr-1" />
-            Horarios
-          </Button>
-        )}
       </div>
     </div>
   );

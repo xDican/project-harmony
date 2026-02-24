@@ -268,84 +268,131 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 6) Query A: Obtener schedules del doctor (primary source: doctor_schedules)
-    let scheduleQuery = supabase
-      .from("doctor_schedules")
-      .select("day_of_week, start_time, end_time")
-      .eq("doctor_id", doctorId);
+    // 6) Query A: Fetch schedules — primary: calendar_schedules, fallback: doctor_schedules
+    let allSchedules: ScheduleRow[] = [];
 
     if (calendarId) {
-      scheduleQuery = scheduleQuery.eq("calendar_id", calendarId);
+      // Specific calendar requested
+      const { data, error } = await supabase
+        .from("calendar_schedules")
+        .select("day_of_week, start_time, end_time")
+        .eq("calendar_id", calendarId);
+
+      if (error) {
+        console.error("[get-available-days] Error fetching calendar_schedules:", error);
+        return json(500, {
+          ok: false,
+          error: "Error al obtener horarios del calendario",
+          details: error.message,
+          build: BUILD,
+        });
+      }
+      allSchedules = (data || []) as ScheduleRow[];
+    } else {
+      // No calendarId — aggregate from all active calendars for this doctor
+      const { data: calDoctors, error: cdError } = await supabase
+        .from("calendar_doctors")
+        .select("calendar_id")
+        .eq("doctor_id", doctorId)
+        .eq("is_active", true);
+
+      if (cdError) {
+        console.error("[get-available-days] Error fetching calendar_doctors:", cdError);
+      }
+
+      if (calDoctors && calDoctors.length > 0) {
+        const calendarIds = calDoctors.map((cd: any) => cd.calendar_id);
+        const { data, error } = await supabase
+          .from("calendar_schedules")
+          .select("day_of_week, start_time, end_time")
+          .in("calendar_id", calendarIds);
+
+        if (error) {
+          console.error("[get-available-days] Error fetching calendar_schedules:", error);
+        } else {
+          allSchedules = (data || []) as ScheduleRow[];
+        }
+      }
     }
 
-    const { data: schedules, error: scheduleError } = await scheduleQuery;
+    // Fallback to doctor_schedules if no calendar_schedules found
+    if (allSchedules.length === 0) {
+      console.log("[get-available-days] No calendar_schedules, falling back to doctor_schedules");
+      const { data, error } = await supabase
+        .from("doctor_schedules")
+        .select("day_of_week, start_time, end_time")
+        .eq("doctor_id", doctorId);
 
-    if (scheduleError) {
-      console.error(
-        "[get-available-days] Error fetching schedules:",
-        scheduleError
-      );
-      return json(500, {
-        ok: false,
-        error: "Error al obtener horarios del doctor",
-        details: scheduleError.message,
-        build: BUILD,
-      });
+      if (error) {
+        console.error("[get-available-days] Error fetching doctor_schedules:", error);
+        return json(500, {
+          ok: false,
+          error: "Error al obtener horarios del doctor",
+          details: error.message,
+          build: BUILD,
+        });
+      }
+      allSchedules = (data || []) as ScheduleRow[];
     }
 
-    // Crear mapa de schedules por día de la semana
-    const scheduleMap = new Map<number, ScheduleRow>();
-    for (const schedule of schedules || []) {
-      scheduleMap.set(schedule.day_of_week, schedule as ScheduleRow);
+    // Create schedule map: day_of_week -> ScheduleRow[] (supports multi-calendar)
+    const scheduleMap = new Map<number, ScheduleRow[]>();
+    for (const schedule of allSchedules) {
+      if (!scheduleMap.has(schedule.day_of_week)) {
+        scheduleMap.set(schedule.day_of_week, []);
+      }
+      scheduleMap.get(schedule.day_of_week)!.push(schedule);
     }
 
     if (debug) {
       console.log(
         "[get-available-days] Schedules loaded:",
-        schedules?.length ?? 0
+        allSchedules.length
       );
     }
 
-    // 6b) SHADOW: also fetch from calendar_schedules (non-blocking)
-    let shadowScheduleMap: Map<number, ScheduleRow> | null = null;
-    try {
-      let resolvedCalendarId = calendarId;
-      if (!resolvedCalendarId) {
-        const { data: cdRow } = await supabase
+    // 7) Query B: Obtener citas — co-work: check ALL doctors on the same calendar(s)
+    let appointmentDoctorIds: string[] = [doctorId];
+
+    if (calendarId) {
+      // Specific calendar: get all doctors on this calendar
+      const { data: calDocRows } = await supabase
+        .from("calendar_doctors")
+        .select("doctor_id")
+        .eq("calendar_id", calendarId)
+        .eq("is_active", true);
+      if (calDocRows && calDocRows.length > 0) {
+        appointmentDoctorIds = [...new Set(calDocRows.map((r: any) => r.doctor_id))];
+      }
+    } else if (allSchedules.length > 0) {
+      // No specific calendar — use all calendars the doctor belongs to
+      const { data: calDocs } = await supabase
+        .from("calendar_doctors")
+        .select("calendar_id")
+        .eq("doctor_id", doctorId)
+        .eq("is_active", true);
+
+      if (calDocs && calDocs.length > 0) {
+        const calIds = calDocs.map((cd: any) => cd.calendar_id);
+        const { data: allCalDocs } = await supabase
           .from("calendar_doctors")
-          .select("calendar_id")
-          .eq("doctor_id", doctorId)
-          .eq("is_active", true)
-          .maybeSingle();
-        resolvedCalendarId = cdRow?.calendar_id ?? undefined;
-      }
-      if (resolvedCalendarId) {
-        const { data: calSchedules, error: calScheduleError } = await supabase
-          .from("calendar_schedules")
-          .select("day_of_week, start_time, end_time")
-          .eq("calendar_id", resolvedCalendarId);
-        if (calScheduleError) {
-          console.warn("[get-available-days][shadow] Error fetching calendar_schedules:", calScheduleError);
-        } else {
-          shadowScheduleMap = new Map<number, ScheduleRow>();
-          for (const s of calSchedules ?? []) {
-            shadowScheduleMap.set(s.day_of_week, s as ScheduleRow);
-          }
-          console.log("[get-available-days][shadow] Shadow schedules loaded:", calSchedules?.length ?? 0);
+          .select("doctor_id")
+          .in("calendar_id", calIds)
+          .eq("is_active", true);
+        if (allCalDocs && allCalDocs.length > 0) {
+          appointmentDoctorIds = [...new Set(allCalDocs.map((r: any) => r.doctor_id))];
         }
-      } else {
-        console.warn("[get-available-days][shadow] No calendarId resolved for doctor:", doctorId);
       }
-    } catch (shadowErr) {
-      console.warn("[get-available-days][shadow] Unexpected error:", shadowErr);
     }
 
-    // 7) Query B: Obtener citas del doctor en el mes completo
-    // Usamos el campo `date` igual que get-available-slots (más confiable que appointment_at)
+    if (debug) {
+      console.log("[get-available-days] Co-work doctor IDs:", appointmentDoctorIds.length);
+    }
+
     const { data: appointments, error: appointmentsError } = await supabase
       .from("appointments")
       .select("date, time, duration_minutes, status")
-      .eq("doctor_id", doctorId)
+      .in("doctor_id", appointmentDoctorIds)
       .gte("date", monthStartDate)
       .lt("date", monthEndDate)
       .not("status", "in", `(${CANCELLED_STATUSES.map(s => `"${s}"`).join(",")})`);
@@ -394,10 +441,10 @@ Deno.serve(async (req) => {
     const results: DayResult[] = [];
 
     for (const { date, dow, dt } of daysInMonth) {
-      const schedule = scheduleMap.get(dow);
+      const daySchedules = scheduleMap.get(dow);
 
-      // Verificar si es día de trabajo
-      if (!schedule) {
+      // Verify it's a working day
+      if (!daySchedules || daySchedules.length === 0) {
         results.push({ date, dow, working: false, canFit: false });
         if (debug) {
           console.log(`[get-available-days] ${date} (dow=${dow}): No schedule`);
@@ -405,46 +452,12 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Verificar horario válido (start_time < end_time)
-      const startMinutes = timeToMinutes(schedule.start_time);
-      const endMinutes = timeToMinutes(schedule.end_time);
-
-      if (startMinutes >= endMinutes) {
-        results.push({ date, dow, working: false, canFit: false });
-        if (debug) {
-          console.log(
-            `[get-available-days] ${date} (dow=${dow}): Invalid schedule (start >= end)`
-          );
-        }
-        continue;
-      }
-
-      // Es día de trabajo
       const working = true;
+      let canFit = false;
 
-      // Construir workStart y workEnd como DateTime
-      const workStart = dt.set({
-        hour: Math.floor(startMinutes / 60),
-        minute: startMinutes % 60,
-        second: 0,
-        millisecond: 0,
-      });
-      const workEnd = dt.set({
-        hour: Math.floor(endMinutes / 60),
-        minute: endMinutes % 60,
-        second: 0,
-        millisecond: 0,
-      });
-
-      const workStartMs = workStart.toMillis();
-      const workEndMs = workEnd.toMillis();
-
-      // Obtener citas de este día
+      // Get appointments for this day (shared across all schedule windows)
       const dayAppointments = appointmentsByDate.get(date) || [];
-
-      // Construir intervalos ocupados usando date + time (igual que get-available-slots)
       const occupiedIntervals: Interval[] = dayAppointments.map((apt) => {
-        // Normalizar tiempo a HH:MM y combinar con la fecha
         const normalizedTime = apt.time.substring(0, 5);
         const aptStart = DateTime.fromISO(`${apt.date}T${normalizedTime}:00`, {
           zone: timezone,
@@ -456,75 +469,47 @@ Deno.serve(async (req) => {
         };
       });
 
-      // Calcular gaps
-      const gaps = calculateGaps(workStartMs, workEndMs, occupiedIntervals);
+      // Check each schedule window (may come from different calendars)
+      for (const schedule of daySchedules) {
+        const startMinutes = timeToMinutes(schedule.start_time);
+        const endMinutes = timeToMinutes(schedule.end_time);
 
-      // Verificar si algún gap puede acomodar la duración solicitada
-      const canFit = gaps.some((gap) => gap.durationMinutes >= durationMinutes);
+        if (startMinutes >= endMinutes) continue;
+
+        const workStart = dt.set({
+          hour: Math.floor(startMinutes / 60),
+          minute: startMinutes % 60,
+          second: 0,
+          millisecond: 0,
+        });
+        const workEnd = dt.set({
+          hour: Math.floor(endMinutes / 60),
+          minute: endMinutes % 60,
+          second: 0,
+          millisecond: 0,
+        });
+
+        const gaps = calculateGaps(workStart.toMillis(), workEnd.toMillis(), occupiedIntervals);
+        if (gaps.some((gap) => gap.durationMinutes >= durationMinutes)) {
+          canFit = true;
+          break;
+        }
+      }
 
       results.push({ date, dow, working, canFit });
 
       if (debug) {
+        const schedSummary = daySchedules.map((s) => `${s.start_time}-${s.end_time}`).join(", ");
         console.log(
           `[get-available-days] ${date} (dow=${dow}): ` +
-            `work=${schedule.start_time}-${schedule.end_time}, ` +
+            `schedules=[${schedSummary}], ` +
             `appointments=${dayAppointments.length}, ` +
-            `gaps=${gaps.length} (${gaps.map((g) => Math.floor(g.durationMinutes) + "min").join(", ")}), ` +
             `canFit=${canFit}`
         );
       }
     }
 
-    // 10) SHADOW: compute canFit from calendar_schedules and compare per-day
-    if (shadowScheduleMap !== null) {
-      try {
-        const mismatches: string[] = [];
-        for (const { date, dow, dt } of daysInMonth) {
-          const shadowSchedule = shadowScheduleMap.get(dow);
-          let shadowCanFit = false;
-          let shadowWorking = false;
-
-          if (shadowSchedule) {
-            const startMinutes = timeToMinutes(shadowSchedule.start_time);
-            const endMinutes = timeToMinutes(shadowSchedule.end_time);
-            if (startMinutes < endMinutes) {
-              shadowWorking = true;
-              const workStart = dt.set({ hour: Math.floor(startMinutes / 60), minute: startMinutes % 60, second: 0, millisecond: 0 });
-              const workEnd = dt.set({ hour: Math.floor(endMinutes / 60), minute: endMinutes % 60, second: 0, millisecond: 0 });
-              const dayAppointments = appointmentsByDate.get(date) || [];
-              const occupiedIntervals: Interval[] = dayAppointments.map((apt) => {
-                const normalizedTime = apt.time.substring(0, 5);
-                const aptStart = DateTime.fromISO(`${apt.date}T${normalizedTime}:00`, { zone: timezone });
-                const aptEnd = aptStart.plus({ minutes: apt.duration_minutes ?? 60 });
-                return { startMs: aptStart.toMillis(), endMs: aptEnd.toMillis() };
-              });
-              const gaps = calculateGaps(workStart.toMillis(), workEnd.toMillis(), occupiedIntervals);
-              shadowCanFit = gaps.some((gap) => gap.durationMinutes >= durationMinutes);
-            }
-          }
-
-          const primaryResult = results.find((r) => r.date === date);
-          const primaryCanFit = primaryResult?.canFit ?? false;
-          const primaryWorking = primaryResult?.working ?? false;
-
-          if (shadowWorking !== primaryWorking || shadowCanFit !== primaryCanFit) {
-            mismatches.push(
-              `${date}(dow=${dow}): primary={working:${primaryWorking},canFit:${primaryCanFit}} shadow={working:${shadowWorking},canFit:${shadowCanFit}}`
-            );
-          }
-        }
-
-        if (mismatches.length > 0) {
-          console.warn("[get-available-days][shadow-diff] MISMATCH", { doctorId, month, mismatches });
-        } else {
-          console.log("[get-available-days][shadow] OK - sources match", { doctorId, month });
-        }
-      } catch (shadowCompErr) {
-        console.warn("[get-available-days][shadow] Error computing shadow results:", shadowCompErr);
-      }
-    }
-
-    // 11) Respuesta exitosa
+    // 10) Respuesta exitosa
     console.log(
       `[get-available-days] Completed: ${results.length} days processed`
     );

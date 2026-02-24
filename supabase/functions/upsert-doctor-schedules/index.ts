@@ -296,20 +296,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 9b) Resolve calendarId for dual-write (from request or calendar_doctors lookup)
-    let resolvedCalendarId = calendarId;
-    if (!resolvedCalendarId) {
-      const { data: cdRow } = await supabaseAdmin
-        .from("calendar_doctors")
-        .select("calendar_id")
-        .eq("doctor_id", doctorId)
-        .eq("is_active", true)
-        .maybeSingle();
-      resolvedCalendarId = cdRow?.calendar_id ?? undefined;
-    }
-    console.log("[upsert-doctor-schedules] Resolved calendarId for dual-write:", resolvedCalendarId ?? "none");
-
-    // 10) Borrar horarios anteriores del doctor (primary: doctor_schedules)
+    // 10) Borrar horarios anteriores del doctor (doctor_schedules only)
     const { error: deleteError } = await supabaseAdmin
       .from("doctor_schedules")
       .delete()
@@ -328,27 +315,14 @@ Deno.serve(async (req) => {
 
     console.log("[upsert-doctor-schedules] Old schedules deleted successfully");
 
-    // 10b) DUAL-WRITE: also delete from calendar_schedules (non-blocking)
-    if (resolvedCalendarId) {
-      const { error: calDeleteError } = await supabaseAdmin
-        .from("calendar_schedules")
-        .delete()
-        .eq("calendar_id", resolvedCalendarId);
-      if (calDeleteError) {
-        console.warn("[upsert-doctor-schedules][dual-write] Error deleting calendar_schedules:", calDeleteError);
-      } else {
-        console.log("[upsert-doctor-schedules][dual-write] Old calendar_schedules deleted");
-      }
-    }
-
-    // 11) Insertar nuevos horarios si hay alguno (primary: doctor_schedules)
+    // 11) Insertar nuevos horarios si hay alguno (doctor_schedules only)
     if (schedules.length > 0) {
       const schedulesToInsert = schedules.map((schedule) => ({
         doctor_id: doctorId,
         day_of_week: schedule.day_of_week,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
-        ...(resolvedCalendarId ? { calendar_id: resolvedCalendarId } : {}),
+        ...(calendarId ? { calendar_id: calendarId } : {}),
       }));
 
       const { error: insertError } = await supabaseAdmin
@@ -368,24 +342,6 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
-      }
-
-      // 11b) DUAL-WRITE: also insert into calendar_schedules (non-blocking)
-      if (resolvedCalendarId) {
-        const calSchedulesToInsert = schedules.map((schedule) => ({
-          calendar_id: resolvedCalendarId,
-          day_of_week: schedule.day_of_week,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time,
-        }));
-        const { error: calInsertError } = await supabaseAdmin
-          .from("calendar_schedules")
-          .insert(calSchedulesToInsert);
-        if (calInsertError) {
-          console.warn("[upsert-doctor-schedules][dual-write] Error inserting calendar_schedules:", calInsertError);
-        } else {
-          console.log("[upsert-doctor-schedules][dual-write] calendar_schedules inserted:", calSchedulesToInsert.length);
-        }
       }
     }
 
