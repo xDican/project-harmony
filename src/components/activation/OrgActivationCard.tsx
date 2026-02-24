@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, CheckCircle, XCircle, MessageSquare, MessageSquareOff, AlertCircle } from 'lucide-react';
+import { ChevronDown, CheckCircle, XCircle, MessageSquare, MessageSquareOff, AlertCircle, Calendar, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 export interface OrgData {
@@ -14,6 +15,7 @@ export interface OrgData {
   messaging_enabled: boolean;
   daily_message_cap: number;
   monthly_message_cap: number;
+  max_calendars: number;
   created_at: string;
   recent_audit: AuditEntry[];
 }
@@ -54,11 +56,14 @@ const ACTION_LABELS: Record<string, string> = {
   disable_messaging: 'Deshabilitar mensajes',
   note: 'Nota',
   update_caps: 'Límites actualizados',
+  update_calendar_limit: 'Calendarios actualizados',
 };
 
 export default function OrgActivationCard({ org, onUpdated }: OrgActivationCardProps) {
   const [loading, setLoading] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
+  const [calendarLimit, setCalendarLimit] = useState<number>(org.max_calendars ?? 1);
+  const calendarLimitChanged = calendarLimit !== (org.max_calendars ?? 1);
 
   async function executeAction(action: string, details?: Record<string, any>) {
     setLoading(true);
@@ -110,6 +115,32 @@ export default function OrgActivationCard({ org, onUpdated }: OrgActivationCardP
         <div className="text-xs text-muted-foreground grid grid-cols-2 gap-1">
           <span>Cap diario: {org.daily_message_cap}</span>
           <span>Cap mensual: {org.monthly_message_cap}</span>
+        </div>
+
+        {/* Calendar limit */}
+        <div className="flex items-center gap-2">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Calendarios:</span>
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            value={calendarLimit}
+            onChange={e => setCalendarLimit(Number(e.target.value))}
+            className="h-7 w-16 text-xs"
+          />
+          {calendarLimitChanged && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              disabled={loading}
+              onClick={() => executeAction('update_calendar_limit', { max_calendars: calendarLimit })}
+            >
+              <Save className="h-3 w-3" />
+              Guardar
+            </Button>
+          )}
         </div>
 
         {/* Primary actions */}

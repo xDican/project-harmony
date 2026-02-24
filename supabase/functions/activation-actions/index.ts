@@ -56,6 +56,7 @@ Deno.serve(async (req: Request) => {
         messaging_enabled,
         daily_message_cap,
         monthly_message_cap,
+        max_calendars,
         created_at
       `)
       .order('created_at', { ascending: false });
@@ -116,7 +117,7 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: 'organization_id and action are required' });
     }
 
-    const validActions = ['activate', 'suspend', 'enable_messaging', 'disable_messaging', 'update_caps', 'note'];
+    const validActions = ['activate', 'suspend', 'enable_messaging', 'disable_messaging', 'update_caps', 'update_calendar_limit', 'note'];
     if (!validActions.includes(action)) {
       return json(400, { error: `Invalid action. Must be one of: ${validActions.join(', ')}` });
     }
@@ -143,6 +144,14 @@ Deno.serve(async (req: Request) => {
         if (details.daily_message_cap !== undefined) orgUpdate.daily_message_cap = details.daily_message_cap;
         if (details.monthly_message_cap !== undefined) orgUpdate.monthly_message_cap = details.monthly_message_cap;
         break;
+      case 'update_calendar_limit': {
+        const limit = Number(details.max_calendars);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+          return json(400, { error: 'max_calendars must be an integer between 1 and 100' });
+        }
+        orgUpdate.max_calendars = limit;
+        break;
+      }
       case 'note':
         // No org update — just log
         break;
@@ -176,7 +185,7 @@ Deno.serve(async (req: Request) => {
     // Return updated org
     const { data: updatedOrg, error: fetchError } = await adminClient
       .from('organizations')
-      .select('id, name, onboarding_status, billing_status, messaging_enabled, daily_message_cap, monthly_message_cap')
+      .select('id, name, onboarding_status, billing_status, messaging_enabled, daily_message_cap, monthly_message_cap, max_calendars')
       .eq('id', organization_id)
       .single();
 

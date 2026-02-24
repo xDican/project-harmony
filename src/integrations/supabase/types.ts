@@ -823,6 +823,7 @@ export type Database = {
           email: string | null
           id: string
           is_active: boolean | null
+          max_calendars: number
           messaging_enabled: boolean | null
           monthly_message_cap: number | null
           name: string
@@ -842,6 +843,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean | null
+          max_calendars?: number
           messaging_enabled?: boolean | null
           monthly_message_cap?: number | null
           name: string
@@ -861,6 +863,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean | null
+          max_calendars?: number
           messaging_enabled?: boolean | null
           monthly_message_cap?: number | null
           name?: string
