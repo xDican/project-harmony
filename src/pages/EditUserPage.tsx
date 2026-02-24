@@ -16,10 +16,13 @@ import { Loader2, ArrowLeft, Calendar } from 'lucide-react';
 import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 
 export default function EditUserPage() {
-  const { userId } = useParams<{ userId: string }>();
+  const { userId: paramUserId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { isAdmin, isDoctor, user: currentUser } = useCurrentUser();
-  const isOwnProfile = isDoctor && currentUser?.id === userId;
+  const userId = paramUserId || currentUser?.id;
+  const isOwnProfile = (isDoctor || isAdmin) && currentUser?.id === userId && !paramUserId;
+  const backPath = isOwnProfile ? '/configuracion/perfil' : '/admin/users';
+  const backLabel = isOwnProfile ? 'Volver a mi perfil' : 'Volver a usuarios';
   
   const [user, setUser] = useState<UserWithRelations | null>(null);
   const [fullName, setFullName] = useState('');
@@ -127,9 +130,9 @@ export default function EditUserPage() {
       });
 
       if (result.success) {
-        setSuccess('Usuario actualizado exitosamente');
+        setSuccess(isOwnProfile ? 'Perfil actualizado exitosamente' : 'Usuario actualizado exitosamente');
         setTimeout(() => {
-          navigate('/admin/users');
+          navigate(backPath);
         }, 1500);
       } else {
         setError(result.error || 'Error al actualizar el usuario');
@@ -174,11 +177,11 @@ export default function EditUserPage() {
           </Alert>
           <Button
             variant="ghost"
-            onClick={() => navigate('/admin/users')}
+            onClick={() => navigate(backPath)}
             className="mt-4"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver a usuarios
+            {backLabel}
           </Button>
         </div>
       </MainLayout>
@@ -192,18 +195,18 @@ export default function EditUserPage() {
       <div className="p-6 max-w-2xl mx-auto">
         <Button
           variant="ghost"
-          onClick={() => navigate('/admin/users')}
+          onClick={() => navigate(backPath)}
           className="mb-4"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver a usuarios
+          {backLabel}
         </Button>
 
         <Card>
           <CardHeader>
-            <CardTitle>Editar usuario</CardTitle>
+            <CardTitle>{isOwnProfile ? 'Editar mi perfil' : 'Editar usuario'}</CardTitle>
             <CardDescription>
-              Actualiza la información del usuario del sistema
+              {isOwnProfile ? 'Actualiza tu información personal' : 'Actualiza la información del usuario del sistema'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -332,7 +335,7 @@ export default function EditUserPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/admin/users')}
+                  onClick={() => navigate(backPath)}
                   disabled={saving}
                   className="flex-1"
                 >

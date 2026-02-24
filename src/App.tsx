@@ -190,6 +190,11 @@ const App = () => {
                 <PerfilMedico />
               </RoleBasedRoute>
             } />
+            <Route path="/configuracion/perfil/editar" element={
+              <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
+                <EditUserPage />
+              </RoleBasedRoute>
+            } />
             <Route path="/configuracion/uso-mensajes" element={
               <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <UsoMensajes />
