@@ -412,7 +412,7 @@ export async function getAvailableSlots(params: {
 // --------------------------
 // 6. searchPatients
 // --------------------------
-export async function searchPatients(query: string): Promise<Patient[]> {
+export async function searchPatients(query: string, doctorId?: string): Promise<Patient[]> {
   const orgId = await getActiveOrganizationId();
   // Busca por name o phone (simple LIKE)
   let q = supabase
@@ -422,6 +422,7 @@ export async function searchPatients(query: string): Promise<Patient[]> {
     .order("name", { ascending: true });
 
   if (orgId) q = q.eq("organization_id", orgId);
+  if (doctorId) q = q.eq("doctor_id", doctorId);
 
   const { data, error } = await q;
 

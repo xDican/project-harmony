@@ -11,14 +11,15 @@ interface PatientSearchProps {
   onSelect: (patient: Patient) => void;
   onCreateNew?: (prefill: { nameOrPhone: string }) => void;
   value?: Patient | null;
+  doctorId?: string;
 }
 
 /**
  * PatientSearch - Searchable patient selector with dropdown results
  * Uses debounced search and displays matching patients with contact info
  */
-const PatientSearch = ({ onSelect, onCreateNew, value }: PatientSearchProps) => {
-  const { data: patients, isLoading, query, setQuery } = usePatientsSearch();
+const PatientSearch = ({ onSelect, onCreateNew, value, doctorId }: PatientSearchProps) => {
+  const { data: patients, isLoading, query, setQuery } = usePatientsSearch('', doctorId);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(value || null);
   const containerRef = useRef<HTMLDivElement>(null);

@@ -25,11 +25,11 @@ import type { Doctor } from '@/types/doctor';
 
 /**
  * NuevaCita - New appointment creation page
- * 
+ *
  * Flow (UX mejorado):
- * 1. Seleccionar paciente
- * 2. Seleccionar médico (si no es doctor)
- * 3. Seleccionar DURACIÓN primero
+ * 1. Seleccionar médico (si no es doctor)
+ * 2. Buscar paciente (filtrado por médico seleccionado)
+ * 3. Seleccionar DURACIÓN
  * 4. Ver calendario con días disponibles/no disponibles según duración
  * 5. Seleccionar horario del día elegido
  */
@@ -191,8 +191,9 @@ export default function NuevaCita() {
       .catch(() => {}); // non-blocking; backend auto-resolves as fallback
   }, [selectedDoctor?.id]);
 
-  // Reset date, slots, and available days when doctor changes
+  // Reset patient, date, slots, and available days when doctor changes
   useEffect(() => {
+    setSelectedPatient(null);
     setSelectedDate(undefined);
     setSelectedSlot(null);
     setAvailableSlots([]);
@@ -266,7 +267,7 @@ export default function NuevaCita() {
       const patient = await createPatient({
         name: newPatientName.trim(),
         phone: formatPhoneForStorage(newPatientPhone.trim()),
-        doctorId: user?.doctorId ?? undefined,
+        doctorId: selectedDoctor?.id ?? user?.doctorId ?? undefined,
       });
 
       setSelectedPatient(patient);
@@ -369,30 +370,30 @@ export default function NuevaCita() {
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="space-y-8">
-          {/* Step 1: Patient Selection */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              1. Seleccionar Paciente
-            </Label>
-            <PatientSearch 
-              onSelect={handlePatientSelect}
-              onCreateNew={handleCreateNewPatient}
-              value={selectedPatient}
-            />
-          </section>
-
-          {/* Step 2: Doctor Selection (hidden for doctors and admin in Vista Médico) */}
+          {/* Step 1: Doctor Selection (hidden for doctors and admin in Vista Médico) */}
           {!isDoctorView && (
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
-                2. Seleccionar Médico
+                1. Seleccionar Médico
               </Label>
               <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
             </section>
           )}
 
+          {/* Step 2 (or 1): Patient Selection - filtered by selected doctor */}
+          <section>
+            <Label className="text-lg font-semibold text-foreground mb-3 block">
+              {getStepNumber(2)}. Seleccionar Paciente
+            </Label>
+            <PatientSearch
+              onSelect={handlePatientSelect}
+              onCreateNew={handleCreateNewPatient}
+              value={selectedPatient}
+              doctorId={selectedDoctor?.id}
+            />
+          </section>
 
-          {/* Step 3 (or 2): Duration Selection - AHORA ANTES DE LA FECHA */}
+          {/* Step 3 (or 2): Duration Selection */}
           <section>
             <Label className="text-lg font-semibold text-foreground mb-3 block">
               {getStepNumber(3)}. Duración de la Cita

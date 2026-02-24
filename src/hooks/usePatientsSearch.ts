@@ -9,7 +9,7 @@ import { Patient } from '@/types/patient';
  * @param initialQuery - Optional initial search query
  * @returns Object with search results, loading state, error, query, and setter
  */
-export const usePatientsSearch = (initialQuery: string = '') => {
+export const usePatientsSearch = (initialQuery: string = '', doctorId?: string) => {
   const [query, setQuery] = useState<string>(initialQuery);
   const [debouncedQuery, setDebouncedQuery] = useState<string>(initialQuery);
   const [data, setData] = useState<Patient[]>([]);
@@ -39,7 +39,7 @@ export const usePatientsSearch = (initialQuery: string = '') => {
     setIsLoading(true);
     setError(null);
 
-    searchPatients(debouncedQuery)
+    searchPatients(debouncedQuery, doctorId)
       .then((results) => {
         setData(results);
         setIsLoading(false);
@@ -49,7 +49,7 @@ export const usePatientsSearch = (initialQuery: string = '') => {
         setData([]);
         setIsLoading(false);
       });
-  }, [debouncedQuery]);
+  }, [debouncedQuery, doctorId]);
 
   return {
     data,
