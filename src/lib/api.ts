@@ -65,9 +65,9 @@ interface ApiModule {
     durationMinutes?: number;
   }) => Promise<Appointment>;
   getAvailableSlots: (params: { doctorId: string; date: string; durationMinutes?: number }) => Promise<string[]>;
-  searchPatients: (query: string) => Promise<Patient[]>;
+  searchPatients: (query: string, doctorId?: string) => Promise<Patient[]>;
   getAllPatients: (doctorId?: string) => Promise<Patient[]>;
-  createPatient: (input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }) => Promise<Patient>;
+  createPatient: (input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }) => Promise<Patient & { isExisting: boolean }>;
   getSpecialties: () => Promise<Specialty[]>;
   getDoctorsBySpecialty: (specialtyId: string) => Promise<Doctor[]>;
   getDoctors: () => Promise<Doctor[]>;
@@ -183,9 +183,9 @@ export async function getAvailableSlots(params: {
 /**
  * Search patients by name or phone
  */
-export async function searchPatients(query: string): Promise<Patient[]> {
+export async function searchPatients(query: string, doctorId?: string): Promise<Patient[]> {
   const apiModule = await getApiModule();
-  return await apiModule.searchPatients(query);
+  return await apiModule.searchPatients(query, doctorId);
 }
 
 /**
@@ -199,7 +199,7 @@ export async function getAllPatients(doctorId?: string): Promise<Patient[]> {
 /**
  * Create a new patient
  */
-export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient> {
+export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient & { isExisting: boolean }> {
   const apiModule = await getApiModule();
   return await apiModule.createPatient(input);
 }
