@@ -496,7 +496,7 @@ export async function getAllPatients(doctorId?: string): Promise<Patient[]> {
 // --------------------------
 // 8. createPatient
 // --------------------------
-export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient> {
+export async function createPatient(input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }): Promise<Patient & { isExisting: boolean }> {
   const orgId = await getActiveOrganizationId();
   const { name, phone, email, notes, doctorId } = input;
 
@@ -522,6 +522,7 @@ export async function createPatient(input: { name: string; phone: string; email?
     email: data.email ?? undefined,
     notes: data.notes ?? undefined,
     createdAt: data.created_at,
+    isExisting: data.is_existing ?? false,
   };
 }
 

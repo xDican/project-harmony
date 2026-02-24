@@ -121,7 +121,7 @@ export default function Pacientes() {
 
     setIsCreating(true);
     try {
-      await createPatient({
+      const result = await createPatient({
         name: newPatientName.trim(),
         phone: formatPhoneForStorage(newPatientPhone.trim()),
         email: newPatientEmail.trim() || undefined,
@@ -129,10 +129,17 @@ export default function Pacientes() {
         doctorId: assignedDoctorId,
       });
 
-      toast({
-        title: 'Paciente creado',
-        description: 'El paciente ha sido creado exitosamente',
-      });
+      if (result.isExisting) {
+        toast({
+          title: 'Número ya registrado',
+          description: `El teléfono ya pertenece al paciente "${result.name}". Se ha vinculado a tu lista.`,
+        });
+      } else {
+        toast({
+          title: 'Paciente creado',
+          description: 'El paciente ha sido creado exitosamente',
+        });
+      }
 
       // Refresh patients list keeping current filter
       const currentFilterDoctorId = user?.role === 'doctor'

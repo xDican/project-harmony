@@ -274,11 +274,18 @@ export default function NuevaCita() {
       setIsCreatePatientOpen(false);
       setNewPatientName('');
       setNewPatientPhone('');
-      
-      toast({
-        title: "Paciente creado",
-        description: `${patient.name} ha sido agregado exitosamente.`,
-      });
+
+      if (patient.isExisting) {
+        toast({
+          title: "Número ya registrado",
+          description: `El teléfono ya pertenece al paciente "${patient.name}". Se ha seleccionado para esta cita.`,
+        });
+      } else {
+        toast({
+          title: "Paciente creado",
+          description: `${patient.name} ha sido agregado exitosamente.`,
+        });
+      }
     } catch (error) {
       console.error('Error creating patient:', error);
       toast({
