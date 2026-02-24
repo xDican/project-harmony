@@ -15,7 +15,7 @@ import type { Specialty } from '@/types/doctor';
 import type { UserWithRelations } from '@/lib/api';
 import type { CalendarEntry } from '@/types/organization';
 import { supabase } from '@/lib/supabaseClient';
-import { Loader2, ArrowLeft, Calendar } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { formatPhoneForDisplay, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 
 export default function EditUserPage() {
@@ -365,17 +365,6 @@ export default function EditUserPage() {
                       </Select>
                     </div>
 
-                    {calendarId && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => navigate(`/admin/calendars/${calendarId}/schedule`)}
-                        className="w-full"
-                      >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Configurar horarios
-                      </Button>
-                    )}
                   </>
                 )}
               </div>
