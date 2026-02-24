@@ -206,7 +206,7 @@ export default function AgendaSemanal() {
                 <ChevronLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Semana </span>anterior
               </Button>
-              <div className="min-w-[3.5rem] flex justify-center">
+              <div className="min-w-[7rem] sm:min-w-[9rem] flex justify-center">
                 {!isCurrentWeek && (
                   <Button
                     variant="outline"
