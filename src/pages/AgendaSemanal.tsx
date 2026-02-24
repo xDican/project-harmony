@@ -196,33 +196,30 @@ export default function AgendaSemanal() {
             </div>
 
             {/* Week Navigation */}
-            <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="grid grid-cols-3 gap-2 mb-3 max-w-md mx-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setWeekStart(prev => subWeeks(prev, 1))}
-                className="gap-1 text-xs md:text-sm min-w-[7rem] sm:min-w-[9rem]"
+                className="gap-1 text-xs md:text-sm w-full"
               >
                 <ChevronLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Semana </span>anterior
               </Button>
-              <div className="min-w-[7rem] sm:min-w-[9rem] flex justify-center">
-                {!isCurrentWeek && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGoToToday}
-                    className="text-xs md:text-sm w-full"
-                  >
-                    Hoy
-                  </Button>
-                )}
-              </div>
+              <Button
+                variant={isCurrentWeek ? "ghost" : "outline"}
+                size="sm"
+                onClick={handleGoToToday}
+                disabled={isCurrentWeek}
+                className="text-xs md:text-sm w-full"
+              >
+                Hoy
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setWeekStart(prev => addWeeks(prev, 1))}
-                className="gap-1 text-xs md:text-sm min-w-[7rem] sm:min-w-[9rem]"
+                className="gap-1 text-xs md:text-sm w-full"
               >
                 <span className="hidden sm:inline">Semana </span>siguiente
                 <ChevronRight className="h-4 w-4" />
