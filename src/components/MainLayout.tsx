@@ -224,7 +224,7 @@ export default function MainLayout({
         {isAdmin && !(isAdminDoctor && adminView === 'doctor') && <Collapsible open={adminMenuOpen} onOpenChange={setAdminMenuOpen}>
             <CollapsibleTrigger className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors w-full">
               <Settings className="h-5 w-5" />
-              <span className="flex-1 text-left">Propietario</span>
+              <span className="flex-1 text-left">Administrador</span>
               <ChevronDown className={`h-4 w-4 transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} />
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1">
@@ -259,7 +259,7 @@ export default function MainLayout({
                 )}
                 onClick={() => setAdminView('admin')}
               >
-                <Building2 className="h-3 w-3" /> Propietario
+                <Building2 className="h-3 w-3" /> Administrador
               </button>
             </div>
           </div>

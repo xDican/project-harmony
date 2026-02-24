@@ -20,8 +20,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getWhatsAppLinesByOrganization, updateWhatsAppLine } from '@/lib/api.supabase';
+import { type EmbeddedSignupResult } from '@/lib/whatsappApi';
+import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import type { WhatsAppLine } from '@/types/organization';
-import { Loader2, Search, Edit, MessageCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Search, Edit, MessageCircle, Plus } from 'lucide-react';
 
 export default function WhatsAppLinesList() {
   const { isAdmin } = useCurrentUser();
@@ -40,12 +43,18 @@ export default function WhatsAppLinesList() {
   const [editingLine, setEditingLine] = useState<WhatsAppLine | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Connect dialog state
+  const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+
   // Form fields
   const [formLabel, setFormLabel] = useState('');
   const [formBotEnabled, setFormBotEnabled] = useState(false);
   const [formBotGreeting, setFormBotGreeting] = useState('');
   const [formDefaultDuration, setFormDefaultDuration] = useState<number | ''>('');
   const [formIsActive, setFormIsActive] = useState(true);
+
+  // Template mappings for the editing line
+  const [templateMappings, setTemplateMappings] = useState<Array<{ logical_type: string; template_name: string; template_language: string; is_active: boolean }>>([]);
 
   useEffect(() => {
     loadLines();
@@ -85,14 +94,32 @@ export default function WhatsAppLinesList() {
     setCurrentPage(1);
   };
 
-  const openEditDialog = (line: WhatsAppLine) => {
+  const openEditDialog = async (line: WhatsAppLine) => {
     setEditingLine(line);
     setFormLabel(line.label);
     setFormBotEnabled(line.botEnabled);
     setFormBotGreeting(line.botGreeting || '');
     setFormDefaultDuration(line.defaultDurationMinutes || '');
     setFormIsActive(line.isActive);
+    setTemplateMappings([]);
     setDialogOpen(true);
+
+    // Load template mappings for this line
+    const { data } = await supabase
+      .from('template_mappings')
+      .select('logical_type, template_name, template_language, is_active')
+      .eq('whatsapp_line_id', line.id)
+      .order('logical_type');
+    if (data) setTemplateMappings(data);
+  };
+
+  const handleConnected = (result: EmbeddedSignupResult) => {
+    setConnectDialogOpen(false);
+    toast({
+      title: 'Línea conectada',
+      description: `${result.verified_name} · ${result.phone_number}`,
+    });
+    loadLines();
   };
 
   const handleSave = async () => {
@@ -166,11 +193,17 @@ export default function WhatsAppLinesList() {
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
         {/* Page Header */}
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Lineas de WhatsApp</h1>
-          <p className="text-muted-foreground">
-            Administra las lineas de WhatsApp conectadas a tu organizacion.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Lineas de WhatsApp</h1>
+            <p className="text-muted-foreground">
+              Administra las lineas de WhatsApp conectadas a tu organizacion.
+            </p>
+          </div>
+          <Button onClick={() => setConnectDialogOpen(true)} className="flex-shrink-0">
+            <Plus className="h-4 w-4 mr-2" />
+            Conectar línea
+          </Button>
         </div>
 
         <div>
@@ -424,6 +457,21 @@ export default function WhatsAppLinesList() {
                   Linea activa
                 </Label>
               </div>
+
+              {/* Template mappings (read-only) */}
+              {templateMappings.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Plantillas configuradas</Label>
+                  <div className="rounded-md border divide-y text-sm">
+                    {templateMappings.map((m) => (
+                      <div key={m.logical_type} className="px-3 py-2 flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground capitalize">{m.logical_type.replace(/_/g, ' ')}</span>
+                        <span className="font-mono text-xs truncate max-w-[200px]" title={m.template_name}>{m.template_name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <DialogFooter>
@@ -439,6 +487,24 @@ export default function WhatsAppLinesList() {
                 Guardar cambios
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Connect new line dialog */}
+        <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Conectar línea de WhatsApp</DialogTitle>
+              <DialogDescription>
+                Conecta una nueva línea de WhatsApp Business a través de Meta.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <MetaEmbeddedSignup
+                onSuccess={handleConnected}
+                onError={(err) => toast({ title: 'Error al conectar', description: err, variant: 'destructive' })}
+              />
+            </div>
           </DialogContent>
         </Dialog>
       </div>
