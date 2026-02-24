@@ -230,7 +230,8 @@ export default function EditUserPage() {
                 </div>
               </div>
 
-              {/* Datos del perfil Section */}
+              {/* Datos del perfil Section — not applicable for admin */}
+              {user.role !== 'admin' && (
               <div className="space-y-4">
                 <h3 className="text-sm font-medium">Datos del perfil</h3>
                 <Separator />
@@ -294,6 +295,7 @@ export default function EditUserPage() {
                   </>
                 )}
               </div>
+              )}
 
               {error && (
                 <Alert variant="destructive">
