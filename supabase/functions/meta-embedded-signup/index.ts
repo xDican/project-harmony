@@ -568,11 +568,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 10) Auto-register phone number with Meta Cloud API
+    // 10) Auto-register phone number with Meta Cloud API (without 2FA PIN for frictionless E2E re-registration)
     let metaRegistered = false;
     try {
-      const pin = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
-
       const registerRes = await fetch(
         `${GRAPH_BASE}/${phone_number_id}/register`,
         {
@@ -581,7 +579,7 @@ Deno.serve(async (req) => {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+          body: JSON.stringify({ messaging_product: "whatsapp" }),
         },
       );
       const registerData = await registerRes.json().catch(() => ({}));
@@ -590,16 +588,11 @@ Deno.serve(async (req) => {
         metaRegistered = true;
         await supabaseAdmin
           .from("whatsapp_lines")
-          .update({ meta_registered: true, meta_registration_pin: pin })
+          .update({ meta_registered: true })
           .eq("id", lineId);
-        console.log("[meta-embedded-signup] Phone registered with Meta Cloud API");
+        console.log("[meta-embedded-signup] Phone registered with Meta Cloud API (no 2FA PIN)");
       } else {
         console.warn("[meta-embedded-signup] Registration failed (non-blocking):", registerData?.error?.message);
-        // Save PIN anyway so UI can retry with same PIN
-        await supabaseAdmin
-          .from("whatsapp_lines")
-          .update({ meta_registration_pin: pin })
-          .eq("id", lineId);
       }
     } catch (regErr) {
       console.warn("[meta-embedded-signup] Registration error (non-blocking):", regErr);

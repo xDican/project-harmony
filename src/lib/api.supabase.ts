@@ -1679,6 +1679,14 @@ export async function updateWhatsAppLine(
   };
 }
 
+export async function disconnectWhatsAppLine(lineId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('disconnect-whatsapp-line', {
+    body: { whatsapp_line_id: lineId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+}
+
 // --------------------------
 // Org Switching (Step 10b)
 // --------------------------

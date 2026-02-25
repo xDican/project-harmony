@@ -19,12 +19,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getWhatsAppLinesByOrganization, updateWhatsAppLine } from '@/lib/api.supabase';
+import { getWhatsAppLinesByOrganization, updateWhatsAppLine, disconnectWhatsAppLine } from '@/lib/api.supabase';
 import { type EmbeddedSignupResult } from '@/lib/whatsappApi';
 import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import type { WhatsAppLine } from '@/types/organization';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Search, Edit, MessageCircle, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Search, Edit, MessageCircle, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
 export default function WhatsAppLinesList() {
   const { isAdmin } = useCurrentUser();
@@ -56,6 +56,11 @@ export default function WhatsAppLinesList() {
   // Template mappings for the editing line
   const [templateMappings, setTemplateMappings] = useState<Array<{ logical_type: string; template_name: string; template_language: string; is_active: boolean; meta_status: string | null }>>([]);
   const [checkingStatus, setCheckingStatus] = useState(false);
+
+  // Disconnect confirmation state
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
+  const [disconnectConfirmPhone, setDisconnectConfirmPhone] = useState('');
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     loadLines();
@@ -158,6 +163,30 @@ export default function WhatsAppLinesList() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!editingLine) return;
+    setDisconnecting(true);
+    try {
+      await disconnectWhatsAppLine(editingLine.id);
+      toast({
+        title: 'Linea desconectada',
+        description: `La linea ${editingLine.phoneNumber} ha sido eliminada`,
+      });
+      setDisconnectDialogOpen(false);
+      setDialogOpen(false);
+      setDisconnectConfirmPhone('');
+      await loadLines();
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.message || 'Error al desconectar la linea',
+        variant: 'destructive',
+      });
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -517,7 +546,21 @@ export default function WhatsAppLinesList() {
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              {editingLine?.provider === 'meta' && (
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setDisconnectConfirmPhone('');
+                    setDisconnectDialogOpen(true);
+                  }}
+                  disabled={saving}
+                  className="sm:mr-auto"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Desconectar linea
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setDialogOpen(false)}
@@ -528,6 +571,56 @@ export default function WhatsAppLinesList() {
               <Button onClick={handleSave} disabled={saving}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar cambios
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Disconnect confirmation dialog */}
+        <Dialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Desconectar linea de WhatsApp</DialogTitle>
+              <DialogDescription>
+                Esto eliminara la conexion WhatsApp, plantillas y sesiones de bot.
+                El numero podra reconectarse despues. Los logs de mensajes se conservan.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Alert variant="destructive">
+                <AlertDescription>
+                  Esta accion no se puede deshacer. Se deregistrara el telefono del Cloud API
+                  de Meta y se eliminaran todos los datos asociados a esta linea.
+                </AlertDescription>
+              </Alert>
+              <div className="space-y-2">
+                <Label htmlFor="disconnect-confirm">
+                  Escribe <span className="font-mono font-bold">{editingLine?.phoneNumber}</span> para confirmar
+                </Label>
+                <Input
+                  id="disconnect-confirm"
+                  value={disconnectConfirmPhone}
+                  onChange={(e) => setDisconnectConfirmPhone(e.target.value)}
+                  placeholder={editingLine?.phoneNumber}
+                  disabled={disconnecting}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDisconnectDialogOpen(false)}
+                disabled={disconnecting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDisconnect}
+                disabled={disconnecting || disconnectConfirmPhone !== editingLine?.phoneNumber}
+              >
+                {disconnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirmar desconexion
               </Button>
             </DialogFooter>
           </DialogContent>
