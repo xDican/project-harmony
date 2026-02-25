@@ -214,6 +214,30 @@ serve(async (req) => {
           throw new Error(`Error al asignar calendario: ${calDocError.message}`);
         }
 
+        // Auto-add doctor to whatsapp_line_doctors for all active lines in the org
+        if (resolvedOrgId) {
+          const { data: activeLines } = await supabaseAdmin
+            .from("whatsapp_lines")
+            .select("id")
+            .eq("organization_id", resolvedOrgId)
+            .eq("is_active", true);
+
+          if (activeLines && activeLines.length > 0) {
+            const wldRows = activeLines.map((line: any) => ({
+              whatsapp_line_id: line.id,
+              doctor_id: doctorId,
+              calendar_id: calendarId,
+            }));
+            const { error: wldError } = await supabaseAdmin
+              .from("whatsapp_line_doctors")
+              .upsert(wldRows, { onConflict: "whatsapp_line_id,doctor_id,calendar_id", ignoreDuplicates: true });
+            if (wldError) {
+              console.error("Error populating whatsapp_line_doctors (non-blocking):", wldError);
+            } else {
+              console.log("whatsapp_line_doctors populated for new doctor:", doctorId, "lines:", activeLines.length);
+            }
+          }
+        }
       }
     }
 

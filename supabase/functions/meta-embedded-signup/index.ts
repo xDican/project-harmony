@@ -1,12 +1,22 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import {
+  CANONICAL_TEMPLATES,
+  LEGACY_TEMPLATE_NAMES,
+  ORIONCARE_WABA_ID,
+  generateTemplateName,
+} from "../_shared/canonical-templates.ts";
+import {
+  createTemplateInWaba,
+  getTemplateStatuses,
+} from "../_shared/meta-template-api.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-22_v6";
+const BUILD = "meta-embedded-signup@2026-02-24_v11";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
@@ -17,16 +27,6 @@ const RequestSchema = z.object({
   waba_id: z.string().optional(),
   phone_number_id: z.string().optional(),
 });
-
-// Canonical template mappings — same approved templates used across all WABAs connected through this App.
-// Whenever a brand new line has no prior mappings to copy, these are applied immediately (is_active=true).
-const CANONICAL_TEMPLATE_MAPPINGS = [
-  { logical_type: "confirmation",       template_name: "notificacion_creacion_cita_utility_hx0e54700971a4adf2d4f4fcb8f021beff_", template_language: "es_MX" },
-  { logical_type: "reminder_24h",       template_name: "notificacion_24h_antes_utility_hx9f009d3fb6845f75c34a1868b98e64a6",    template_language: "es_MX" },
-  { logical_type: "reschedule_doctor",  template_name: "notificacion_reagenda_medico_utility_hx95828e73090fb5a66e3157fe33ac956d", template_language: "es_MX" },
-  { logical_type: "patient_confirmed",  template_name: "confirmacion_cita_utility_hx7ef2d47944d28ef80f84a9bacb89d587",          template_language: "es_MX" },
-  { logical_type: "patient_reschedule", template_name: "paciente_solicita_reagenda_utility_hxe08b07d4ae63dbd73e11709817ac2f75", template_language: "es_MX" },
-];
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -332,65 +332,228 @@ Deno.serve(async (req) => {
       console.log("[meta-embedded-signup] Old lines deactivated for org:", orgId);
     }
 
+    // 8c) Auto-populate whatsapp_line_doctors from org's calendar_doctors
+    const { data: calDocs } = await supabaseAdmin
+      .from("calendar_doctors")
+      .select("doctor_id, calendar_id, calendars!inner(organization_id)")
+      .eq("calendars.organization_id", orgId)
+      .eq("is_active", true);
+
+    if (calDocs && calDocs.length > 0) {
+      const rows = calDocs.map((cd: any) => ({
+        whatsapp_line_id: lineId,
+        doctor_id: cd.doctor_id,
+        calendar_id: cd.calendar_id,
+      }));
+      await supabaseAdmin
+        .from("whatsapp_line_doctors")
+        .upsert(rows, { onConflict: "whatsapp_line_id,doctor_id,calendar_id", ignoreDuplicates: true });
+      console.log("[meta-embedded-signup] whatsapp_line_doctors populated:", rows.length, "entries");
+    }
+
     // 9) Copy template_mappings from previous active line (if any),
     //    or preserve existing mappings on this line (reconnect same number),
     //    or create empty defaults for a brand new line.
     let mappings;
 
+    // Fetch WABA ID of previous line (if any) for same-WABA detection
+    let previousWabaId: string | null = null;
+    if (previousActiveLineId) {
+      const { data: prevLineData } = await supabaseAdmin
+        .from("whatsapp_lines")
+        .select("meta_waba_id")
+        .eq("id", previousActiveLineId)
+        .single();
+      previousWabaId = prevLineData?.meta_waba_id ?? null;
+    }
+
     // Priority 1: copy from a different previous line
     if (previousActiveLineId) {
       const { data: prevMappings } = await supabaseAdmin
         .from("template_mappings")
-        .select("logical_type, template_name, template_language, parameter_order")
+        .select("logical_type, template_name, template_language, parameter_order, meta_status, meta_template_id")
         .eq("whatsapp_line_id", previousActiveLineId)
         .eq("provider", "meta")
         .eq("is_active", true);
 
       if (prevMappings && prevMappings.length > 0) {
-        mappings = prevMappings.map((m) => ({
-          whatsapp_line_id: lineId,
-          logical_type: m.logical_type,
-          provider: "meta",
-          template_name: m.template_name,
-          template_language: m.template_language,
-          parameter_order: m.parameter_order,
-          is_active: !!m.template_name,
-        }));
-        console.log("[meta-embedded-signup] Copying", mappings.length, "template_mappings from previous line:", previousActiveLineId);
+        // If the previous line used the same WABA, templates already exist — copy as-is
+        if (previousWabaId === waba_id) {
+          mappings = prevMappings.map((m) => ({
+            whatsapp_line_id: lineId,
+            logical_type: m.logical_type,
+            provider: "meta",
+            template_name: m.template_name,
+            template_language: m.template_language,
+            parameter_order: m.parameter_order,
+            is_active: !!m.template_name,
+            meta_status: m.meta_status,
+            meta_template_id: m.meta_template_id,
+          }));
+          console.log("[meta-embedded-signup] Same WABA — copying", mappings.length, "template_mappings from previous line:", previousActiveLineId);
+        } else {
+          // Different WABA — treat as brand new (will create templates below in 9b)
+          console.log("[meta-embedded-signup] Different WABA (prev:", previousWabaId, "new:", waba_id, ") — treating as new line for template creation");
+          mappings = undefined;
+        }
       }
     }
 
     // Priority 2: same line already has configured mappings — don't overwrite them
-    if (!mappings) {
+    // BUT if all existing mappings are inactive with null/REJECTED status, treat as needing recreation
+    if (!mappings && mappings !== undefined) {
       const { data: existingMappings } = await supabaseAdmin
         .from("template_mappings")
-        .select("logical_type, template_name, template_language, parameter_order, is_active")
+        .select("logical_type, template_name, template_language, parameter_order, is_active, meta_status, meta_template_id")
         .eq("whatsapp_line_id", lineId)
         .eq("provider", "meta")
         .neq("template_name", "");
 
       if (existingMappings && existingMappings.length > 0) {
-        console.log("[meta-embedded-signup] Same line reconnected — keeping", existingMappings.length, "existing template_mappings");
-        // Skip upsert entirely: existing mappings are already correct
-        mappings = null;
+        // Check if any mapping is actually usable (active, or pending/approved in Meta)
+        const hasUsableMappings = existingMappings.some(
+          (m) => m.is_active || m.meta_status === "APPROVED" || m.meta_status === "PENDING"
+        );
+
+        if (hasUsableMappings) {
+          console.log("[meta-embedded-signup] Same line reconnected — keeping", existingMappings.length, "existing template_mappings (some are usable)");
+          // Skip upsert entirely: existing mappings are already correct
+          mappings = null;
+        } else {
+          // All mappings are inactive/null/rejected — delete them and recreate via Priority 3
+          console.log("[meta-embedded-signup] Same line reconnected but all", existingMappings.length, "mappings are inactive/null — deleting and recreating templates");
+          const { error: delError } = await supabaseAdmin
+            .from("template_mappings")
+            .delete()
+            .eq("whatsapp_line_id", lineId)
+            .eq("provider", "meta");
+
+          if (delError) {
+            console.error("[meta-embedded-signup] Error deleting stale mappings:", delError);
+          }
+          // Fall through to Priority 3 by leaving mappings as undefined
+          mappings = undefined;
+        }
       }
     }
 
-    // Priority 3: brand new line — apply canonical templates so the line works immediately
+    // Priority 3: brand new line (or different WABA from previous line)
     if (mappings === undefined) {
-      mappings = CANONICAL_TEMPLATE_MAPPINGS.map((t) => ({
-        whatsapp_line_id: lineId,
-        logical_type: t.logical_type,
-        provider: "meta",
-        template_name: t.template_name,
-        template_language: t.template_language,
-        parameter_order: [],
-        is_active: true,
-      }));
-      console.log("[meta-embedded-signup] Applying canonical template mappings for brand new line:", lineId);
+      // 9b) Create canonical templates with date-based unique suffix (avoids Meta 30-day name retention)
+      if (waba_id !== ORIONCARE_WABA_ID) {
+        console.log("[meta-embedded-signup] Creating canonical templates in WABA:", waba_id);
+        mappings = [];
+        const MAX_NAME_ATTEMPTS = 5; // _250225, _250225b, _250225c, _250225d, _250225e
+
+        try {
+          for (const tmpl of CANONICAL_TEMPLATES) {
+            let created = false;
+
+            for (let attempt = 0; attempt < MAX_NAME_ATTEMPTS; attempt++) {
+              const candidateName = generateTemplateName(tmpl.template_name, attempt);
+              console.log("[meta-embedded-signup] Attempting template:", candidateName, attempt > 0 ? `(attempt ${attempt + 1})` : "");
+
+              const result = await createTemplateInWaba(
+                waba_id!,
+                accessToken,
+                candidateName,
+                tmpl.language,
+                tmpl.category,
+                tmpl.components,
+              );
+
+              if (result.ok) {
+                console.log("[meta-embedded-signup] Template created:", candidateName, "status:", result.status, "id:", result.templateId);
+                mappings.push({
+                  whatsapp_line_id: lineId,
+                  logical_type: tmpl.logical_type,
+                  provider: "meta",
+                  template_name: candidateName,
+                  template_language: tmpl.language,
+                  parameter_order: [],
+                  is_active: false,
+                  meta_status: result.status || "PENDING",
+                  meta_template_id: result.templateId || null,
+                });
+                created = true;
+                break;
+              } else if (result.alreadyExists) {
+                // Name taken — try next suffix variant
+                console.log("[meta-embedded-signup] Name taken:", candidateName, "— trying next suffix");
+                continue;
+              } else {
+                // Other error (rate limit, permission, etc.) — no point retrying with different name
+                console.warn("[meta-embedded-signup] Failed to create template:", candidateName, "| error:", result.error);
+                mappings.push({
+                  whatsapp_line_id: lineId,
+                  logical_type: tmpl.logical_type,
+                  provider: "meta",
+                  template_name: candidateName,
+                  template_language: tmpl.language,
+                  parameter_order: [],
+                  is_active: false,
+                  meta_status: "FAILED",
+                  meta_template_id: null,
+                });
+                created = true; // exit loop — already added a FAILED mapping
+                break;
+              }
+            }
+
+            if (!created) {
+              // All name attempts exhausted (all returned alreadyExists)
+              console.warn("[meta-embedded-signup] All name attempts exhausted for:", tmpl.logical_type);
+              const lastName = generateTemplateName(tmpl.template_name, MAX_NAME_ATTEMPTS - 1);
+              mappings.push({
+                whatsapp_line_id: lineId,
+                logical_type: tmpl.logical_type,
+                provider: "meta",
+                template_name: lastName,
+                template_language: tmpl.language,
+                parameter_order: [],
+                is_active: false,
+                meta_status: "FAILED",
+                meta_template_id: null,
+              });
+            }
+          }
+        } catch (templateErr) {
+          console.error("[meta-embedded-signup] Error creating templates (non-blocking):", templateErr);
+          if (mappings.length === 0) {
+            mappings = CANONICAL_TEMPLATES.map((t) => ({
+              whatsapp_line_id: lineId,
+              logical_type: t.logical_type,
+              provider: "meta",
+              template_name: generateTemplateName(t.template_name),
+              template_language: t.language,
+              parameter_order: [],
+              is_active: false,
+              meta_status: null,
+              meta_template_id: null,
+            }));
+          }
+        }
+      } else {
+        // OrionCare primary WABA — use legacy template names (already approved)
+        console.log("[meta-embedded-signup] OrionCare WABA — applying legacy template names");
+        mappings = CANONICAL_TEMPLATES.map((t) => {
+          const legacy = LEGACY_TEMPLATE_NAMES[t.logical_type];
+          return {
+            whatsapp_line_id: lineId,
+            logical_type: t.logical_type,
+            provider: "meta",
+            template_name: legacy?.template_name ?? t.template_name,
+            template_language: legacy?.template_language ?? t.language,
+            parameter_order: [],
+            is_active: true,
+            meta_status: "APPROVED",
+            meta_template_id: null,
+          };
+        });
+      }
     }
 
-    if (mappings !== null) {
+    if (mappings !== null && mappings.length > 0) {
       const { error: mappingsError } = await supabaseAdmin
         .from("template_mappings")
         .upsert(mappings, {
