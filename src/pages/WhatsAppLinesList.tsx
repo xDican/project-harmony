@@ -24,7 +24,7 @@ import { type EmbeddedSignupResult } from '@/lib/whatsappApi';
 import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import type { WhatsAppLine } from '@/types/organization';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Search, Edit, MessageCircle, Plus } from 'lucide-react';
+import { Loader2, Search, Edit, MessageCircle, Plus, RefreshCw } from 'lucide-react';
 
 export default function WhatsAppLinesList() {
   const { isAdmin } = useCurrentUser();
@@ -54,7 +54,8 @@ export default function WhatsAppLinesList() {
   const [formIsActive, setFormIsActive] = useState(true);
 
   // Template mappings for the editing line
-  const [templateMappings, setTemplateMappings] = useState<Array<{ logical_type: string; template_name: string; template_language: string; is_active: boolean }>>([]);
+  const [templateMappings, setTemplateMappings] = useState<Array<{ logical_type: string; template_name: string; template_language: string; is_active: boolean; meta_status: string | null }>>([]);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   useEffect(() => {
     loadLines();
@@ -107,7 +108,7 @@ export default function WhatsAppLinesList() {
     // Load template mappings for this line
     const { data } = await supabase
       .from('template_mappings')
-      .select('logical_type, template_name, template_language, is_active')
+      .select('logical_type, template_name, template_language, is_active, meta_status')
       .eq('whatsapp_line_id', line.id)
       .order('logical_type');
     if (data) setTemplateMappings(data);
@@ -461,12 +462,54 @@ export default function WhatsAppLinesList() {
               {/* Template mappings (read-only) */}
               {templateMappings.length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Plantillas configuradas</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Plantillas configuradas</Label>
+                    {templateMappings.some((m) => m.meta_status === 'PENDING') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={checkingStatus}
+                        onClick={async () => {
+                          setCheckingStatus(true);
+                          try {
+                            const { data: result, error } = await supabase.functions.invoke('check-template-status');
+                            if (error) throw error;
+                            toast({
+                              title: 'Estado verificado',
+                              description: `Aprobadas: ${result?.approved ?? 0}, Rechazadas: ${result?.rejected ?? 0}, Pendientes: ${result?.still_pending ?? 0}`,
+                            });
+                            // Reload mappings
+                            if (editingLine) {
+                              const { data } = await supabase
+                                .from('template_mappings')
+                                .select('logical_type, template_name, template_language, is_active, meta_status')
+                                .eq('whatsapp_line_id', editingLine.id)
+                                .order('logical_type');
+                              if (data) setTemplateMappings(data);
+                            }
+                          } catch (err: any) {
+                            toast({ title: 'Error', description: err.message || 'Error al verificar estado', variant: 'destructive' });
+                          } finally {
+                            setCheckingStatus(false);
+                          }
+                        }}
+                      >
+                        {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                        Verificar estado
+                      </Button>
+                    )}
+                  </div>
                   <div className="rounded-md border divide-y text-sm">
                     {templateMappings.map((m) => (
                       <div key={m.logical_type} className="px-3 py-2 flex items-center justify-between gap-2">
                         <span className="text-muted-foreground capitalize">{m.logical_type.replace(/_/g, ' ')}</span>
-                        <span className="font-mono text-xs truncate max-w-[200px]" title={m.template_name}>{m.template_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs truncate max-w-[200px]" title={m.template_name}>{m.template_name}</span>
+                          {m.meta_status === 'APPROVED' && <Badge variant="default" className="bg-green-600 text-xs">Aprobada</Badge>}
+                          {m.meta_status === 'PENDING' && <Badge variant="secondary" className="bg-yellow-500 text-white text-xs">Pendiente</Badge>}
+                          {m.meta_status === 'REJECTED' && <Badge variant="destructive" className="text-xs">Rechazada</Badge>}
+                          {m.meta_status === 'FAILED' && <Badge variant="destructive" className="text-xs">Error al crear</Badge>}
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -68,6 +68,8 @@ export interface TemplateMappingRow {
   template_language: string;
   parameter_order: string[];
   is_active: boolean;
+  meta_status: string | null;
+  meta_template_id: string | null;
 }
 
 /** Row from whatsapp_lines table (relevant fields) */

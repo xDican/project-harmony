@@ -319,6 +319,27 @@ Deno.serve(async (req) => {
 
     // 6) Validate we have template or body
     if (!resolvedTemplateName && !body) {
+      // Check if there's a PENDING mapping (template awaiting Meta approval)
+      if (type && type !== "generic") {
+        const { data: pendingMapping } = await supabase
+          .from("template_mappings")
+          .select("meta_status")
+          .eq("whatsapp_line_id", line.id)
+          .eq("logical_type", type)
+          .eq("provider", line.provider)
+          .eq("meta_status", "PENDING")
+          .limit(1)
+          .maybeSingle();
+
+        if (pendingMapping) {
+          return jsonResponse(503, {
+            ok: false,
+            error: "Plantilla pendiente de aprobacion por Meta",
+            errorCode: "TEMPLATE_PENDING_APPROVAL",
+          });
+        }
+      }
+
       return jsonResponse(400, {
         ok: false,
         error: "Debe proporcionar un type válido con plantilla configurada, templateName, o body",
