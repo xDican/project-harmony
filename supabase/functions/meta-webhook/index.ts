@@ -208,12 +208,10 @@ async function handleIncomingMessage(
     // Quick patient lookup for log enrichment (optional — failures are non-fatal)
     let patientIdForLog: string | undefined;
     if (fromPhone) {
-      const localPhone = fromPhone.replace(/^\+504/, "");
-      const phonesToCheck = localPhone !== fromPhone ? [fromPhone, localPhone] : [fromPhone];
       const { data: p } = await supabase
         .from("patients")
         .select("id")
-        .in("phone", phonesToCheck)
+        .eq("phone", fromPhone)
         .limit(1)
         .maybeSingle();
       patientIdForLog = p?.id;
@@ -240,18 +238,13 @@ async function handleIncomingMessage(
     return;
   }
 
-  // Find patient by phone
-  // Patients may be stored as local 8-digit (33899824) or E164 (+50433899824),
-  // so we try both formats.
+  // Find patient by phone — DB stores all phones as E.164 (+504XXXXXXXX)
   let patient: { id: string; name: string } | null = null;
   if (fromPhone) {
-    const localPhone = fromPhone.replace(/^\+504/, "");
-    const phonesToCheck = localPhone !== fromPhone ? [fromPhone, localPhone] : [fromPhone];
-
     const { data, error } = await supabase
       .from("patients")
       .select("id, name, phone")
-      .in("phone", phonesToCheck)
+      .eq("phone", fromPhone)
       .limit(1)
       .maybeSingle();
 
@@ -259,7 +252,7 @@ async function handleIncomingMessage(
       console.error("[meta-webhook] Error finding patient:", error);
     }
     patient = data;
-    console.log("[meta-webhook] Patient lookup phones:", phonesToCheck, "found:", patient?.id ?? "none");
+    console.log("[meta-webhook] Patient lookup phone:", fromPhone, "found:", patient?.id ?? "none");
   }
 
   // Find appointment:
@@ -343,7 +336,7 @@ async function handleIncomingMessage(
       }
 
       // Send notification templates based on intent
-      await sendIntentNotification(supabase, intent, appointment, patient!, fromPhone, toPhone);
+      await sendIntentNotification(supabase, intent, appointment, patient!, fromPhone, toPhone, lineOrgId);
     }
   }
 }
@@ -364,6 +357,7 @@ async function sendIntentNotification(
   patient: { id: string; name: string },
   _patientPhone: string,
   _linePhone: string,
+  orgId?: string,
 ): Promise<void> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -397,6 +391,7 @@ async function sendIntentNotification(
         appointmentId: appointment.id,
         patientId: patient.id,
         doctorId: appointment.doctor_id,
+        ...(orgId ? { organizationId: orgId } : {}),
       }),
     }).catch((e) => console.error("[meta-webhook] Error sending patient_confirmed:", e));
 
@@ -427,6 +422,7 @@ async function sendIntentNotification(
           appointmentId: appointment.id,
           patientId: patient.id,
           doctorId: appointment.doctor_id,
+          ...(orgId ? { organizationId: orgId } : {}),
         }),
       }).catch((e) => console.error("[meta-webhook] Error sending reschedule_doctor:", e));
     }
@@ -447,6 +443,7 @@ async function sendIntentNotification(
         appointmentId: appointment.id,
         patientId: patient.id,
         doctorId: appointment.doctor_id,
+        ...(orgId ? { organizationId: orgId } : {}),
       }),
     }).catch((e) => console.error("[meta-webhook] Error sending patient_reschedule:", e));
   }
@@ -524,6 +521,7 @@ async function routeToBotHandler(
         to: fromPhone,
         body: fullMessage,
         type: "generic",
+        organizationId: orgId,
         ...(patientId ? { patientId } : {}),
       }),
     });

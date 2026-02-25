@@ -419,7 +419,7 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             whatsappLineId: resolvedLineId,
-            patientPhone: fromLocal,
+            patientPhone: "+504" + fromLocal,
             messageText: bodyText,
             organizationId: resolvedOrgId,
           }),
@@ -529,7 +529,7 @@ Deno.serve(async (req: Request) => {
       const { data: patData, error: patError } = await supabase
         .from("patients")
         .select("id, name")
-        .eq("phone", fromLocal)
+        .eq("phone", "+504" + fromLocal)
         .limit(1);
 
       if (patError) {
