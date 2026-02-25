@@ -137,45 +137,79 @@ Deno.serve(async (req) => {
         } catch (err) {
           console.warn("[disconnect-whatsapp-line] Unsubscribe error:", err);
         }
+      }
 
-        // 5c) Delete templates from WABA
+      // 5c) Delete templates from Meta WABA (best-effort)
+      if (line.meta_waba_id) {
         const { data: mappings } = await supabaseAdmin
           .from("template_mappings")
-          .select("template_name, meta_template_id")
-          .eq("whatsapp_line_id", whatsapp_line_id)
-          .eq("provider", "meta");
+          .select("template_name")
+          .eq("whatsapp_line_id", whatsapp_line_id);
 
-        if (mappings && mappings.length > 0) {
-          const deletedNames = new Set<string>();
+        if (mappings?.length) {
+          console.log(`[disconnect-whatsapp-line] Deleting ${mappings.length} templates from WABA ${line.meta_waba_id}`);
           for (const m of mappings) {
-            if (!m.template_name || deletedNames.has(m.template_name)) continue;
-            deletedNames.add(m.template_name);
             try {
               const delRes = await fetch(
-                `${GRAPH_BASE}/${line.meta_waba_id}/message_templates?name=${encodeURIComponent(m.template_name)}`,
-                {
-                  method: "DELETE",
-                  headers: { Authorization: `Bearer ${token}` },
-                },
+                `${GRAPH_BASE}/${line.meta_waba_id}/message_templates?name=${m.template_name}`,
+                { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
               );
+              const delData = await delRes.json().catch(() => ({}));
               if (delRes.ok) {
                 results.templates_deleted++;
-                console.log("[disconnect-whatsapp-line] Deleted template:", m.template_name);
+                console.log(`[disconnect-whatsapp-line] Deleted template: ${m.template_name}`);
               } else {
-                const delData = await delRes.json().catch(() => ({}));
-                console.warn("[disconnect-whatsapp-line] Failed to delete template:", m.template_name, delData?.error?.message);
+                console.warn(`[disconnect-whatsapp-line] Failed to delete template ${m.template_name}:`, delData?.error?.message);
               }
             } catch (err) {
-              console.warn("[disconnect-whatsapp-line] Template delete error:", m.template_name, err);
+              console.warn(`[disconnect-whatsapp-line] Error deleting template ${m.template_name}:`, err);
             }
           }
         }
       }
     }
 
-    // 6) Delete the whatsapp_lines row — CASCADE handles:
-    //    whatsapp_line_doctors, template_mappings, bot_sessions
-    //    message_logs are NOT deleted (historical data)
+    // 6) Clean up tables whose FKs lack ON DELETE CASCADE
+    //    bot_sessions and message_logs reference whatsapp_lines without CASCADE
+    const { error: botErr } = await supabaseAdmin
+      .from("bot_sessions")
+      .delete()
+      .eq("whatsapp_line_id", whatsapp_line_id);
+    if (botErr) {
+      console.warn("[disconnect-whatsapp-line] Error deleting bot_sessions (non-blocking):", botErr);
+    }
+
+    // Nullify whatsapp_line_id in message_logs (preserve historical data)
+    const { error: logsErr } = await supabaseAdmin
+      .from("message_logs")
+      .update({ whatsapp_line_id: null })
+      .eq("whatsapp_line_id", whatsapp_line_id);
+    if (logsErr) {
+      console.warn("[disconnect-whatsapp-line] Error nullifying message_logs (non-blocking):", logsErr);
+    }
+
+    // Delete template_mappings referencing this line
+    const { error: tmErr } = await supabaseAdmin
+      .from("template_mappings")
+      .delete()
+      .eq("whatsapp_line_id", whatsapp_line_id);
+    if (tmErr) {
+      console.warn("[disconnect-whatsapp-line] Error deleting template_mappings (non-blocking):", tmErr);
+    }
+
+    // Delete bot_conversation_logs referencing this line
+    const { error: bclErr } = await supabaseAdmin
+      .from("bot_conversation_logs")
+      .delete()
+      .eq("whatsapp_line_id", whatsapp_line_id);
+    if (bclErr) {
+      console.warn("[disconnect-whatsapp-line] Error deleting bot_conversation_logs (non-blocking):", bclErr);
+    }
+
+    // 7) Hard delete: remove the line completely to free the phone_number UNIQUE constraint.
+    //    whatsapp_line_doctors has ON DELETE CASCADE so it's cleaned up automatically.
+    //    The meta_registration_pin is no longer needed — step 5a already called /deregister
+    //    on Meta (clearing 2FA), and reconnect via meta-embedded-signup generates a new PIN.
     const { error: deleteError } = await supabaseAdmin
       .from("whatsapp_lines")
       .delete()
@@ -186,7 +220,7 @@ Deno.serve(async (req) => {
       return json({ error: "Error al eliminar la linea de WhatsApp" }, 500);
     }
 
-    console.log("[disconnect-whatsapp-line] Line deleted successfully:", whatsapp_line_id);
+    console.log("[disconnect-whatsapp-line] Line hard-deleted:", whatsapp_line_id);
 
     return json({
       success: true,

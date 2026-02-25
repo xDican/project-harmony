@@ -6,17 +6,14 @@ import {
   ORIONCARE_WABA_ID,
   generateTemplateName,
 } from "../_shared/canonical-templates.ts";
-import {
-  createTemplateInWaba,
-  getTemplateStatuses,
-} from "../_shared/meta-template-api.ts";
+import { createTemplateInWaba } from "../_shared/meta-template-api.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-24_v11";
+const BUILD = "meta-embedded-signup@2026-02-25_v16";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
@@ -234,12 +231,13 @@ Deno.serve(async (req) => {
     // 8) Upsert whatsapp_lines
     const { data: existingLine } = await supabaseAdmin
       .from("whatsapp_lines")
-      .select("id")
+      .select("id, meta_registration_pin")
       .eq("organization_id", orgId)
       .eq("meta_phone_number_id", phone_number_id)
       .maybeSingle();
 
     let lineId: string;
+    let phoneConflict: { id: string; organization_id: string; meta_registration_pin: string | null } | null = null;
 
     if (existingLine) {
       // UPDATE línea existente
@@ -264,11 +262,12 @@ Deno.serve(async (req) => {
     } else {
       // INSERT nueva línea
       // Verificar si el phone_number ya existe en otra línea (unique constraint)
-      const { data: phoneConflict } = await supabaseAdmin
+      const { data: phoneConflictData } = await supabaseAdmin
         .from("whatsapp_lines")
-        .select("id, organization_id")
+        .select("id, organization_id, meta_registration_pin")
         .eq("phone_number", displayPhoneNumber)
         .maybeSingle();
+      phoneConflict = phoneConflictData;
 
       if (phoneConflict) {
         // Si el número ya existe en OTRA org, error
@@ -439,76 +438,46 @@ Deno.serve(async (req) => {
 
     // Priority 3: brand new line (or different WABA from previous line)
     if (mappings === undefined) {
-      // 9b) Create canonical templates with date-based unique suffix (avoids Meta 30-day name retention)
+      // 9b) Create canonical templates with timestamp-based unique names (DDMMYY_HHMMSS)
+      // Each connection gets unique names — no collision/retry logic needed.
       if (waba_id !== ORIONCARE_WABA_ID) {
         console.log("[meta-embedded-signup] Creating canonical templates in WABA:", waba_id);
         mappings = [];
-        const MAX_NAME_ATTEMPTS = 5; // _250225, _250225b, _250225c, _250225d, _250225e
 
         try {
           for (const tmpl of CANONICAL_TEMPLATES) {
-            let created = false;
+            const templateName = generateTemplateName(tmpl.template_name);
+            console.log("[meta-embedded-signup] Creating template:", templateName);
 
-            for (let attempt = 0; attempt < MAX_NAME_ATTEMPTS; attempt++) {
-              const candidateName = generateTemplateName(tmpl.template_name, attempt);
-              console.log("[meta-embedded-signup] Attempting template:", candidateName, attempt > 0 ? `(attempt ${attempt + 1})` : "");
+            const result = await createTemplateInWaba(
+              waba_id!,
+              accessToken,
+              templateName,
+              tmpl.language,
+              tmpl.category,
+              tmpl.components,
+            );
 
-              const result = await createTemplateInWaba(
-                waba_id!,
-                accessToken,
-                candidateName,
-                tmpl.language,
-                tmpl.category,
-                tmpl.components,
-              );
-
-              if (result.ok) {
-                console.log("[meta-embedded-signup] Template created:", candidateName, "status:", result.status, "id:", result.templateId);
-                mappings.push({
-                  whatsapp_line_id: lineId,
-                  logical_type: tmpl.logical_type,
-                  provider: "meta",
-                  template_name: candidateName,
-                  template_language: tmpl.language,
-                  parameter_order: [],
-                  is_active: false,
-                  meta_status: result.status || "PENDING",
-                  meta_template_id: result.templateId || null,
-                });
-                created = true;
-                break;
-              } else if (result.alreadyExists) {
-                // Name taken — try next suffix variant
-                console.log("[meta-embedded-signup] Name taken:", candidateName, "— trying next suffix");
-                continue;
-              } else {
-                // Other error (rate limit, permission, etc.) — no point retrying with different name
-                console.warn("[meta-embedded-signup] Failed to create template:", candidateName, "| error:", result.error);
-                mappings.push({
-                  whatsapp_line_id: lineId,
-                  logical_type: tmpl.logical_type,
-                  provider: "meta",
-                  template_name: candidateName,
-                  template_language: tmpl.language,
-                  parameter_order: [],
-                  is_active: false,
-                  meta_status: "FAILED",
-                  meta_template_id: null,
-                });
-                created = true; // exit loop — already added a FAILED mapping
-                break;
-              }
-            }
-
-            if (!created) {
-              // All name attempts exhausted (all returned alreadyExists)
-              console.warn("[meta-embedded-signup] All name attempts exhausted for:", tmpl.logical_type);
-              const lastName = generateTemplateName(tmpl.template_name, MAX_NAME_ATTEMPTS - 1);
+            if (result.ok) {
+              console.log("[meta-embedded-signup] Template created:", templateName, "status:", result.status, "id:", result.templateId);
               mappings.push({
                 whatsapp_line_id: lineId,
                 logical_type: tmpl.logical_type,
                 provider: "meta",
-                template_name: lastName,
+                template_name: templateName,
+                template_language: tmpl.language,
+                parameter_order: [],
+                is_active: false,
+                meta_status: result.status || "PENDING",
+                meta_template_id: result.templateId || null,
+              });
+            } else {
+              console.warn("[meta-embedded-signup] Failed to create template:", templateName, "| error:", result.error);
+              mappings.push({
+                whatsapp_line_id: lineId,
+                logical_type: tmpl.logical_type,
+                provider: "meta",
+                template_name: templateName,
                 template_language: tmpl.language,
                 parameter_order: [],
                 is_active: false,
@@ -568,34 +537,49 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 10) Auto-register phone number with Meta Cloud API (without 2FA PIN for frictionless E2E re-registration)
+    // 10) Register phone with Meta Cloud API
+    // Reuse existing PIN from DB if available (reconnect case — Meta requires the SAME
+    // 2FA PIN that was set on the first /register call; deregister does NOT clear it).
     let metaRegistered = false;
+    let registrationError: string | null = null;
+
+    const existingPin = existingLine?.meta_registration_pin
+      ?? phoneConflict?.meta_registration_pin
+      ?? null;
+    const pin = existingPin
+      || String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
+
+    console.log("[meta-embedded-signup] Step 10: Registering phone", phone_number_id,
+      "| existingPin:", !!existingPin, "| pinLength:", pin.length);
+
     try {
-      const registerRes = await fetch(
-        `${GRAPH_BASE}/${phone_number_id}/register`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ messaging_product: "whatsapp" }),
+      const registerBody = { messaging_product: "whatsapp", pin };
+      const registerRes = await fetch(`${GRAPH_BASE}/${phone_number_id}/register`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify(registerBody),
+      });
       const registerData = await registerRes.json().catch(() => ({}));
+
+      console.log("[meta-embedded-signup] /register response:", registerRes.status, JSON.stringify(registerData));
 
       if (registerRes.ok) {
         metaRegistered = true;
         await supabaseAdmin
           .from("whatsapp_lines")
-          .update({ meta_registered: true })
+          .update({ meta_registered: true, meta_registration_pin: pin })
           .eq("id", lineId);
-        console.log("[meta-embedded-signup] Phone registered with Meta Cloud API (no 2FA PIN)");
+        console.log("[meta-embedded-signup] Phone registered (2FA PIN set)");
       } else {
-        console.warn("[meta-embedded-signup] Registration failed (non-blocking):", registerData?.error?.message);
+        registrationError = `${registerRes.status}: ${registerData?.error?.message ?? JSON.stringify(registerData)}`;
+        console.error("[meta-embedded-signup] Registration FAILED:", registrationError);
       }
     } catch (regErr) {
-      console.warn("[meta-embedded-signup] Registration error (non-blocking):", regErr);
+      registrationError = regErr instanceof Error ? regErr.message : String(regErr);
+      console.error("[meta-embedded-signup] Registration exception:", registrationError);
     }
 
     // 11) Responder con éxito
@@ -605,6 +589,7 @@ Deno.serve(async (req) => {
       phone_number: displayPhoneNumber,
       verified_name: verifiedName,
       meta_registered: metaRegistered,
+      registration_error: registrationError,
       build: BUILD,
     });
   } catch (err) {

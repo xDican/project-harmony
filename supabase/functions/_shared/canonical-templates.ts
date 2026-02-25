@@ -32,7 +32,7 @@ export interface CanonicalTemplate {
 export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
   {
     logical_type: "confirmation",
-    template_name: "orioncare_confirmation_es_mx",
+    template_name: "confirmacion_cita",
     language: "es_MX",
     category: "UTILITY",
     components: [
@@ -49,7 +49,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
   },
   {
     logical_type: "reminder_24h",
-    template_name: "orioncare_reminder_24h_es_mx",
+    template_name: "recordatorio_cita_24h",
     language: "es_MX",
     category: "UTILITY",
     components: [
@@ -69,7 +69,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
   },
   {
     logical_type: "reschedule_doctor",
-    template_name: "orioncare_reschedule_doctor_es_mx",
+    template_name: "aviso_reagenda_medico",
     language: "es_MX",
     category: "UTILITY",
     components: [
@@ -82,7 +82,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
   },
   {
     logical_type: "patient_confirmed",
-    template_name: "orioncare_patient_confirmed_es_mx",
+    template_name: "cita_confirmada",
     language: "es_MX",
     category: "UTILITY",
     components: [
@@ -95,7 +95,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
   },
   {
     logical_type: "patient_reschedule",
-    template_name: "orioncare_patient_reschedule_es_mx",
+    template_name: "solicitud_reagenda",
     language: "es_MX",
     category: "UTILITY",
     components: [
@@ -108,20 +108,21 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
 ];
 
 /**
- * Generate a unique template name by appending a date suffix (DDMMYY).
- * If `attempt` > 0, appends a letter: _250225, _250225b, _250225c, etc.
+ * Generate a unique template name by appending a timestamp suffix (DDMMYY_HHMMSS).
+ * Each second produces a unique name, so no retry/collision logic is needed.
  * Meta template names: max 512 chars, lowercase alphanumeric + underscore only.
+ *
+ * Example: confirmacion_cita_250226_143052
  */
-export function generateTemplateName(base: string, attempt = 0): string {
+export function generateTemplateName(base: string): string {
   const now = new Date();
   const dd = String(now.getUTCDate()).padStart(2, "0");
   const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
   const yy = String(now.getUTCFullYear()).slice(-2);
-  const suffix = `${dd}${mm}${yy}`;
-  if (attempt === 0) return `${base}_${suffix}`;
-  // a=0 already used as no-letter, so attempt 1 = b, 2 = c, etc.
-  const letter = String.fromCharCode(97 + attempt); // b, c, d...
-  return `${base}_${suffix}${letter}`;
+  const HH = String(now.getUTCHours()).padStart(2, "0");
+  const MM = String(now.getUTCMinutes()).padStart(2, "0");
+  const SS = String(now.getUTCSeconds()).padStart(2, "0");
+  return `${base}_${dd}${mm}${yy}_${HH}${MM}${SS}`;
 }
 
 /** Legacy template names used in the OrionCare primary WABA. */
