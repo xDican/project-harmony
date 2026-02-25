@@ -1644,12 +1644,13 @@ async function findPatientByPhone(
   organizationId: string,
   supabase: SupabaseClient
 ): Promise<any | null> {
-  // Search by normalized phone
+  // Normalize to E.164 — DB stores all phones as +504XXXXXXXX
+  const normalized = phone.startsWith('+') ? phone : `+504${phone}`;
   const { data: patient } = await supabase
     .from('patients')
     .select('*')
     .eq('organization_id', organizationId)
-    .or(`phone.eq.${phone},phone.eq.+504${phone}`)
+    .eq('phone', normalized)
     .limit(1)
     .maybeSingle();
 
