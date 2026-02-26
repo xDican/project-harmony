@@ -16,7 +16,6 @@ const RequestSchema = z.object({
 });
 
 const DEFAULT_DURATION_MINUTES = 60;
-const SLOT_GRANULARITY_MINUTES = 30;
 
 /**
  * Construye un DateTime de Luxon combinando una fecha y una hora
@@ -252,6 +251,14 @@ Deno.serve(async (req) => {
     // 10) Generate available slots using Luxon
     const availableSlots: string[] = [];
 
+    // Derive slot granularity from duration: 15-min citas → 15-min slots, 30+ → 30-min slots
+    const slotGranularity = Math.min(durationMinutes, 30);
+
+    // Filter past slots for today
+    const timezone = "America/Tegucigalpa";
+    const now = DateTime.now().setZone(timezone);
+    const isToday = date === now.toISODate();
+
     for (const schedule of schedules) {
       const workStart = buildDateTime(date, schedule.start_time);
       const workEnd = buildDateTime(date, schedule.end_time);
@@ -259,10 +266,16 @@ Deno.serve(async (req) => {
 
       console.log("[get-available-slots] Schedule:", formatToHHMM(workStart), "to", formatToHHMM(workEnd));
 
-      // Generate candidate slots every SLOT_GRANULARITY_MINUTES
+      // Generate candidate slots every slotGranularity minutes
       let slotStart = workStart;
 
       while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
+        // Skip slots that are in the past for today
+        if (isToday && slotStart <= now) {
+          slotStart = slotStart.plus({ minutes: slotGranularity });
+          continue;
+        }
+
         const slotStartMs = slotStart.toMillis();
         const slotEndMs = slotStart.plus({ minutes: durationMinutes }).toMillis();
 
@@ -277,7 +290,7 @@ Deno.serve(async (req) => {
         }
 
         // Move to next candidate slot
-        slotStart = slotStart.plus({ minutes: SLOT_GRANULARITY_MINUTES });
+        slotStart = slotStart.plus({ minutes: slotGranularity });
       }
     }
 

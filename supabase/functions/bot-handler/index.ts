@@ -616,6 +616,8 @@ async function handleBookingSelectWeek(
 
   const durationMinutes = lineData?.default_duration_minutes || 60;
   session.context.durationMinutes = durationMinutes;
+  const slotGranularity = Math.min(durationMinutes, 30);
+  session.context.slotGranularity = slotGranularity;
 
   // Get available weeks
   const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId);
@@ -665,12 +667,15 @@ async function handleBookingSelectDay(
   session.context.selectedWeek = selectedWeek.weekStart;
 
   // Get available days in the selected week
+  const durationMins = session.context.durationMinutes || 60;
+  const granularity = session.context.slotGranularity || Math.min(durationMins, 30);
   const days = await getAvailableDaysInWeek(
     session.context.doctorId,
     selectedWeek.weekStart,
-    session.context.durationMinutes || 60,
+    durationMins,
     supabase,
-    session.context.calendarId
+    session.context.calendarId,
+    granularity
   );
 
   if (days.length === 0) {
@@ -761,14 +766,18 @@ async function showHourSlots(
   const PAGE_SIZE = 5;
   const page = session.context.slotPage || 1;
 
+  const durationMinutes = session.context.durationMinutes || 60;
+  const slotGranularity = session.context.slotGranularity || Math.min(durationMinutes, 30);
+
   const result = await getAvailableHoursForDate(
     session.context.doctorId,
     session.context.selectedDate,
-    session.context.durationMinutes || 60,
+    durationMinutes,
     page,
     PAGE_SIZE,
     supabase,
-    session.context.calendarId
+    session.context.calendarId,
+    slotGranularity
   );
 
   if (result.slots.length === 0) {
@@ -916,12 +925,14 @@ async function createAppointmentWithPatient(
   supabase: SupabaseClient
 ): Promise<BotResponse> {
   // Re-validate slot availability before creating
+  const checkDuration = session.context.durationMinutes || 60;
   const slotsCheck = await getAvailableSlotsForDate(
     session.context.doctorId,
     session.context.selectedDate,
-    session.context.durationMinutes || 60,
+    checkDuration,
     supabase,
-    session.context.calendarId
+    session.context.calendarId,
+    session.context.slotGranularity || Math.min(checkDuration, 30)
   );
 
   if (!slotsCheck.includes(session.context.selectedTime)) {
@@ -1245,6 +1256,7 @@ async function handleCancelConfirm(
       .single();
 
     session.context.durationMinutes = lineData?.default_duration_minutes || 60;
+    session.context.slotGranularity = Math.min(session.context.durationMinutes, 30);
     session.context.isReschedule = true; // Flag to know we're rescheduling
 
     // Go to week selection (reuse booking flow)
@@ -1476,7 +1488,8 @@ async function getAvailableDaysInWeek(
   weekStart: string,
   durationMinutes: number,
   supabase: SupabaseClient,
-  calendarId?: string
+  calendarId?: string,
+  slotGranularity: number = 30
 ): Promise<{ date: string; label: string }[]> {
   const timezone = 'America/Tegucigalpa';
   const weekStartDt = DateTime.fromISO(weekStart, { zone: timezone });
@@ -1491,7 +1504,7 @@ async function getAvailableDaysInWeek(
     if (date < now.startOf('day')) continue;
 
     // Check if this day has available slots
-    const slots = await getAvailableSlotsForDate(doctorId, dateStr, durationMinutes, supabase, calendarId);
+    const slots = await getAvailableSlotsForDate(doctorId, dateStr, durationMinutes, supabase, calendarId, slotGranularity);
 
     if (slots.length > 0) {
       const label = date.toFormat('EEEE dd MMM', { locale: 'es' });
@@ -1509,9 +1522,10 @@ async function getAvailableHoursForDate(
   page: number,
   pageSize: number,
   supabase: SupabaseClient,
-  calendarId?: string
+  calendarId?: string,
+  slotGranularity: number = 30
 ): Promise<{ slots: string[]; hasMore: boolean; totalSlots: number }> {
-  const allSlots = await getAvailableSlotsForDate(doctorId, date, durationMinutes, supabase, calendarId);
+  const allSlots = await getAvailableSlotsForDate(doctorId, date, durationMinutes, supabase, calendarId, slotGranularity);
   const totalSlots = allSlots.length;
   const startIdx = (page - 1) * pageSize;
   const endIdx = startIdx + pageSize;
@@ -1534,9 +1548,9 @@ async function getAvailableSlotsForDate(
   date: string,
   durationMinutes: number,
   supabase: SupabaseClient,
-  calendarId?: string
+  calendarId?: string,
+  slotGranularity: number = 30
 ): Promise<string[]> {
-  const SLOT_GRANULARITY = 30;
 
   // Get day of week (Luxon: 1=Mon...7=Sun → convert to 0=Sun...6=Sat)
   const requestedDate = DateTime.fromISO(date);
@@ -1612,6 +1626,11 @@ async function getAvailableSlotsForDate(
   // Generate available slots
   const availableSlots: string[] = [];
 
+  // Filter past slots for today
+  const timezone = 'America/Tegucigalpa';
+  const now = DateTime.now().setZone(timezone);
+  const isToday = date === now.toISODate();
+
   for (const schedule of schedules) {
     const workStart = DateTime.fromISO(`${date}T${schedule.start_time.substring(0, 5)}:00`);
     const workEnd = DateTime.fromISO(`${date}T${schedule.end_time.substring(0, 5)}:00`);
@@ -1620,6 +1639,12 @@ async function getAvailableSlotsForDate(
     let slotStart = workStart;
 
     while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
+      // Skip slots that are in the past for today
+      if (isToday && slotStart <= now) {
+        slotStart = slotStart.plus({ minutes: slotGranularity });
+        continue;
+      }
+
       const slotStartMs = slotStart.toMillis();
       const slotEndMs = slotStart.plus({ minutes: durationMinutes }).toMillis();
 
@@ -1631,7 +1656,7 @@ async function getAvailableSlotsForDate(
         availableSlots.push(slotStart.toFormat('HH:mm'));
       }
 
-      slotStart = slotStart.plus({ minutes: SLOT_GRANULARITY });
+      slotStart = slotStart.plus({ minutes: slotGranularity });
     }
   }
 

@@ -437,6 +437,8 @@ Deno.serve(async (req) => {
     }
 
     // 9) Procesar cada día del mes
+    const now = DateTime.now().setZone(timezone);
+    const todayStr = now.toISODate();
     const daysInMonth = getDaysInMonth(year, monthNum, timezone);
     const results: DayResult[] = [];
 
@@ -489,7 +491,14 @@ Deno.serve(async (req) => {
           millisecond: 0,
         });
 
-        const gaps = calculateGaps(workStart.toMillis(), workEnd.toMillis(), occupiedIntervals);
+        // Clamp workStart to current time for today (past hours are not available)
+        let effectiveWorkStartMs = workStart.toMillis();
+        if (date === todayStr && effectiveWorkStartMs < now.toMillis()) {
+          effectiveWorkStartMs = now.toMillis();
+        }
+        if (effectiveWorkStartMs >= workEnd.toMillis()) continue;
+
+        const gaps = calculateGaps(effectiveWorkStartMs, workEnd.toMillis(), occupiedIntervals);
         if (gaps.some((gap) => gap.durationMinutes >= durationMinutes)) {
           canFit = true;
           break;

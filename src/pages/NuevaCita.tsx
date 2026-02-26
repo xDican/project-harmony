@@ -69,6 +69,7 @@ export default function NuevaCita() {
 
   // Duration options
   const durationOptions = [
+    { value: 15, label: '15 min' },
     { value: 30, label: '30 min' },
     { value: 60, label: '1 hora' },
     { value: 90, label: '1.5 horas' },
@@ -405,7 +406,7 @@ export default function NuevaCita() {
             <Label className="text-lg font-semibold text-foreground mb-3 block">
               {getStepNumber(3)}. Duración de la Cita
             </Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {durationOptions.map((option) => (
                 <Button
                   key={option.value}
