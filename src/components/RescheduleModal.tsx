@@ -37,6 +37,7 @@ interface RescheduleModalProps {
 
 // Duration options (same as NuevaCita)
 const durationOptions = [
+  { value: 15, label: '15 min' },
   { value: 30, label: '30 min' },
   { value: 60, label: '1 hora' },
   { value: 90, label: '1.5 horas' },
@@ -314,7 +315,7 @@ export function RescheduleModal({
           {/* Step 1: Duration selector (PRIMERO) */}
           <div className="space-y-2">
             <Label>1. Duración de la cita</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {durationOptions.map((option) => (
                 <Button
                   key={option.value}

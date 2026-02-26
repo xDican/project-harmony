@@ -16,6 +16,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -432,18 +439,22 @@ export default function WhatsAppLinesList() {
 
               <div className="space-y-2">
                 <Label htmlFor="wa-duration">Duracion por defecto (minutos)</Label>
-                <Input
-                  id="wa-duration"
-                  type="number"
-                  min={1}
-                  max={480}
-                  value={formDefaultDuration}
-                  onChange={(e) =>
-                    setFormDefaultDuration(e.target.value ? Number(e.target.value) : '')
-                  }
-                  placeholder="Ej: 30"
+                <Select
+                  value={formDefaultDuration !== '' ? String(formDefaultDuration) : ''}
+                  onValueChange={(val) => setFormDefaultDuration(val ? Number(val) : '')}
                   disabled={saving}
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar duracion" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15 min</SelectItem>
+                    <SelectItem value="30">30 min</SelectItem>
+                    <SelectItem value="60">1 hora</SelectItem>
+                    <SelectItem value="90">1.5 horas</SelectItem>
+                    <SelectItem value="120">2 horas</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center space-x-2">
