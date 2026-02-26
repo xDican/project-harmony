@@ -13,6 +13,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { DateTime } from 'https://esm.sh/luxon@3.4.4';
+import { formatTimeForTemplate } from '../_shared/datetime.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -76,6 +77,7 @@ interface BotHandlerInput {
   patientPhone: string;
   messageText: string;
   organizationId: string;
+  appointmentId?: string;  // direct reschedule from template quick reply
 }
 
 // ============================================================================
@@ -169,9 +171,28 @@ async function handleBotMessage(
     // Fall through to greeting handler
   }
 
-  // Route to state handler based on current state
+  // Direct reschedule: when appointmentId arrives and session is fresh (greeting),
+  // skip the menu and jump straight to the reschedule week-selection flow.
   let response: BotResponse;
 
+  if (input.appointmentId && session.state === 'greeting') {
+    response = await handleDirectReschedule(input.appointmentId, session, organizationId, supabase);
+
+    // Update session and log, then return early
+    await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
+
+    const responseTimeMs = Date.now() - startTime;
+    const intent = detectIntent(stateBefore, response.nextState, messageText);
+    logConversation(
+      session.id, whatsappLineId, organizationId, patientPhone,
+      stateBefore, response.nextState, messageText, response.message,
+      response.options || [], intent, responseTimeMs, supabase
+    ).catch((err) => console.error('[bot-handler] Log error (non-fatal):', err));
+
+    return response;
+  }
+
+  // Route to state handler based on current state
   switch (session.state) {
     case 'greeting':
       response = await handleGreeting(session, organizationId, supabase);
@@ -356,6 +377,96 @@ async function updateSession(
 // ============================================================================
 // STATE HANDLERS
 // ============================================================================
+
+/**
+ * Direct reschedule: patient tapped "Reagendar" on a confirmation/reminder template.
+ * Skips greeting → menu → reschedule_list and jumps straight to week selection.
+ */
+async function handleDirectReschedule(
+  appointmentId: string,
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient
+): Promise<BotResponse> {
+  console.log('[bot-handler] Direct reschedule for appointment:', appointmentId);
+
+  // 1. Fetch appointment with doctor info
+  const { data: appointment, error: aptError } = await supabase
+    .from('appointments')
+    .select('id, date, time, duration_minutes, status, doctor_id, doctors:doctor_id (id, name, prefix)')
+    .eq('id', appointmentId)
+    .maybeSingle();
+
+  if (aptError || !appointment || appointment.status === 'cancelada' || appointment.status === 'cancelled') {
+    console.log('[bot-handler] Direct reschedule: appointment not found or cancelled, falling back to greeting');
+    return await handleGreeting(session, organizationId, supabase);
+  }
+
+  // 2. Find patient by phone
+  const patient = await findPatientByPhone(session.patient_phone, organizationId, supabase);
+
+  // 3. Get calendarId from whatsapp_line_doctors
+  const { data: lineDoctor } = await supabase
+    .from('whatsapp_line_doctors')
+    .select('calendar_id')
+    .eq('whatsapp_line_id', session.whatsapp_line_id)
+    .eq('doctor_id', appointment.doctor_id)
+    .limit(1)
+    .maybeSingle();
+
+  const calendarId = lineDoctor?.calendar_id;
+
+  // 4. Get default duration from whatsapp_lines
+  const { data: lineData } = await supabase
+    .from('whatsapp_lines')
+    .select('default_duration_minutes')
+    .eq('id', session.whatsapp_line_id)
+    .single();
+
+  const durationMinutes = lineData?.default_duration_minutes || appointment.duration_minutes || 60;
+  const slotGranularity = Math.min(durationMinutes, 30);
+
+  const doctor = appointment.doctors as any;
+  const doctorName = doctor ? `${doctor.prefix} ${doctor.name}` : 'Doctor';
+
+  // 5. Pre-populate context
+  session.context.rescheduleAppointmentId = appointment.id;
+  session.context.rescheduleAppointmentDate = appointment.date;
+  session.context.rescheduleAppointmentTime = appointment.time;
+  session.context.rescheduleAppointmentDoctorName = doctorName;
+  session.context.doctorId = appointment.doctor_id;
+  session.context.doctorName = doctorName;
+  session.context.isReschedule = true;
+  session.context.durationMinutes = durationMinutes;
+  session.context.slotGranularity = slotGranularity;
+  session.context.calendarId = calendarId;
+  if (patient) {
+    session.context.patientId = patient.id;
+    session.context.patientName = patient.name;
+  }
+
+  // 6. Get available weeks
+  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId);
+
+  if (weeks.length === 0) {
+    return {
+      message: `No hay disponibilidad en las próximas 2 semanas para reagendar tu cita con ${doctorName}. Te conecto con la secretaría.`,
+      requiresInput: false,
+      nextState: 'handoff_secretary',
+      sessionComplete: true,
+    };
+  }
+
+  session.context.availableWeeks = weeks;
+
+  return {
+    message: `Vamos a reagendar tu cita con ${doctorName}. Selecciona la nueva semana:`,
+    options: weeks.map((w) => w.weekLabel),
+    requiresInput: true,
+    nextState: 'booking_select_day',
+    sessionComplete: false,
+  };
+}
 
 async function handleGreeting(
   session: BotSession,
@@ -729,7 +840,7 @@ async function handleBookingSelectHour(
       const dayLabel = selectedDate.toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
       return {
-        message: `*Resumen de tu cita:*\n\nDoctor: ${session.context.doctorName}\nFecha: ${dayLabel}\nHora: ${selectedTime}\nDuración: ${session.context.durationMinutes} minutos\n\n¿Deseas confirmar esta cita?`,
+        message: `*Resumen de tu cita:*\n\nDoctor: ${session.context.doctorName}\nFecha: ${dayLabel}\nHora: ${formatTimeForTemplate(selectedTime)}\nDuración: ${session.context.durationMinutes} minutos\n\n¿Deseas confirmar esta cita?`,
         options: ['Sí, confirmar', 'No, cambiar horario', 'Cancelar'],
         requiresInput: true,
         nextState: 'booking_confirm',
@@ -793,7 +904,7 @@ async function showHourSlots(
   // Store current page slots in context
   session.context.availableSlots = result.slots;
 
-  const options = [...result.slots];
+  const options = result.slots.map((s: string) => formatTimeForTemplate(s));
   if (result.hasMore) {
     options.push('Ver más horarios');
   }
@@ -998,7 +1109,7 @@ async function createAppointmentWithPatient(
   const successTitle = session.context.isReschedule ? '¡Cita reagendada exitosamente!' : '¡Cita agendada exitosamente!';
 
   return {
-    message: `${successEmoji} *${successTitle}*\n\nDoctor: ${session.context.doctorName}\nFecha: ${dateLabel}\nHora: ${session.context.selectedTime}\nDuración: ${session.context.durationMinutes} min\n\nRecibirás un recordatorio antes de tu cita. ¡Gracias!`,
+    message: `${successEmoji} *${successTitle}*\n\nDoctor: ${session.context.doctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(session.context.selectedTime)}\nDuración: ${session.context.durationMinutes} min\n\nRecibirás un recordatorio antes de tu cita. ¡Gracias!`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -1073,7 +1184,7 @@ async function handleRescheduleList(
     if (isNaN(selection) || selection < 1 || selection > appointments.length) {
       const options = appointments.map((apt: any) => {
         const dateLabel = DateTime.fromISO(apt.date, { zone: 'America/Tegucigalpa' }).toFormat('dd MMM', { locale: 'es' });
-        return `${apt.doctorName} - ${dateLabel} ${apt.time}`;
+        return `${apt.doctorName} - ${dateLabel} ${formatTimeForTemplate(apt.time)}`;
       });
       options.push('Volver al menú');
 
@@ -1099,7 +1210,7 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `Cita seleccionada:\n\nDoctor: ${selectedApt.doctorName}\nFecha: ${dateLabel}\nHora: ${selectedApt.time}\n\n¿Qué deseas hacer?`,
+      message: `Cita seleccionada:\n\nDoctor: ${selectedApt.doctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(selectedApt.time)}\n\n¿Qué deseas hacer?`,
       options: ['Reagendar cita', 'Cancelar cita', 'Volver al menú'],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -1147,7 +1258,7 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `Tienes 1 cita próxima:\n\nDoctor: ${apt.doctorName}\nFecha: ${dateLabel}\nHora: ${apt.time}\n\n¿Qué deseas hacer?`,
+      message: `Tienes 1 cita próxima:\n\nDoctor: ${apt.doctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(apt.time)}\n\n¿Qué deseas hacer?`,
       options: ['Reagendar cita', 'Cancelar cita', 'Volver al menú'],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -1158,7 +1269,7 @@ async function handleRescheduleList(
   // Multiple appointments - list them
   const options = mappedAppointments.map((apt: any) => {
     const dateLabel = DateTime.fromISO(apt.date, { zone: 'America/Tegucigalpa' }).toFormat('dd MMM', { locale: 'es' });
-    return `${apt.doctorName} - ${dateLabel} ${apt.time}`;
+    return `${apt.doctorName} - ${dateLabel} ${formatTimeForTemplate(apt.time)}`;
   });
   options.push('Volver al menú');
 
@@ -1211,7 +1322,7 @@ async function handleCancelConfirm(
         .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
       return {
-        message: `❌ *Cita cancelada*\n\nDoctor: ${session.context.rescheduleAppointmentDoctorName}\nFecha: ${dateLabel}\nHora: ${session.context.rescheduleAppointmentTime}\n\nLa cita ha sido cancelada exitosamente. ¿Necesitas algo más?`,
+        message: `❌ *Cita cancelada*\n\nDoctor: ${session.context.rescheduleAppointmentDoctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente. ¿Necesitas algo más?`,
         options: [
           'Agendar nueva cita',
           'Volver al menú principal',
@@ -1291,7 +1402,7 @@ async function handleCancelConfirm(
     session.context.cancelConfirmPhase = 'confirm_delete';
 
     return {
-      message: `¿Estás seguro que deseas *cancelar* tu cita?\n\nDoctor: ${session.context.rescheduleAppointmentDoctorName}\nFecha: ${dateLabel}\nHora: ${session.context.rescheduleAppointmentTime}\n\n⚠️ Esta acción no se puede deshacer.`,
+      message: `¿Estás seguro que deseas *cancelar* tu cita?\n\nDoctor: ${session.context.rescheduleAppointmentDoctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n⚠️ Esta acción no se puede deshacer.`,
       options: ['Sí, cancelar cita', 'No, volver'],
       requiresInput: true,
       nextState: 'cancel_confirm',
