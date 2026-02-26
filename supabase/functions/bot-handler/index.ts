@@ -14,6 +14,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { DateTime } from 'https://esm.sh/luxon@3.4.4';
 import { formatTimeForTemplate } from '../_shared/datetime.ts';
+import { OPT_EMOJI, buildStepTitle } from '../_shared/bot-messages.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,14 +25,16 @@ const corsHeaders = {
 // HANDOFF LABELS — configurable per whatsapp_line.bot_handoff_type
 // ============================================================================
 
-const HANDOFF_LABELS: Record<string, { menuOption: string; connecting: string }> = {
+const HANDOFF_LABELS: Record<string, { menuOption: string; connecting: string; emoji: string }> = {
   secretary: {
-    menuOption: 'Hablar con la secretaría',
-    connecting: 'la secretaría',
+    menuOption: '👩🏻‍💼 Hablar con la secretaria',
+    connecting: 'la secretaria',
+    emoji: '👩🏻‍💼',
   },
   doctor: {
-    menuOption: 'Hablar con el doctor',
+    menuOption: '🩺 Hablar con el doctor',
     connecting: 'el doctor',
+    emoji: '🩺',
   },
 };
 
@@ -69,6 +72,7 @@ interface BotSession {
 interface BotResponse {
   message: string;
   options?: string[];
+  showMenuHint?: boolean; // false hides "0️⃣ Menu principal" in formatBotMessage (default true)
   requiresInput: boolean;
   nextState: BotState;
   sessionComplete: boolean;
@@ -135,7 +139,14 @@ serve(async (req) => {
 
     const response = await handleBotMessage(input, supabase);
 
-    return new Response(JSON.stringify(response), {
+    return new Response(JSON.stringify({
+      message: response.message,
+      options: response.options,
+      showMenuHint: response.showMenuHint,
+      requiresInput: response.requiresInput,
+      nextState: response.nextState,
+      sessionComplete: response.sessionComplete,
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -185,7 +196,7 @@ async function handleBotMessage(
       .single();
     session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
   }
-  const handoffLabels = session.context.handoffLabels as { menuOption: string; connecting: string };
+  const handoffLabels = session.context.handoffLabels as { menuOption: string; connecting: string; emoji: string };
 
   const stateBefore = session.state;
 
@@ -413,7 +424,7 @@ async function handleDirectReschedule(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   console.log('[bot-handler] Direct reschedule for appointment:', appointmentId);
 
@@ -426,7 +437,7 @@ async function handleDirectReschedule(
 
   if (aptError || !appointment || appointment.status === 'cancelada' || appointment.status === 'cancelled') {
     console.log('[bot-handler] Direct reschedule: appointment not found or cancelled, falling back to greeting');
-    return await handleGreeting(session, organizationId, supabase);
+    return await handleGreeting(session, organizationId, supabase, handoffLabels);
   }
 
   // 2. Find patient by phone
@@ -471,13 +482,14 @@ async function handleDirectReschedule(
     session.context.patientId = patient.id;
     session.context.patientName = patient.name;
   }
+  session.context.bookingTotalSteps = 4; // Direct reschedule always 4 steps
 
   // 6. Get available weeks
   const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId);
 
   if (weeks.length === 0) {
     return {
-      message: `No hay disponibilidad en las próximas 2 semanas para reagendar tu cita con ${doctorName}. Te conecto con ${handoffLabels.connecting}.`,
+      message: `⚠️ No encontramos disponibilidad en las proximas 2 semanas para reagendar su cita con ${doctorName}.\n\nConectando con ${handoffLabels.connecting}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -486,8 +498,10 @@ async function handleDirectReschedule(
 
   session.context.availableWeeks = weeks;
 
+  const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
+
   return {
-    message: `Vamos a reagendar tu cita con ${doctorName}. Selecciona la nueva semana:`,
+    message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${doctorName}:`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
@@ -499,7 +513,7 @@ async function handleGreeting(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   // Get bot greeting from whatsapp_line
   const { data: lineData } = await supabase
@@ -508,16 +522,17 @@ async function handleGreeting(
     .eq('id', session.whatsapp_line_id)
     .single();
 
-  const greeting = lineData?.bot_greeting || '¡Hola! Soy el asistente virtual. ¿En qué puedo ayudarte?';
+  const greeting = lineData?.bot_greeting || 'Hola, soy el asistente virtual.';
 
   return {
-    message: greeting,
+    message: `${greeting}\n\n¿En que puedo ayudarle?`,
     options: [
-      'Agendar cita',
-      'Reagendar o cancelar cita',
-      'Preguntas frecuentes (FAQs)',
+      `${OPT_EMOJI.agendar} Agendar cita`,
+      `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+      `${OPT_EMOJI.faq} Preguntas frecuentes`,
       handoffLabels.menuOption,
     ],
+    showMenuHint: false,
     requiresInput: true,
     nextState: 'main_menu',
     sessionComplete: false,
@@ -529,7 +544,7 @@ async function handleMainMenu(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
 
@@ -546,7 +561,7 @@ async function handleMainMenu(
 
   if (normalizedInput === '3' || normalizedInput.includes('faq') || normalizedInput.includes('pregunta')) {
     return {
-      message: '¿Qué te gustaría saber? Escribe tu pregunta y buscaré la respuesta.',
+      message: `${OPT_EMOJI.faq} *Preguntas frecuentes*\n\nEscriba su pregunta y buscare la respuesta.`,
       requiresInput: true,
       nextState: 'faq_search',
       sessionComplete: false,
@@ -567,13 +582,14 @@ async function handleMainMenu(
   }
 
   return {
-    message: 'No entendí tu respuesta. Por favor selecciona una opción:',
+    message: '⚠️ Opcion no valida.\n\n¿En que puedo ayudarle?',
     options: [
-      'Agendar cita',
-      'Reagendar o cancelar cita',
-      'Preguntas frecuentes (FAQs)',
+      `${OPT_EMOJI.agendar} Agendar cita`,
+      `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+      `${OPT_EMOJI.faq} Preguntas frecuentes`,
       handoffLabels.menuOption,
     ],
+    showMenuHint: false,
     requiresInput: true,
     nextState: 'main_menu',
     sessionComplete: false,
@@ -585,20 +601,21 @@ async function handleFAQSearch(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const normalizedInput = query.trim().toLowerCase();
 
   // Check if user wants to go back to main menu
   if (normalizedInput === '1' || normalizedInput.includes('volver') || normalizedInput.includes('menú') || normalizedInput.includes('menu')) {
     return {
-      message: '¿En qué puedo ayudarte?',
+      message: '¿En que puedo ayudarle?',
       options: [
-        'Agendar cita',
-        'Reagendar o cancelar cita',
-        'Preguntas frecuentes (FAQs)',
+        `${OPT_EMOJI.agendar} Agendar cita`,
+        `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+        `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
       ],
+      showMenuHint: false,
       requiresInput: true,
       nextState: 'main_menu',
       sessionComplete: false,
@@ -613,7 +630,7 @@ async function handleFAQSearch(
   // Check if user wants another question
   if (normalizedInput === '2' || normalizedInput.includes('otra pregunta')) {
     return {
-      message: 'Escribe tu pregunta:',
+      message: `${OPT_EMOJI.faq} Escriba su pregunta:`,
       requiresInput: true,
       nextState: 'faq_search',
       sessionComplete: false,
@@ -628,8 +645,8 @@ async function handleFAQSearch(
 
   if (faq) {
     return {
-      message: `*${faq.question}*\n\n${faq.answer}\n\n¿Necesitas algo más?`,
-      options: ['Volver al menú principal', 'Otra pregunta'],
+      message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faq.question}*\n${faq.answer}`,
+      options: [`${OPT_EMOJI.faq} Otra pregunta`, `${OPT_EMOJI.menu} Menu principal`],
       requiresInput: true,
       nextState: 'faq_search',
       sessionComplete: false,
@@ -638,8 +655,8 @@ async function handleFAQSearch(
 
   // No FAQ found
   return {
-    message: 'No encontré una respuesta para esa pregunta. ¿Qué deseas hacer?',
-    options: ['Volver al menú principal', handoffLabels.menuOption],
+    message: '⚠️ No encontre una respuesta para esa pregunta.',
+    options: [`${OPT_EMOJI.menu} Menu principal`, handoffLabels.menuOption],
     requiresInput: true,
     nextState: 'faq_search',
     sessionComplete: false,
@@ -673,7 +690,7 @@ async function startBookingFlow(
 
   if (!lineDoctors || lineDoctors.length === 0) {
     return {
-      message: `No hay doctores disponibles para agendar. Te conecto con ${session.context.handoffLabels?.connecting || 'la secretaría'}.`,
+      message: `⚠️ No hay doctores disponibles para agendar.\n\nConectando con ${session.context.handoffLabels?.connecting || 'la secretaria'}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -688,11 +705,14 @@ async function startBookingFlow(
     session.context.doctorId = doctor.id;
     session.context.doctorName = `${doctor.prefix} ${doctor.name}`;
     session.context.calendarId = calendar.id;
+    session.context.bookingTotalSteps = 4;
 
     return await handleBookingSelectWeek('', session, organizationId, supabase);
   }
 
   // Multiple doctors - show selection
+  session.context.bookingTotalSteps = 5;
+
   const options = lineDoctors.map((ld: any) => {
     const doc = ld.doctor;
     return `${doc.prefix} ${doc.name}`;
@@ -705,8 +725,10 @@ async function startBookingFlow(
     calendarId: ld.calendar.id,
   }));
 
+  const stepTitle = buildStepTitle(OPT_EMOJI.agendar, 'Agendar cita', 1, 5);
+
   return {
-    message: '¿Con qué doctor deseas agendar?',
+    message: `${stepTitle}\n\n¿Con que doctor desea agendar?`,
     options,
     requiresInput: true,
     nextState: 'booking_select_doctor',
@@ -724,8 +746,9 @@ async function handleBookingSelectDoctor(
   const selection = parseInt(input.trim());
 
   if (isNaN(selection) || selection < 1 || selection > availableDoctors.length) {
+    const stepTitle = buildStepTitle(OPT_EMOJI.agendar, 'Agendar cita', 1, session.context.bookingTotalSteps || 5);
     return {
-      message: 'Opción inválida. Por favor selecciona un número de la lista:',
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n¿Con que doctor desea agendar?`,
       options: availableDoctors.map((d: any) => d.name),
       requiresInput: true,
       nextState: 'booking_select_doctor',
@@ -747,7 +770,7 @@ async function handleBookingSelectWeek(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels?: { menuOption: string; connecting: string }
+  handoffLabels?: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   // Get default duration from whatsapp_line
   const { data: lineData } = await supabase
@@ -765,8 +788,9 @@ async function handleBookingSelectWeek(
   const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId);
 
   if (weeks.length === 0) {
+    const connecting = handoffLabels?.connecting || session.context.handoffLabels?.connecting || 'la secretaria';
     return {
-      message: `No hay disponibilidad en las próximas 2 semanas. Te conecto con ${handoffLabels?.connecting || session.context.handoffLabels?.connecting || 'la secretaría'} para agendar en fechas futuras.`,
+      message: `⚠️ No encontramos disponibilidad en las proximas 2 semanas.\n\nConectando con ${connecting}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -776,8 +800,15 @@ async function handleBookingSelectWeek(
   // Store weeks in context for selection
   session.context.availableWeeks = weeks;
 
+  const totalSteps = session.context.bookingTotalSteps || 4;
+  const isReschedule = session.context.isReschedule;
+  const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
+  const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
+  const weekStep = totalSteps === 5 ? 2 : 1;
+  const stepTitle = buildStepTitle(flowEmoji, flowName, weekStep, totalSteps);
+
   return {
-    message: `Selecciona la semana para tu cita con ${session.context.doctorName}:`,
+    message: `${stepTitle}\n\nSeleccione la semana para su cita con ${session.context.doctorName}:`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
@@ -794,10 +825,18 @@ async function handleBookingSelectDay(
   const availableWeeks = session.context.availableWeeks || [];
   const selection = parseInt(input.trim());
 
+  const totalSteps = session.context.bookingTotalSteps || 4;
+  const isReschedule = session.context.isReschedule;
+  const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
+  const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
+  const weekStep = totalSteps === 5 ? 2 : 1;
+  const dayStep = totalSteps === 5 ? 3 : 2;
+
   // Validate selection
   if (isNaN(selection) || selection < 1 || selection > availableWeeks.length) {
+    const stepTitle = buildStepTitle(flowEmoji, flowName, weekStep, totalSteps);
     return {
-      message: 'Opción inválida. Por favor selecciona una semana:',
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\nSeleccione una semana:`,
       options: availableWeeks.map((w: any) => w.weekLabel),
       requiresInput: true,
       nextState: 'booking_select_day',
@@ -821,8 +860,9 @@ async function handleBookingSelectDay(
   );
 
   if (days.length === 0) {
+    const stepTitle = buildStepTitle(flowEmoji, flowName, weekStep, totalSteps);
     return {
-      message: 'No hay días disponibles en esta semana. Selecciona otra semana:',
+      message: `${stepTitle}\n\n⚠️ No hay dias disponibles en esta semana.\nSeleccione otra semana:`,
       options: availableWeeks.map((w: any) => w.weekLabel),
       requiresInput: true,
       nextState: 'booking_select_day',
@@ -833,8 +873,10 @@ async function handleBookingSelectDay(
   // Store days in context
   session.context.availableDays = days;
 
+  const stepTitle = buildStepTitle(flowEmoji, flowName, dayStep, totalSteps);
+
   return {
-    message: `¿Qué día prefieres para tu cita con ${session.context.doctorName}?`,
+    message: `${stepTitle}\n\n¿Que dia prefiere?`,
     options: days.map((d: any) => d.label),
     requiresInput: true,
     nextState: 'booking_select_hour',
@@ -858,6 +900,13 @@ async function handleBookingSelectHour(
     return await showHourSlots(session, supabase);
   }
 
+  const totalSteps = session.context.bookingTotalSteps || 4;
+  const isReschedule = session.context.isReschedule;
+  const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
+  const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
+  const dayStep = totalSteps === 5 ? 3 : 2;
+  const hourStep = totalSteps === 5 ? 4 : 3;
+
   // Check if user is selecting a time slot (already in hour selection mode)
   if (session.context.availableSlots) {
     const slots = session.context.availableSlots as string[];
@@ -870,9 +919,12 @@ async function handleBookingSelectHour(
       const selectedDate = DateTime.fromISO(session.context.selectedDate, { zone: timezone });
       const dayLabel = selectedDate.toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
+      const confirmStep = totalSteps;
+      const confirmTitle = buildStepTitle(OPT_EMOJI.confirmar, 'Confirmar cita', confirmStep, totalSteps);
+
       return {
-        message: `*Resumen de tu cita:*\n\nDoctor: ${session.context.doctorName}\nFecha: ${dayLabel}\nHora: ${formatTimeForTemplate(selectedTime)}\nDuración: ${session.context.durationMinutes} minutos\n\n¿Deseas confirmar esta cita?`,
-        options: ['Sí, confirmar', 'No, cambiar horario', 'Cancelar'],
+        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
+        options: [`${OPT_EMOJI.confirmar} Si, confirmar`, `${OPT_EMOJI.cambiar} Cambiar horario`, `${OPT_EMOJI.cancelar} Cancelar`],
         requiresInput: true,
         nextState: 'booking_confirm',
         sessionComplete: false,
@@ -885,8 +937,9 @@ async function handleBookingSelectHour(
 
   // First time: user is selecting a day
   if (isNaN(selection) || selection < 1 || selection > availableDays.length) {
+    const stepTitle = buildStepTitle(flowEmoji, flowName, dayStep, totalSteps);
     return {
-      message: 'Opción inválida. Por favor selecciona un día:',
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n¿Que dia prefiere?`,
       options: availableDays.map((d: any) => d.label),
       requiresInput: true,
       nextState: 'booking_select_hour',
@@ -922,9 +975,17 @@ async function showHourSlots(
     slotGranularity
   );
 
+  const totalSteps = session.context.bookingTotalSteps || 4;
+  const isReschedule = session.context.isReschedule;
+  const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
+  const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
+  const hourStep = totalSteps === 5 ? 4 : 3;
+
   if (result.slots.length === 0) {
+    const dayStep = totalSteps === 5 ? 3 : 2;
+    const stepTitle = buildStepTitle(flowEmoji, flowName, dayStep, totalSteps);
     return {
-      message: 'No hay horarios disponibles para este día. Selecciona otro día.',
+      message: `${stepTitle}\n\n⚠️ No hay horarios disponibles para este dia.\nSeleccione otro dia:`,
       options: (session.context.availableDays || []).map((d: any) => d.label),
       requiresInput: true,
       nextState: 'booking_select_hour',
@@ -937,15 +998,17 @@ async function showHourSlots(
 
   const options = result.slots.map((s: string) => formatTimeForTemplate(s));
   if (result.hasMore) {
-    options.push('Ver más horarios');
+    options.push('Ver mas horarios ➡️');
   }
 
   const timezone = 'America/Tegucigalpa';
   const selectedDate = DateTime.fromISO(session.context.selectedDate, { zone: timezone });
   const dayLabel = selectedDate.toFormat('EEEE dd MMMM', { locale: 'es' });
 
+  const stepTitle = buildStepTitle(flowEmoji, flowName, hourStep, totalSteps);
+
   return {
-    message: `Horarios disponibles para *${dayLabel}* con ${session.context.doctorName}:`,
+    message: `${stepTitle}\n\n${OPT_EMOJI.horarios} Horarios disponibles — *${dayLabel}*\n${session.context.doctorName}`,
     options,
     requiresInput: true,
     nextState: 'booking_select_hour',
@@ -958,7 +1021,7 @@ async function handleBookingConfirm(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
   const selection = parseInt(input.trim());
@@ -971,7 +1034,7 @@ async function handleBookingConfirm(
     if (!patient) {
       // Patient not registered — ask for their name first
       return {
-        message: 'Para completar tu cita, necesito tu nombre completo. ¿Cuál es tu nombre?',
+        message: 'Para completar su cita, necesitamos su nombre completo.\n\n¿Cual es su nombre?',
         requiresInput: true,
         nextState: 'booking_ask_name',
         sessionComplete: false,
@@ -992,13 +1055,14 @@ async function handleBookingConfirm(
   // Option 3: Cancel
   if (selection === 3 || normalizedInput.includes('cancelar')) {
     return {
-      message: 'Agendado cancelado. ¿Necesitas algo más?',
+      message: `${OPT_EMOJI.cancelar} Proceso cancelado.\n\n¿En que puedo ayudarle?`,
       options: [
-        'Agendar cita',
-        'Reagendar o cancelar cita',
-        'Preguntas frecuentes (FAQs)',
+        `${OPT_EMOJI.agendar} Agendar cita`,
+        `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+        `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
       ],
+      showMenuHint: false,
       requiresInput: true,
       nextState: 'main_menu',
       sessionComplete: false,
@@ -1006,8 +1070,8 @@ async function handleBookingConfirm(
   }
 
   return {
-    message: 'No entendí tu respuesta. ¿Deseas confirmar la cita?',
-    options: ['Sí, confirmar', 'No, cambiar horario', 'Cancelar'],
+    message: '⚠️ Opcion no valida.\n\n¿Desea confirmar la cita?',
+    options: [`${OPT_EMOJI.confirmar} Si, confirmar`, `${OPT_EMOJI.cambiar} Cambiar horario`, `${OPT_EMOJI.cancelar} Cancelar`],
     requiresInput: true,
     nextState: 'booking_confirm',
     sessionComplete: false,
@@ -1019,14 +1083,14 @@ async function handleBookingAskName(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const trimmedName = input.trim();
 
   // Validate: name must be at least 3 characters and not a number
   if (trimmedName.length < 3 || /^\d+$/.test(trimmedName)) {
     return {
-      message: 'Por favor ingresa tu nombre completo (ej: Juan Pérez):',
+      message: '⚠️ Por favor ingrese su nombre completo (ej: Juan Perez):',
       requiresInput: true,
       nextState: 'booking_ask_name',
       sessionComplete: false,
@@ -1048,7 +1112,7 @@ async function handleBookingAskName(
   if (createError) {
     console.error('[booking_ask_name] Error creating patient:', createError);
     return {
-      message: `Error al registrar tus datos. Te conecto con ${handoffLabels.connecting}.`,
+      message: `⚠️ Error al registrar sus datos.\n\nConectando con ${handoffLabels.connecting}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1084,7 +1148,7 @@ async function createAppointmentWithPatient(
     session.context.slotPage = 1;
     session.context.availableSlots = null;
     return {
-      message: 'Lo siento, ese horario acaba de ser reservado. Aquí están las opciones actualizadas:',
+      message: '⚠️ Ese horario acaba de ser reservado.\n\nHorarios actualizados:',
       requiresInput: true,
       nextState: 'booking_select_hour',
       sessionComplete: false,
@@ -1127,7 +1191,7 @@ async function createAppointmentWithPatient(
   if (aptError) {
     console.error('[createAppointment] Error creating appointment:', aptError);
     return {
-      message: `Error al agendar la cita. Te conecto con ${session.context.handoffLabels?.connecting || 'la secretaría'}.`,
+      message: `⚠️ Error al agendar la cita.\n\nConectando con ${session.context.handoffLabels?.connecting || 'la secretaria'}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1138,11 +1202,11 @@ async function createAppointmentWithPatient(
   const dateLabel = DateTime.fromISO(session.context.selectedDate, { zone: timezone })
     .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
-  const successEmoji = session.context.isReschedule ? '🔄' : '✅';
+  const successEmoji = session.context.isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.confirmar;
   const successTitle = session.context.isReschedule ? '¡Cita reagendada exitosamente!' : '¡Cita agendada exitosamente!';
 
   return {
-    message: `${successEmoji} *${successTitle}*\n\nDoctor: ${session.context.doctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(session.context.selectedTime)}\nDuración: ${session.context.durationMinutes} min\n\nRecibirás un recordatorio antes de tu cita. ¡Gracias!`,
+    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -1163,7 +1227,7 @@ async function startRescheduleFlow(
 
   if (!patient) {
     return {
-      message: `No encontré tu información en el sistema. Te conecto con ${session.context.handoffLabels?.connecting || 'la secretaría'}.`,
+      message: `⚠️ No encontramos su informacion en el sistema.\n\nConectando con ${session.context.handoffLabels?.connecting || 'la secretaria'}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1181,13 +1245,13 @@ async function handleRescheduleList(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const patientId = session.context.patientId;
 
   if (!patientId) {
     return {
-      message: `No encontré tu información. Te conecto con ${handoffLabels.connecting}.`,
+      message: `⚠️ No encontramos su informacion.\n\nConectando con ${handoffLabels.connecting}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1199,16 +1263,17 @@ async function handleRescheduleList(
     const appointments = session.context.upcomingAppointments as any[];
     const selection = parseInt(input.trim());
 
-    // "Volver al menú" is always the last option
+    // "Volver al menu" is always the last option
     if (selection === appointments.length + 1 || input.trim().toLowerCase().includes('volver') || input.trim().toLowerCase().includes('menu')) {
       return {
-        message: '¿En qué puedo ayudarte?',
+        message: '¿En que puedo ayudarle?',
         options: [
-          'Agendar cita',
-          'Reagendar o cancelar cita',
-          'Preguntas frecuentes (FAQs)',
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+          `${OPT_EMOJI.faq} Preguntas frecuentes`,
           handoffLabels.menuOption,
         ],
+        showMenuHint: false,
         requiresInput: true,
         nextState: 'main_menu',
         sessionComplete: false,
@@ -1220,10 +1285,10 @@ async function handleRescheduleList(
         const dateLabel = DateTime.fromISO(apt.date, { zone: 'America/Tegucigalpa' }).toFormat('dd MMM', { locale: 'es' });
         return `${apt.doctorName} - ${dateLabel} ${formatTimeForTemplate(apt.time)}`;
       });
-      options.push('Volver al menú');
+      options.push(`${OPT_EMOJI.volver} Volver al menu`);
 
       return {
-        message: 'Opción inválida. Selecciona una cita:',
+        message: '⚠️ Opcion no valida.\nSeleccione una cita:',
         options,
         requiresInput: true,
         nextState: 'reschedule_list',
@@ -1244,8 +1309,8 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `Cita seleccionada:\n\nDoctor: ${selectedApt.doctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(selectedApt.time)}\n\n¿Qué deseas hacer?`,
-      options: ['Reagendar cita', 'Cancelar cita', 'Volver al menú'],
+      message: `${OPT_EMOJI.reagendar} *Cita seleccionada*\n\n🩺 ${selectedApt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedApt.time)}\n\n¿Que desea hacer?`,
+      options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
       requiresInput: true,
       nextState: 'cancel_confirm',
       sessionComplete: false,
@@ -1257,8 +1322,8 @@ async function handleRescheduleList(
 
   if (appointments.length === 0) {
     return {
-      message: 'No tienes citas programadas para reagendar o cancelar.',
-      options: ['Volver al menú principal'],
+      message: `${OPT_EMOJI.reagendar} No tiene citas programadas para reagendar o cancelar.`,
+      options: [`${OPT_EMOJI.menu} Menu principal`],
       requiresInput: true,
       nextState: 'main_menu',
       sessionComplete: false,
@@ -1292,8 +1357,8 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `Tienes 1 cita próxima:\n\nDoctor: ${apt.doctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(apt.time)}\n\n¿Qué deseas hacer?`,
-      options: ['Reagendar cita', 'Cancelar cita', 'Volver al menú'],
+      message: `${OPT_EMOJI.reagendar} *Su cita proxima:*\n\n🩺 ${apt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(apt.time)}\n\n¿Que desea hacer?`,
+      options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
       requiresInput: true,
       nextState: 'cancel_confirm',
       sessionComplete: false,
@@ -1305,10 +1370,10 @@ async function handleRescheduleList(
     const dateLabel = DateTime.fromISO(apt.date, { zone: 'America/Tegucigalpa' }).toFormat('dd MMM', { locale: 'es' });
     return `${apt.doctorName} - ${dateLabel} ${formatTimeForTemplate(apt.time)}`;
   });
-  options.push('Volver al menú');
+  options.push(`${OPT_EMOJI.volver} Volver al menu`);
 
   return {
-    message: 'Tienes estas citas próximas. ¿Cuál deseas reagendar o cancelar?',
+    message: `${OPT_EMOJI.reagendar} *Sus citas proximas*\n\n¿Cual desea reagendar o cancelar?`,
     options,
     requiresInput: true,
     nextState: 'reschedule_list',
@@ -1321,7 +1386,7 @@ async function handleCancelConfirm(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
   const selection = parseInt(input.trim());
@@ -1346,7 +1411,7 @@ async function handleCancelConfirm(
       if (cancelError) {
         console.error('[cancel_confirm] Error cancelling:', cancelError);
         return {
-          message: `Error al cancelar la cita. Te conecto con ${handoffLabels.connecting}.`,
+          message: `⚠️ Error al cancelar la cita.\n\nConectando con ${handoffLabels.connecting}...`,
           requiresInput: false,
           nextState: 'handoff_secretary',
           sessionComplete: true,
@@ -1357,11 +1422,12 @@ async function handleCancelConfirm(
         .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
       return {
-        message: `❌ *Cita cancelada*\n\nDoctor: ${session.context.rescheduleAppointmentDoctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente. ¿Necesitas algo más?`,
+        message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
         options: [
-          'Agendar nueva cita',
-          'Volver al menú principal',
+          `${OPT_EMOJI.agendar} Agendar nueva cita`,
+          `${OPT_EMOJI.menu} Menu principal`,
         ],
+        showMenuHint: false,
         requiresInput: true,
         nextState: 'main_menu',
         sessionComplete: false,
@@ -1371,8 +1437,8 @@ async function handleCancelConfirm(
     // Option 2 or "no" → go back to action selection
     if (selection === 2 || normalizedInput.includes('no') || normalizedInput.includes('volver')) {
       return {
-        message: '¿Qué deseas hacer con esta cita?',
-        options: ['Reagendar cita', 'Cancelar cita', 'Volver al menú'],
+        message: '¿Que desea hacer con esta cita?',
+        options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
         requiresInput: true,
         nextState: 'cancel_confirm',
         sessionComplete: false,
@@ -1381,8 +1447,8 @@ async function handleCancelConfirm(
 
     // Invalid input in delete confirm phase
     return {
-      message: '¿Estás seguro que deseas cancelar la cita?',
-      options: ['Sí, cancelar cita', 'No, volver'],
+      message: '⚠️ ¿Esta seguro que desea cancelar la cita?',
+      options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
       requiresInput: true,
       nextState: 'cancel_confirm',
       sessionComplete: false,
@@ -1404,13 +1470,14 @@ async function handleCancelConfirm(
     session.context.durationMinutes = lineData?.default_duration_minutes || 60;
     session.context.slotGranularity = Math.min(session.context.durationMinutes, 30);
     session.context.isReschedule = true; // Flag to know we're rescheduling
+    session.context.bookingTotalSteps = 4; // Reschedule always 4 steps (doctor already selected)
 
     // Go to week selection (reuse booking flow)
     const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId);
 
     if (weeks.length === 0) {
       return {
-        message: `No hay disponibilidad en las próximas 2 semanas. Te conecto con ${handoffLabels.connecting}.`,
+        message: `⚠️ No encontramos disponibilidad en las proximas 2 semanas.\n\nConectando con ${handoffLabels.connecting}...`,
         requiresInput: false,
         nextState: 'handoff_secretary',
         sessionComplete: true,
@@ -1419,8 +1486,10 @@ async function handleCancelConfirm(
 
     session.context.availableWeeks = weeks;
 
+    const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
+
     return {
-      message: `Selecciona la nueva semana para tu cita con ${session.context.doctorName}:`,
+      message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${session.context.doctorName}:`,
       options: weeks.map((w) => w.weekLabel),
       requiresInput: true,
       nextState: 'booking_select_day',
@@ -1437,24 +1506,25 @@ async function handleCancelConfirm(
     session.context.cancelConfirmPhase = 'confirm_delete';
 
     return {
-      message: `¿Estás seguro que deseas *cancelar* tu cita?\n\nDoctor: ${session.context.rescheduleAppointmentDoctorName}\nFecha: ${dateLabel}\nHora: ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n⚠️ Esta acción no se puede deshacer.`,
-      options: ['Sí, cancelar cita', 'No, volver'],
+      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
+      options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
       requiresInput: true,
       nextState: 'cancel_confirm',
       sessionComplete: false,
     };
   }
 
-  // Option 3: Volver al menú
+  // Option 3: Volver al menu
   if (selection === 3 || normalizedInput.includes('volver') || normalizedInput.includes('no') || normalizedInput.includes('menu') || normalizedInput.includes('menú')) {
     return {
-      message: '¿En qué puedo ayudarte?',
+      message: '¿En que puedo ayudarle?',
       options: [
-        'Agendar cita',
-        'Reagendar o cancelar cita',
-        'Preguntas frecuentes (FAQs)',
+        `${OPT_EMOJI.agendar} Agendar cita`,
+        `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+        `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
       ],
+      showMenuHint: false,
       requiresInput: true,
       nextState: 'main_menu',
       sessionComplete: false,
@@ -1463,8 +1533,8 @@ async function handleCancelConfirm(
 
   // Invalid input
   return {
-    message: 'No entendí tu respuesta. ¿Qué deseas hacer con esta cita?',
-    options: ['Reagendar cita', 'Cancelar cita', 'Volver al menú'],
+    message: '⚠️ Opcion no valida.\n\n¿Que desea hacer con esta cita?',
+    options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
     requiresInput: true,
     nextState: 'cancel_confirm',
     sessionComplete: false,
@@ -1480,7 +1550,7 @@ async function handleHandoffToSecretary(
   patientPhone: string,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels?: { menuOption: string; connecting: string }
+  handoffLabels?: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   // Find active secretaries in organization
   const { data: secretaries } = await supabase
@@ -1496,8 +1566,11 @@ async function handleHandoffToSecretary(
     console.log(`[bot] Handoff to secretary for patient ${patientPhone}, org ${organizationId}`);
   }
 
+  const emoji = handoffLabels?.emoji || '👩🏻‍💼';
+  const connecting = handoffLabels?.connecting || 'la secretaria';
+
   return {
-    message: `Te estoy conectando con ${handoffLabels?.connecting || 'la secretaría'}. En breve recibirás respuesta.`,
+    message: `${emoji} Conectando con ${connecting}...\n\nEn breve recibira respuesta. Gracias por su paciencia.`,
     requiresInput: false,
     nextState: 'handoff_secretary',
     sessionComplete: true,

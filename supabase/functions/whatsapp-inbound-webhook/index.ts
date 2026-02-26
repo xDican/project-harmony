@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { EMOJI_NUMBERS, SEP } from "../_shared/bot-messages.ts";
 
 const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
 const TWILIO_WEBHOOK_URL = Deno.env.get("TWILIO_WEBHOOK_URL") || ""; // exact URL configured in Twilio
@@ -118,13 +119,28 @@ function extractAppointmentIdFromPayload(params: Record<string, string>): string
 }
 
 /**
- * Formats bot message with numbered options
+ * Formats bot message with emoji-numbered options (Premium UX).
+ * @param text - The main message body
+ * @param options - List of option labels (already include emojis from bot-handler)
+ * @param showMenuHint - Whether to show "0️⃣ Menu principal" (default true)
  */
-function formatBotMessage(text: string, options?: string[]): string {
+function formatBotMessage(text: string, options?: string[], showMenuHint = true): string {
   if (!options || options.length === 0) return text;
 
-  const menuText = options.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n');
-  return `${text}\n\n${menuText}\n\nResponde con el número de tu opción.`;
+  const menuLines = options.map((opt, idx) => {
+    const num = idx < EMOJI_NUMBERS.length ? EMOJI_NUMBERS[idx] : `${idx + 1}.`;
+    return `${num} ${opt}`;
+  });
+
+  let result = `${text}\n\n${menuLines.join('\n')}`;
+
+  if (showMenuHint) {
+    result += `\n${SEP}\n0️⃣ Menu principal 🏠`;
+  }
+
+  result += `\n\n👉 Responda con el numero de su opcion.`;
+
+  return result;
 }
 
 /**
@@ -434,7 +450,8 @@ Deno.serve(async (req: Request) => {
           console.log("[whatsapp-inbound-webhook] Bot response:", botData);
 
           // Format bot message with options if present
-          const formattedMessage = formatBotMessage(botData.message, botData.options);
+          const showMenuHint = botData.showMenuHint !== undefined ? botData.showMenuHint : true;
+          const formattedMessage = formatBotMessage(botData.message, botData.options, showMenuHint);
 
           // Send bot response via send-whatsapp-message
           const sendWhatsAppUrl = `https://${projectRef}.supabase.co/functions/v1/send-whatsapp-message`;

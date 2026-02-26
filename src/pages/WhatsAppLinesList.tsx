@@ -523,71 +523,55 @@ export default function WhatsAppLinesList() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="secretary">La secretaría</SelectItem>
+                            <SelectItem value="secretary">La secretaria</SelectItem>
                             <SelectItem value="doctor">El doctor</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          El bot mostrará "Hablar con la secretaría" o "Hablar con el doctor" según esta configuración.
+                          El bot mostrará "Hablar con la secretaria" o "Hablar con el doctor" según esta configuración.
                         </p>
                       </div>
                     </>
                   )}
 
-                  {/* Template mappings (read-only) */}
+                  {/* Template mappings (summary) */}
                   {templateMappings.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Plantillas configuradas</Label>
-                        {templateMappings.some((m) => m.meta_status === 'PENDING') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={checkingStatus}
-                            onClick={async () => {
-                              setCheckingStatus(true);
-                              try {
-                                const { data: result, error } = await supabase.functions.invoke('check-template-status');
-                                if (error) throw error;
-                                toast({
-                                  title: 'Estado verificado',
-                                  description: `Aprobadas: ${result?.approved ?? 0}, Rechazadas: ${result?.rejected ?? 0}, Pendientes: ${result?.still_pending ?? 0}`,
-                                });
-                                // Reload mappings
-                                if (editingLine) {
-                                  const { data } = await supabase
-                                    .from('template_mappings')
-                                    .select('logical_type, template_name, template_language, is_active, meta_status')
-                                    .eq('whatsapp_line_id', editingLine.id)
-                                    .order('logical_type');
-                                  if (data) setTemplateMappings(data);
-                                }
-                              } catch (err: any) {
-                                toast({ title: 'Error', description: err.message || 'Error al verificar estado', variant: 'destructive' });
-                              } finally {
-                                setCheckingStatus(false);
-                              }
-                            }}
-                          >
-                            {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                            Verificar estado
-                          </Button>
-                        )}
-                      </div>
-                      <div className="rounded-md border divide-y text-sm">
-                        {templateMappings.map((m) => (
-                          <div key={m.logical_type} className="px-3 py-2 flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground capitalize">{m.logical_type.replace(/_/g, ' ')}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs truncate max-w-[200px]" title={m.template_name}>{m.template_name}</span>
-                              {m.meta_status === 'APPROVED' && <Badge variant="default" className="bg-green-600 text-xs">Aprobada</Badge>}
-                              {m.meta_status === 'PENDING' && <Badge variant="secondary" className="bg-yellow-500 text-white text-xs">Pendiente</Badge>}
-                              {m.meta_status === 'REJECTED' && <Badge variant="destructive" className="text-xs">Rechazada</Badge>}
-                              {m.meta_status === 'FAILED' && <Badge variant="destructive" className="text-xs">Error al crear</Badge>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">
+                        Plantillas configuradas {templateMappings.filter((m) => m.meta_status === 'APPROVED').length}/{templateMappings.length}
+                      </Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={checkingStatus}
+                        onClick={async () => {
+                          setCheckingStatus(true);
+                          try {
+                            const { data: result, error } = await supabase.functions.invoke('check-template-status');
+                            if (error) throw error;
+                            toast({
+                              title: 'Estado verificado',
+                              description: `Aprobadas: ${result?.approved ?? 0}, Rechazadas: ${result?.rejected ?? 0}, Pendientes: ${result?.still_pending ?? 0}`,
+                            });
+                            // Reload mappings
+                            if (editingLine) {
+                              const { data } = await supabase
+                                .from('template_mappings')
+                                .select('logical_type, template_name, template_language, is_active, meta_status')
+                                .eq('whatsapp_line_id', editingLine.id)
+                                .order('logical_type');
+                              if (data) setTemplateMappings(data);
+                            }
+                          } catch (err: any) {
+                            toast({ title: 'Error', description: err.message || 'Error al verificar estado', variant: 'destructive' });
+                          } finally {
+                            setCheckingStatus(false);
+                          }
+                        }}
+                      >
+                        {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                        Verificar estado
+                      </Button>
                     </div>
                   )}
                 </TabsContent>
