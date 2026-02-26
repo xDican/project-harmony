@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -418,168 +419,179 @@ export default function WhatsAppLinesList() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="wa-label">Etiqueta *</Label>
-                <Input
-                  id="wa-label"
-                  value={formLabel}
-                  onChange={(e) => setFormLabel(e.target.value)}
-                  placeholder="Etiqueta de la linea"
-                  disabled={saving}
-                />
-              </div>
+            <div className="max-h-[60vh] overflow-y-auto py-4">
+              <Tabs defaultValue="general">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="bot">Bot</TabsTrigger>
+                </TabsList>
 
-              <div className="space-y-2">
-                <Label htmlFor="wa-phone">Telefono</Label>
-                <Input
-                  id="wa-phone"
-                  value={editingLine?.phoneNumber || ''}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="wa-duration">Duracion por defecto (minutos)</Label>
-                <Select
-                  value={formDefaultDuration !== '' ? String(formDefaultDuration) : ''}
-                  onValueChange={(val) => setFormDefaultDuration(val ? Number(val) : '')}
-                  disabled={saving}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar duracion" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="15">15 min</SelectItem>
-                    <SelectItem value="30">30 min</SelectItem>
-                    <SelectItem value="60">1 hora</SelectItem>
-                    <SelectItem value="90">1.5 horas</SelectItem>
-                    <SelectItem value="120">2 horas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="wa-bot"
-                  checked={formBotEnabled}
-                  onCheckedChange={(checked) => setFormBotEnabled(checked === true)}
-                  disabled={saving}
-                />
-                <Label htmlFor="wa-bot" className="cursor-pointer">
-                  Bot habilitado
-                </Label>
-              </div>
-
-              {formBotEnabled && (
-                <>
+                <TabsContent value="general" className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="wa-bot-greeting">Mensaje de bienvenida del bot</Label>
-                    <Textarea
-                      id="wa-bot-greeting"
-                      value={formBotGreeting}
-                      onChange={(e) => setFormBotGreeting(e.target.value)}
-                      placeholder="Ej: ¡Hola! Soy el asistente virtual de la Clínica. ¿En qué puedo ayudarte hoy?"
+                    <Label htmlFor="wa-label">Etiqueta *</Label>
+                    <Input
+                      id="wa-label"
+                      value={formLabel}
+                      onChange={(e) => setFormLabel(e.target.value)}
+                      placeholder="Etiqueta de la linea"
                       disabled={saving}
-                      rows={4}
-                      className="resize-none"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Este mensaje se enviará cuando un paciente inicie una conversación con el bot.
-                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="wa-handoff-type">Etiqueta de contacto en el bot</Label>
+                    <Label htmlFor="wa-phone">Telefono</Label>
+                    <Input
+                      id="wa-phone"
+                      value={editingLine?.phoneNumber || ''}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="wa-duration">Duracion por defecto (minutos)</Label>
                     <Select
-                      value={formHandoffType}
-                      onValueChange={(val) => setFormHandoffType(val as 'secretary' | 'doctor')}
+                      value={formDefaultDuration !== '' ? String(formDefaultDuration) : ''}
+                      onValueChange={(val) => setFormDefaultDuration(val ? Number(val) : '')}
                       disabled={saving}
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Seleccionar duracion" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="secretary">La secretaría</SelectItem>
-                        <SelectItem value="doctor">El doctor</SelectItem>
+                        <SelectItem value="15">15 min</SelectItem>
+                        <SelectItem value="30">30 min</SelectItem>
+                        <SelectItem value="60">1 hora</SelectItem>
+                        <SelectItem value="90">1.5 horas</SelectItem>
+                        <SelectItem value="120">2 horas</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      El bot mostrará "Hablar con la secretaría" o "Hablar con el doctor" según esta configuración.
-                    </p>
                   </div>
-                </>
-              )}
 
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="wa-active"
-                  checked={formIsActive}
-                  onCheckedChange={(checked) => setFormIsActive(checked === true)}
-                  disabled={saving}
-                />
-                <Label htmlFor="wa-active" className="cursor-pointer">
-                  Linea activa
-                </Label>
-              </div>
-
-              {/* Template mappings (read-only) */}
-              {templateMappings.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Plantillas configuradas</Label>
-                    {templateMappings.some((m) => m.meta_status === 'PENDING') && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={checkingStatus}
-                        onClick={async () => {
-                          setCheckingStatus(true);
-                          try {
-                            const { data: result, error } = await supabase.functions.invoke('check-template-status');
-                            if (error) throw error;
-                            toast({
-                              title: 'Estado verificado',
-                              description: `Aprobadas: ${result?.approved ?? 0}, Rechazadas: ${result?.rejected ?? 0}, Pendientes: ${result?.still_pending ?? 0}`,
-                            });
-                            // Reload mappings
-                            if (editingLine) {
-                              const { data } = await supabase
-                                .from('template_mappings')
-                                .select('logical_type, template_name, template_language, is_active, meta_status')
-                                .eq('whatsapp_line_id', editingLine.id)
-                                .order('logical_type');
-                              if (data) setTemplateMappings(data);
-                            }
-                          } catch (err: any) {
-                            toast({ title: 'Error', description: err.message || 'Error al verificar estado', variant: 'destructive' });
-                          } finally {
-                            setCheckingStatus(false);
-                          }
-                        }}
-                      >
-                        {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                        Verificar estado
-                      </Button>
-                    )}
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="wa-active"
+                      checked={formIsActive}
+                      onCheckedChange={(checked) => setFormIsActive(checked === true)}
+                      disabled={saving}
+                    />
+                    <Label htmlFor="wa-active" className="cursor-pointer">
+                      Linea activa
+                    </Label>
                   </div>
-                  <div className="rounded-md border divide-y text-sm">
-                    {templateMappings.map((m) => (
-                      <div key={m.logical_type} className="px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground capitalize">{m.logical_type.replace(/_/g, ' ')}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs truncate max-w-[200px]" title={m.template_name}>{m.template_name}</span>
-                          {m.meta_status === 'APPROVED' && <Badge variant="default" className="bg-green-600 text-xs">Aprobada</Badge>}
-                          {m.meta_status === 'PENDING' && <Badge variant="secondary" className="bg-yellow-500 text-white text-xs">Pendiente</Badge>}
-                          {m.meta_status === 'REJECTED' && <Badge variant="destructive" className="text-xs">Rechazada</Badge>}
-                          {m.meta_status === 'FAILED' && <Badge variant="destructive" className="text-xs">Error al crear</Badge>}
-                        </div>
+                </TabsContent>
+
+                <TabsContent value="bot" className="space-y-4 mt-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="wa-bot"
+                      checked={formBotEnabled}
+                      onCheckedChange={(checked) => setFormBotEnabled(checked === true)}
+                      disabled={saving}
+                    />
+                    <Label htmlFor="wa-bot" className="cursor-pointer">
+                      Bot habilitado
+                    </Label>
+                  </div>
+
+                  {formBotEnabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="wa-bot-greeting">Mensaje de bienvenida del bot</Label>
+                        <Textarea
+                          id="wa-bot-greeting"
+                          value={formBotGreeting}
+                          onChange={(e) => setFormBotGreeting(e.target.value)}
+                          placeholder="Ej: ¡Hola! Soy el asistente virtual de la Clínica. ¿En qué puedo ayudarte hoy?"
+                          disabled={saving}
+                          rows={4}
+                          className="resize-none"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Este mensaje se enviará cuando un paciente inicie una conversación con el bot.
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="wa-handoff-type">Etiqueta de contacto en el bot</Label>
+                        <Select
+                          value={formHandoffType}
+                          onValueChange={(val) => setFormHandoffType(val as 'secretary' | 'doctor')}
+                          disabled={saving}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="secretary">La secretaría</SelectItem>
+                            <SelectItem value="doctor">El doctor</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          El bot mostrará "Hablar con la secretaría" o "Hablar con el doctor" según esta configuración.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Template mappings (read-only) */}
+                  {templateMappings.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Plantillas configuradas</Label>
+                        {templateMappings.some((m) => m.meta_status === 'PENDING') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={checkingStatus}
+                            onClick={async () => {
+                              setCheckingStatus(true);
+                              try {
+                                const { data: result, error } = await supabase.functions.invoke('check-template-status');
+                                if (error) throw error;
+                                toast({
+                                  title: 'Estado verificado',
+                                  description: `Aprobadas: ${result?.approved ?? 0}, Rechazadas: ${result?.rejected ?? 0}, Pendientes: ${result?.still_pending ?? 0}`,
+                                });
+                                // Reload mappings
+                                if (editingLine) {
+                                  const { data } = await supabase
+                                    .from('template_mappings')
+                                    .select('logical_type, template_name, template_language, is_active, meta_status')
+                                    .eq('whatsapp_line_id', editingLine.id)
+                                    .order('logical_type');
+                                  if (data) setTemplateMappings(data);
+                                }
+                              } catch (err: any) {
+                                toast({ title: 'Error', description: err.message || 'Error al verificar estado', variant: 'destructive' });
+                              } finally {
+                                setCheckingStatus(false);
+                              }
+                            }}
+                          >
+                            {checkingStatus ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                            Verificar estado
+                          </Button>
+                        )}
+                      </div>
+                      <div className="rounded-md border divide-y text-sm">
+                        {templateMappings.map((m) => (
+                          <div key={m.logical_type} className="px-3 py-2 flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground capitalize">{m.logical_type.replace(/_/g, ' ')}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs truncate max-w-[200px]" title={m.template_name}>{m.template_name}</span>
+                              {m.meta_status === 'APPROVED' && <Badge variant="default" className="bg-green-600 text-xs">Aprobada</Badge>}
+                              {m.meta_status === 'PENDING' && <Badge variant="secondary" className="bg-yellow-500 text-white text-xs">Pendiente</Badge>}
+                              {m.meta_status === 'REJECTED' && <Badge variant="destructive" className="text-xs">Rechazada</Badge>}
+                              {m.meta_status === 'FAILED' && <Badge variant="destructive" className="text-xs">Error al crear</Badge>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
 
             <DialogFooter className="flex-col sm:flex-row gap-2">
