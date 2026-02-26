@@ -258,6 +258,7 @@ Deno.serve(async (req) => {
     const timezone = "America/Tegucigalpa";
     const now = DateTime.now().setZone(timezone);
     const isToday = date === now.toISODate();
+    const nowHHMM = now.toFormat("HH:mm");
 
     for (const schedule of schedules) {
       const workStart = buildDateTime(date, schedule.start_time);
@@ -271,7 +272,7 @@ Deno.serve(async (req) => {
 
       while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
         // Skip slots that are in the past for today
-        if (isToday && slotStart <= now) {
+        if (isToday && slotStart.toFormat("HH:mm") <= nowHHMM) {
           slotStart = slotStart.plus({ minutes: slotGranularity });
           continue;
         }
