@@ -258,12 +258,12 @@ async function handleIncomingMessage(
   // Find appointment:
   // 1) Direct lookup by ID embedded in button payload (exact, preferred)
   // 2) Fall back to fuzzy search by patient + active status (legacy / freeform text)
-  let appointment: { id: string; doctor_id: string; status: string } | null = null;
+  let appointment: { id: string; doctor_id: string; status: string; organization_id?: string } | null = null;
 
   if (appointmentIdFromPayload) {
     const { data, error } = await supabase
       .from("appointments")
-      .select("id, doctor_id, status")
+      .select("id, doctor_id, status, organization_id")
       .eq("id", appointmentIdFromPayload)
       .neq("status", "cancelada")
       .maybeSingle();
@@ -277,7 +277,7 @@ async function handleIncomingMessage(
 
     const { data, error } = await supabase
       .from("appointments")
-      .select("id, doctor_id, patient_id, status, appointment_at")
+      .select("id, doctor_id, patient_id, status, appointment_at, organization_id")
       .eq("patient_id", patient.id)
       .in("status", ACTIVE_STATUSES)
       .gte("appointment_at", twoDaysAgo.toISOString())
@@ -336,7 +336,9 @@ async function handleIncomingMessage(
       }
 
       // Send notification templates based on intent
-      await sendIntentNotification(supabase, intent, appointment, patient!, fromPhone, toPhone, lineOrgId);
+      // Use appointment's org as fallback when line lookup fails (e.g. duplicate lines)
+      const effectiveOrgId = lineOrgId || appointment.organization_id;
+      await sendIntentNotification(supabase, intent, appointment, patient!, fromPhone, toPhone, effectiveOrgId);
     }
   }
 }
@@ -353,7 +355,7 @@ async function handleIncomingMessage(
 async function sendIntentNotification(
   supabase: ReturnType<typeof createClient>,
   intent: MessageIntent,
-  appointment: { id: string; doctor_id: string },
+  appointment: { id: string; doctor_id: string; organization_id?: string },
   patient: { id: string; name: string },
   _patientPhone: string,
   _linePhone: string,
@@ -376,24 +378,34 @@ async function sendIntentNotification(
 
     if (!appt) return;
 
-    await fetch(gatewayUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        "x-internal-secret": internalSecret,
-        apikey: anonKey,
-      },
-      body: JSON.stringify({
-        to: _patientPhone,
-        type: "patient_confirmed",
-        templateParams: { "1": formatTimeForTemplate(appt.time) },
-        appointmentId: appointment.id,
-        patientId: patient.id,
-        doctorId: appointment.doctor_id,
-        ...(orgId ? { organizationId: orgId } : {}),
-      }),
-    }).catch((e) => console.error("[meta-webhook] Error sending patient_confirmed:", e));
+    const formattedTime = formatTimeForTemplate(appt.time);
+    try {
+      const res = await fetch(gatewayUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+          "x-internal-secret": internalSecret,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({
+          to: _patientPhone,
+          type: "patient_confirmed",
+          templateParams: { "1": formattedTime },
+          body: `Cita Confirmada.\n\nNos dará mucho gusto recibirle mañana a las ${formattedTime} en nuestro consultorio.\n\n¡Que tenga un gran día!`,
+          appointmentId: appointment.id,
+          patientId: patient.id,
+          doctorId: appointment.doctor_id,
+          ...(orgId ? { organizationId: orgId } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.warn("[meta-webhook] messaging-gw error for patient_confirmed:", res.status, errText);
+      }
+    } catch (e) {
+      console.error("[meta-webhook] Network error sending patient_confirmed:", e);
+    }
 
   } else if (intent === "reschedule") {
     // reschedule_doctor: 2 params = nombre del paciente, número del paciente
@@ -404,7 +416,41 @@ async function sendIntentNotification(
       .single();
 
     if (doctorUser?.phone) {
-      await fetch(gatewayUrl, {
+      try {
+        const res = await fetch(gatewayUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+            "x-internal-secret": internalSecret,
+            apikey: anonKey,
+          },
+          body: JSON.stringify({
+            to: normalizeToE164(doctorUser.phone),
+            type: "reschedule_doctor",
+            templateParams: {
+              "1": patient.name,
+              "2": _patientPhone,
+            },
+            body: `Solicitud de reagendación\n\nEl paciente ${patient.name} ha solicitado reagendar su cita.\n\nTeléfono: ${_patientPhone}`,
+            appointmentId: appointment.id,
+            patientId: patient.id,
+            doctorId: appointment.doctor_id,
+            ...(orgId ? { organizationId: orgId } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          console.warn("[meta-webhook] messaging-gw error for reschedule_doctor:", res.status, errText);
+        }
+      } catch (e) {
+        console.error("[meta-webhook] Network error sending reschedule_doctor:", e);
+      }
+    }
+
+    // patient_reschedule: sin params
+    try {
+      const res = await fetch(gatewayUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -413,39 +459,23 @@ async function sendIntentNotification(
           apikey: anonKey,
         },
         body: JSON.stringify({
-          to: normalizeToE164(doctorUser.phone),
-          type: "reschedule_doctor",
-          templateParams: {
-            "1": patient.name,
-            "2": _patientPhone,
-          },
+          to: _patientPhone,
+          type: "patient_reschedule",
+          templateParams: {},
+          body: "Su solicitud de reagendación ha sido recibida.\n\nEn breve, el consultorio se pondrá en contacto para confirmar la nueva fecha y hora.\n\nGracias por su comprensión.",
           appointmentId: appointment.id,
           patientId: patient.id,
           doctorId: appointment.doctor_id,
           ...(orgId ? { organizationId: orgId } : {}),
         }),
-      }).catch((e) => console.error("[meta-webhook] Error sending reschedule_doctor:", e));
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.warn("[meta-webhook] messaging-gw error for patient_reschedule:", res.status, errText);
+      }
+    } catch (e) {
+      console.error("[meta-webhook] Network error sending patient_reschedule:", e);
     }
-
-    // patient_reschedule: sin params
-    await fetch(gatewayUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        "x-internal-secret": internalSecret,
-        apikey: anonKey,
-      },
-      body: JSON.stringify({
-        to: _patientPhone,
-        type: "patient_reschedule",
-        templateParams: {},
-        appointmentId: appointment.id,
-        patientId: patient.id,
-        doctorId: appointment.doctor_id,
-        ...(orgId ? { organizationId: orgId } : {}),
-      }),
-    }).catch((e) => console.error("[meta-webhook] Error sending patient_reschedule:", e));
   }
 }
 
@@ -683,6 +713,8 @@ Deno.serve(async (req) => {
         .select("id, organization_id, bot_enabled")
         .eq("meta_phone_number_id", phoneNumberId)
         .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
         .maybeSingle();
       activeLineId = wline?.id;
       activeLineOrgId = wline?.organization_id ?? undefined;
