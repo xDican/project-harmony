@@ -58,6 +58,7 @@ export default function WhatsAppLinesList() {
   const [formBotEnabled, setFormBotEnabled] = useState(false);
   const [formBotGreeting, setFormBotGreeting] = useState('');
   const [formDefaultDuration, setFormDefaultDuration] = useState<number | ''>('');
+  const [formHandoffType, setFormHandoffType] = useState<'secretary' | 'doctor'>('secretary');
   const [formIsActive, setFormIsActive] = useState(true);
 
   // Template mappings for the editing line
@@ -112,6 +113,7 @@ export default function WhatsAppLinesList() {
     setFormLabel(line.label);
     setFormBotEnabled(line.botEnabled);
     setFormBotGreeting(line.botGreeting || '');
+    setFormHandoffType(line.botHandoffType || 'secretary');
     setFormDefaultDuration(line.defaultDurationMinutes || '');
     setFormIsActive(line.isActive);
     setTemplateMappings([]);
@@ -153,6 +155,7 @@ export default function WhatsAppLinesList() {
         label: formLabel.trim(),
         botEnabled: formBotEnabled,
         botGreeting: formBotGreeting.trim() || undefined,
+        botHandoffType: formHandoffType,
         defaultDurationMinutes: formDefaultDuration !== '' ? Number(formDefaultDuration) : undefined,
         isActive: formIsActive,
       });
@@ -470,21 +473,43 @@ export default function WhatsAppLinesList() {
               </div>
 
               {formBotEnabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="wa-bot-greeting">Mensaje de bienvenida del bot</Label>
-                  <Textarea
-                    id="wa-bot-greeting"
-                    value={formBotGreeting}
-                    onChange={(e) => setFormBotGreeting(e.target.value)}
-                    placeholder="Ej: ¡Hola! Soy el asistente virtual de la Clínica. ¿En qué puedo ayudarte hoy?"
-                    disabled={saving}
-                    rows={4}
-                    className="resize-none"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Este mensaje se enviará cuando un paciente inicie una conversación con el bot.
-                  </p>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="wa-bot-greeting">Mensaje de bienvenida del bot</Label>
+                    <Textarea
+                      id="wa-bot-greeting"
+                      value={formBotGreeting}
+                      onChange={(e) => setFormBotGreeting(e.target.value)}
+                      placeholder="Ej: ¡Hola! Soy el asistente virtual de la Clínica. ¿En qué puedo ayudarte hoy?"
+                      disabled={saving}
+                      rows={4}
+                      className="resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Este mensaje se enviará cuando un paciente inicie una conversación con el bot.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="wa-handoff-type">Etiqueta de contacto en el bot</Label>
+                    <Select
+                      value={formHandoffType}
+                      onValueChange={(val) => setFormHandoffType(val as 'secretary' | 'doctor')}
+                      disabled={saving}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="secretary">La secretaría</SelectItem>
+                        <SelectItem value="doctor">El doctor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      El bot mostrará "Hablar con la secretaría" o "Hablar con el doctor" según esta configuración.
+                    </p>
+                  </div>
+                </>
               )}
 
               <div className="flex items-center space-x-2">

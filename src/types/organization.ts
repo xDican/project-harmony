@@ -52,6 +52,7 @@ export interface WhatsAppLine {
   provider: string;
   botEnabled: boolean;
   botGreeting?: string;
+  botHandoffType?: 'secretary' | 'doctor';
   defaultDurationMinutes?: number;
   isActive: boolean;
   createdAt: string;
