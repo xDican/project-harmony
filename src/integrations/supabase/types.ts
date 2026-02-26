@@ -391,6 +391,41 @@ export type Database = {
           },
         ]
       }
+      calendar_schedules: {
+        Row: {
+          calendar_id: string
+          created_at: string | null
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+        }
+        Insert: {
+          calendar_id: string
+          created_at?: string | null
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+        }
+        Update: {
+          calendar_id?: string
+          created_at?: string | null
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_schedules_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "calendars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendars: {
         Row: {
           clinic_id: string | null
@@ -983,12 +1018,32 @@ export type Database = {
         }
         Relationships: []
       }
+      superadmin_whitelist: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       template_mappings: {
         Row: {
           created_at: string
           id: string
           is_active: boolean
           logical_type: string
+          meta_status: string | null
+          meta_template_id: string | null
           parameter_order: string[]
           provider: string
           template_language: string
@@ -1000,6 +1055,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           logical_type: string
+          meta_status?: string | null
+          meta_template_id?: string | null
           parameter_order?: string[]
           provider?: string
           template_language?: string
@@ -1011,6 +1068,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           logical_type?: string
+          meta_status?: string | null
+          meta_template_id?: string | null
           parameter_order?: string[]
           provider?: string
           template_language?: string
@@ -1134,6 +1193,7 @@ export type Database = {
         Row: {
           bot_enabled: boolean | null
           bot_greeting: string | null
+          bot_handoff_type: string
           clinic_id: string | null
           created_at: string | null
           default_duration_minutes: number | null
@@ -1142,6 +1202,8 @@ export type Database = {
           label: string
           meta_access_token: string | null
           meta_phone_number_id: string | null
+          meta_registered: boolean | null
+          meta_registration_pin: string | null
           meta_waba_id: string | null
           organization_id: string
           phone_number: string
@@ -1157,6 +1219,7 @@ export type Database = {
         Insert: {
           bot_enabled?: boolean | null
           bot_greeting?: string | null
+          bot_handoff_type?: string
           clinic_id?: string | null
           created_at?: string | null
           default_duration_minutes?: number | null
@@ -1165,6 +1228,8 @@ export type Database = {
           label: string
           meta_access_token?: string | null
           meta_phone_number_id?: string | null
+          meta_registered?: boolean | null
+          meta_registration_pin?: string | null
           meta_waba_id?: string | null
           organization_id: string
           phone_number: string
@@ -1180,6 +1245,7 @@ export type Database = {
         Update: {
           bot_enabled?: boolean | null
           bot_greeting?: string | null
+          bot_handoff_type?: string
           clinic_id?: string | null
           created_at?: string | null
           default_duration_minutes?: number | null
@@ -1188,6 +1254,8 @@ export type Database = {
           label?: string
           meta_access_token?: string | null
           meta_phone_number_id?: string | null
+          meta_registered?: boolean | null
+          meta_registration_pin?: string | null
           meta_waba_id?: string | null
           organization_id?: string
           phone_number?: string
@@ -1364,6 +1432,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_superadmin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "secretary" | "doctor"

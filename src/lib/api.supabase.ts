@@ -1630,6 +1630,7 @@ export async function getWhatsAppLinesByOrganization(): Promise<WhatsAppLine[]> 
     provider: row.provider,
     botEnabled: row.bot_enabled,
     botGreeting: row.bot_greeting ?? undefined,
+    botHandoffType: row.bot_handoff_type ?? undefined,
     defaultDurationMinutes: row.default_duration_minutes ?? undefined,
     isActive: row.is_active,
     createdAt: row.created_at,
@@ -1639,12 +1640,13 @@ export async function getWhatsAppLinesByOrganization(): Promise<WhatsAppLine[]> 
 
 export async function updateWhatsAppLine(
   lineId: string,
-  updates: { label?: string; botEnabled?: boolean; botGreeting?: string; defaultDurationMinutes?: number; isActive?: boolean }
+  updates: { label?: string; botEnabled?: boolean; botGreeting?: string; botHandoffType?: 'secretary' | 'doctor'; defaultDurationMinutes?: number; isActive?: boolean }
 ): Promise<WhatsAppLine> {
   const dbUpdates: Record<string, unknown> = {};
   if (updates.label !== undefined) dbUpdates.label = updates.label;
   if (updates.botEnabled !== undefined) dbUpdates.bot_enabled = updates.botEnabled;
   if (updates.botGreeting !== undefined) dbUpdates.bot_greeting = updates.botGreeting;
+  if (updates.botHandoffType !== undefined) dbUpdates.bot_handoff_type = updates.botHandoffType;
   if (updates.defaultDurationMinutes !== undefined) dbUpdates.default_duration_minutes = updates.defaultDurationMinutes;
   if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
 
@@ -1672,6 +1674,7 @@ export async function updateWhatsAppLine(
     provider: data.provider,
     botEnabled: data.bot_enabled,
     botGreeting: (data as any).bot_greeting ?? undefined,
+    botHandoffType: (data as any).bot_handoff_type ?? undefined,
     defaultDurationMinutes: data.default_duration_minutes ?? undefined,
     isActive: data.is_active,
     createdAt: data.created_at,

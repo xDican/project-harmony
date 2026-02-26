@@ -21,6 +21,21 @@ const corsHeaders = {
 };
 
 // ============================================================================
+// HANDOFF LABELS — configurable per whatsapp_line.bot_handoff_type
+// ============================================================================
+
+const HANDOFF_LABELS: Record<string, { menuOption: string; connecting: string }> = {
+  secretary: {
+    menuOption: 'Hablar con la secretaría',
+    connecting: 'la secretaría',
+  },
+  doctor: {
+    menuOption: 'Hablar con el doctor',
+    connecting: 'el doctor',
+  },
+};
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
@@ -161,6 +176,17 @@ async function handleBotMessage(
     }
   }
 
+  // Load handoff labels once per session
+  if (!session.context.handoffLabels) {
+    const { data: lineConfig } = await supabase
+      .from('whatsapp_lines')
+      .select('bot_handoff_type')
+      .eq('id', whatsappLineId)
+      .single();
+    session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
+  }
+  const handoffLabels = session.context.handoffLabels as { menuOption: string; connecting: string };
+
   const stateBefore = session.state;
 
   // Universal escape: "0" or "reiniciar" resets to greeting from any state
@@ -176,7 +202,7 @@ async function handleBotMessage(
   let response: BotResponse;
 
   if (input.appointmentId && session.state === 'greeting') {
-    response = await handleDirectReschedule(input.appointmentId, session, organizationId, supabase);
+    response = await handleDirectReschedule(input.appointmentId, session, organizationId, supabase, handoffLabels);
 
     // Update session and log, then return early
     await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
@@ -195,15 +221,15 @@ async function handleBotMessage(
   // Route to state handler based on current state
   switch (session.state) {
     case 'greeting':
-      response = await handleGreeting(session, organizationId, supabase);
+      response = await handleGreeting(session, organizationId, supabase, handoffLabels);
       break;
 
     case 'main_menu':
-      response = await handleMainMenu(messageText, session, organizationId, supabase);
+      response = await handleMainMenu(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'faq_search':
-      response = await handleFAQSearch(messageText, session, organizationId, supabase);
+      response = await handleFAQSearch(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'booking_select_doctor':
@@ -211,7 +237,7 @@ async function handleBotMessage(
       break;
 
     case 'booking_select_week':
-      response = await handleBookingSelectWeek(messageText, session, organizationId, supabase);
+      response = await handleBookingSelectWeek(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'booking_select_day':
@@ -223,28 +249,28 @@ async function handleBotMessage(
       break;
 
     case 'booking_confirm':
-      response = await handleBookingConfirm(messageText, session, organizationId, supabase);
+      response = await handleBookingConfirm(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'booking_ask_name':
-      response = await handleBookingAskName(messageText, session, organizationId, supabase);
+      response = await handleBookingAskName(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'reschedule_list':
-      response = await handleRescheduleList(messageText, session, organizationId, supabase);
+      response = await handleRescheduleList(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'cancel_confirm':
-      response = await handleCancelConfirm(messageText, session, organizationId, supabase);
+      response = await handleCancelConfirm(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'handoff_secretary':
-      response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase);
+      response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase, handoffLabels);
       break;
 
     default:
       // Unknown state, reset to greeting
-      response = await handleGreeting(session, organizationId, supabase);
+      response = await handleGreeting(session, organizationId, supabase, handoffLabels);
   }
 
   // Update session with new state and context
@@ -386,7 +412,8 @@ async function handleDirectReschedule(
   appointmentId: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   console.log('[bot-handler] Direct reschedule for appointment:', appointmentId);
 
@@ -450,7 +477,7 @@ async function handleDirectReschedule(
 
   if (weeks.length === 0) {
     return {
-      message: `No hay disponibilidad en las próximas 2 semanas para reagendar tu cita con ${doctorName}. Te conecto con la secretaría.`,
+      message: `No hay disponibilidad en las próximas 2 semanas para reagendar tu cita con ${doctorName}. Te conecto con ${handoffLabels.connecting}.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -471,7 +498,8 @@ async function handleDirectReschedule(
 async function handleGreeting(
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   // Get bot greeting from whatsapp_line
   const { data: lineData } = await supabase
@@ -488,7 +516,7 @@ async function handleGreeting(
       'Agendar cita',
       'Reagendar o cancelar cita',
       'Preguntas frecuentes (FAQs)',
-      'Hablar con secretaría',
+      handoffLabels.menuOption,
     ],
     requiresInput: true,
     nextState: 'main_menu',
@@ -500,7 +528,8 @@ async function handleMainMenu(
   input: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
 
@@ -524,8 +553,8 @@ async function handleMainMenu(
     };
   }
 
-  if (normalizedInput === '4' || normalizedInput.includes('secretar')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase);
+  if (normalizedInput === '4' || normalizedInput.includes('secretar') || normalizedInput.startsWith('hablar con')) {
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
   }
 
   // Invalid input - increment attempt counter
@@ -534,7 +563,7 @@ async function handleMainMenu(
 
   if (invalidAttempts >= 3) {
     // Auto-handoff after 3 invalid attempts
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
   }
 
   return {
@@ -543,7 +572,7 @@ async function handleMainMenu(
       'Agendar cita',
       'Reagendar o cancelar cita',
       'Preguntas frecuentes (FAQs)',
-      'Hablar con secretaría',
+      handoffLabels.menuOption,
     ],
     requiresInput: true,
     nextState: 'main_menu',
@@ -555,7 +584,8 @@ async function handleFAQSearch(
   query: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   const normalizedInput = query.trim().toLowerCase();
 
@@ -567,7 +597,7 @@ async function handleFAQSearch(
         'Agendar cita',
         'Reagendar o cancelar cita',
         'Preguntas frecuentes (FAQs)',
-        'Hablar con secretaría',
+        handoffLabels.menuOption,
       ],
       requiresInput: true,
       nextState: 'main_menu',
@@ -575,9 +605,9 @@ async function handleFAQSearch(
     };
   }
 
-  // Check if user wants to contact secretary (from "no FAQ found" options)
-  if (normalizedInput === '1' || normalizedInput.includes('secretar') || normalizedInput.includes('sí') || normalizedInput.includes('si, contactar')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase);
+  // Check if user wants to contact secretary/doctor (from "no FAQ found" options)
+  if (normalizedInput === '1' || normalizedInput.includes('secretar') || normalizedInput.includes('hablar con') || normalizedInput.includes('sí') || normalizedInput.includes('si, contactar')) {
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
   }
 
   // Check if user wants another question
@@ -609,7 +639,7 @@ async function handleFAQSearch(
   // No FAQ found
   return {
     message: 'No encontré una respuesta para esa pregunta. ¿Qué deseas hacer?',
-    options: ['Volver al menú principal', 'Hablar con secretaría'],
+    options: ['Volver al menú principal', handoffLabels.menuOption],
     requiresInput: true,
     nextState: 'faq_search',
     sessionComplete: false,
@@ -643,7 +673,7 @@ async function startBookingFlow(
 
   if (!lineDoctors || lineDoctors.length === 0) {
     return {
-      message: 'No hay doctores disponibles para agendar. Te conecto con la secretaría.',
+      message: `No hay doctores disponibles para agendar. Te conecto con ${session.context.handoffLabels?.connecting || 'la secretaría'}.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -716,7 +746,8 @@ async function handleBookingSelectWeek(
   input: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels?: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   // Get default duration from whatsapp_line
   const { data: lineData } = await supabase
@@ -735,7 +766,7 @@ async function handleBookingSelectWeek(
 
   if (weeks.length === 0) {
     return {
-      message: 'No hay disponibilidad en las próximas 2 semanas. Te conecto con la secretaría para agendar en fechas futuras.',
+      message: `No hay disponibilidad en las próximas 2 semanas. Te conecto con ${handoffLabels?.connecting || session.context.handoffLabels?.connecting || 'la secretaría'} para agendar en fechas futuras.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -926,7 +957,8 @@ async function handleBookingConfirm(
   input: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
   const selection = parseInt(input.trim());
@@ -965,7 +997,7 @@ async function handleBookingConfirm(
         'Agendar cita',
         'Reagendar o cancelar cita',
         'Preguntas frecuentes (FAQs)',
-        'Hablar con secretaría',
+        handoffLabels.menuOption,
       ],
       requiresInput: true,
       nextState: 'main_menu',
@@ -986,7 +1018,8 @@ async function handleBookingAskName(
   input: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   const trimmedName = input.trim();
 
@@ -1015,7 +1048,7 @@ async function handleBookingAskName(
   if (createError) {
     console.error('[booking_ask_name] Error creating patient:', createError);
     return {
-      message: 'Error al registrar tus datos. Te conecto con la secretaría.',
+      message: `Error al registrar tus datos. Te conecto con ${handoffLabels.connecting}.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1094,7 +1127,7 @@ async function createAppointmentWithPatient(
   if (aptError) {
     console.error('[createAppointment] Error creating appointment:', aptError);
     return {
-      message: 'Error al agendar la cita. Te conecto con la secretaría.',
+      message: `Error al agendar la cita. Te conecto con ${session.context.handoffLabels?.connecting || 'la secretaría'}.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1130,7 +1163,7 @@ async function startRescheduleFlow(
 
   if (!patient) {
     return {
-      message: 'No encontré tu información en el sistema. Por favor contacta a la secretaría.',
+      message: `No encontré tu información en el sistema. Te conecto con ${session.context.handoffLabels?.connecting || 'la secretaría'}.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1147,13 +1180,14 @@ async function handleRescheduleList(
   input: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   const patientId = session.context.patientId;
 
   if (!patientId) {
     return {
-      message: 'No encontré tu información. Te conecto con la secretaría.',
+      message: `No encontré tu información. Te conecto con ${handoffLabels.connecting}.`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1173,7 +1207,7 @@ async function handleRescheduleList(
           'Agendar cita',
           'Reagendar o cancelar cita',
           'Preguntas frecuentes (FAQs)',
-          'Hablar con secretaría',
+          handoffLabels.menuOption,
         ],
         requiresInput: true,
         nextState: 'main_menu',
@@ -1286,7 +1320,8 @@ async function handleCancelConfirm(
   input: string,
   session: BotSession,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
   const selection = parseInt(input.trim());
@@ -1311,7 +1346,7 @@ async function handleCancelConfirm(
       if (cancelError) {
         console.error('[cancel_confirm] Error cancelling:', cancelError);
         return {
-          message: 'Error al cancelar la cita. Te conecto con la secretaría.',
+          message: `Error al cancelar la cita. Te conecto con ${handoffLabels.connecting}.`,
           requiresInput: false,
           nextState: 'handoff_secretary',
           sessionComplete: true,
@@ -1375,7 +1410,7 @@ async function handleCancelConfirm(
 
     if (weeks.length === 0) {
       return {
-        message: 'No hay disponibilidad en las próximas 2 semanas. Te conecto con la secretaría.',
+        message: `No hay disponibilidad en las próximas 2 semanas. Te conecto con ${handoffLabels.connecting}.`,
         requiresInput: false,
         nextState: 'handoff_secretary',
         sessionComplete: true,
@@ -1418,7 +1453,7 @@ async function handleCancelConfirm(
         'Agendar cita',
         'Reagendar o cancelar cita',
         'Preguntas frecuentes (FAQs)',
-        'Hablar con secretaría',
+        handoffLabels.menuOption,
       ],
       requiresInput: true,
       nextState: 'main_menu',
@@ -1444,7 +1479,8 @@ async function handleHandoffToSecretary(
   whatsappLineId: string,
   patientPhone: string,
   organizationId: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  handoffLabels?: { menuOption: string; connecting: string }
 ): Promise<BotResponse> {
   // Find active secretaries in organization
   const { data: secretaries } = await supabase
@@ -1461,7 +1497,7 @@ async function handleHandoffToSecretary(
   }
 
   return {
-    message: 'Te estoy conectando con nuestra secretaría. En breve recibirás respuesta. 📞',
+    message: `Te estoy conectando con ${handoffLabels?.connecting || 'la secretaría'}. En breve recibirás respuesta.`,
     requiresInput: false,
     nextState: 'handoff_secretary',
     sessionComplete: true,
