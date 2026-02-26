@@ -202,40 +202,47 @@ async function handleIncomingMessage(
     return;
   }
 
-  // BOT FLOW: route to bot-handler when bot is enabled AND it's not a button
-  // confirmation reply (those still use the legacy appointment-update flow).
-  if (botEnabled && lineId && lineOrgId && !appointmentIdFromPayload) {
-    // Quick patient lookup for log enrichment (optional — failures are non-fatal)
-    let patientIdForLog: string | undefined;
-    if (fromPhone) {
-      const { data: p } = await supabase
-        .from("patients")
-        .select("id")
-        .eq("phone", fromPhone)
-        .limit(1)
-        .maybeSingle();
-      patientIdForLog = p?.id;
+  // BOT FLOW: route to bot-handler when bot is enabled.
+  // Exception: "Confirmar" button with appointmentId stays in legacy flow
+  // (updates status + sends patient_confirmed ack).
+  if (botEnabled && lineId && lineOrgId) {
+    const intent = detectIntent(body);
+
+    if (intent === "confirm" && appointmentIdFromPayload) {
+      // Confirmar → fall through to legacy flow below
+    } else {
+      // Everything else → bot (includes Reagendar with appointmentId, free text, etc.)
+      let patientIdForLog: string | undefined;
+      if (fromPhone) {
+        const { data: p } = await supabase
+          .from("patients")
+          .select("id")
+          .eq("phone", fromPhone)
+          .limit(1)
+          .maybeSingle();
+        patientIdForLog = p?.id;
+      }
+
+      // Log inbound message
+      await logMessage(supabase, {
+        direction: "inbound",
+        toPhone,
+        fromPhone,
+        body: body || null,
+        type: "patient_reply",
+        status: "received",
+        provider: "meta",
+        providerMessageId: message.id,
+        patientId: patientIdForLog,
+        organizationId: lineOrgId,
+        whatsappLineId: lineId,
+        rawPayload: message,
+      });
+
+      // Dispatch to bot-handler — pass appointmentId for direct reschedule
+      await routeToBotHandler(fromPhone, body, lineId, lineOrgId, patientIdForLog, appointmentIdFromPayload ?? undefined);
+      return;
     }
-
-    // Log inbound message
-    await logMessage(supabase, {
-      direction: "inbound",
-      toPhone,
-      fromPhone,
-      body: body || null,
-      type: "patient_reply",
-      status: "received",
-      provider: "meta",
-      providerMessageId: message.id,
-      patientId: patientIdForLog,
-      organizationId: lineOrgId,
-      whatsappLineId: lineId,
-      rawPayload: message,
-    });
-
-    // Dispatch to bot-handler and send response
-    await routeToBotHandler(fromPhone, body, lineId, lineOrgId, patientIdForLog);
-    return;
   }
 
   // Find patient by phone — DB stores all phones as E.164 (+504XXXXXXXX)
@@ -493,6 +500,7 @@ async function routeToBotHandler(
   lineId: string,
   orgId: string,
   patientId?: string,
+  appointmentId?: string,
 ): Promise<void> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -515,6 +523,7 @@ async function routeToBotHandler(
         patientPhone: fromPhone,
         messageText: messageText || "",
         organizationId: orgId,
+        ...(appointmentId ? { appointmentId } : {}),
       }),
     });
 
