@@ -23,11 +23,12 @@ Deno.serve(async (req) => {
       return jsonResponse(500, { ok: false, error: "Server configuration error" });
     }
 
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     // Auth: service role key, internal secret, or valid JWT
     const internalSecret = req.headers.get("x-internal-secret") || "";
     const expectedSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
     const authHeader = req.headers.get("Authorization") || "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
 
     let isAuthenticated = false;
 
@@ -39,10 +40,8 @@ Deno.serve(async (req) => {
     }
     if (!isAuthenticated && authHeader.startsWith("Bearer ")) {
       try {
-        const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-          global: { headers: { Authorization: authHeader } },
-        });
-        const { data: { user }, error: authError } = await authClient.auth.getUser();
+        const jwt = authHeader.replace("Bearer ", "");
+        const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
         if (user && !authError) isAuthenticated = true;
       } catch { /* invalid token */ }
     }
@@ -50,8 +49,6 @@ Deno.serve(async (req) => {
     if (!isAuthenticated) {
       return jsonResponse(401, { ok: false, error: "Unauthorized" });
     }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 1) Get all PENDING template mappings joined with whatsapp_lines
     const { data: pendingMappings, error: fetchError } = await supabase
