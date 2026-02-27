@@ -47,6 +47,7 @@ type BotState =
   | 'main_menu'
   | 'faq_search'
   | 'booking_select_doctor'
+  | 'booking_select_service'
   | 'booking_select_week'
   | 'booking_select_day'
   | 'booking_select_hour'
@@ -187,14 +188,15 @@ async function handleBotMessage(
     }
   }
 
-  // Load handoff labels once per session
+  // Load handoff labels and service types once per session
   if (!session.context.handoffLabels) {
     const { data: lineConfig } = await supabase
       .from('whatsapp_lines')
-      .select('bot_handoff_type')
+      .select('bot_handoff_type, bot_service_types')
       .eq('id', whatsappLineId)
       .single();
     session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
+    session.context.lineServiceTypes = lineConfig?.bot_service_types || [];
   }
   const handoffLabels = session.context.handoffLabels as { menuOption: string; connecting: string; emoji: string };
 
@@ -245,6 +247,10 @@ async function handleBotMessage(
 
     case 'booking_select_doctor':
       response = await handleBookingSelectDoctor(messageText, session, organizationId, supabase);
+      break;
+
+    case 'booking_select_service':
+      response = await handleBookingSelectService(messageText, session, organizationId, supabase);
       break;
 
     case 'booking_select_week':
@@ -431,7 +437,7 @@ async function handleDirectReschedule(
   // 1. Fetch appointment with doctor info
   const { data: appointment, error: aptError } = await supabase
     .from('appointments')
-    .select('id, date, time, duration_minutes, status, doctor_id, doctors:doctor_id (id, name, prefix)')
+    .select('id, date, time, duration_minutes, status, doctor_id, service_type, doctors:doctor_id (id, name, prefix)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -481,6 +487,10 @@ async function handleDirectReschedule(
   if (patient) {
     session.context.patientId = patient.id;
     session.context.patientName = patient.name;
+  }
+  // Carry over service type from original appointment
+  if (appointment.service_type) {
+    session.context.selectedServiceType = appointment.service_type;
   }
   session.context.bookingTotalSteps = 4; // Direct reschedule always 4 steps
 
@@ -664,6 +674,73 @@ async function handleFAQSearch(
 }
 
 // ============================================================================
+// BOOKING FLOW HELPERS — step numbering & service type
+// ============================================================================
+
+/**
+ * Dynamic step numbering based on whether the flow includes doctor selection
+ * and/or service type selection steps.
+ */
+function getStepNumbers(session: BotSession) {
+  const total = session.context.bookingTotalSteps || 4;
+  let offset = 0;
+  const hasMultiDoc = (session.context.availableDoctors?.length || 0) > 1;
+  const hasServiceStep = (session.context.availableServiceTypes?.length || 0) >= 2;
+  if (hasMultiDoc) offset++;
+  if (hasServiceStep) offset++;
+  return {
+    weekStep: 1 + offset,
+    dayStep: 2 + offset,
+    hourStep: 3 + offset,
+    confirmStep: total,
+    totalSteps: total,
+  };
+}
+
+/**
+ * Checks service types configured on the line and either:
+ * - 0 types → returns null (skip, no service step)
+ * - 1 type → auto-selects it silently, applies duration override, returns null
+ * - 2+ types → returns a BotResponse with options for the patient to choose
+ */
+function maybeShowServiceTypeStep(session: BotSession): BotResponse | null {
+  const serviceTypes: Array<{ name: string; duration_minutes?: number }> = session.context.lineServiceTypes || [];
+
+  if (serviceTypes.length === 0) {
+    return null;
+  }
+
+  if (serviceTypes.length === 1) {
+    // Auto-select the single type silently
+    session.context.selectedServiceType = serviceTypes[0].name;
+    if (serviceTypes[0].duration_minutes) {
+      session.context.serviceDurationOverride = serviceTypes[0].duration_minutes;
+    }
+    return null;
+  }
+
+  // 2+ types: show selection step
+  session.context.availableServiceTypes = serviceTypes;
+
+  const isReschedule = session.context.isReschedule;
+  const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
+  const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
+  const hasMultiDoc = (session.context.availableDoctors?.length || 0) > 1;
+  const serviceStep = hasMultiDoc ? 2 : 1;
+  const totalSteps = session.context.bookingTotalSteps || 4;
+
+  const stepTitle = buildStepTitle(flowEmoji, flowName, serviceStep, totalSteps);
+
+  return {
+    message: `${stepTitle}\n\n📋 ¿Que tipo de servicio necesita?`,
+    options: serviceTypes.map((st) => st.name),
+    requiresInput: true,
+    nextState: 'booking_select_service',
+    sessionComplete: false,
+  };
+}
+
+// ============================================================================
 // BOOKING FLOW HANDLERS
 // ============================================================================
 
@@ -697,6 +774,10 @@ async function startBookingFlow(
     };
   }
 
+  // Determine if service types add an extra step
+  const serviceTypes: Array<{ name: string; duration_minutes?: number }> = session.context.lineServiceTypes || [];
+  const hasServiceStep = serviceTypes.length >= 2;
+
   // If only 1 doctor, auto-select
   if (lineDoctors.length === 1) {
     const doctor = lineDoctors[0].doctor;
@@ -705,13 +786,17 @@ async function startBookingFlow(
     session.context.doctorId = doctor.id;
     session.context.doctorName = `${doctor.prefix} ${doctor.name}`;
     session.context.calendarId = calendar.id;
-    session.context.bookingTotalSteps = 4;
+    session.context.bookingTotalSteps = 4 + (hasServiceStep ? 1 : 0);
+
+    // Check if service type step is needed before going to week selection
+    const serviceResponse = maybeShowServiceTypeStep(session);
+    if (serviceResponse) return serviceResponse;
 
     return await handleBookingSelectWeek('', session, organizationId, supabase);
   }
 
   // Multiple doctors - show selection
-  session.context.bookingTotalSteps = 5;
+  session.context.bookingTotalSteps = 5 + (hasServiceStep ? 1 : 0);
 
   const options = lineDoctors.map((ld: any) => {
     const doc = ld.doctor;
@@ -725,7 +810,8 @@ async function startBookingFlow(
     calendarId: ld.calendar.id,
   }));
 
-  const stepTitle = buildStepTitle(OPT_EMOJI.agendar, 'Agendar cita', 1, 5);
+  const totalSteps = session.context.bookingTotalSteps;
+  const stepTitle = buildStepTitle(OPT_EMOJI.agendar, 'Agendar cita', 1, totalSteps);
 
   return {
     message: `${stepTitle}\n\n¿Con que doctor desea agendar?`,
@@ -761,7 +847,47 @@ async function handleBookingSelectDoctor(
   session.context.doctorName = selectedDoctor.name;
   session.context.calendarId = selectedDoctor.calendarId;
 
+  // Check if service type step is needed before going to week selection
+  const serviceResponse = maybeShowServiceTypeStep(session);
+  if (serviceResponse) return serviceResponse;
+
   // Move to week selection
+  return await handleBookingSelectWeek('', session, organizationId, supabase);
+}
+
+async function handleBookingSelectService(
+  input: string,
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient
+): Promise<BotResponse> {
+  const serviceTypes: Array<{ name: string; duration_minutes?: number }> = session.context.availableServiceTypes || [];
+  const selection = parseInt(input.trim());
+
+  if (isNaN(selection) || selection < 1 || selection > serviceTypes.length) {
+    const isReschedule = session.context.isReschedule;
+    const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
+    const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
+    const hasMultiDoc = (session.context.availableDoctors?.length || 0) > 1;
+    const serviceStep = hasMultiDoc ? 2 : 1;
+    const totalSteps = session.context.bookingTotalSteps || 4;
+    const stepTitle = buildStepTitle(flowEmoji, flowName, serviceStep, totalSteps);
+
+    return {
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n📋 ¿Que tipo de servicio necesita?`,
+      options: serviceTypes.map((st) => st.name),
+      requiresInput: true,
+      nextState: 'booking_select_service',
+      sessionComplete: false,
+    };
+  }
+
+  const selected = serviceTypes[selection - 1];
+  session.context.selectedServiceType = selected.name;
+  if (selected.duration_minutes) {
+    session.context.serviceDurationOverride = selected.duration_minutes;
+  }
+
   return await handleBookingSelectWeek('', session, organizationId, supabase);
 }
 
@@ -779,7 +905,7 @@ async function handleBookingSelectWeek(
     .eq('id', session.whatsapp_line_id)
     .single();
 
-  const durationMinutes = lineData?.default_duration_minutes || 60;
+  const durationMinutes = session.context.serviceDurationOverride || lineData?.default_duration_minutes || 60;
   session.context.durationMinutes = durationMinutes;
   const slotGranularity = Math.min(durationMinutes, 30);
   session.context.slotGranularity = slotGranularity;
@@ -800,12 +926,11 @@ async function handleBookingSelectWeek(
   // Store weeks in context for selection
   session.context.availableWeeks = weeks;
 
-  const totalSteps = session.context.bookingTotalSteps || 4;
   const isReschedule = session.context.isReschedule;
   const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
   const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
-  const weekStep = totalSteps === 5 ? 2 : 1;
-  const stepTitle = buildStepTitle(flowEmoji, flowName, weekStep, totalSteps);
+  const steps = getStepNumbers(session);
+  const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
 
   return {
     message: `${stepTitle}\n\nSeleccione la semana para su cita con ${session.context.doctorName}:`,
@@ -825,16 +950,14 @@ async function handleBookingSelectDay(
   const availableWeeks = session.context.availableWeeks || [];
   const selection = parseInt(input.trim());
 
-  const totalSteps = session.context.bookingTotalSteps || 4;
   const isReschedule = session.context.isReschedule;
   const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
   const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
-  const weekStep = totalSteps === 5 ? 2 : 1;
-  const dayStep = totalSteps === 5 ? 3 : 2;
+  const steps = getStepNumbers(session);
 
   // Validate selection
   if (isNaN(selection) || selection < 1 || selection > availableWeeks.length) {
-    const stepTitle = buildStepTitle(flowEmoji, flowName, weekStep, totalSteps);
+    const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
     return {
       message: `${stepTitle}\n\n⚠️ Opcion no valida.\nSeleccione una semana:`,
       options: availableWeeks.map((w: any) => w.weekLabel),
@@ -860,7 +983,7 @@ async function handleBookingSelectDay(
   );
 
   if (days.length === 0) {
-    const stepTitle = buildStepTitle(flowEmoji, flowName, weekStep, totalSteps);
+    const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
     return {
       message: `${stepTitle}\n\n⚠️ No hay dias disponibles en esta semana.\nSeleccione otra semana:`,
       options: availableWeeks.map((w: any) => w.weekLabel),
@@ -873,7 +996,7 @@ async function handleBookingSelectDay(
   // Store days in context
   session.context.availableDays = days;
 
-  const stepTitle = buildStepTitle(flowEmoji, flowName, dayStep, totalSteps);
+  const stepTitle = buildStepTitle(flowEmoji, flowName, steps.dayStep, steps.totalSteps);
 
   return {
     message: `${stepTitle}\n\n¿Que dia prefiere?`,
@@ -900,12 +1023,10 @@ async function handleBookingSelectHour(
     return await showHourSlots(session, supabase);
   }
 
-  const totalSteps = session.context.bookingTotalSteps || 4;
   const isReschedule = session.context.isReschedule;
   const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
   const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
-  const dayStep = totalSteps === 5 ? 3 : 2;
-  const hourStep = totalSteps === 5 ? 4 : 3;
+  const steps = getStepNumbers(session);
 
   // Check if user is selecting a time slot (already in hour selection mode)
   if (session.context.availableSlots) {
@@ -919,11 +1040,12 @@ async function handleBookingSelectHour(
       const selectedDate = DateTime.fromISO(session.context.selectedDate, { zone: timezone });
       const dayLabel = selectedDate.toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
-      const confirmStep = totalSteps;
-      const confirmTitle = buildStepTitle(OPT_EMOJI.confirmar, 'Confirmar cita', confirmStep, totalSteps);
+      const confirmTitle = buildStepTitle(OPT_EMOJI.confirmar, 'Confirmar cita', steps.confirmStep, steps.totalSteps);
+
+      const serviceTypeLine = session.context.selectedServiceType ? `\n📋 ${session.context.selectedServiceType}` : '';
 
       return {
-        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
+        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
         options: [`${OPT_EMOJI.confirmar} Si, confirmar`, `${OPT_EMOJI.cambiar} Cambiar horario`, `${OPT_EMOJI.cancelar} Cancelar`],
         requiresInput: true,
         nextState: 'booking_confirm',
@@ -937,7 +1059,7 @@ async function handleBookingSelectHour(
 
   // First time: user is selecting a day
   if (isNaN(selection) || selection < 1 || selection > availableDays.length) {
-    const stepTitle = buildStepTitle(flowEmoji, flowName, dayStep, totalSteps);
+    const stepTitle = buildStepTitle(flowEmoji, flowName, steps.dayStep, steps.totalSteps);
     return {
       message: `${stepTitle}\n\n⚠️ Opcion no valida.\n¿Que dia prefiere?`,
       options: availableDays.map((d: any) => d.label),
@@ -975,15 +1097,13 @@ async function showHourSlots(
     slotGranularity
   );
 
-  const totalSteps = session.context.bookingTotalSteps || 4;
   const isReschedule = session.context.isReschedule;
   const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
   const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
-  const hourStep = totalSteps === 5 ? 4 : 3;
+  const steps = getStepNumbers(session);
 
   if (result.slots.length === 0) {
-    const dayStep = totalSteps === 5 ? 3 : 2;
-    const stepTitle = buildStepTitle(flowEmoji, flowName, dayStep, totalSteps);
+    const stepTitle = buildStepTitle(flowEmoji, flowName, steps.dayStep, steps.totalSteps);
     return {
       message: `${stepTitle}\n\n⚠️ No hay horarios disponibles para este dia.\nSeleccione otro dia:`,
       options: (session.context.availableDays || []).map((d: any) => d.label),
@@ -1005,7 +1125,7 @@ async function showHourSlots(
   const selectedDate = DateTime.fromISO(session.context.selectedDate, { zone: timezone });
   const dayLabel = selectedDate.toFormat('EEEE dd MMMM', { locale: 'es' });
 
-  const stepTitle = buildStepTitle(flowEmoji, flowName, hourStep, totalSteps);
+  const stepTitle = buildStepTitle(flowEmoji, flowName, steps.hourStep, steps.totalSteps);
 
   return {
     message: `${stepTitle}\n\n${OPT_EMOJI.horarios} Horarios disponibles — *${dayLabel}*\n${session.context.doctorName}`,
@@ -1184,6 +1304,7 @@ async function createAppointmentWithPatient(
       status: 'agendada',
       organization_id: organizationId,
       notes: appointmentNotes,
+      service_type: session.context.selectedServiceType || null,
     })
     .select()
     .single();
@@ -1205,8 +1326,10 @@ async function createAppointmentWithPatient(
   const successEmoji = session.context.isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.confirmar;
   const successTitle = session.context.isReschedule ? '¡Cita reagendada exitosamente!' : '¡Cita agendada exitosamente!';
 
+  const serviceTypeLine = session.context.selectedServiceType ? `\n📋 ${session.context.selectedServiceType}` : '';
+
   return {
-    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.`,
+    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -1337,6 +1460,7 @@ async function handleRescheduleList(
     time: apt.time,
     status: apt.status,
     durationMinutes: apt.duration_minutes,
+    serviceType: apt.service_type || null,
     doctorId: apt.doctors?.id,
     doctorName: apt.doctors ? `${apt.doctors.prefix} ${apt.doctors.name}` : 'Doctor',
   }));
@@ -1471,6 +1595,12 @@ async function handleCancelConfirm(
     session.context.slotGranularity = Math.min(session.context.durationMinutes, 30);
     session.context.isReschedule = true; // Flag to know we're rescheduling
     session.context.bookingTotalSteps = 4; // Reschedule always 4 steps (doctor already selected)
+
+    // Carry over service type from original appointment
+    const selectedApt = (session.context.upcomingAppointments || []).find((a: any) => a.id === session.context.rescheduleAppointmentId);
+    if (selectedApt?.serviceType) {
+      session.context.selectedServiceType = selectedApt.serviceType;
+    }
 
     // Go to week selection (reuse booking flow)
     const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId);
@@ -1913,7 +2043,7 @@ async function getPatientUpcomingAppointments(
   const { data: appointments } = await supabase
     .from('appointments')
     .select(`
-      id, date, time, status, notes, duration_minutes,
+      id, date, time, status, notes, duration_minutes, service_type,
       doctors:doctor_id (id, name, prefix)
     `)
     .eq('patient_id', patientId)
