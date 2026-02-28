@@ -495,11 +495,11 @@ async function handleDirectReschedule(
   session.context.bookingTotalSteps = 4; // Direct reschedule always 4 steps
 
   // 6. Get available weeks
-  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId);
+  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId, slotGranularity);
 
   if (weeks.length === 0) {
     return {
-      message: `⚠️ No encontramos disponibilidad en las proximas 2 semanas para reagendar su cita con ${doctorName}.\n\nConectando con ${handoffLabels.connecting}...`,
+      message: `⚠️ No encontramos disponibilidad en las proximas semanas para reagendar su cita con ${doctorName}.\n\nConectando con ${handoffLabels.connecting}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -749,6 +749,25 @@ async function startBookingFlow(
   organizationId: string,
   supabase: SupabaseClient
 ): Promise<BotResponse> {
+  // Clear stale booking/reschedule context from previous flows
+  delete session.context.isReschedule;
+  delete session.context.rescheduleAppointmentId;
+  delete session.context.rescheduleAppointmentDate;
+  delete session.context.rescheduleAppointmentTime;
+  delete session.context.rescheduleAppointmentDoctorName;
+  delete session.context.selectedServiceType;
+  delete session.context.serviceDurationOverride;
+  delete session.context.availableServiceTypes;
+  delete session.context.availableWeeks;
+  delete session.context.availableDays;
+  delete session.context.availableSlots;
+  delete session.context.selectedWeek;
+  delete session.context.selectedDate;
+  delete session.context.selectedTime;
+  delete session.context.slotPage;
+  delete session.context.cancelConfirmPhase;
+  delete session.context.upcomingAppointments;
+
   // Get doctors linked to this WhatsApp line
   const { data: lineDoctors } = await supabase
     .from('whatsapp_line_doctors')
@@ -911,12 +930,12 @@ async function handleBookingSelectWeek(
   session.context.slotGranularity = slotGranularity;
 
   // Get available weeks
-  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId);
+  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId, slotGranularity);
 
   if (weeks.length === 0) {
     const connecting = handoffLabels?.connecting || session.context.handoffLabels?.connecting || 'la secretaria';
     return {
-      message: `⚠️ No encontramos disponibilidad en las proximas 2 semanas.\n\nConectando con ${connecting}...`,
+      message: `⚠️ No encontramos disponibilidad en las proximas semanas.\n\nConectando con ${connecting}...`,
       requiresInput: false,
       nextState: 'handoff_secretary',
       sessionComplete: true,
@@ -1428,6 +1447,16 @@ async function handleRescheduleList(
     session.context.doctorId = selectedApt.doctorId;
     session.context.doctorName = selectedApt.doctorName;
 
+    // Lookup calendarId from whatsapp_line_doctors (same pattern as handleDirectReschedule)
+    const { data: lineDoc } = await supabase
+      .from('whatsapp_line_doctors')
+      .select('calendar_id')
+      .eq('whatsapp_line_id', session.whatsapp_line_id)
+      .eq('doctor_id', selectedApt.doctorId)
+      .limit(1)
+      .maybeSingle();
+    session.context.calendarId = lineDoc?.calendar_id || null;
+
     const dateLabel = DateTime.fromISO(selectedApt.date, { zone: 'America/Tegucigalpa' })
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
@@ -1476,6 +1505,16 @@ async function handleRescheduleList(
     session.context.rescheduleAppointmentDoctorName = apt.doctorName;
     session.context.doctorId = apt.doctorId;
     session.context.doctorName = apt.doctorName;
+
+    // Lookup calendarId from whatsapp_line_doctors (same pattern as handleDirectReschedule)
+    const { data: lineDoc } = await supabase
+      .from('whatsapp_line_doctors')
+      .select('calendar_id')
+      .eq('whatsapp_line_id', session.whatsapp_line_id)
+      .eq('doctor_id', apt.doctorId)
+      .limit(1)
+      .maybeSingle();
+    session.context.calendarId = lineDoc?.calendar_id || null;
 
     const dateLabel = DateTime.fromISO(apt.date, { zone: 'America/Tegucigalpa' })
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
@@ -1548,8 +1587,10 @@ async function handleCancelConfirm(
       return {
         message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
         options: [
-          `${OPT_EMOJI.agendar} Agendar nueva cita`,
-          `${OPT_EMOJI.menu} Menu principal`,
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+          `${OPT_EMOJI.faq} Preguntas frecuentes`,
+          handoffLabels.menuOption,
         ],
         showMenuHint: false,
         requiresInput: true,
@@ -1603,11 +1644,11 @@ async function handleCancelConfirm(
     }
 
     // Go to week selection (reuse booking flow)
-    const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId);
+    const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId, session.context.slotGranularity);
 
     if (weeks.length === 0) {
       return {
-        message: `⚠️ No encontramos disponibilidad en las proximas 2 semanas.\n\nConectando con ${handoffLabels.connecting}...`,
+        message: `⚠️ No encontramos disponibilidad en las proximas semanas.\n\nConectando con ${handoffLabels.connecting}...`,
         requiresInput: false,
         nextState: 'handoff_secretary',
         sessionComplete: true,
@@ -1776,28 +1817,31 @@ async function getAvailableWeeks(
   doctorId: string,
   durationMinutes: number,
   supabase: SupabaseClient,
-  calendarId?: string
+  calendarId?: string,
+  slotGranularity?: number
 ): Promise<{ weekStart: string; weekLabel: string }[]> {
   const timezone = 'America/Tegucigalpa';
   const now = DateTime.now().setZone(timezone);
   const weeks: { weekStart: string; weekLabel: string }[] = [];
+  const MAX_RESULTS = 2;
+  const MAX_SCAN = 6;
+  const granularity = slotGranularity || Math.min(durationMinutes, 30);
 
-  // Check next 2 weeks
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < MAX_SCAN && weeks.length < MAX_RESULTS; i++) {
     const weekStart = now.plus({ weeks: i }).startOf('week'); // Monday
     const weekEnd = weekStart.plus({ days: 6 }); // Sunday
 
-    // Check if week has at least 1 available slot
-    const hasSlots = await weekHasAvailableSlots(
+    // Verify real availability using getAvailableDaysInWeek (checks past days, booked slots, etc.)
+    const days = await getAvailableDaysInWeek(
       doctorId,
       weekStart.toISODate() || '',
-      weekEnd.toISODate() || '',
       durationMinutes,
       supabase,
-      calendarId
+      calendarId,
+      granularity
     );
 
-    if (hasSlots) {
+    if (days.length > 0) {
       const label = `Semana del ${weekStart.toFormat('dd MMM', { locale: 'es' })} al ${weekEnd.toFormat('dd MMM', { locale: 'es' })}`;
       weeks.push({
         weekStart: weekStart.toISODate() || '',
@@ -1807,30 +1851,6 @@ async function getAvailableWeeks(
   }
 
   return weeks;
-}
-
-async function weekHasAvailableSlots(
-  doctorId: string,
-  weekStart: string,
-  weekEnd: string,
-  durationMinutes: number,
-  supabase: SupabaseClient,
-  calendarId?: string
-): Promise<boolean> {
-  if (calendarId) {
-    const { data: schedules } = await supabase
-      .from('calendar_schedules')
-      .select('day_of_week')
-      .eq('calendar_id', calendarId);
-    return !!(schedules && schedules.length > 0);
-  }
-  const { data: schedules } = await supabase
-    .from('doctor_schedules')
-    .select('day_of_week')
-    .eq('doctor_id', doctorId);
-
-  if (!schedules || schedules.length === 0) return false;
-  return true;
 }
 
 async function getAvailableDaysInWeek(
