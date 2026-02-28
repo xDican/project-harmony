@@ -570,6 +570,7 @@ async function handleMainMenu(
   }
 
   if (normalizedInput === '3' || normalizedInput.includes('faq') || normalizedInput.includes('pregunta')) {
+    delete session.context.lastFaqResult;
     return {
       message: `${OPT_EMOJI.faq} *Preguntas frecuentes*\n\nEscriba su pregunta y buscare la respuesta.`,
       requiresInput: true,
@@ -614,9 +615,58 @@ async function handleFAQSearch(
   handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const normalizedInput = query.trim().toLowerCase();
+  const lastFaqResult = session.context.lastFaqResult;
 
-  // Check if user wants to go back to main menu
-  if (normalizedInput === '1' || normalizedInput.includes('volver') || normalizedInput.includes('menú') || normalizedInput.includes('menu')) {
+  // Route numeric inputs based on which options were shown
+  if (lastFaqResult === 'found') {
+    // Options shown: [1: Otra pregunta, 2: Menu principal]
+    if (normalizedInput === '1' || normalizedInput.includes('otra pregunta')) {
+      return {
+        message: `${OPT_EMOJI.faq} Escriba su pregunta:`,
+        requiresInput: true,
+        nextState: 'faq_search',
+        sessionComplete: false,
+      };
+    }
+    if (normalizedInput === '2' || normalizedInput.includes('menu') || normalizedInput.includes('menú') || normalizedInput.includes('volver')) {
+      return {
+        message: '¿En que puedo ayudarle?',
+        options: [
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+          `${OPT_EMOJI.faq} Preguntas frecuentes`,
+          handoffLabels.menuOption,
+        ],
+        showMenuHint: false,
+        requiresInput: true,
+        nextState: 'main_menu',
+        sessionComplete: false,
+      };
+    }
+  } else if (lastFaqResult === 'not_found') {
+    // Options shown: [1: Menu principal, 2: Handoff]
+    if (normalizedInput === '1' || normalizedInput.includes('menu') || normalizedInput.includes('menú') || normalizedInput.includes('volver')) {
+      return {
+        message: '¿En que puedo ayudarle?',
+        options: [
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+          `${OPT_EMOJI.faq} Preguntas frecuentes`,
+          handoffLabels.menuOption,
+        ],
+        showMenuHint: false,
+        requiresInput: true,
+        nextState: 'main_menu',
+        sessionComplete: false,
+      };
+    }
+    if (normalizedInput === '2' || normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
+    }
+  }
+
+  // Fallback: text-based matching (no lastFaqResult or first entry)
+  if (normalizedInput.includes('menu') || normalizedInput.includes('menú') || normalizedInput.includes('volver')) {
     return {
       message: '¿En que puedo ayudarle?',
       options: [
@@ -631,20 +681,16 @@ async function handleFAQSearch(
       sessionComplete: false,
     };
   }
-
-  // Check if user wants to contact secretary/doctor (from "no FAQ found" options)
-  if (normalizedInput === '1' || normalizedInput.includes('secretar') || normalizedInput.includes('hablar con') || normalizedInput.includes('sí') || normalizedInput.includes('si, contactar')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
-  }
-
-  // Check if user wants another question
-  if (normalizedInput === '2' || normalizedInput.includes('otra pregunta')) {
+  if (normalizedInput.includes('otra pregunta')) {
     return {
       message: `${OPT_EMOJI.faq} Escriba su pregunta:`,
       requiresInput: true,
       nextState: 'faq_search',
       sessionComplete: false,
     };
+  }
+  if (normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
   }
 
   // Get doctor_id and clinic_id from session context if available
@@ -654,6 +700,7 @@ async function handleFAQSearch(
   const faq = await searchFAQ(query, doctorId, clinicId, organizationId, supabase);
 
   if (faq) {
+    session.context.lastFaqResult = 'found';
     return {
       message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faq.question}*\n${faq.answer}`,
       options: [`${OPT_EMOJI.faq} Otra pregunta`, `${OPT_EMOJI.menu} Menu principal`],
@@ -664,6 +711,7 @@ async function handleFAQSearch(
   }
 
   // No FAQ found
+  session.context.lastFaqResult = 'not_found';
   return {
     message: '⚠️ No encontre una respuesta para esa pregunta.',
     options: [`${OPT_EMOJI.menu} Menu principal`, handoffLabels.menuOption],
