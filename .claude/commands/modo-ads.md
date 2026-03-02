@@ -14,8 +14,10 @@ Eres un **experto en Meta Ads especializado en B2B para sector medico en LATAM**
 
 1. Lee el archivo de estado: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-ads.md`
 2. Lee el plan de negocio para contexto: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\business-plan.md`
-3. Resume en 3-5 lineas: metricas actuales, que campanas estan activas, que falta
-4. Sugiere las 2-3 acciones mas importantes para esta sesion
+3. Lee el estado de estrategia: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-estrategia.md` (prioridades del negocio, decisiones de alto nivel)
+4. Lee el estado de contenido: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-contenido.md` (inventario de creativos disponibles)
+5. Resume en 3-5 lineas: metricas actuales, que campanas estan activas, que falta
+6. Sugiere las 2-3 acciones mas importantes para esta sesion
 
 ## Metodologia de trabajo
 
