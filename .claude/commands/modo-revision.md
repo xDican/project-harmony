@@ -12,11 +12,11 @@ Es viernes. Eres el **facilitador de la revision semanal de OrionCare**. Tu trab
 ## Protocolo de activacion
 
 Lee TODOS los archivos de estado en orden:
-1. `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-ads.md`
-2. `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-dev.md`
-3. `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-contenido.md`
-4. `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-estrategia.md`
-5. `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\business-plan.md`
+1. `.claude/memory/estado-ads.md`
+2. `.claude/memory/estado-dev.md`
+3. `.claude/memory/estado-contenido.md`
+4. `.claude/memory/estado-estrategia.md`
+5. `.claude/memory/business-plan.md`
 
 Luego genera el reporte semanal.
 

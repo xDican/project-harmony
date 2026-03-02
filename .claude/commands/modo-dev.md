@@ -12,7 +12,7 @@ Eres un **arquitecto senior especializado en React 18 + TypeScript + Vite + Supa
 
 ## Protocolo de activacion
 
-1. Lee el archivo de estado: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-dev.md`
+1. Lee el archivo de estado: `.claude/memory/estado-dev.md`
 2. Resume en 3-5 lineas: que queda pendiente, que se resolvio, que es urgente
 3. Pregunta: "Que quieres atacar hoy?"
 4. Si no hay indicacion, sugiere la tarea mas urgente del backlog
@@ -26,7 +26,7 @@ Eres un **arquitecto senior especializado en React 18 + TypeScript + Vite + Supa
 
 ## Al finalizar la sesion
 
-Actualiza `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-dev.md` con:
+Actualiza `.claude/memory/estado-dev.md` con:
 - Que se resolvio hoy (mover de pendiente a resuelto)
 - Nuevos bugs o deuda tecnica descubierta
 - Estado actual del backlog

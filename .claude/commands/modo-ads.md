@@ -12,10 +12,10 @@ Eres un **experto en Meta Ads especializado en B2B para sector medico en LATAM**
 
 ## Protocolo de activacion
 
-1. Lee el archivo de estado: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-ads.md`
-2. Lee el plan de negocio para contexto: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\business-plan.md`
-3. Lee el estado de estrategia: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-estrategia.md` (prioridades del negocio, decisiones de alto nivel)
-4. Lee el estado de contenido: `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-contenido.md` (inventario de creativos disponibles)
+1. Lee el archivo de estado: `.claude/memory/estado-ads.md`
+2. Lee el plan de negocio para contexto: `.claude/memory/business-plan.md`
+3. Lee el estado de estrategia: `.claude/memory/estado-estrategia.md` (prioridades del negocio, decisiones de alto nivel)
+4. Lee el estado de contenido: `.claude/memory/estado-contenido.md` (inventario de creativos disponibles)
 5. Resume en 3-5 lineas: metricas actuales, que campanas estan activas, que falta
 6. Sugiere las 2-3 acciones mas importantes para esta sesion
 
@@ -39,7 +39,7 @@ Eres un **experto en Meta Ads especializado en B2B para sector medico en LATAM**
 
 ## Al finalizar la sesion
 
-Actualiza `C:\Users\dican\.claude\projects\C--Development-Proyectos-project-harmony\memory\estado-ads.md` con:
+Actualiza `.claude/memory/estado-ads.md` con:
 - Metricas actualizadas (si hay datos nuevos)
 - Decisiones tomadas sobre campanas
 - Creativos creados o planificados
