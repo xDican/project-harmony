@@ -1,6 +1,6 @@
 # Estado Ads — OrionCare
 
-> Ultima actualizacion: 2 Mar 2026
+> Ultima actualizacion: 3 Mar 2026 (campana Imagen A lista para lanzar)
 
 ## Dashboard
 
@@ -64,22 +64,35 @@ Campana congelada desde hace semanas. Se congelo porque los leads hicieron marke
 4. **Herramienta de video:** probar HeyGen (trial gratis, 3 videos) antes de reactivar Veo 3.1
 5. **Encuesta simplificada:** de 7 a 5 preguntas (eliminar redundantes para reducir friccion)
 
+## Campana nueva — AD-005 Imagen A (lista para lanzar)
+
+**Creativo:** Imagen estatica — doctor en cama de noche, notificaciones WhatsApp apiladas.
+**A/B test:** 2 variantes de copy (misma imagen):
+- Variante 1: Dolor + Solucion ("Cuantas citas perdio esta semana...")
+- Variante 2: Pregunta directa ("Todavia agenda citas uno por uno...")
+
+**Configuracion:**
+- Objetivo: Leads (formulario con 5 preguntas)
+- Presupuesto: Lifetime budget $100, ~2 semanas (~$7/dia automatico)
+- Audiencia: Honduras, medicos independientes
+- Placements: Feed (4:5) + Stories (9:16) automatico
+- Evaluacion: revisar al llegar a $50 gastados (~1 semana)
+
+**Detalle completo en:** `docs/ad-creatives.md`
+
 ## Proximos pasos
 
-1. **Probar HeyGen** — crear cuenta trial, evaluar calidad del avatar en espanol
-2. **Producir video** con el guion aprobado (15-25 seg, avatar AI a camara):
-   - Hook: "Doctor, todavia agenda citas por WhatsApp uno por uno?"
-   - Dolor: WhatsApp con 20 mensajes, pacientes que cancelan/no llegan
-   - Solucion: "Con OrionCare sus pacientes se agendan solos por WhatsApp"
-   - CTA: "Responda 4 preguntas y le mostramos como funciona"
-3. **Preparar copy completo del ad** (texto primario, headline, descripcion)
-4. **Simplificar encuesta** a 5 preguntas:
-   - ¿Ejerce como medico o dentista?
-   - ¿Cuanto tiempo pierde agendando citas al dia?
-   - ¿Cual es su especialidad?
-   - Nombre
-   - Telefono
-5. **Lanzar campana nueva** con $100/mes ($3.30/dia), solo independientes Honduras
+1. **LANZAR campana AD-005** en Meta Ads Manager (checklist en `docs/ad-creatives.md`)
+   - Exportar imagen 4:5 + 9:16
+   - Crear campana Leads, lifetime budget $100
+   - Configurar formulario 5 preguntas
+   - 2 ads con las 2 variantes de copy
+   - Publicar y esperar aprobacion Meta
+2. **Revisar metricas** al llegar a $50 gastados (~1 semana)
+   - Comparar CTR de ambas variantes — pausar la peor
+   - Meta objetivo: CTR > 1.5% (vs 0.54% campana anterior)
+3. **En paralelo (prioridad baja):** video AD-003 Veo 3.1 — prompts listos, pendiente generar
+4. **Semana 3:** scripts de seguimiento/cierre + posts organicos
 
 ## Restricciones Meta para salud
 
