@@ -1,6 +1,6 @@
 # Estado Ads — OrionCare
 
-> Ultima actualizacion: 3 Mar 2026 (campana Imagen A lista para lanzar)
+> Ultima actualizacion: 4 Mar 2026 (demo bot + funnel actualizado)
 
 ## Dashboard
 
@@ -80,19 +80,27 @@ Campana congelada desde hace semanas. Se congelo porque los leads hicieron marke
 
 **Detalle completo en:** `docs/ad-creatives.md`
 
+## Decisiones sesion 4 Mar
+
+1. **Demo bot integrado al funnel:** Lead termina formulario → thank you page lo envia a probar el bot por WhatsApp (+50493133496)
+2. **Thank you page actualizada:**
+   - Titulo: "¡Listo! Ahora póngase en el lugar de su paciente."
+   - Cuerpo: "Presione el botón de abajo y envíe la palabra DEMO para ver cómo sus pacientes agendarían citas solos por WhatsApp."
+   - Boton: "Probar el asistente por WhatsApp" → `https://wa.me/+50493133496?text=DEMO`
+3. **Texto pre-formulario actualizado:** "Al finalizar, podrá probar el asistente virtual de OrionCare directo en su WhatsApp. Su información solo se usará para este fin."
+4. **Pendiente dev:** Crear flujo especial en el bot para cuando reciba "DEMO" — contexto guiado para el doctor, no el flujo normal de paciente
+5. **Desactivar Messenger** en configuracion del formulario (Settings → desmarcar Messenger)
+
 ## Proximos pasos
 
-1. **LANZAR campana AD-005** en Meta Ads Manager (checklist en `docs/ad-creatives.md`)
-   - Exportar imagen 4:5 + 9:16
-   - Crear campana Leads, lifetime budget $100
-   - Configurar formulario 5 preguntas
-   - 2 ads con las 2 variantes de copy
-   - Publicar y esperar aprobacion Meta
-2. **Revisar metricas** al llegar a $50 gastados (~1 semana)
+1. **DEV (blocker):** Implementar flujo "DEMO" en el bot — que al recibir "DEMO" guie al doctor por la experiencia
+2. **Generar imagen AD-005** en Gemini (o plan B: Canva con stock + overlays)
+3. **LANZAR campana AD-005** en Meta Ads Manager (checklist en `docs/ad-creatives.md`)
+4. **Revisar metricas** al llegar a $50 gastados (~1 semana)
    - Comparar CTR de ambas variantes — pausar la peor
-   - Meta objetivo: CTR > 1.5% (vs 0.54% campana anterior)
-3. **En paralelo (prioridad baja):** video AD-003 Veo 3.1 — prompts listos, pendiente generar
-4. **Semana 3:** scripts de seguimiento/cierre + posts organicos
+   - Medir: cuantos leads hacen clic en "Probar el asistente" vs cuantos no
+5. **En paralelo (prioridad baja):** video AD-003 Veo 3.1 — prompts listos, pendiente generar
+6. **Semana 3:** scripts de seguimiento/cierre + posts organicos
 
 ## Restricciones Meta para salud
 
