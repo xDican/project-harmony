@@ -239,8 +239,18 @@ export default function NuevaCita() {
   };
 
   const handleCreateNewPatient = ({ nameOrPhone }: { nameOrPhone: string }) => {
+    // Secretary/admin must select a doctor first so the RPC can resolve the org
+    if (!selectedDoctor && !user?.doctorId) {
+      toast({
+        variant: "destructive",
+        title: "Selecciona un médico primero",
+        description: "Debes seleccionar un médico antes de crear un paciente nuevo.",
+      });
+      return;
+    }
+
     const isPhone = /^\d+[-\s]?\d*$/.test(nameOrPhone);
-    
+
     if (isPhone) {
       setNewPatientName('');
       setNewPatientPhone(nameOrPhone);
@@ -248,7 +258,7 @@ export default function NuevaCita() {
       setNewPatientName(nameOrPhone);
       setNewPatientPhone('');
     }
-    
+
     setIsCreatePatientOpen(true);
   };
 
@@ -262,13 +272,23 @@ export default function NuevaCita() {
       return;
     }
 
+    const doctorId = selectedDoctor?.id ?? user?.doctorId;
+    if (!doctorId) {
+      toast({
+        variant: "destructive",
+        title: "Médico requerido",
+        description: "Selecciona un médico antes de crear un paciente.",
+      });
+      return;
+    }
+
     setIsCreatingPatient(true);
-    
+
     try {
       const patient = await createPatient({
         name: newPatientName.trim(),
         phone: formatPhoneForStorage(newPatientPhone.trim()),
-        doctorId: selectedDoctor?.id ?? user?.doctorId ?? undefined,
+        doctorId,
       });
 
       setSelectedPatient(patient);

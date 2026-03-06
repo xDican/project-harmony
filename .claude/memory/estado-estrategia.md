@@ -1,6 +1,6 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 5 Mar 2026
+> Ultima actualizacion: 6 Mar 2026
 
 ## Dashboard
 
@@ -20,7 +20,7 @@
 | Cliente | Estado | Pago | Notas |
 |---------|--------|------|-------|
 | A | Activo | $35/mes | Esperando tarjeta Meta para activar bot completo |
-| B | Instalacion | $35/mes | 2 clinicas con secretaria, instalacion pendiente |
+| B (Dra. Yeni) | Activo — configurada | $35/mes | 2 clinicas con secretaria, operativa. Lista de features solicitados (ver sprint abajo). |
 | C | Prospecto | $35/mes | Cierre pendiente |
 
 ## Pipeline
@@ -32,7 +32,7 @@
 
 ## Riesgos activos
 
-1. **ALTO: Sistema de recepcion de leads no listo.** Campaña corriendo pero: "Empezar ahora" apunta a numero personal de Diego, esposa sin scripts ni CRM configurado, sin numero de ventas dedicado. Cada lead que entra se pierde o lo atiende Diego improvisando.
+1. **ALTO: Numero de ventas bloqueado por Meta.** Numero nuevo configurado, "Empezar ahora" ya apunta a el, pero Meta lo bloqueo. Esperando resolucion (~24hrs desde 5 Mar). **Deadline: si el 7 Mar no esta resuelto → cambiar a otro numero.** Campaña AD-005 corre pero leads que hagan clic caen a numero muerto.
 2. **ALTO: Bot sin validacion en campo.** Dra. Tejeda probo el bot (primer uso real por lead), pero ningun paciente real ha agendado todavia.
 3. **MEDIO: Dependencia de 3 clientes.** Si uno se va, perdemos 33% del ingreso.
 4. **BAJO: Deuda tecnica de seguridad.** 4 advisories de Supabase pendientes.
@@ -66,6 +66,22 @@
 | Momentum (Jul) | 50 | $2,000 | Pendiente |
 | Objetivo (Dic) | 175 | $7,000 | Pendiente |
 
+## Decisiones sesion 6 Mar
+
+### Sprint mini aprobado (4 items)
+- Bug secretaria + bloquear fechas + UI medico unico + completar hand-off
+- Todo lo demas diferido a Junio — se le comunica a Dra. Yeni: "Lo tenemos anotado, en la siguiente actualizacion"
+- Max 2-3 dias de desarrollo
+
+### Numero de ventas bloqueado por Meta
+- Diego decidio dejar campaña corriendo con numero muerto (leads son frios, pocos haran clic a WhatsApp)
+- Deadline: 7 Mar — si no se resuelve, cambiar a otro numero
+- No revertir a numero personal de Diego
+
+### Seguimiento de prospectos
+- Diego maneja Dra. Tejeda y Dra. Ramos personalmente (no delegar, son relaciones iniciadas por el)
+- Warhol maneja leads nuevos que lleguen de campaña
+
 ## Decisiones sesion 5 Mar
 
 ### Scripts de ventas — sistema completo creado
@@ -90,15 +106,33 @@
 - **Bot de ventas automatizado descartado por ahora.** Razon: sin datos suficientes (1 conversacion), feature freeze, y humano convierte mejor con 3 clientes y cero marca. Secuencia: documentar 30+ conversaciones → analizar patrones (Abr-May) → diseñar bot (Jun) → produccion (Jul).
 - **No agregar ChatGPT ni herramientas extra al proceso de ventas.** El sistema es: lead entra → esposa responde con script → documenta en Sheet. Simple.
 
+## Sprint mini — polish y bugs (aprobado 6 Mar, max 2-3 dias)
+
+Contexto: Dra. Yeni envio lista de 8 features. Se triaron y solo 4 entran bajo feature freeze (bugs + polish + completar TODO existente). El resto va a Junio.
+
+| # | Item | Tipo | Complejidad |
+|---|------|------|-------------|
+| 1 | Secretaria no puede crear pacientes | Bug | Baja |
+| 2 | Bloquear fechas especificas | Operacional critico | Media |
+| 3 | UI medico unico (ocultar dropdowns innecesarios) | Polish | Baja |
+| 4 | Completar hand-off a secretaria (TODO en linea 1784 de bot-handler) | Completar codigo existente | Baja-media |
+
+### Diferidos a Junio 2026
+
+| Item | Razon |
+|------|-------|
+| Requisitos por servicio (ej. "tomar agua 30 min antes") | Feature nuevo |
+| Notas rapidas por paciente | Feature nuevo |
+| Mensaje al cancelar con razon + re-agenda | Feature nuevo |
+| Mensajes de publicidad/marketing | Feature nuevo (P2) |
+
 ## Proximos pasos
 
-1. **HOY (Diego):** Obtener numero nuevo de ventas → cambiar "Empezar ahora" en Lovable → configurar WhatsApp Business en ese numero
-2. **HOY (Diego):** Grabar audio de presentacion (30-40 seg, 1 toma, natural)
-3. **HOY (Diego):** Terminar de configurar CRM (formulas Dashboard + Filter Views + listas desplegables)
-4. **HOY (Diego):** Compartir `scripts-ventas.md` con esposa en G-Drive (ya subido)
-5. **MAÑANA (Esposa):** Si Dra. Tejeda no escribe → enviar SC-003 (seguimiento suave)
-6. **MAÑANA (Esposa):** Retomar Dra. Ramos con SC-007
-7. **ESTA SEMANA:** Cerrar Cliente C, instalar Cliente B
-8. **ESTA SEMANA:** Sesion con esposa (30 min) para explicarle CRM + scripts + Filter Views
-9. **SEMANA 2:** Revisar metricas AD-005 al llegar a $50 gastados — pausar variante peor
-10. **VIERNES 7 Mar:** Primera revision semanal con datos de campaña nueva
+1. **HOY (Diego):** Escribir a Dra. Tejeda (SC-003 seguimiento suave) y Dra. Ramos (SC-007)
+2. **HOY (Diego):** Grabar audio de presentacion (30-40 seg, 1 toma, natural) — pendiente de ayer
+3. **7 MAR:** Si Meta no desbloquea numero → cambiar a otro numero inmediatamente
+4. **ESTA SEMANA:** Cerrar Cliente C
+5. **ESTA SEMANA:** Sesion con Warhol (30 min) para explicarle CRM + scripts + Filter Views
+6. **ESTA SEMANA o SIGUIENTE:** Ejecutar sprint mini (4 items arriba) — max 2-3 dias
+7. **SEMANA 2:** Revisar metricas AD-005 al llegar a $50 gastados — pausar variante peor
+8. **VIERNES 7 Mar:** Primera revision semanal con datos de campaña nueva
