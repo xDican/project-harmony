@@ -1147,7 +1147,7 @@ async function showHourSlots(
   session: BotSession,
   supabase: SupabaseClient
 ): Promise<BotResponse> {
-  const PAGE_SIZE = 5;
+  const PAGE_SIZE = 10;
   const page = session.context.slotPage || 1;
 
   const durationMinutes = session.context.durationMinutes || 60;

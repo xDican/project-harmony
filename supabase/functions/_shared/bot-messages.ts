@@ -7,7 +7,7 @@
 export const SEP = '────────────';
 
 // Emoji numbers for numbered options
-export const EMOJI_NUMBERS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣'];
+export const EMOJI_NUMBERS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '1️⃣1️⃣', '1️⃣2️⃣'];
 
 // Emoji map for recurring option types
 export const OPT_EMOJI: Record<string, string> = {
