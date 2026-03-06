@@ -317,38 +317,74 @@ serve(async (req) => {
 
       const clinicId = clinicRow?.id ?? null;
 
-      // Insert calendar
-      const { data: calendarData, error: calendarError } = await supabaseAdmin
+      // Idempotent: check if "Agenda principal" already exists for this org
+      const { data: existingCalendar } = await supabaseAdmin
         .from("calendars")
-        .insert({
-          name: "Agenda principal",
-          organization_id: orgId,
-          clinic_id: clinicId,
-        })
         .select("id")
-        .single();
+        .eq("organization_id", orgId)
+        .eq("name", "Agenda principal")
+        .limit(1)
+        .maybeSingle();
 
-      if (calendarError) {
-        console.error("[onboarding/schedule] calendar insert error:", calendarError);
-        return new Response(JSON.stringify({ error: calendarError.message }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      let calendarId: string;
 
-      const calendarId = calendarData.id;
+      if (existingCalendar) {
+        // Reuse existing calendar — clean old schedules so we can re-insert fresh
+        calendarId = existingCalendar.id;
+        console.log("[onboarding/schedule] Reusing existing calendar:", calendarId);
 
-      // Insert calendar_doctors
-      const { error: cdError } = await supabaseAdmin
-        .from("calendar_doctors")
-        .insert({ calendar_id: calendarId, doctor_id: doctorId });
+        await supabaseAdmin
+          .from("calendar_schedules")
+          .delete()
+          .eq("calendar_id", calendarId);
 
-      if (cdError) {
-        console.error("[onboarding/schedule] calendar_doctors insert error:", cdError);
-        return new Response(JSON.stringify({ error: cdError.message }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        await supabaseAdmin
+          .from("doctor_schedules")
+          .delete()
+          .eq("doctor_id", doctorId)
+          .eq("calendar_id", calendarId);
+
+        // Ensure calendar_doctors link exists
+        await supabaseAdmin
+          .from("calendar_doctors")
+          .upsert(
+            { calendar_id: calendarId, doctor_id: doctorId, is_active: true },
+            { onConflict: "calendar_id,doctor_id" }
+          );
+      } else {
+        // Create new calendar
+        const { data: calendarData, error: calendarError } = await supabaseAdmin
+          .from("calendars")
+          .insert({
+            name: "Agenda principal",
+            organization_id: orgId,
+            clinic_id: clinicId,
+          })
+          .select("id")
+          .single();
+
+        if (calendarError) {
+          console.error("[onboarding/schedule] calendar insert error:", calendarError);
+          return new Response(JSON.stringify({ error: calendarError.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        calendarId = calendarData.id;
+
+        // Insert calendar_doctors
+        const { error: cdError } = await supabaseAdmin
+          .from("calendar_doctors")
+          .insert({ calendar_id: calendarId, doctor_id: doctorId });
+
+        if (cdError) {
+          console.error("[onboarding/schedule] calendar_doctors insert error:", cdError);
+          return new Response(JSON.stringify({ error: cdError.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       // Insert calendar_schedules

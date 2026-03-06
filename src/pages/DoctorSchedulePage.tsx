@@ -32,13 +32,21 @@ export default function DoctorSchedulePage() {
         }
 
         // Resolve calendar for this doctor
-        const { data: cdRow } = await supabase
+        const { data: cdRows, error: cdError } = await supabase
           .from('calendar_doctors')
           .select('calendar_id')
           .eq('doctor_id', doctorId)
           .eq('is_active', true)
-          .maybeSingle();
+          .limit(1);
 
+        if (cdError) {
+          console.error('Error fetching calendar_doctors:', cdError);
+          setError('Error al cargar los datos del doctor.');
+          setIsLoading(false);
+          return;
+        }
+
+        const cdRow = cdRows?.[0];
         if (cdRow?.calendar_id) {
           // Redirect to CalendarSchedulePage
           navigate(`/admin/calendars/${cdRow.calendar_id}/schedule`, { replace: true });
