@@ -54,6 +54,7 @@ const GatewayRequestSchema = z.object({
       "reschedule_doctor",
       "patient_confirmed",
       "patient_reschedule",
+      "handoff_notification",
       "generic",
     ])
     .optional()

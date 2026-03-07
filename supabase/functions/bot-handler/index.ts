@@ -15,6 +15,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { DateTime } from 'https://esm.sh/luxon@3.4.4';
 import { formatTimeForTemplate } from '../_shared/datetime.ts';
 import { OPT_EMOJI, buildStepTitle } from '../_shared/bot-messages.ts';
+import { normalizeToE164 } from '../_shared/phone.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -282,7 +283,7 @@ async function handleBotMessage(
       break;
 
     case 'handoff_secretary':
-      response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase, handoffLabels);
+      response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase, handoffLabels, session.context);
       break;
 
     default:
@@ -580,7 +581,7 @@ async function handleMainMenu(
   }
 
   if (normalizedInput === '4' || normalizedInput.includes('secretar') || normalizedInput.startsWith('hablar con')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
   }
 
   // Invalid input - increment attempt counter
@@ -589,7 +590,7 @@ async function handleMainMenu(
 
   if (invalidAttempts >= 3) {
     // Auto-handoff after 3 invalid attempts
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
   }
 
   return {
@@ -661,7 +662,7 @@ async function handleFAQSearch(
       };
     }
     if (normalizedInput === '2' || normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
-      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
     }
   }
 
@@ -690,7 +691,7 @@ async function handleFAQSearch(
     };
   }
   if (normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
   }
 
   // Get doctor_id and clinic_id from session context if available
@@ -1769,24 +1770,62 @@ async function handleHandoffToSecretary(
   patientPhone: string,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels?: { menuOption: string; connecting: string; emoji: string }
+  handoffLabels?: { menuOption: string; connecting: string; emoji: string },
+  sessionContext?: Record<string, any>
 ): Promise<BotResponse> {
-  // Find active secretaries in organization
-  const { data: secretaries } = await supabase
-    .from('org_members')
-    .select('user_id, users!inner(email)')
-    .eq('organization_id', organizationId)
-    .eq('role', 'secretary')
-    .eq('is_active', true)
-    .limit(1);
+  const emoji = handoffLabels?.emoji || '\ud83d\udc69\ud83c\udffb\u200d\ud83d\udcbc';
+  const connecting = handoffLabels?.connecting || 'la secretaria';
 
-  if (secretaries && secretaries.length > 0) {
-    // TODO: Send notification to secretary (email or WhatsApp)
-    console.log(`[bot] Handoff to secretary for patient ${patientPhone}, org ${organizationId}`);
+  // Determine handoff target from whatsapp_line config
+  const { data: lineConfig } = await supabase
+    .from('whatsapp_lines')
+    .select('bot_handoff_type')
+    .eq('id', whatsappLineId)
+    .single();
+
+  const handoffType = lineConfig?.bot_handoff_type || 'secretary';
+  let targetPhone: string | null = null;
+
+  if (handoffType === 'secretary') {
+    // Find secretary phone via org_members → secretaries
+    const { data: member } = await supabase
+      .from('org_members')
+      .select('secretary:secretary_id(phone)')
+      .eq('organization_id', organizationId)
+      .eq('role', 'secretary')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    targetPhone = (member?.secretary as any)?.phone || null;
+  } else {
+    // Find doctor phone via whatsapp_line_doctors → doctors
+    const { data: lineDoctor } = await supabase
+      .from('whatsapp_line_doctors')
+      .select('doctor:doctor_id(phone)')
+      .eq('whatsapp_line_id', whatsappLineId)
+      .limit(1)
+      .maybeSingle();
+
+    targetPhone = (lineDoctor?.doctor as any)?.phone || null;
   }
 
-  const emoji = handoffLabels?.emoji || '👩🏻‍💼';
-  const connecting = handoffLabels?.connecting || 'la secretaria';
+  // Resolve patient name
+  const patientName = sessionContext?.patientName || null;
+  let resolvedName = patientName;
+  if (!resolvedName) {
+    const patient = await findPatientByPhone(patientPhone, organizationId, supabase);
+    resolvedName = patient?.name || null;
+  }
+
+  // Fire-and-forget notification to target
+  if (targetPhone) {
+    notifyHandoffTarget(targetPhone, patientPhone, resolvedName, organizationId).catch((err) => {
+      console.warn('[bot] Handoff notification failed (non-blocking):', err);
+    });
+  } else {
+    console.warn(`[bot] No phone found for handoff target (${handoffType}), org ${organizationId}`);
+  }
 
   return {
     message: `${emoji} Conectando con ${connecting}...\n\nEn breve recibira respuesta. Gracias por su paciencia.`,
@@ -1794,6 +1833,55 @@ async function handleHandoffToSecretary(
     nextState: 'handoff_secretary',
     sessionComplete: true,
   };
+}
+
+async function notifyHandoffTarget(
+  targetPhone: string,
+  patientPhone: string,
+  patientName: string | null,
+  organizationId: string,
+): Promise<void> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const internalSecret = Deno.env.get('INTERNAL_FUNCTION_SECRET');
+
+  if (!supabaseUrl || !serviceRoleKey || !anonKey || !internalSecret) {
+    console.warn('[bot] Missing env vars for handoff notification');
+    return;
+  }
+
+  const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
+  const gatewayUrl = `https://${projectRef}.supabase.co/functions/v1/messaging-gateway`;
+
+  const normalizedTarget = normalizeToE164(targetPhone);
+  const normalizedPatient = normalizeToE164(patientPhone);
+
+  const response = await fetch(gatewayUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${serviceRoleKey}`,
+      'x-internal-secret': internalSecret,
+      'apikey': anonKey,
+    },
+    body: JSON.stringify({
+      to: normalizedTarget,
+      type: 'handoff_notification',
+      templateParams: {
+        '1': normalizedPatient,
+        '2': patientName || 'No registrado',
+      },
+      organizationId,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    console.warn('[bot] Handoff notification gateway error:', data.error || `HTTP ${response.status}`);
+  } else {
+    console.log('[bot] Handoff notification sent to:', normalizedTarget);
+  }
 }
 
 // ============================================================================

@@ -67,6 +67,9 @@ export default function WhatsAppLinesList() {
   const [templateMappings, setTemplateMappings] = useState<Array<{ logical_type: string; template_name: string; template_language: string; is_active: boolean; meta_status: string | null }>>([]);
   const [checkingStatus, setCheckingStatus] = useState(false);
 
+  // Secretary detection
+  const [hasActiveSecretary, setHasActiveSecretary] = useState<boolean | null>(null);
+
   // Disconnect confirmation state
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [disconnectConfirmPhone, setDisconnectConfirmPhone] = useState('');
@@ -115,12 +118,25 @@ export default function WhatsAppLinesList() {
     setFormLabel(line.label);
     setFormBotEnabled(line.botEnabled);
     setFormBotGreeting(line.botGreeting || '');
-    setFormHandoffType(line.botHandoffType || 'secretary');
     setFormServiceTypes(line.botServiceTypes || []);
     setFormDefaultDuration(line.defaultDurationMinutes || '');
     setFormIsActive(line.isActive);
     setTemplateMappings([]);
+    setHasActiveSecretary(null);
     setDialogOpen(true);
+
+    // Check if org has an active secretary
+    const { data: secData } = await supabase
+      .from('org_members')
+      .select('id')
+      .eq('organization_id', line.organizationId)
+      .eq('role', 'secretary')
+      .eq('is_active', true)
+      .limit(1);
+
+    const hasSec = !!(secData && secData.length > 0);
+    setHasActiveSecretary(hasSec);
+    setFormHandoffType(hasSec ? (line.botHandoffType || 'secretary') : 'doctor');
 
     // Load template mappings for this line
     const { data } = await supabase
@@ -520,7 +536,7 @@ export default function WhatsAppLinesList() {
                         <Select
                           value={formHandoffType}
                           onValueChange={(val) => setFormHandoffType(val as 'secretary' | 'doctor')}
-                          disabled={saving}
+                          disabled={saving || hasActiveSecretary === false}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -530,9 +546,15 @@ export default function WhatsAppLinesList() {
                             <SelectItem value="doctor">El doctor</SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
-                          El bot mostrará "Hablar con la secretaria" o "Hablar con el doctor" según esta configuración.
-                        </p>
+                        {hasActiveSecretary === false ? (
+                          <p className="text-xs text-amber-600">
+                            No hay secretaria activa en esta organizacion. El handoff se dirigira al doctor.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            El bot mostrara "Hablar con la secretaria" o "Hablar con el doctor" segun esta configuracion.
+                          </p>
+                        )}
                       </div>
 
                       {/* Service types */}

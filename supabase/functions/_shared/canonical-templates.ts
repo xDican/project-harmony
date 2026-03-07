@@ -26,7 +26,7 @@ export interface CanonicalTemplate {
 }
 
 /**
- * The 5 canonical templates that every client WABA should have.
+ * The 6 canonical templates that every client WABA should have.
  * Bodies are identical to the approved OrionCare originals.
  */
 export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
@@ -105,6 +105,19 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
       },
     ],
   },
+  {
+    logical_type: "handoff_notification",
+    template_name: "solicitud_atencion_paciente",
+    language: "es_MX",
+    category: "UTILITY",
+    components: [
+      {
+        type: "BODY",
+        text: "\ud83d\udccb Nuevo paciente requiere atenci\u00f3n\n\nUn paciente ha solicitado comunicarse con usted desde el asistente virtual de OrionCare.\n\n\ud83d\udcde Tel\u00e9fono: {{1}}\n\ud83d\udc64 Nombre: {{2}}\n\nPor favor comun\u00edquese con el paciente para atenderle.",
+        example: { body_text: [["50412345678", "Juan Perez"]] },
+      },
+    ],
+  },
 ];
 
 /**
@@ -132,4 +145,5 @@ export const LEGACY_TEMPLATE_NAMES: Record<string, { template_name: string; temp
   reschedule_doctor:  { template_name: "notificacion_reagenda_medico_utility_hx95828e73090fb5a66e3157fe33ac956d", template_language: "es_MX" },
   patient_confirmed:  { template_name: "confirmacion_cita_utility_hx7ef2d47944d28ef80f84a9bacb89d587",          template_language: "es_MX" },
   patient_reschedule: { template_name: "paciente_solicita_reagenda_utility_hxe08b07d4ae63dbd73e11709817ac2f75", template_language: "es_MX" },
+  handoff_notification: { template_name: "TBD_LEGACY_NAME", template_language: "es_MX" },
 };
