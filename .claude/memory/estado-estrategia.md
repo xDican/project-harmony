@@ -6,12 +6,13 @@
 
 | Metrica | Valor | Meta |
 |---------|-------|------|
-| Clientes activos | 3 | 175 |
-| MRR | $105 | $7,000 |
-| Gasto en ads | $100 (campaña AD-005 activa) | $100/mes |
-| Leads/mes | 1 (primer lead de campaña nueva) | 20 |
-| CPA proyectado | ~$33 (si se mantiene tendencia) | < $20 |
-| LTV:CPA ratio | 14.5x (a 12 meses) | > 3x |
+| Clientes activos | 2 | 175 |
+| MRR | $70 | $7,000 |
+| Gasto en ads | $29.42 de $100 (AD-005 activa, 3 dias) | $100/mes |
+| Leads campaña | 5 (Meta reporta) / 6 (Diego cuenta) | 20/mes |
+| CPL actual | $5.88 | < $5 |
+| CPA proyectado | Por definir (0 cierres de AD-005 aun) | < $20 |
+| LTV:CPA ratio | 14.5x (a 12 meses, teorico) | > 3x |
 | Churn | 0% | < 5% |
 | Producto | 85% listo | Estable |
 
@@ -19,16 +20,18 @@
 
 | Cliente | Estado | Pago | Notas |
 |---------|--------|------|-------|
-| A | Activo | $35/mes | Esperando tarjeta Meta para activar bot completo |
-| B (Dra. Yeni) | Activo — configurada | $35/mes | 2 clinicas con secretaria, operativa. Lista de features solicitados (ver sprint abajo). |
-| C | Prospecto | $35/mes | Cierre pendiente |
+| B (Dra. Yeni) | Activo — configurada | $35/mes | 2 clinicas con secretaria, operativa. Solicito features, se completaron hand-off y bug secretaria. |
+| Dra. Ramos | Activo — recien integrada | $35/mes | Integrada hace 2 dias (4 Mar). Solicito features, hand-off completado para ella. |
 
 ## Pipeline
 
 | Prospecto | Fuente | Estado | Notas |
 |-----------|--------|--------|-------|
-| Dra. Tejeda (Podosalud) | Ad Meta (campaña AD-005) | Negociando — objecion precio | Podologa, +504 3330-5877. Probo bot, pregunto personalización y recordatorios. Dijo "me interesa pero dejeme analizar el precio". No escribir hoy, esperar. Si no escribe mañana → SC-003. Precio $40/mes. |
-| Dra. Ramos | Lead anterior (Ene 2026) | Contactado — volvio a responder | +504 9910-2805. Retomar con SC-007. Asignar a esposa. |
+| Cliente A | Lead original | Descartado | Nunca activo, dice que el avisa. No perseguir. |
+| Dra. Tejeda (Podosalud) | AD-005 | Perdido — precio | "de momento no lo tomare". Recontactar en 60 dias. |
+| 4-5 leads frios AD-005 | AD-005 | Sin contactar | Contactar manana (7 Mar) con numero activo o numero de Warhol |
+
+**Pipeline efectivo: 0 prospectos calientes. Cuello de botella = volumen de leads, no producto.**
 
 ## Riesgos activos
 
@@ -106,16 +109,14 @@
 - **Bot de ventas automatizado descartado por ahora.** Razon: sin datos suficientes (1 conversacion), feature freeze, y humano convierte mejor con 3 clientes y cero marca. Secuencia: documentar 30+ conversaciones → analizar patrones (Abr-May) → diseñar bot (Jun) → produccion (Jul).
 - **No agregar ChatGPT ni herramientas extra al proceso de ventas.** El sistema es: lead entra → esposa responde con script → documenta en Sheet. Simple.
 
-## Sprint mini — polish y bugs (aprobado 6 Mar, max 2-3 dias)
+## Sprint mini — progreso (aprobado 6 Mar, max 2-3 dias)
 
-Contexto: Dra. Yeni envio lista de 8 features. Se triaron y solo 4 entran bajo feature freeze (bugs + polish + completar TODO existente). El resto va a Junio.
-
-| # | Item | Tipo | Complejidad |
-|---|------|------|-------------|
-| 1 | Secretaria no puede crear pacientes | Bug | Baja |
-| 2 | Bloquear fechas especificas | Operacional critico | Media |
-| 3 | UI medico unico (ocultar dropdowns innecesarios) | Polish | Baja |
-| 4 | Completar hand-off a secretaria (TODO en linea 1784 de bot-handler) | Completar codigo existente | Baja-media |
+| # | Item | Estado |
+|---|------|--------|
+| 1 | Secretaria no puede crear pacientes | DONE |
+| 2 | Bloquear fechas especificas | PENDIENTE |
+| 3 | UI medico unico (ocultar dropdowns innecesarios) | PENDIENTE |
+| 4 | Completar hand-off a secretaria/doctor | DONE |
 
 ### Diferidos a Junio 2026
 
@@ -128,11 +129,17 @@ Contexto: Dra. Yeni envio lista de 8 features. Se triaron y solo 4 entran bajo f
 
 ## Proximos pasos
 
-1. **HOY (Diego):** Escribir a Dra. Tejeda (SC-003 seguimiento suave) y Dra. Ramos (SC-007)
-2. **HOY (Diego):** Grabar audio de presentacion (30-40 seg, 1 toma, natural) — pendiente de ayer
-3. **7 MAR:** Si Meta no desbloquea numero → cambiar a otro numero inmediatamente
-4. **ESTA SEMANA:** Cerrar Cliente C
-5. **ESTA SEMANA:** Sesion con Warhol (30 min) para explicarle CRM + scripts + Filter Views
-6. **ESTA SEMANA o SIGUIENTE:** Ejecutar sprint mini (4 items arriba) — max 2-3 dias
-7. **SEMANA 2:** Revisar metricas AD-005 al llegar a $50 gastados — pausar variante peor
-8. **VIERNES 7 Mar:** Primera revision semanal con datos de campaña nueva
+### Inmediato (7 Mar)
+1. **Contactar 4-5 leads frios de AD-005** (con numero activo o numero de Warhol)
+2. **Verificar aprobacion de templates Meta** (handoff_notification para 3 orgs)
+3. **QA handoff** con Demo Bot cuando template se apruebe
+4. **Si Meta no desbloquea numero de ventas** → cambiar a otro numero
+
+### Esta semana
+5. **Sesion con Warhol** (30 min) para explicarle CRM + scripts + Filter Views
+6. **Grabar audio de presentacion** (30-40 seg, pendiente desde 5 Mar)
+7. **Sprint mini dev:** bloquear fechas + UI medico unico (2 items restantes)
+8. **Viernes 7 Mar:** Primera revision semanal con datos reales
+
+### Semana 2
+9. **Revisar metricas AD-005** al llegar a $50 gastados — pausar variante peor
