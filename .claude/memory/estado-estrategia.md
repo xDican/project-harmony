@@ -1,6 +1,6 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 6 Mar 2026
+> Ultima actualizacion: 8 Mar 2026
 
 ## Dashboard
 
@@ -29,16 +29,18 @@
 |-----------|--------|--------|-------|
 | Cliente A | Lead original | Descartado | Nunca activo, dice que el avisa. No perseguir. |
 | Dra. Tejeda (Podosalud) | AD-005 | Perdido — precio | "de momento no lo tomare". Recontactar en 60 dias. |
-| 4-5 leads frios AD-005 | AD-005 | Sin contactar | Contactar manana (7 Mar) con numero activo o numero de Warhol |
+| Lead "ya tiene plataforma" | AD-005 | Tibia | Escucho audio, tiene competidor. Proximo paso: 1 mensaje diferenciador (autoagenda WhatsApp). Max 2-3 mensajes mas, si no avanza → Fria. |
+| Leads frios AD-005 | AD-005 | Contactados (7 Mar) | Se contactaron. Nuevos leads tambien entraron y fueron contactados. Resultados pendientes. |
 
-**Pipeline efectivo: 0 prospectos calientes. Cuello de botella = volumen de leads, no producto.**
+**Pipeline efectivo: 1 tibia, resto frios contactados. Cuello de botella sigue siendo volumen de leads.**
 
 ## Riesgos activos
 
-1. **ALTO: Numero de ventas bloqueado por Meta.** Numero nuevo configurado, "Empezar ahora" ya apunta a el, pero Meta lo bloqueo. Esperando resolucion (~24hrs desde 5 Mar). **Deadline: si el 7 Mar no esta resuelto → cambiar a otro numero.** Campaña AD-005 corre pero leads que hagan clic caen a numero muerto.
-2. **ALTO: Bot sin validacion en campo.** Dra. Tejeda probo el bot (primer uso real por lead), pero ningun paciente real ha agendado todavia.
-3. **MEDIO: Dependencia de 3 clientes.** Si uno se va, perdemos 33% del ingreso.
-4. **BAJO: Deuda tecnica de seguridad.** 4 advisories de Supabase pendientes.
+1. **ALTO: Volumen de leads insuficiente.** Pipeline casi vacio. Tasa de conversion historica 2.4% — necesitamos mucho mas volumen para llegar a 5-8 clientes en Marzo.
+2. **MEDIO: Numero de ventas en calentamiento.** Bloqueo de Meta resuelto usando numeros personales como workaround. Numero nuevo se esta "calentando" para evitar futuros bloqueos.
+3. **MEDIO: Bot sin validacion en campo.** Ningun paciente real ha agendado por el bot todavia. 2 clientes activos pero sin datos de uso del bot por pacientes.
+4. **MEDIO: Dependencia de 2 clientes.** Si uno se va, perdemos 50% del ingreso.
+5. **BAJO: Deuda tecnica de seguridad.** 4 advisories de Supabase pendientes.
 
 ## Decisiones vigentes
 
@@ -76,10 +78,10 @@
 - Todo lo demas diferido a Junio — se le comunica a Dra. Yeni: "Lo tenemos anotado, en la siguiente actualizacion"
 - Max 2-3 dias de desarrollo
 
-### Numero de ventas bloqueado por Meta
-- Diego decidio dejar campaña corriendo con numero muerto (leads son frios, pocos haran clic a WhatsApp)
-- Deadline: 7 Mar — si no se resuelve, cambiar a otro numero
-- No revertir a numero personal de Diego
+### Numero de ventas — workaround activo
+- Bloqueo de Meta resuelto usando numeros personales temporalmente
+- Numero nuevo de WhatsApp se esta "calentando" para evitar bloqueos futuros
+- Campaña AD-005 sigue corriendo
 
 ### Seguimiento de prospectos
 - Diego maneja Dra. Tejeda y Dra. Ramos personalmente (no delegar, son relaciones iniciadas por el)
@@ -92,7 +94,8 @@
 - 7 scripts: SC-001 a SC-007 cubriendo todo el funnel
 - Estilo ajustado a la personalidad de Diego: calido, natural, sin presion
 - Incluye audio de presentacion (30-40s) como herramienta clave — Diego graba UNO, esposa lo reenvia
-- Manejo de objeciones: precio, secretaria, "lo voy a pensar", WhatsApp
+- Manejo de objeciones: precio, secretaria, "lo voy a pensar", WhatsApp, "ya tengo plataforma"
+- Clasificacion de leads (Caliente/Tibio/Frio) con definiciones y reglas de esfuerzo
 - Filosofia: "ser humano primero, vender despues, pero siempre con brujula hacia el cierre"
 
 ### CRM reestructurado
@@ -127,19 +130,28 @@
 | Mensaje al cancelar con razon + re-agenda | Feature nuevo |
 | Mensajes de publicidad/marketing | Feature nuevo (P2) |
 
+## Decisiones sesion 8 Mar
+
+### Scripts de ventas actualizados
+- Agregada objecion "ya tengo plataforma" a SC-005 — posiciona diferenciador (autoagenda WhatsApp) sin atacar competidor
+- Agregada clasificacion de leads (Caliente/Tibio/Frio) con definiciones, prioridad y reglas de esfuerzo maximo
+- Lead tibia con plataforma existente: max 1 mensaje diferenciador + DEMO, si no responde en 3 dias → SC-004 → Fria
+
+### Numero de ventas
+- Workaround activo: usando numeros personales mientras se calienta el numero nuevo de WhatsApp
+
 ## Proximos pasos
 
-### Inmediato (7 Mar)
-1. **Contactar 4-5 leads frios de AD-005** (con numero activo o numero de Warhol)
-2. **Verificar aprobacion de templates Meta** (handoff_notification para 3 orgs)
-3. **QA handoff** con Demo Bot cuando template se apruebe
-4. **Si Meta no desbloquea numero de ventas** → cambiar a otro numero
+### Inmediato (8-9 Mar)
+1. **Enviar mensaje diferenciador a lead tibia** (la que tiene plataforma) — esperar 24-48hrs, no hoy
+2. **Monitorear respuestas de leads contactados** — clasificar como Caliente/Tibio/Frio segun respuesta
 
-### Esta semana
-5. **Sesion con Warhol** (30 min) para explicarle CRM + scripts + Filter Views
-6. **Grabar audio de presentacion** (30-40 seg, pendiente desde 5 Mar)
-7. **Sprint mini dev:** bloquear fechas + UI medico unico (2 items restantes)
-8. **Viernes 7 Mar:** Primera revision semanal con datos reales
+### Esta semana (10-14 Mar)
+3. **Sesion con Warhol** (30 min) para explicarle CRM + scripts + Filter Views + clasificacion de leads
+4. **Sprint mini dev:** bloquear fechas + UI medico unico (2 items restantes)
+5. **Revisar metricas AD-005** al llegar a $50 gastados — pausar variante peor
+6. **Verificar aprobacion de templates Meta** (handoff_notification para 3 orgs)
 
-### Semana 2
-9. **Revisar metricas AD-005** al llegar a $50 gastados — pausar variante peor
+### Pendientes arrastrados
+7. **Grabar audio de presentacion** (30-40 seg, pendiente desde 5 Mar) — HECHO, ya se esta usando
+8. **Primera revision semanal con datos reales** — reprogramar, no se hizo el 7 Mar
