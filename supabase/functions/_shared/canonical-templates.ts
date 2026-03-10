@@ -38,7 +38,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "\ud83d\udc4b Hola {{1}}\n\n\u2705 Su cita ha sido agendada con \u00e9xito\n\n\ud83e\ude7a {{2}}\n\ud83d\udcc5 {{3}}\n\u23f0 {{4}}\n\nSi necesita cambiar la fecha u hora, puede hacerlo f\u00e1cilmente:\n\ud83d\udc49 Presione el bot\u00f3n *Reagendar* o escriba la palabra *REAGENDAR*.\n\nEstamos para ayudarle \ud83d\ude0a",
+        text: "👋 Hola {{1}}\n\n✅ Su cita ha sido agendada con éxito\n\n🩺 {{2}}\n📅 {{3}}\n⏰ {{4}}\n\nSi necesita cambiar la fecha u hora, puede hacerlo fácilmente:\n👉 Presione el botón *Reagendar* o escriba la palabra *REAGENDAR*.\n\nEstamos para ayudarle 😊",
         example: { body_text: [["Juan", "Dr. Lopez", "25 de febrero", "10:00 AM"]] },
       },
       {
@@ -55,7 +55,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "\u23f0 Recordatorio de cita m\u00e9dica\n\nHola {{1}},\n\nTienes una cita programada con:\n\n\ud83e\ude7a {{2}}\n\ud83d\udcc5 {{3}}\n\u23f0 {{4}}\n\nPor favor confirme su asistencia o reagende su cita usando los botones de abajo \ud83d\udc47\n\nGracias por su tiempo \ud83d\ude0a",
+        text: "⏰ Recordatorio de cita médica\n\nHola {{1}},\n\nTienes una cita programada con:\n\n🩺 {{2}}\n📅 {{3}}\n⏰ {{4}}\n\nPor favor confirme su asistencia o reagende su cita usando los botones de abajo 👇\n\nGracias por su tiempo 😊",
         example: { body_text: [["Juan", "Dr. Lopez", "25 de febrero", "10:00 AM"]] },
       },
       {
@@ -75,7 +75,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "\ud83d\udcde Solicitud de reagendaci\u00f3n\n\nEl paciente {{1}} ha solicitado reagendar su cita.\n\n\ud83d\udc49 Por favor comun\u00edquese con el paciente para coordinar la nueva fecha y hora.\n\n\ud83d\udcf1 Tel\u00e9fono: {{2}}\n\n\u2014\nSistema de Citas",
+        text: "📞 Solicitud de reagendación\n\nEl paciente {{1}} ha solicitado reagendar su cita.\n\n👉 Por favor comuníquese con el paciente para coordinar la nueva fecha y hora.\n\n📱 Teléfono: {{2}}\n\n—\nSistema de Citas",
         example: { body_text: [["Juan Perez", "+50412345678"]] },
       },
     ],
@@ -88,7 +88,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "\u2705 Cita Confirmada. \n\nNos dar\u00e1 mucho gusto recibirle *ma\u00f1ana* a las {{1}} en nuestro consultorio.\n\n\u00a1Que tenga un gran d\u00eda!",
+        text: "✅ Cita Confirmada. \n\nNos dará mucho gusto recibirle *mañana* a las {{1}} en nuestro consultorio.\n\n¡Que tenga un gran día!",
         example: { body_text: [["10:00 AM"]] },
       },
     ],
@@ -101,7 +101,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "\ud83d\udd04 Su solicitud de reagendaci\u00f3n ha sido recibida.\n\n\ud83d\udcde En breve, el consultorio se pondr\u00e1 en contacto para confirmar la nueva fecha y hora.\n\nGracias por su comprensi\u00f3n \ud83d\ude0a",
+        text: "🔄 Su solicitud de reagendación ha sido recibida.\n\n📞 En breve, el consultorio se pondrá en contacto para confirmar la nueva fecha y hora.\n\nGracias por su comprensión 😊",
       },
     ],
   },
@@ -113,7 +113,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "\ud83d\udccb Nuevo paciente requiere atenci\u00f3n\n\nUn paciente ha solicitado comunicarse con usted desde el asistente virtual de OrionCare.\n\n\ud83d\udcde Tel\u00e9fono: {{1}}\n\ud83d\udc64 Nombre: {{2}}\n\nPor favor comun\u00edquese con el paciente para atenderle.",
+        text: "📋 Nuevo paciente requiere atención\n\nUn paciente ha solicitado comunicarse con usted desde el asistente virtual de OrionCare.\n\n📞 Teléfono: {{1}}\n👤 Nombre: {{2}}\n\nPor favor comuníquese con el paciente para atenderle.",
         example: { body_text: [["50412345678", "Juan Perez"]] },
       },
     ],

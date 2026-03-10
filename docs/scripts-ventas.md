@@ -175,7 +175,10 @@ Esperar. Dejar que hable. Si es positivo:
 
 ### Mensaje
 
-> Hola Dr./Dra. [NOMBRE], buen dia! Solo queria saber si logro ver mi mensaje. Sin prisa, quedo pendiente cuando tenga un chance.
+> Hola Dr.a [NOMBRE]! 😄
+Solo queria saber si logro ver mi mensaje. 
+
+Sin prisa, quedo pendiente cuando tenga un chance.
 
 Nada mas. Sin ofertas, sin informacion adicional.
 
@@ -188,7 +191,10 @@ Nada mas. Sin ofertas, sin informacion adicional.
 
 ### Mensaje
 
-> Dr./Dra. [NOMBRE], no le quito mas tiempo! Si en algun momento quiere ver como funciona OrionCare, con gusto me escribe. Que tenga un excelente dia!
+> Buenos días Dr.a [NOMBRE]!
+solo le escribo por última vez para no insistirle. 😄
+Si en algún momento le interesa retomar el tema, con gusto quedo a la orden.
+Que tenga un excelente día
 
 Si no responde → marcar como "No interesado" en el Sheet. No escribir mas.
 

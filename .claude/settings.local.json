@@ -44,7 +44,20 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:invideo.io)",
       "WebFetch(domain:docs.cloud.google.com)",
-      "WebFetch(domain:fal.ai)"
+      "WebFetch(domain:fal.ai)",
+      "WebFetch(domain:aroksds.com)",
+      "WebFetch(domain:www.datahash.com)",
+      "WebFetch(domain:developers.facebook.com)",
+      "WebFetch(domain:help.gohighlevel.com)",
+      "WebFetch(domain:help.privyr.com)",
+      "WebFetch(domain:www.marketingauditor.com)",
+      "WebFetch(domain:www.trustlinedigital.com)",
+      "WebFetch(domain:savemyleads.com)",
+      "WebFetch(domain:www.orioncare.app)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(git:*)",
+      "Bash(npx supabase:*)"
     ]
   }
 }

@@ -1373,6 +1373,7 @@ async function createAppointmentWithPatient(
       organization_id: organizationId,
       notes: appointmentNotes,
       service_type: session.context.selectedServiceType || null,
+      calendar_id: session.context.calendarId || null,
     })
     .select()
     .single();
@@ -1681,13 +1682,13 @@ async function handleCancelConfirm(
       .eq('id', session.whatsapp_line_id)
       .single();
 
-    session.context.durationMinutes = lineData?.default_duration_minutes || 60;
+    const selectedApt = (session.context.upcomingAppointments || []).find((a: any) => a.id === session.context.rescheduleAppointmentId);
+    session.context.durationMinutes = selectedApt?.durationMinutes || lineData?.default_duration_minutes || 60;
     session.context.slotGranularity = Math.min(session.context.durationMinutes, 30);
     session.context.isReschedule = true; // Flag to know we're rescheduling
     session.context.bookingTotalSteps = 4; // Reschedule always 4 steps (doctor already selected)
 
     // Carry over service type from original appointment
-    const selectedApt = (session.context.upcomingAppointments || []).find((a: any) => a.id === session.context.rescheduleAppointmentId);
     if (selectedApt?.serviceType) {
       session.context.selectedServiceType = selectedApt.serviceType;
     }
@@ -2194,7 +2195,10 @@ async function getPatientUpcomingAppointments(
   organizationId: string,
   supabase: SupabaseClient
 ): Promise<any[]> {
-  const now = DateTime.now().setZone('America/Tegucigalpa').toISODate();
+  const tz = 'America/Tegucigalpa';
+  const nowDt = DateTime.now().setZone(tz);
+  const todayDate = nowDt.toISODate();
+  const currentTime = nowDt.toFormat('HH:mm:ss');
 
   const { data: appointments } = await supabase
     .from('appointments')
@@ -2204,13 +2208,21 @@ async function getPatientUpcomingAppointments(
     `)
     .eq('patient_id', patientId)
     .eq('organization_id', organizationId)
-    .gte('date', now || '')
+    .gte('date', todayDate || '')
     .in('status', ['agendada', 'confirmada'])
     .order('date', { ascending: true })
     .order('time', { ascending: true })
-    .limit(5);
+    .limit(10);
 
-  return appointments || [];
+  // Filter out today's appointments that already passed
+  const filtered = (appointments || []).filter((apt: any) => {
+    if (apt.date === todayDate) {
+      return apt.time >= currentTime;
+    }
+    return true;
+  });
+
+  return filtered.slice(0, 5);
 }
 
 // ============================================================================

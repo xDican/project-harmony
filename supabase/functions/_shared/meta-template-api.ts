@@ -78,6 +78,47 @@ export async function createTemplateInWaba(
   }
 }
 
+export interface DeleteTemplateResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Delete a message template from a WABA via Meta Graph API.
+ * DELETE /{waba_id}/message_templates?name={name}
+ */
+export async function deleteTemplateInWaba(
+  wabaId: string,
+  accessToken: string,
+  templateName: string,
+): Promise<DeleteTemplateResult> {
+  try {
+    const res = await fetch(
+      `${GRAPH_BASE}/${wabaId}/message_templates?name=${encodeURIComponent(templateName)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      error: data.error?.message || `HTTP ${res.status}`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /**
  * Get all template statuses from a WABA in a single API call.
  * GET /{waba_id}/message_templates?fields=name,status,id
