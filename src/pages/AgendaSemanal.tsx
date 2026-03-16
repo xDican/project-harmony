@@ -272,7 +272,7 @@ export default function AgendaSemanal() {
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-4 py-4">
             {/* Doctor Selection (for admin/secretary, hidden when in Vista Médico) */}
-            {isAdminOrSecretary && !isDoctorView && !isSingleDoctorOrg && (
+            {isAdminOrSecretary && !isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
               <div className="mb-6">
                 <Label className="text-base font-semibold text-foreground mb-3 block">
                   Médico
