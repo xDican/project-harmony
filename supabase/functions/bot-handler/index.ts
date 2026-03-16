@@ -1229,6 +1229,15 @@ async function handleBookingConfirm(
       };
     }
 
+    // Link patient to this doctor if not already linked
+    if (session.context.doctorId) {
+      await supabase.from('doctor_patients').upsert({
+        doctor_id: session.context.doctorId,
+        patient_id: patient.id,
+        organization_id: organizationId,
+      }, { onConflict: 'doctor_id,patient_id' });
+    }
+
     // Patient found — proceed to create appointment
     return await createAppointmentWithPatient(patient, session, organizationId, supabase);
   }
@@ -1285,17 +1294,16 @@ async function handleBookingAskName(
     };
   }
 
-  // Create the patient record
-  const { data: newPatient, error: createError } = await supabase
-    .from('patients')
-    .insert({
-      name: trimmedName,
-      phone: session.patient_phone,
-      organization_id: organizationId,
-      doctor_id: session.context.doctorId,
-    })
-    .select()
-    .single();
+  // Create the patient record (RPC also creates doctor_patients junction)
+  const { data: rpcResult, error: createError } = await supabase
+    .rpc('find_or_create_patient', {
+      p_name: trimmedName,
+      p_phone: session.patient_phone,
+      p_doctor_id: session.context.doctorId,
+      p_organization_id: organizationId,
+    });
+
+  const newPatient = rpcResult;
 
   if (createError) {
     console.error('[booking_ask_name] Error creating patient:', createError);

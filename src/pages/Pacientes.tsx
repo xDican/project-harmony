@@ -35,6 +35,7 @@ export default function Pacientes() {
   // Doctor filter (only used by secretary/admin)
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filterDoctorId, setFilterDoctorId] = useState<string>('');
+  const [doctorsLoaded, setDoctorsLoaded] = useState(user?.role === 'doctor');
 
   // Create patient dialog state
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -55,12 +56,17 @@ export default function Pacientes() {
           setFilterDoctorId(docs[0].id);
           setNewPatientDoctorId(docs[0].id);
         }
-      }).catch(console.error);
+        setDoctorsLoaded(true);
+      }).catch((err) => {
+        console.error(err);
+        setDoctorsLoaded(true);
+      });
     }
   }, [user?.role]);
 
   // Load patients — doctors see only their own; secretary/admin use filter
   useEffect(() => {
+    if (!doctorsLoaded) return;
     setIsLoading(true);
     const doctorId = user?.role === 'doctor'
       ? (user.doctorId ?? undefined)
@@ -75,7 +81,7 @@ export default function Pacientes() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [user?.role, user?.doctorId, filterDoctorId]);
+  }, [user?.role, user?.doctorId, filterDoctorId, doctorsLoaded]);
 
   // Filter patients based on search query
   const filteredPatients = useMemo(() => {
