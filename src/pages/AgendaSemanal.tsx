@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Calendar, AlertCircle, Stethoscope, User, ChevronLeft, ChevronRight, CalendarClock, CalendarDays } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { useWeekAppointments } from '@/hooks/useWeekAppointments';
-import { useDoctors } from '@/hooks/useDoctors';
+import { useSingleDoctor } from '@/hooks/useSingleDoctor';
 import StatusBadge from '@/components/StatusBadge';
 import { RescheduleModal } from '@/components/RescheduleModal';
 import { getLocalToday } from '@/lib/dateUtils';
@@ -86,8 +86,15 @@ export default function AgendaSemanal() {
     }
   };
 
-  // Fetch doctors list (only for admin)
-  const { data: doctors, isLoading: loadingDoctors } = useDoctors();
+  // Fetch doctors list
+  const { doctors, isSingleDoctorOrg, singleDoctor, isLoading: loadingDoctors } = useSingleDoctor();
+
+  // Auto-select doctor for single-doctor orgs
+  useEffect(() => {
+    if (isSingleDoctorOrg && singleDoctor) {
+      setSelectedDoctorId(singleDoctor.id);
+    }
+  }, [isSingleDoctorOrg, singleDoctor]);
 
   // Determine the doctorId to use for fetching appointments
   // Doctors see only their own, admin/secretary can filter by doctor or see all
@@ -264,7 +271,7 @@ export default function AgendaSemanal() {
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-4 py-4">
             {/* Doctor Selection (for admin/secretary, hidden when in Vista Médico) */}
-            {isAdminOrSecretary && !isDoctorView && (
+            {isAdminOrSecretary && !isDoctorView && !isSingleDoctorOrg && (
               <div className="mb-6">
                 <Label className="text-base font-semibold text-foreground mb-3 block">
                   Médico

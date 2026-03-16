@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Calendar, AlertCircle, Stethoscope, User, ChevronLeft, ChevronRight, CalendarClock } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { useTodayAppointments } from '@/hooks/useTodayAppointments';
-import { useDoctors } from '@/hooks/useDoctors';
+import { useSingleDoctor } from '@/hooks/useSingleDoctor';
 import StatusBadge from '@/components/StatusBadge';
 import { RescheduleModal } from '@/components/RescheduleModal';
 import { getLocalDateString, getLocalToday, getLocalTomorrow, getTomorrowDateString } from '@/lib/dateUtils';
@@ -54,8 +54,15 @@ export default function AgendaMedico() {
     }
   };
 
-  // Fetch doctors list (only for admin)
-  const { data: doctors, isLoading: loadingDoctors } = useDoctors();
+  // Fetch doctors list
+  const { doctors, isSingleDoctorOrg, singleDoctor, isLoading: loadingDoctors } = useSingleDoctor();
+
+  // Auto-select doctor for single-doctor orgs
+  useEffect(() => {
+    if (isSingleDoctorOrg && singleDoctor) {
+      setSelectedDoctorId(singleDoctor.id);
+    }
+  }, [isSingleDoctorOrg, singleDoctor]);
 
   // Determine the doctorId to use for fetching appointments
   const doctorIdToFetch = isDoctor 
@@ -157,7 +164,7 @@ export default function AgendaMedico() {
         </div>
 
         {/* Doctor Selection (only for admin) */}
-        {isAdmin && (
+        {isAdmin && !isSingleDoctorOrg && (
           <div className="mb-6">
             <Label className="text-base font-semibold text-foreground mb-3 block">
               Médico

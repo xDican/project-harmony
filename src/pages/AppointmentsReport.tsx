@@ -69,7 +69,12 @@ export default function AppointmentsReport() {
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setDoctors(data || []);
+      const docs = data || [];
+      setDoctors(docs);
+      // Auto-select for single-doctor orgs
+      if (docs.length === 1) {
+        setSelectedDoctorId(docs[0].id);
+      }
     } catch (error) {
       console.error('Error loading doctors:', error);
       toast({
@@ -267,7 +272,8 @@ export default function AppointmentsReport() {
                   </Popover>
                 </div>
 
-                {/* Doctor */}
+                {/* Doctor (hidden for single-doctor orgs) */}
+                {doctors.length > 1 && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Doctor</label>
                   <Select
@@ -288,6 +294,7 @@ export default function AppointmentsReport() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
 
                 {/* Estado */}
                 <div className="space-y-2">

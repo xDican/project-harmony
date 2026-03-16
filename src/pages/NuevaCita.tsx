@@ -19,6 +19,7 @@ import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { getAvailableSlots, getAvailableDays, createPatient, createAppointment, getDoctorById } from '@/lib/api';
 import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
 import { useCurrentUser } from '@/context/UserContext';
+import { useSingleDoctor } from '@/hooks/useSingleDoctor';
 import { supabase } from '@/lib/supabaseClient';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
@@ -35,6 +36,7 @@ import type { Doctor } from '@/types/doctor';
  */
 export default function NuevaCita() {
   const { user, isDoctor, isDoctorView } = useCurrentUser();
+  const { singleDoctor, isSingleDoctorOrg } = useSingleDoctor();
   
   // Core selection state
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -94,6 +96,13 @@ export default function NuevaCita() {
         });
     }
   }, [isDoctorView, user?.doctorId, selectedDoctor]);
+
+  // Auto-fill doctor for single-doctor orgs
+  useEffect(() => {
+    if (isSingleDoctorOrg && singleDoctor && !selectedDoctor) {
+      setSelectedDoctor(singleDoctor);
+    }
+  }, [isSingleDoctorOrg, singleDoctor, selectedDoctor]);
 
   /**
    * Fetch available days when doctor, duration, or month changes
@@ -392,14 +401,15 @@ export default function NuevaCita() {
   const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
 
   // Step numbering helper
-  const getStepNumber = (baseStep: number) => isDoctorView ? baseStep - 1 : baseStep;
+  const skipDoctorStep = isDoctorView || isSingleDoctorOrg;
+  const getStepNumber = (baseStep: number) => skipDoctorStep ? baseStep - 1 : baseStep;
 
   return (
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="space-y-8">
           {/* Step 1: Doctor Selection (hidden for doctors and admin in Vista Médico) */}
-          {!isDoctorView && (
+          {!isDoctorView && !isSingleDoctorOrg && (
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
                 1. Seleccionar Médico

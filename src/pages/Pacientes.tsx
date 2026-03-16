@@ -48,7 +48,14 @@ export default function Pacientes() {
   // Load doctors list for secretary/admin
   useEffect(() => {
     if (user?.role !== 'doctor') {
-      getDoctors().then(setDoctors).catch(console.error);
+      getDoctors().then((docs) => {
+        setDoctors(docs);
+        // Auto-select for single-doctor orgs
+        if (docs.length === 1) {
+          setFilterDoctorId(docs[0].id);
+          setNewPatientDoctorId(docs[0].id);
+        }
+      }).catch(console.error);
     }
   }, [user?.role]);
 
@@ -189,8 +196,8 @@ export default function Pacientes() {
         </div>
 
         <div>
-            {/* Doctor filter (secretary/admin only) */}
-            {user?.role !== 'doctor' && doctors.length > 0 && (
+            {/* Doctor filter (secretary/admin only, hidden for single-doctor orgs) */}
+            {user?.role !== 'doctor' && doctors.length > 1 && (
               <div className="mb-4">
                 <Select
                   value={filterDoctorId || 'all'}
@@ -380,7 +387,7 @@ export default function Pacientes() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              {user?.role !== 'doctor' && (
+              {user?.role !== 'doctor' && doctors.length > 1 && (
                 <div className="space-y-2">
                   <Label>Médico *</Label>
                   <Select value={newPatientDoctorId} onValueChange={setNewPatientDoctorId}>
