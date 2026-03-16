@@ -150,3 +150,17 @@ export interface BotAnalyticsEvent {
   metadata: Record<string, any>;
   created_at: string;
 }
+
+export interface FAQTemplate {
+  id: string;
+  category: string;
+  question: string;
+  keywords: string[];
+  answerHint: string;
+}
+
+export interface FAQTemplateCategory {
+  id: string;
+  label: string;
+  description: string;
+}

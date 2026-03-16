@@ -28,7 +28,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getFAQs, createFAQ, updateFAQ, deleteFAQ } from '@/api/botFaqs';
 import type { BotFAQ, BotFAQInsert } from '@/types/bot.types';
-import { Loader2, Search, Plus, Edit, Trash2, MessageCircleQuestion, GripVertical } from 'lucide-react';
+import { Loader2, Search, Plus, Edit, Trash2, MessageCircleQuestion, GripVertical, BookOpen } from 'lucide-react';
+import FAQTemplatePicker from '@/components/FAQTemplatePicker';
+import type { FAQTemplate } from '@/types/bot.types';
 
 export default function BotFAQsPage() {
   const { isAdmin, isSecretary, organizationId, currentDoctorId } = useCurrentUser();
@@ -54,6 +56,10 @@ export default function BotFAQsPage() {
   const [formKeywords, setFormKeywords] = useState('');
   const [formScope, setFormScope] = useState<1 | 2 | 3>(3); // Default to org-level
   const [formDisplayOrder, setFormDisplayOrder] = useState(0);
+
+  // Template picker
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [templateHint, setTemplateHint] = useState<string | null>(null);
 
   // Delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -128,6 +134,19 @@ export default function BotFAQsPage() {
     setFormKeywords('');
     setFormScope(3); // Default to org-level
     setFormDisplayOrder(faqs.length);
+    setTemplateHint(null);
+    setDialogOpen(true);
+  };
+
+  const handleTemplateSelect = (template: FAQTemplate) => {
+    setTemplatePickerOpen(false);
+    setEditingFaq(null);
+    setFormQuestion(template.question);
+    setFormAnswer('');
+    setFormKeywords(template.keywords.join(', '));
+    setFormScope(3);
+    setFormDisplayOrder(faqs.length);
+    setTemplateHint(template.answerHint);
     setDialogOpen(true);
   };
 
@@ -138,6 +157,7 @@ export default function BotFAQsPage() {
     setFormKeywords(faq.keywords?.join(', ') || '');
     setFormScope(faq.scope_priority as 1 | 2 | 3);
     setFormDisplayOrder(faq.display_order);
+    setTemplateHint(null);
     setDialogOpen(true);
   };
 
@@ -290,10 +310,16 @@ export default function BotFAQsPage() {
               Gestiona las preguntas frecuentes del bot de WhatsApp
             </p>
           </div>
-          <Button onClick={openCreateDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo FAQ
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setTemplatePickerOpen(true)}>
+              <BookOpen className="mr-2 h-4 w-4" />
+              Desde catalogo
+            </Button>
+            <Button onClick={openCreateDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              Crear manual
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -462,6 +488,14 @@ export default function BotFAQsPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {templateHint && !editingFaq && (
+              <Alert>
+                <AlertDescription>
+                  Pregunta y palabras clave pre-llenadas desde el catalogo. Solo escribe tu respuesta.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="question">
                 Pregunta <span className="text-destructive">*</span>
@@ -486,7 +520,7 @@ export default function BotFAQsPage() {
                 id="answer"
                 value={formAnswer}
                 onChange={(e) => setFormAnswer(e.target.value)}
-                placeholder="Nuestro horario es de lunes a viernes..."
+                placeholder={templateHint && !editingFaq ? templateHint : 'Nuestro horario es de lunes a viernes...'}
                 rows={4}
                 maxLength={2000}
               />
@@ -557,6 +591,14 @@ export default function BotFAQsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Template Picker */}
+      <FAQTemplatePicker
+        open={templatePickerOpen}
+        onOpenChange={setTemplatePickerOpen}
+        onSelect={handleTemplateSelect}
+        existingFaqs={faqs}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
