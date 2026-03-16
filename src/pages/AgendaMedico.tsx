@@ -73,6 +73,7 @@ export default function AgendaMedico() {
   const { data: appointments, isLoading: loadingAppointments, refetch } = useTodayAppointments({
     doctorId: doctorIdToFetch,
     initialDate: currentDateStr,
+    enabled: isDoctor || !loadingDoctors,
   });
 
   // Reset page when date changes

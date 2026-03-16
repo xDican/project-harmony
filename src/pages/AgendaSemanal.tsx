@@ -106,6 +106,7 @@ export default function AgendaSemanal() {
   const { data: appointmentsByDate, weekDates, isLoading: loadingAppointments, refetch } = useWeekAppointments({
     doctorId: doctorIdToFetch,
     weekStart: weekStartStr,
+    enabled: isDoctorView || !loadingDoctors,
   });
 
   // Get appointments for the selected day

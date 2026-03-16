@@ -9,9 +9,10 @@ import { getTodayAppointments, getTodayAppointmentsByDoctor, AppointmentWithDeta
  * @param options.weekStart - ISO date string for the start of the week (YYYY-MM-DD)
  * @returns Object with appointments grouped by date, loading state, and refetch function
  */
-export const useWeekAppointments = (options: { 
-  doctorId?: string | null; 
+export const useWeekAppointments = (options: {
+  doctorId?: string | null;
   weekStart: string; // ISO date string "YYYY-MM-DD"
+  enabled?: boolean;
 }) => {
   const [data, setData] = useState<Record<string, AppointmentWithDetails[]>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -64,8 +65,9 @@ export const useWeekAppointments = (options: {
   }, [weekDates, options.doctorId]);
 
   useEffect(() => {
+    if (options.enabled === false) return;
     fetchAppointments();
-  }, [fetchAppointments]);
+  }, [fetchAppointments, options.enabled]);
 
   // Get total count of appointments in the week
   const totalAppointments = useMemo(() => {

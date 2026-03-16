@@ -36,7 +36,7 @@ import type { Doctor } from '@/types/doctor';
  */
 export default function NuevaCita() {
   const { user, isDoctor, isDoctorView } = useCurrentUser();
-  const { singleDoctor, isSingleDoctorOrg } = useSingleDoctor();
+  const { singleDoctor, isSingleDoctorOrg, isLoading: loadingDoctors } = useSingleDoctor();
   
   // Core selection state
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -401,7 +401,7 @@ export default function NuevaCita() {
   const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
 
   // Step numbering helper
-  const skipDoctorStep = isDoctorView || isSingleDoctorOrg;
+  const skipDoctorStep = isDoctorView || loadingDoctors || isSingleDoctorOrg;
   const getStepNumber = (baseStep: number) => skipDoctorStep ? baseStep - 1 : baseStep;
 
   return (
@@ -409,7 +409,7 @@ export default function NuevaCita() {
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="space-y-8">
           {/* Step 1: Doctor Selection (hidden for doctors and admin in Vista Médico) */}
-          {!isDoctorView && !isSingleDoctorOrg && (
+          {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
                 1. Seleccionar Médico

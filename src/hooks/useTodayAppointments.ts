@@ -10,9 +10,10 @@ import { getLocalDateString } from '@/lib/dateUtils';
  * @param options.initialDate - Optional ISO date string (defaults to today in local timezone)
  * @returns Object with data, loading state, error, current date, and refetch function
  */
-export const useTodayAppointments = (options?: { 
-  doctorId?: string | null; 
+export const useTodayAppointments = (options?: {
+  doctorId?: string | null;
   initialDate?: string;
+  enabled?: boolean;
 }) => {
   // Use the provided date directly, defaulting to today
   const date = options?.initialDate || getLocalDateString();
@@ -40,8 +41,9 @@ export const useTodayAppointments = (options?: {
   }, [date, options?.doctorId]);
 
   useEffect(() => {
+    if (options?.enabled === false) return;
     fetchAppointments();
-  }, [fetchAppointments]);
+  }, [fetchAppointments, options?.enabled]);
 
   return {
     data,
