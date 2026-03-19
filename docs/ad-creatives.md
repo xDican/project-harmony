@@ -151,6 +151,208 @@ Estos campos se llenan automaticamente desde el perfil de Facebook. El lead solo
 - [ ] Revisar metricas al llegar a $50 gastados
 
 ---
+
+# AD-007 — 2 Variantes de Imagen + 2 de Copy (19 Mar 2026)
+
+> **Objetivo:** Filtrar leads basura via creativo (no via formulario ni audiencia). 2 imagenes que solo un medico reconoce como "mi dia a dia".
+
+> **Decision estrategica:** NO estrechar audiencia en Meta. TAM Honduras ~5,000-7,000 medicos. El CREATIVO es el filtro. Audiencia Meta sin cambios (Honduras, medicos/dentistas). 2 variantes de imagen en la misma campana: Meta optimiza entrega via Advantage+.
+
+---
+
+## Buyer Persona (2 perfiles)
+
+**Perfil primario: "Doctor-Empresario con Equipo"**
+- Clinica con 2+ doctores (propietario + contratados/subarrendados)
+- Asistentes con rol MIXTO: front desk + asistir en procedimientos
+- Gestion manual o software sin WhatsApp integrado
+- Dolor: la asistente esta saturada (agenda, cobra, contesta WhatsApp, asiste en procedimientos)
+- Precio: $75-110/mes | LTV:CPA: 27-40x
+- Ejemplo real: Carla Paredes / Medilaser
+
+**Perfil secundario: "Doctor Independiente"**
+- Medico solo o con secretaria basica
+- El mismo ES quien contesta WhatsApp entre pacientes
+- Dolor: no puede contestar durante consultas, pierde pacientes
+- Precio: $40/mes | LTV:CPA: 14.5x
+- Ejemplo real: Yeni, Ramos
+
+---
+
+## Imagen A: "La Asistente Saturada" (perfil empresario)
+
+**Visual:** Asistente de clinica (~25-35, scrubs, pelo recogido) en recepcion de consultorio. Celular en mano con notificaciones WhatsApp acumuladas. Paciente esperando al fondo (borroso). Elementos de clinica visibles.
+
+**Detalle clave:** Lleva SCRUBS (no ropa oficina) → comunica rol mixto medico+admin. Solo un doctor-empresario reconoce este escenario.
+
+**Por que filtra:** Un no-medico ve a una asistente de clinica y sigue scrolleando. Un doctor-empresario piensa "eso pasa todos los dias en mi clinica."
+
+**Formatos:** 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
+
+### Prompt AI para generar — Imagen A
+
+```
+Photorealistic image of a young Latin American woman (25-35 years old) working as a medical clinic receptionist. She is wearing medical SCRUBS (light blue or teal), hair pulled back in a ponytail. She is standing behind a clinic reception desk, holding a smartphone showing multiple WhatsApp notification bubbles stacked on screen (green chat bubbles with unread badges).
+
+Her expression is stressed and overwhelmed — slightly furrowed brows, looking at the phone with concern while a patient (blurred, out of focus) waits in the background sitting in a waiting room chair.
+
+The setting is a modern but modest Latin American medical clinic reception area — white walls, a small desk with a computer monitor, appointment book, and medical files. Warm fluorescent lighting. The scene feels busy and chaotic.
+
+Camera angle: medium shot from slightly above, focused on the receptionist. Shallow depth of field — the waiting patient in the background is blurred.
+
+Style: Clean, professional, editorial photography look. Natural lighting. No text overlays. No logos. Colors: predominantly white/teal (scrubs) with green (WhatsApp notifications) as accent.
+
+IMPORTANT: The woman wears medical SCRUBS, not office clothes. This is a medical assistant who also handles reception, not just an office worker.
+```
+
+**Generar en 3 formatos:** 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
+
+---
+
+## Imagen B: "El Doctor Entre Pacientes" (perfil independiente)
+
+**Visual:** Doctor (~35-50, bata blanca, estetoscopio) sentado en su consultorio, solo, revisando el celular con expresion de cansancio/preocupacion. Pantalla muestra notificaciones WhatsApp. Ambiente: consultorio con diploma en la pared, escritorio con expedientes, camilla al fondo.
+
+**Detalle clave:** El consultorio y la bata blanca son el filtro visual. Solo un medico reconoce ese ambiente como "mi dia a dia." Un no-medico ve un consultorio generico y no siente conexion.
+
+**Por que filtra:** AD-005 (doctor de noche) tenia 86% calificados porque era especificamente medico. Esta imagen tiene el mismo principio pero angulo fresco (entre pacientes, no de noche).
+
+**Formatos:** 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
+
+### Prompt AI para generar — Imagen B
+
+```
+Photorealistic image of a Latin American male doctor (35-50 years old) sitting alone in his private medical office. He wears a white lab coat with a stethoscope around his neck. He is looking at his smartphone with a tired, worried expression — bags under his eyes, slight frown.
+
+The smartphone screen shows multiple WhatsApp notification bubbles (green chat bubbles stacked with unread message badges). He holds the phone in one hand, the other hand resting on his forehead in a gesture of exhaustion.
+
+The setting is a modest private medical office in Latin America — a wooden desk with medical files and papers, a framed diploma/certificate on the wall behind him, a medical examination bed/table visible in the background. Warm artificial lighting from a desk lamp. The room feels quiet — he is alone between patients.
+
+Camera angle: medium close-up, slightly off-center, focused on the doctor's face and phone. Shallow depth of field — the office background is slightly soft.
+
+Style: Clean, editorial photography. Natural, warm tones. No text overlays. No logos. Mood: solitary, tired, overwhelmed by digital demands. Colors: white (lab coat), warm wood tones (desk/office), green accent (WhatsApp notifications).
+
+IMPORTANT: This is a PRIVATE PRACTICE doctor, not a hospital. The office should look like an independent consultation room, not a hospital ward.
+```
+
+**Generar en 3 formatos:** 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
+
+---
+
+## Copy AD-007 — 3 textos + 2 titulos por ad (Advantage+ rota)
+
+> **Decision:** 3 textos principales + 2 titulos por ad (no 5×5 como AD-005). Razon: $10/dia ÷ 2 ads = $5/ad/dia. Con 5×5 no hay suficiente data para optimizar. 6 combinaciones por ad, 12 total.
+
+### Ad 1: Imagen A — "La Asistente Saturada" (perfil empresario)
+
+**Texto 1 — Enumerar tareas (dolor explicito):**
+> Doctor, su asistente contesta WhatsApp, recibe pacientes, cobra, agenda y encima le ayuda en procedimientos. Todo al mismo tiempo.
+>
+> Con OrionCare, los pacientes se agendan solos por WhatsApp. Su asistente deja de correr y usted deja de perder citas.
+
+**Texto 2 — El momento de dolor (asistente en procedimiento):**
+> Mientras su asistente le ayuda en un procedimiento, los pacientes siguen escribiendo por WhatsApp. Nadie contesta. Algunos se cansan de esperar y buscan otro doctor.
+>
+> Con OrionCare, un asistente virtual atiende por WhatsApp las 24 horas. Su equipo se enfoca en lo que importa.
+
+**Texto 3 — La consecuencia (pacientes perdidos):**
+> ¿Cuantos pacientes dejaron de escribir porque nadie les contesto a tiempo?
+>
+> Su asistente no puede contestar WhatsApp, atender la recepcion y ayudarle en procedimientos al mismo tiempo. Con OrionCare, los pacientes se agendan solos. Sin esperas. Sin citas perdidas.
+
+**Titulo 1:** Su asistente ya no puede con todo
+**Titulo 2:** Los pacientes escriben, nadie contesta
+
+**Descripcion:** OrionCare — Agenda automatica por WhatsApp para clinicas
+**CTA:** Mas informacion
+
+### Ad 2: Imagen B — "El Doctor Entre Pacientes" (perfil independiente)
+
+**Texto 1 — Pregunta directa:**
+> Cuando esta con un paciente, ¿quien contesta los que escriben por WhatsApp?
+>
+> Con OrionCare, un asistente virtual atiende a sus pacientes al instante. Agenda citas, responde preguntas y envia recordatorios. Las 24 horas. Sin que usted tenga que contestar uno por uno.
+
+**Texto 2 — El momento entre pacientes:**
+> Entre paciente y paciente, usted agarra el celular y ve 12 mensajes de WhatsApp. Todos quieren cita. Y solo tiene 5 minutos antes del siguiente.
+>
+> Con OrionCare, esos 12 pacientes ya se agendaron solos. Sin que usted contestara ni uno.
+
+**Texto 3 — La noche (conecta con exito de AD-005):**
+> Son las 9 de la noche y todavia le estan escribiendo por WhatsApp para agendar cita.
+>
+> Con OrionCare, sus pacientes se agendan solos. A cualquier hora. Sin que usted levante un dedo.
+
+**Titulo 1:** Atienda pacientes sin soltar el telefono
+**Titulo 2:** Sus pacientes se agendan solos por WhatsApp
+
+**Descripcion:** OrionCare — Agenda automatica por WhatsApp para medicos
+**CTA:** Mas informacion
+
+---
+
+## Formulario AD-007
+
+> Sin cambios mayores vs AD-006. **Especialidad se mantiene en texto libre** (escribir requiere intencion = filtro involuntario). NO agregar mas preguntas.
+
+| # | Pregunta | Tipo en Meta | Opciones |
+|---|----------|-------------|----------|
+| 1 | ¿Ejerce como médico o dentista? | Multiple choice | Sí / No |
+| 2 | ¿Cuánto tiempo pierde agendando citas al día? | Multiple choice | Poco / Mucho / Demasiado |
+| 3 | ¿Cuál es su especialidad? | Short answer | (texto libre) |
+
+> **Nota:** El dropdown de especialidad (probado en AD-006) no resolvio el problema de leads basura (90% basura el 19 Mar). Se revierte a texto libre porque escribir requiere mas intencion que seleccionar de una lista.
+
+---
+
+## Configuracion de campana Meta — AD-007
+
+| Parametro | Valor |
+|-----------|-------|
+| Objetivo | Leads (formulario) |
+| Estructura | 1 campana, 1 ad set, **2 ads** (uno por imagen) |
+| Ad 1 | Imagen A + 3 textos equipo + 2 titulos |
+| Ad 2 | Imagen B + 3 textos independiente + 2 titulos |
+| Combinaciones | 6 por ad, 12 total. Meta optimiza via Advantage+. |
+| Presupuesto | $20/dia total ($10/dia por ad) |
+| Audiencia | Honduras, medicos/dentistas (sin cambios) |
+| Placements | Feed + Stories (automatico) |
+| Formatos por imagen | 3: 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628) |
+| Formulario | Especialidad en texto libre |
+| CTA | Mas informacion |
+
+**AD-006: Pausar al lanzar AD-007.** Solo pausar, no eliminar (Meta conserva aprendizajes).
+
+### Performance esperado
+
+| Metrica | AD-006 (actual) | AD-007 (hipotesis) |
+|---------|-----------------|---------------------|
+| CTR | 1.57% | 0.8-1.3% (menor pero mejor calidad) |
+| % calificados | 10-31% | 70-85% |
+| CPL calificado | $2.69-12.80 | $2.50-4.50 |
+
+> **Metrica clave: CPL calificado, NO CTR.** Un CTR menor con mejor calidad es victoria.
+
+---
+
+## Checklist de lanzamiento — AD-007
+
+- [x] Generar Imagen A (Asistente Saturada) en 3 formatos (Gemini)
+- [x] Generar Imagen B (Doctor Entre Pacientes) en 3 formatos (Gemini)
+- [x] Revisar imagenes: escenario clinico claro, sin procedimientos medicos (restriccion Meta)
+- [x] Revertir campo especialidad a texto libre en formulario Meta
+- [x] Crear campana AD-007 en Meta Ads Manager (1 campana, 1 ad set, 2 ads)
+- [x] Ad 1: Imagen A + 3 textos equipo + 2 titulos (Advantage+)
+- [x] Ad 2: Imagen B + 3 textos independiente + 2 titulos (Advantage+)
+- [x] Configurar presupuesto $20/dia total ($10/dia por ad)
+- [x] Pausar AD-006 (no eliminar)
+- [x] Guardar metricas finales AD-005/AD-006 en estado-ads.md
+- [x] Publicar AD-007 y esperar aprobacion de Meta
+- [x] Verificar aprobacion Meta — aprobada y en circulacion
+- [ ] Monitorear dia 3-5 (~$20-30 gastados): % calificados es la metrica clave
+- [ ] Dia 7: cual imagen tiene mejor % calificados → pausar la peor
+
+---
 ---
 
 # Video Ad — Comedia/Chisme Veo 3.1 (AD-003)

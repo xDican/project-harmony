@@ -1,106 +1,190 @@
 # Estado Ads — OrionCare
 
-> Ultima actualizacion: 4 Mar 2026 (demo bot + funnel actualizado)
+> Ultima actualizacion: 19 Mar 2026 (AD-007 ACTIVA, AD-005 y AD-006 pausadas con metricas finales)
 
 ## Dashboard
 
 | Metrica | Valor actual | Meta |
 |---------|-------------|------|
-| Campanas activas | 0 (congelada para construir bot) | 1-2 |
-| Gasto ultima campana | $203.81 | $100/mes |
-| Leads totales historicos | 125 | 20/mes |
-| CPL (ultima campana) | $4.16 | < $5 |
-| CPA (historico) | ~$68 (3 clientes de 125 leads) | < $20 |
-| CTR (enlace) | 0.54% | > 1.5% |
-| CPM | $1.36 | — |
-| CPC (enlace) | $0.25 | — |
+| Campanas activas | **1 (AD-007)** — 2 ads, $10/dia cada uno | 1-2 |
+| Gasto total historico | $148.08 (AD-005 $92.30 + AD-006 $55.78) | — |
+| Leads totales historicos | 80 (AD-005: 38 + AD-006: 42) | — |
+| Cierres totales | **1** (Carla Paredes, $75/mes) | — |
+| Presupuesto AD-007 | $20/dia ($10/dia por ad) | — |
 
-## Estado actual
+## Campanas
 
-Campana congelada desde hace semanas. Se congelo porque los leads hicieron market pull hacia el bot de autoagenda (el producto solo tenia agenda + recordatorios). Ahora el bot ya esta listo y en campo — el producto es mucho mas fuerte que antes.
+### AD-007 — Asistente Saturada + Doctor Entre Pacientes (ACTIVA 19 Mar)
+- **Estado:** ACTIVA. Aprobada por Meta y en circulacion.
+- **Concepto:** 2 imagenes que solo un medico reconoce como "mi dia a dia" = creativo como filtro de calidad.
+- **Imagen A:** "La Asistente Saturada" — perfil empresario. 3 textos + 2 titulos (Advantage+).
+- **Imagen B:** "El Doctor Entre Pacientes" — perfil independiente. 3 textos + 2 titulos (Advantage+).
+- **Config:** 1 campana, 1 ad set, 2 ads. 6 combinaciones por ad, 12 total. Meta optimiza.
+- **Presupuesto:** $20/dia ($10/dia por ad).
+- **Formulario:** Texto libre en especialidad (escribir requiere intencion = filtro).
+- **Hipotesis:** CTR menor (0.8-1.3%) pero % calificados 70-85% vs 10-31% de AD-006.
+- **Metrica clave:** CPL calificado, NO CTR.
+- **Monitoreo:** Dia 3-5 (~$60-100 gastados): % calificados. Dia 7: pausar imagen con peor % calificados.
+- **Detalle completo:** `docs/ad-creatives.md` seccion AD-007.
 
-## Analisis de campana anterior (completado)
+### AD-006 — "20 mensajes = 1 cita" (PAUSADA 19 Mar)
+- **Estado:** Pausada. No eliminar (Meta conserva aprendizajes).
+- **Razon pausa:** 70-90% leads basura. Creativo universalmente relatable — no filtra.
+- **Metricas finales (CSV 17 Feb-18 Mar):** Gasto $55.78 | 42 leads | CPL $1.33 | CTR 1.38% | CPM $1.39 | CPC $0.10 | Alcance 21,942 | Frecuencia 1.83 | Impresiones 40,101
+- **Calidad:** ~10-31% calificados. Batch 19 Mar fue 90% basura.
+- **Aprendizaje:** Generacion excelente, calidad inaceptable. El formulario no puede compensar un creativo que atrae a todos.
+
+### AD-005 — Doctor de noche (PAUSADA 13 Mar)
+- **Estado:** Pausada. Fatigada — frecuencia 2.23, CTR cayendo.
+- **Metricas finales (CSV 17 Feb-18 Mar):** Gasto $92.30 | 38 leads | CPL $2.43 | CTR 0.72% | CPM $1.73 | CPC $0.24 | Alcance 24,011 | Frecuencia 2.23 | Impresiones 53,433
+- **Calidad:** ~86% calificados (el creativo "doctor en cama" filtraba bien). 1 cierre (Carla Paredes).
+- **CPL calificado:** ~$2.83
+
+## Metricas finales AD-005 y AD-006 (CSV 17 Feb - 18 Mar)
+
+### AD-005 (AutoAgenda)
+- Gasto: $92.30 | Impresiones: 53,433 | CPM: $1.73
+- Alcance: 24,011 | Frecuencia: **2.23** (fatiga confirmada)
+- Clics enlace: 387 | CPC: $0.24 | CTR: 0.72%
+- Clics todos: 925 | CTR todos: 1.73% | CPC todos: $0.10
+- Resultados (leads): 38 | Costo por resultado: $2.43
+- **Cierres: 1** (Carla Paredes)
+
+### AD-006 (20mensajes1cita)
+- Gasto: $55.78 | Impresiones: 40,101 | CPM: $1.39
+- Alcance: 21,942 | Frecuencia: **1.83**
+- Clics enlace: 554 | CPC: $0.10 | CTR: 1.38%
+- Clics todos: 676 | CTR todos: 1.69% | CPC todos: $0.08
+- Resultados (leads): 42 | Costo por resultado: $1.33
+
+### Comparativa final
+
+| Metrica | AD-005 | AD-006 |
+|---------|--------|--------|
+| Gasto | $92.30 | $55.78 |
+| Leads | 38 | 42 |
+| CPL | $2.43 | $1.33 |
+| CTR | 0.72% | 1.38% |
+| % calificados | ~86% | ~10-31% |
+| CPL calificado | ~$2.83 | ~$4.30-$13.30 |
+| Cierres | 1 | 0 |
+
+> **Conclusion:** AD-005 gana en calidad (86% calificados, 1 cierre). AD-006 gana en volumen pero la basura invalida la ventaja de CPL bajo.
+
+## Funnel real AD-005 (con datos del bot)
+
+| Etapa | Cantidad | % del anterior | Costo unitario |
+|-------|----------|---------------|----------------|
+| Impresiones | 54,583 | — | — |
+| Clicks | 398 | 0.73% | $0.23 |
+| Form fills | 35 | 8.8% de clicks | $2.66 |
+| Interactuaron con bot | ~21 | 64% de forms | ~$4.43 |
+| Agendaron cita en bot | 8 | 38% de interactores | ~$11.63 |
+| Cierres | 1 | 12.5% de bookings | $93.02 |
+
+**Fugas principales:**
+- 36% de form fills nunca tocan el bot (posible problema de redirect)
+- Dolor "Poco" = 0% conversion (10+ leads, ~$27 desperdiciados)
+- FAQ del bot no explica OrionCare (3-4 leads perdidos)
+
+## Analisis de campana anterior (historico)
 
 ### Metricas
 - Gasto: $203.81 | Impresiones: 149,360 | CPM: $1.36
 - Clics enlace: 811 | CPC: $0.25 | CTR: 0.54%
-- Clics todos: 1,127 | CTR todos: 0.75% | CPC todos: $0.18
 - Resultados: 49 | Costo por resultado: $4.16
 
 ### Funnel historico (125 leads totales)
 - Funnel: Ad → encuesta (7 preguntas) → contacto via WhatsApp
 - Filtro: solo leads que dijeron "mucho" o "demasiado" tiempo agendando
 - Calificados: 56 (38 independientes + 18 con secretaria)
-
-### Medicos independientes (38 calificados)
-- 20 no interesados (52.6%)
-- 9 mostraron interes (23.7%)
-- 3 convertidos (7.9%) — los 3 clientes actuales
-- 3 en espera de respuesta (7.9%)
-- 2 no contestaron (5.3%)
-- 1 medico futuro (2.6%)
-
-### Medicos con secretaria (18 calificados)
-- 3 mostraron interes, 1 seguimiento pendiente, 2 no contestaron
-- 0 convertidos — la secretaria "resuelve" el problema, dolor menor
+- Independientes: 3 convertidos de 38 (7.9%)
+- Con secretaria: 0 convertidos de 18 (0%)
 
 ### Aprendizajes clave
-1. **CPL bueno ($4.16)** pero **CTR malo (0.54%)** — el creativo no genera suficiente clic
-2. **CPM baratisimo ($1.36)** — Honduras es ventaja competitiva, si sube CTR los leads se abaratan mucho
-3. **Independientes convierten 10x mejor** que medicos con secretaria
-4. **52% de independientes calificados dijeron "no interesado"** — posible causa: no comprendian bien el producto al ser contactados (en ese momento era solo agenda + recordatorios)
-5. **El mercado hondureno no lee, prefiere visual** — imagen estatica limita CTR
-6. **Los leads causaron market pull hacia el bot** — ahora el producto es mas fuerte
+1. CPL bueno ($4.16) pero CTR malo (0.54%)
+2. CPM baratisimo ($1.36) — Honduras es ventaja competitiva
+3. Independientes convierten 10x mejor que medicos con secretaria
+4. El mercado hondureno prefiere visual — imagen estatica limita CTR
 
-### Creativo anterior
-- Imagen estatica: robot en consultorio dental con burbuja "El paciente ya confirmo para manana"
-- Problema: demasiado futurista, no genera urgencia, texto pequeno en mobile
+## Investigacion mercado Honduras (13 Mar 2026)
 
-## Decisiones tomadas (sesion 2 Mar)
+### Audiencia
+- Facebook Honduras: 4.6M alcanzables, 5.43M usuarios totales
+- TAM medicos/dentistas privados: ~5,000-7,000
+- No hay competidor local con Meta Ads — first-mover advantage
 
-1. **Audiencia: solo medicos independientes** — eliminar medicos con secretaria del targeting
-2. **Formato: video con avatar AI** (persona hablando a camara, no la cara del fundador)
-3. **Mensaje core cambia:** de "agenda con recordatorios" a "tus pacientes se agendan solos por WhatsApp"
-4. **Herramienta de video:** probar HeyGen (trial gratis, 3 videos) antes de reactivar Veo 3.1
-5. **Encuesta simplificada:** de 7 a 5 preguntas (eliminar redundantes para reducir friccion)
+### Benchmarks
+- CPM Honduras: $1.50-$3.00 (OrionCare: $1.70 — excelente)
+- CPC Honduras: $0.10-$0.30 (OrionCare: $0.23 — bien)
+- CPL Honduras: $2.00-$8.00 (OrionCare: $2.66 — muy bueno)
+- CTR benchmark imagen: ~0.90% (OrionCare: 0.73% — por debajo)
 
-## Campana nueva — AD-005 Imagen A (lista para lanzar)
+### Formatos (benchmarks globales)
+- Video: CTR 0.98% (mejor CTR)
+- Carousel: 30-50% menor costo por conversion (mejor conversion)
+- Imagen: CTR 0.91% (baseline)
 
-**Creativo:** Imagen estatica — doctor en cama de noche, notificaciones WhatsApp apiladas.
-**A/B test:** 2 variantes de copy (misma imagen):
-- Variante 1: Dolor + Solucion ("Cuantas citas perdio esta semana...")
-- Variante 2: Pregunta directa ("Todavia agenda citas uno por uno...")
+### Implicaciones
+- Audiencia pequeña (~5K-7K) = creativos se fatigan rapido, rotar cada 2-3 semanas
+- Mobile-first: atencion de 1.7 segundos
+- 95% de medicos LATAM ya usan WhatsApp para su practica
+- Carousel no probado aun — potencial para menor costo por conversion
+- Video pendiente (AD-001 HeyGen, AD-003 Veo 3.1) — potencial para mejor CTR
 
-**Configuracion:**
-- Objetivo: Leads (formulario con 5 preguntas)
-- Presupuesto: Lifetime budget $100, ~2 semanas (~$7/dia automatico)
-- Audiencia: Honduras, medicos independientes
-- Placements: Feed (4:5) + Stories (9:16) automatico
-- Evaluacion: revisar al llegar a $50 gastados (~1 semana)
+### Competencia
+- Ningun competidor anuncia en Honduras
+- Ninguno tiene WhatsApp bot nativo (diferenciador unico)
+- Precios competidores: $19-$50/mes. OrionCare $40 = rango medio-alto pero con WhatsApp
 
-**Detalle completo en:** `docs/ad-creatives.md`
+## Buyer persona refinado (19 Mar)
 
-## Decisiones sesion 4 Mar
+**Decision:** NO estrechar audiencia en Meta. El CREATIVO funciona como filtro.
+- Audiencia Meta: sin cambios (Honduras, medicos/dentistas)
+- 2 variantes de imagen en la misma campana: Meta optimiza entrega via Advantage+
+- Ambos perfiles cubiertos por el creativo
 
-1. **Demo bot integrado al funnel:** Lead termina formulario → thank you page lo envia a probar el bot por WhatsApp (+50493133496)
-2. **Thank you page actualizada:**
-   - Titulo: "¡Listo! Ahora póngase en el lugar de su paciente."
-   - Cuerpo: "Presione el botón de abajo y envíe la palabra DEMO para ver cómo sus pacientes agendarían citas solos por WhatsApp."
-   - Boton: "Probar el asistente por WhatsApp" → `https://wa.me/+50493133496?text=DEMO`
-3. **Texto pre-formulario actualizado:** "Al finalizar, podrá probar el asistente virtual de OrionCare directo en su WhatsApp. Su información solo se usará para este fin."
-4. **Pendiente dev:** Crear flujo especial en el bot para cuando reciba "DEMO" — contexto guiado para el doctor, no el flujo normal de paciente
-5. **Desactivar Messenger** en configuracion del formulario (Settings → desmarcar Messenger)
+**Perfil primario: "Doctor-Empresario con Equipo"**
+- Clinica 2+ doctores, asistentes con rol mixto (front desk + procedimientos)
+- Precio: $75-110/mes | LTV:CPA: 27-40x
+- Ejemplo: Carla Paredes / Medilaser
+
+**Perfil secundario: "Doctor Independiente"**
+- Medico solo o con secretaria basica
+- Precio: $40/mes | LTV:CPA: 14.5x
+- Ejemplo: Yeni, Ramos
+
+## Decisiones tomadas
+
+### Sesion 19 Mar
+1. **AD-006 pausada** — 70-90% leads basura, creativo universalmente relatable
+2. **AD-007 en preparacion** — 2 imagenes (asistente saturada + doctor entre pacientes) + 2 copys
+3. **Buyer persona refinado** — 2 perfiles (empresario + independiente), creativo como filtro
+4. **Audiencia Meta sin cambios** — no estrechar, el creativo filtra
+5. **Formulario:** especialidad revertida a texto libre (escribir requiere intencion)
+6. **Metrica clave cambiada:** CPL calificado, no CTR
+
+### Sesion 13 Mar
+1. **AD-006 lanzada** — imagen "20 mensajes = 1 cita", 3 formatos (1:1, 9:16, 1.91:1)
+2. **Formulario sin cambios** — "Poco" se mantiene como señal de calidad, no como filtro
+3. **CTA cambiado** de "Registrarte" a "Más información" (menor friccion)
+4. **Copy con Advantage+** — 2 variantes de texto principal, Meta rota automaticamente
+
+### Sesion 4 Mar
+1. Demo bot integrado al funnel (thank you page → WhatsApp bot)
+2. Desactivar Messenger en config del formulario
+
+### Sesion 2 Mar
+1. Audiencia: solo medicos independientes
+2. Mensaje core: "tus pacientes se agendan solos por WhatsApp"
+3. Encuesta simplificada: de 7 a 5 preguntas
 
 ## Proximos pasos
 
-1. **DEV (blocker):** Implementar flujo "DEMO" en el bot — que al recibir "DEMO" guie al doctor por la experiencia
-2. **Generar imagen AD-005** en Gemini (o plan B: Canva con stock + overlays)
-3. **LANZAR campana AD-005** en Meta Ads Manager (checklist en `docs/ad-creatives.md`)
-4. **Revisar metricas** al llegar a $50 gastados (~1 semana)
-   - Comparar CTR de ambas variantes — pausar la peor
-   - Medir: cuantos leads hacen clic en "Probar el asistente" vs cuantos no
-5. **En paralelo (prioridad baja):** video AD-003 Veo 3.1 — prompts listos, pendiente generar
-6. **Semana 3:** scripts de seguimiento/cierre + posts organicos
+1. **Monitorear AD-007 dia 3-5** (~$60-100 gastados) — % calificados es la metrica clave
+2. **Evaluacion dia 7 (~26 Mar):** % calificados vs meta 70%. Cual imagen rinde mejor. Pausar la peor.
+3. **Siguiente rotacion:** Carousel o video (AD-001/AD-003) si AD-007 se fatiga
+4. **Regla:** Siempre generar 3 formatos por creativo: 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
 
 ## Restricciones Meta para salud
 
