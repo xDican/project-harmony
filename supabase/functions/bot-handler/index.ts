@@ -211,6 +211,41 @@ async function handleBotMessage(
     // Fall through to greeting handler
   }
 
+  // Escape from booking states: "cancelar", "salir", "menu", "volver" → back to main_menu
+  const BOOKING_ESCAPABLE_STATES: BotState[] = [
+    'booking_select_doctor', 'booking_select_service', 'booking_select_day',
+    'booking_select_hour', 'booking_ask_name',
+  ];
+  const ESCAPE_WORDS = ['cancelar', 'salir', 'menu', 'volver'];
+  if (BOOKING_ESCAPABLE_STATES.includes(session.state) && ESCAPE_WORDS.includes(trimmedMsg)) {
+    console.log('[bot-handler] Booking escape:', trimmedMsg, 'from', session.state);
+    // Clean booking context but preserve line config
+    const preserved = { handoffLabels: session.context.handoffLabels, lineServiceTypes: session.context.lineServiceTypes };
+    session.context = { ...preserved };
+    const escapeResponse: BotResponse = {
+      message: `${OPT_EMOJI.cancelar} Proceso cancelado.\n\n¿En que puedo ayudarle?`,
+      options: [
+        `${OPT_EMOJI.agendar} Agendar cita`,
+        `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+        `${OPT_EMOJI.faq} Preguntas frecuentes`,
+        handoffLabels.menuOption,
+      ],
+      showMenuHint: false,
+      requiresInput: true,
+      nextState: 'main_menu',
+      sessionComplete: false,
+    };
+    await updateSession(session.id, escapeResponse.nextState, session.context, false, supabase);
+    const escResponseTimeMs = Date.now() - startTime;
+    const escIntent = detectIntent(stateBefore, escapeResponse.nextState, messageText);
+    logConversation(
+      session.id, whatsappLineId, organizationId, patientPhone,
+      stateBefore, escapeResponse.nextState, messageText, escapeResponse.message,
+      escapeResponse.options || [], escIntent, escResponseTimeMs, supabase
+    ).catch((err) => console.error('[bot-handler] Log error (non-fatal):', err));
+    return escapeResponse;
+  }
+
   // Direct reschedule: when appointmentId arrives and session is fresh (greeting),
   // skip the menu and jump straight to the reschedule week-selection flow.
   let response: BotResponse;
@@ -572,6 +607,7 @@ async function handleMainMenu(
 
   if (normalizedInput === '3' || normalizedInput.includes('faq') || normalizedInput.includes('pregunta')) {
     delete session.context.lastFaqResult;
+    delete session.context.faqNotFoundCount;
     return {
       message: `${OPT_EMOJI.faq} *Preguntas frecuentes*\n\nEscriba su pregunta y buscare la respuesta.`,
       requiresInput: true,
@@ -582,6 +618,26 @@ async function handleMainMenu(
 
   if (normalizedInput === '4' || normalizedInput.includes('secretar') || normalizedInput.startsWith('hablar con')) {
     return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+  }
+
+  // Recognize greetings — re-show menu friendly instead of "opcion no valida"
+  const SALUDOS = ['hola', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'buen dia', 'hey'];
+  const isGreeting = SALUDOS.some(s => normalizedInput === s || normalizedInput.startsWith(s + ' ') || normalizedInput.startsWith(s + ','));
+  if (isGreeting) {
+    session.context.invalidAttempts = 0;
+    return {
+      message: '¡Hola! 👋 ¿En que puedo ayudarle?',
+      options: [
+        `${OPT_EMOJI.agendar} Agendar cita`,
+        `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+        `${OPT_EMOJI.faq} Preguntas frecuentes`,
+        handoffLabels.menuOption,
+      ],
+      showMenuHint: false,
+      requiresInput: true,
+      nextState: 'main_menu',
+      sessionComplete: false,
+    };
   }
 
   // Invalid input - increment attempt counter
@@ -664,6 +720,27 @@ async function handleFAQSearch(
     if (normalizedInput === '2' || normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
       return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
     }
+  } else if (lastFaqResult === 'not_found_auto') {
+    // Options shown: [1: Si conectar, 2: Menu principal]
+    if (normalizedInput === '1' || normalizedInput.includes('si') || normalizedInput.includes('secretar') || normalizedInput.includes('conectar')) {
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    }
+    if (normalizedInput === '2' || normalizedInput.includes('menu') || normalizedInput.includes('menú') || normalizedInput.includes('volver')) {
+      return {
+        message: '¿En que puedo ayudarle?',
+        options: [
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+          `${OPT_EMOJI.faq} Preguntas frecuentes`,
+          handoffLabels.menuOption,
+        ],
+        showMenuHint: false,
+        requiresInput: true,
+        nextState: 'main_menu',
+        sessionComplete: false,
+      };
+    }
+    // Any other text → fall through to search
   }
 
   // Fallback: text-based matching (no lastFaqResult or first entry)
@@ -702,6 +779,7 @@ async function handleFAQSearch(
 
   if (faq) {
     session.context.lastFaqResult = 'found';
+    session.context.faqNotFoundCount = 0;
     return {
       message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faq.question}*\n${faq.answer}`,
       options: [`${OPT_EMOJI.faq} Otra pregunta`, `${OPT_EMOJI.menu} Menu principal`],
@@ -711,7 +789,22 @@ async function handleFAQSearch(
     };
   }
 
-  // No FAQ found
+  // No FAQ found — track consecutive misses
+  const faqNotFoundCount = (session.context.faqNotFoundCount || 0) + 1;
+  session.context.faqNotFoundCount = faqNotFoundCount;
+
+  if (faqNotFoundCount >= 3) {
+    // Auto-offer handoff after 3 consecutive misses
+    session.context.lastFaqResult = 'not_found_auto';
+    return {
+      message: `No he podido encontrar la informacion que busca. ¿Desea que le conecte con ${handoffLabels.connecting}?`,
+      options: [`${handoffLabels.emoji} Si, conectar con ${handoffLabels.connecting}`, `${OPT_EMOJI.menu} Menu principal`],
+      requiresInput: true,
+      nextState: 'faq_search',
+      sessionComplete: false,
+    };
+  }
+
   session.context.lastFaqResult = 'not_found';
   return {
     message: '⚠️ No encontre una respuesta para esa pregunta.',
@@ -1906,6 +1999,7 @@ async function searchFAQ(
 ): Promise<BotFAQ | null> {
   // Normalize query: lowercase, remove accents, trim
   const normalizedQuery = query.toLowerCase().trim();
+  console.log('[searchFAQ] Query:', normalizedQuery);
 
   // Build search query with priority order
   let orCondition: string;
@@ -1924,7 +2018,15 @@ async function searchFAQ(
     .or(orCondition)
     .order('scope_priority', { ascending: true }); // 1=doctor, 2=clinic, 3=org
 
-  if (error || !faqs) return null;
+  if (error) {
+    console.error('[searchFAQ] Supabase error:', error.message);
+    return null;
+  }
+  if (!faqs || faqs.length === 0) {
+    console.log('[searchFAQ] No FAQs found for org/doctor/clinic scope');
+    return null;
+  }
+  console.log('[searchFAQ] FAQs loaded:', faqs.length);
 
   // Find best match: keyword overlap
   let bestMatch: BotFAQ | null = null;
@@ -1934,18 +2036,30 @@ async function searchFAQ(
     const keywords = faq.keywords || [];
     let score = 0;
 
-    // Check if query contains any keyword
+    // Check if query contains any keyword (or keyword contains query for short queries)
     for (const keyword of keywords) {
-      if (normalizedQuery.includes(keyword.toLowerCase())) {
+      const kw = keyword.toLowerCase();
+      if (normalizedQuery.includes(kw)) {
         score += 1;
+      } else if (normalizedQuery.length >= 3 && kw.includes(normalizedQuery)) {
+        score += 0.75;
       }
     }
 
-    // Also check if question contains query words
+    // Also check if question contains query words (with prefix matching)
     const queryWords = normalizedQuery.split(/\s+/);
+    const questionLower = faq.question.toLowerCase();
+    const questionWords = questionLower.split(/\s+/);
     for (const word of queryWords) {
-      if (word.length >= 3 && faq.question.toLowerCase().includes(word)) {
+      if (word.length >= 3 && questionLower.includes(word)) {
         score += 0.5;
+      } else if (word.length >= 4) {
+        for (const qw of questionWords) {
+          if (qw.startsWith(word)) {
+            score += 0.25;
+            break;
+          }
+        }
       }
     }
 
@@ -1953,6 +2067,13 @@ async function searchFAQ(
       bestScore = score;
       bestMatch = faq;
     }
+  }
+
+  if (bestScore > 0 && bestMatch) {
+    console.log('[searchFAQ] Best match:', bestMatch.question, '| Score:', bestScore);
+  } else {
+    const queryWords = normalizedQuery.split(/\s+/);
+    console.log('[searchFAQ] No match | Query words:', queryWords);
   }
 
   return bestScore > 0 ? bestMatch : null;
