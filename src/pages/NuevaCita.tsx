@@ -41,11 +41,7 @@ export default function NuevaCita() {
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-  };
+  const agendarRef = useRef<HTMLDivElement>(null);
 
   // Duration state
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -191,6 +187,15 @@ export default function NuevaCita() {
       setSelectedSlot(null);
     }
   }, [selectedDoctor, selectedDate, durationMinutes, selectedCalendarId]);
+
+  // Auto-scroll to Agendar button when slots finish loading
+  useEffect(() => {
+    if (!isLoadingSlots && availableSlots.length > 0) {
+      setTimeout(() => {
+        agendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+  }, [isLoadingSlots, availableSlots]);
 
   // Fetch calendarId when doctor changes
   useEffect(() => {
@@ -469,18 +474,14 @@ export default function NuevaCita() {
             </AlertDescription>
           </Alert>
         ) : (
-          <div className="mt-2 space-y-3">
+          <div className="relative mt-2 space-y-3">
             <Button
               variant="outline"
               className={cn(
                 'w-full justify-between text-left font-normal',
                 !selectedDate && 'text-muted-foreground'
               )}
-              onClick={() => {
-                const willOpen = !calendarOpen;
-                setCalendarOpen(willOpen);
-                if (willOpen) scrollToBottom();
-              }}
+              onClick={() => setCalendarOpen(!calendarOpen)}
             >
               <span className="flex items-center">
                 {isLoadingDays ? (
@@ -499,14 +500,13 @@ export default function NuevaCita() {
               )}
             </Button>
             {calendarOpen && (
-              <div className="border rounded-md p-3 bg-background">
+              <div className="absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg">
                 <Calendar
                   mode="single"
                   selected={selectedDate}
                   onSelect={(date) => {
                     setSelectedDate(date);
                     setCalendarOpen(false);
-                    scrollToBottom();
                   }}
                   month={currentMonth}
                   onMonthChange={handleMonthChange}
@@ -607,11 +607,10 @@ export default function NuevaCita() {
                 {fechaStepNum}. Seleccionar Fecha
               </Label>
               {renderAgendaSection()}
-              <div ref={bottomRef} />
             </section>
 
             {/* Botón Agendar */}
-            <div className="pt-6 border-t">
+            <div ref={agendarRef} className="pt-6 border-t">
               <Button
                 onClick={handleCreateAppointment}
                 disabled={!isFormValid}
