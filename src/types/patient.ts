@@ -6,4 +6,5 @@ export interface Patient {
   notes?: string;
   documentId?: string;
   createdAt?: string;
+  reminder3dPreferred?: boolean;
 }

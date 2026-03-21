@@ -1,0 +1,2 @@
+ALTER TABLE patients
+  ADD COLUMN IF NOT EXISTS reminder_3d_preferred BOOLEAN NOT NULL DEFAULT false;

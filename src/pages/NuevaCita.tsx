@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CalendarIcon, CheckCircle, Stethoscope, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, Loader2, AlertCircle, Bell, ChevronRight } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
@@ -9,10 +9,9 @@ import SlotSelector from '@/components/SlotSelector';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -22,45 +21,41 @@ import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } 
 import { useCurrentUser } from '@/context/UserContext';
 import { useSingleDoctor } from '@/hooks/useSingleDoctor';
 import { supabase } from '@/lib/supabaseClient';
+import { updatePatientReminder3d } from '@/lib/api.supabase';
 import type { Patient } from '@/types/patient';
 import type { Doctor } from '@/types/doctor';
 
 /**
  * NuevaCita - New appointment creation page
  *
- * Flow (UX mejorado):
- * 1. Seleccionar médico (si no es doctor)
- * 2. Buscar paciente (filtrado por médico seleccionado)
- * 3. Seleccionar DURACIÓN
- * 4. Ver calendario con días disponibles/no disponibles según duración
- * 5. Seleccionar horario del día elegido
+ * Mobile (<768px): Wizard de 2 pasos (Paciente → Agenda)
+ * Desktop (>=768px): Formulario vertical con todas las secciones visibles
  */
 export default function NuevaCita() {
   const { user, isDoctor, isDoctorView } = useCurrentUser();
   const { singleDoctor, isSingleDoctorOrg, isLoading: loadingDoctors } = useSingleDoctor();
-  
+
   // Core selection state
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedCalendarId, setSelectedCalendarId] = useState<string | undefined>();
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  
-  // Duration state (ahora es el primer paso después de seleccionar médico)
+
+  // Duration state
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
   const [reminder3dEnabled, setReminder3dEnabled] = useState(false);
-  
-  // Available days state (para bloquear días en el calendario)
+
+  // Available days state
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [availableDaysMap, setAvailableDaysMap] = useState<Record<string, { canFit: boolean; working: boolean }>>({});
   const [isLoadingDays, setIsLoadingDays] = useState(false);
   const [errorDays, setErrorDays] = useState<string | null>(null);
-  
+
   // Slots state
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  
+
   // Loading states
   const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
   const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
@@ -71,6 +66,19 @@ export default function NuevaCita() {
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
+  // Wizard state (mobile only)
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // Responsive: mobile vs desktop
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // Duration options
   const durationOptions = [
     { value: 15, label: '15 min' },
@@ -79,6 +87,8 @@ export default function NuevaCita() {
     { value: 90, label: '1.5 horas' },
     { value: 120, label: '2 horas' },
   ];
+
+  const skipDoctorStep = isDoctorView || loadingDoctors || isSingleDoctorOrg;
 
   // Auto-fill doctor for logged-in doctors
   useEffect(() => {
@@ -106,16 +116,22 @@ export default function NuevaCita() {
     }
   }, [isSingleDoctorOrg, singleDoctor, selectedDoctor]);
 
+  // Auto-fill reminder toggle when patient is selected
+  useEffect(() => {
+    if (selectedPatient) {
+      setReminder3dEnabled(selectedPatient.reminder3dPreferred ?? false);
+    }
+  }, [selectedPatient]);
+
   /**
    * Fetch available days when doctor, duration, or month changes
-   * This allows the calendar to show which days can accommodate the appointment
    */
   const fetchAvailableDays = useCallback(async (doctorId: string, month: Date, duration: number) => {
     const monthString = format(month, 'yyyy-MM');
-    
+
     setIsLoadingDays(true);
     setErrorDays(null);
-    
+
     try {
       const daysMap = await getAvailableDays({
         doctorId,
@@ -124,8 +140,7 @@ export default function NuevaCita() {
         calendarId: selectedCalendarId,
       });
       setAvailableDaysMap(daysMap);
-      
-      // Si la fecha seleccionada ya no es válida (canFit=false), limpiarla
+
       if (selectedDate) {
         const dateString = format(selectedDate, 'yyyy-MM-dd');
         if (daysMap[dateString] && !daysMap[dateString].canFit) {
@@ -137,7 +152,6 @@ export default function NuevaCita() {
     } catch (error) {
       console.error('[NuevaCita] Error fetching available days:', error);
       setErrorDays('No se pudieron cargar los días disponibles');
-      // En caso de error, no bloqueamos nada - fallback manual
       setAvailableDaysMap({});
     } finally {
       setIsLoadingDays(false);
@@ -165,7 +179,6 @@ export default function NuevaCita() {
         calendarId: selectedCalendarId,
       })
         .then(slots => {
-          // Filter slots to show only future times if the selected date is today
           let filteredSlots = slots;
           if (isToday(selectedDate)) {
             const currentTimeInMinutes = getCurrentTimeInMinutes();
@@ -200,7 +213,7 @@ export default function NuevaCita() {
       .eq('is_active', true)
       .maybeSingle()
       .then(({ data }) => setSelectedCalendarId(data?.calendar_id ?? undefined))
-      .catch(() => {}); // non-blocking; backend auto-resolves as fallback
+      .catch(() => {});
   }, [selectedDoctor?.id]);
 
   // Reset patient, date, slots, and available days when doctor changes
@@ -213,7 +226,7 @@ export default function NuevaCita() {
     setCurrentMonth(new Date());
   }, [selectedDoctor]);
 
-  // Reset date and slots when duration changes (days availability may change)
+  // Reset date and slots when duration changes
   useEffect(() => {
     setSelectedDate(undefined);
     setSelectedSlot(null);
@@ -232,25 +245,25 @@ export default function NuevaCita() {
     setCurrentMonth(month);
   };
 
-  /**
-   * Determine if a date should be disabled in the calendar
-   */
+  const handleReminder3dToggle = (checked: boolean) => {
+    setReminder3dEnabled(checked);
+    if (selectedPatient) {
+      updatePatientReminder3d(selectedPatient.id, checked); // fire-and-forget
+    }
+  };
+
   const isDateDisabled = (date: Date): boolean => {
-    // Always disable past dates
     if (date < getLocalToday()) return true;
-    
+
     const dateString = format(date, 'yyyy-MM-dd');
     const dayInfo = availableDaysMap[dateString];
-    
-    // If no info available yet (loading or error), don't block
+
     if (!dayInfo) return false;
-    
-    // Block if not working day or can't fit the appointment
+
     return !dayInfo.working || !dayInfo.canFit;
   };
 
   const handleCreateNewPatient = ({ nameOrPhone }: { nameOrPhone: string }) => {
-    // Secretary/admin must select a doctor first so the RPC can resolve the org
     if (!selectedDoctor && !user?.doctorId) {
       toast({
         variant: "destructive",
@@ -350,7 +363,7 @@ export default function NuevaCita() {
 
     try {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      
+
       const result = await createAppointment({
         doctorId: selectedDoctor.id,
         patientId: selectedPatient.id,
@@ -382,7 +395,7 @@ export default function NuevaCita() {
         ),
       });
 
-      // Reset form
+      // Reset form + volver a paso 1
       setSelectedPatient(null);
       setSelectedDoctor(null);
       setSelectedDate(undefined);
@@ -390,6 +403,7 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setDurationMinutes(30);
       setReminder3dEnabled(false);
+      setCurrentStep(0);
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
@@ -404,209 +418,294 @@ export default function NuevaCita() {
 
   const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
 
-  // Step numbering helper
-  const skipDoctorStep = isDoctorView || loadingDoctors || isSingleDoctorOrg;
-  const getStepNumber = (baseStep: number) => skipDoctorStep ? baseStep - 1 : baseStep;
+  // Step headers for mobile wizard
+  const stepHeaders = [
+    skipDoctorStep ? "Seleccionar paciente" : "Seleccionar médico y paciente",
+    "Agendar cita"
+  ];
+
+  // Shared patient card with reminder toggle
+  const renderPatientCard = () => {
+    if (!selectedPatient) return null;
+    return (
+      <div className="border rounded-xl p-4 bg-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{selectedPatient.name}</p>
+            {selectedPatient.phone && (
+              <p className="text-sm text-muted-foreground">{selectedPatient.phone}</p>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedPatient(null)}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            ✕
+          </Button>
+        </div>
+        <Separator className="my-3" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Recordatorio extra</p>
+              <p className="text-xs text-muted-foreground">
+                {reminder3dEnabled ? "2 WhatsApp: 3 días + 24h" : "1 WhatsApp: 24h antes"}
+              </p>
+            </div>
+          </div>
+          <Switch checked={reminder3dEnabled} onCheckedChange={handleReminder3dToggle} />
+        </div>
+      </div>
+    );
+  };
+
+  // Shared calendar + slots section
+  const renderAgendaSection = () => (
+    <>
+      {/* Duración */}
+      <div>
+        <Label className="text-sm text-muted-foreground">Duración</Label>
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+          {durationOptions.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              variant={durationMinutes === option.value ? 'default' : 'outline'}
+              onClick={() => setDurationMinutes(option.value)}
+              className={cn(
+                'h-12',
+                durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
+              )}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* Calendario inline */}
+      <div>
+        <Label className="text-sm text-muted-foreground">Fecha</Label>
+        {!selectedDoctor ? (
+          <Alert className="mt-2">
+            <AlertDescription>
+              Selecciona un médico primero para ver las fechas disponibles.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="mt-2 space-y-3">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              month={currentMonth}
+              onMonthChange={handleMonthChange}
+              disabled={isDateDisabled}
+              className={cn("p-3 rounded-md border")}
+              modifiers={{
+                unavailable: (date) => {
+                  const dateString = format(date, 'yyyy-MM-dd');
+                  const dayInfo = availableDaysMap[dateString];
+                  return dayInfo ? (!dayInfo.working || !dayInfo.canFit) : false;
+                }
+              }}
+              modifiersClassNames={{
+                unavailable: 'text-muted-foreground/50 line-through cursor-not-allowed'
+              }}
+            />
+            {isLoadingDays && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Cargando disponibilidad...</span>
+              </div>
+            )}
+            {errorDays && (
+              <Alert variant="destructive" className="py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  {errorDays}. Puedes seleccionar cualquier fecha manualmente.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* Slots */}
+      <div>
+        <Label className="text-sm text-muted-foreground">
+          {selectedDate ? `Horario — ${format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}` : "Horario"}
+        </Label>
+        {!selectedDate ? (
+          <p className="text-sm text-muted-foreground italic text-center py-4">
+            Selecciona una fecha en el calendario
+          </p>
+        ) : isLoadingSlots ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="mt-2">
+            <SlotSelector
+              slots={availableSlots}
+              selectedSlot={selectedSlot}
+              onSelect={setSelectedSlot}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
-        <div className="space-y-8">
-          {/* Step 1: Doctor Selection (hidden for doctors and admin in Vista Médico) */}
-          {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
+        {/* Mobile wizard header */}
+        {isMobile && (
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-base font-semibold">{stepHeaders[currentStep]}</span>
+            <span className="text-sm text-muted-foreground">paso {currentStep + 1}/2</span>
+          </div>
+        )}
+
+        {/* ==================== MOBILE WIZARD ==================== */}
+        {isMobile && (
+          <div className="space-y-6">
+            {/* Step 1: Paciente (+ médico si aplica) */}
+            {currentStep === 0 && (
+              <>
+                {/* Doctor search si aplica */}
+                {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
+                  <div>
+                    <Label className="text-sm text-muted-foreground mb-2 block">Médico</Label>
+                    <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
+                  </div>
+                )}
+
+                {/* Patient search */}
+                <div>
+                  <Label className="text-sm text-muted-foreground mb-2 block">Paciente</Label>
+                  <PatientSearch
+                    onSelect={handlePatientSelect}
+                    onCreateNew={handleCreateNewPatient}
+                    value={selectedPatient}
+                    doctorId={selectedDoctor?.id}
+                  />
+                </div>
+
+                {/* Card del paciente seleccionado con toggle */}
+                {renderPatientCard()}
+
+                {/* Botón Siguiente */}
+                <Button
+                  onClick={() => setCurrentStep(1)}
+                  disabled={!selectedPatient || !selectedDoctor}
+                  className="w-full"
+                  size="lg"
+                >
+                  Siguiente
+                  <ChevronRight className="ml-2 h-5 w-5" />
+                </Button>
+              </>
+            )}
+
+            {/* Step 2: Agenda (duración + calendario + slots) */}
+            {currentStep === 1 && (
+              <>
+                <div className="border rounded-xl p-4 space-y-1">
+                  {renderAgendaSection()}
+                </div>
+
+                {/* Botones Atrás / Agendar */}
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep(0)}
+                    className="w-[30%]"
+                    size="lg"
+                  >
+                    Atrás
+                  </Button>
+                  <Button
+                    onClick={handleCreateAppointment}
+                    disabled={!selectedSlot || isCreatingAppointment}
+                    className="flex-1"
+                    size="lg"
+                  >
+                    <CheckCircle className="mr-2 h-5 w-5" />
+                    {isCreatingAppointment ? 'Agendando...' : 'Agendar'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ==================== DESKTOP FORM ==================== */}
+        {!isMobile && (
+          <div className="space-y-8">
+            {/* Médico (si aplica) */}
+            {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
+              <section>
+                <Label className="text-lg font-semibold text-foreground mb-3 block">
+                  Seleccionar Médico
+                </Label>
+                <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
+              </section>
+            )}
+
+            {/* Paciente + toggle en card */}
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
-                1. Seleccionar Médico
+                Seleccionar Paciente
               </Label>
-              <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
-            </section>
-          )}
-
-          {/* Step 2 (or 1): Patient Selection - filtered by selected doctor */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              {getStepNumber(2)}. Seleccionar Paciente
-            </Label>
-            <PatientSearch
-              onSelect={handlePatientSelect}
-              onCreateNew={handleCreateNewPatient}
-              value={selectedPatient}
-              doctorId={selectedDoctor?.id}
-            />
-          </section>
-
-          {/* Step 3 (or 2): Duration Selection */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              {getStepNumber(3)}. Duración de la Cita
-            </Label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-              {durationOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  type="button"
-                  variant={durationMinutes === option.value ? 'default' : 'outline'}
-                  onClick={() => setDurationMinutes(option.value)}
-                  className={cn(
-                    'h-12',
-                    durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
-                  )}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          </section>
-
-          {/* Step 4 (or 3): Date Selection - CON DÍAS BLOQUEADOS */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              {getStepNumber(4)}. Seleccionar Fecha
-            </Label>
-            
-            {!selectedDoctor ? (
-              <Alert>
-                <AlertDescription>
-                  Selecciona un médico primero para ver las fechas disponibles.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <div className="space-y-3">
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
-                      )}
-                      disabled={isLoadingDays}
-                    >
-                      {isLoadingDays ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                      )}
-                      {selectedDate ? (
-                        format(selectedDate, "PPP", { locale: es })
-                      ) : isLoadingDays ? (
-                        <span>Cargando disponibilidad...</span>
-                      ) : (
-                        <span>Selecciona una fecha</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={(date) => {
-                        setSelectedDate(date);
-                        setIsCalendarOpen(false);
-                      }}
-                      month={currentMonth}
-                      onMonthChange={handleMonthChange}
-                      disabled={isDateDisabled}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                      modifiers={{
-                        unavailable: (date) => {
-                          const dateString = format(date, 'yyyy-MM-dd');
-                          const dayInfo = availableDaysMap[dateString];
-                          return dayInfo ? (!dayInfo.working || !dayInfo.canFit) : false;
-                        }
-                      }}
-                      modifiersClassNames={{
-                        unavailable: 'text-muted-foreground/50 line-through cursor-not-allowed'
-                      }}
-                    />
-                    {/* Leyenda simple */}
-                    <div className="px-3 pb-3 flex items-center gap-4 text-xs text-muted-foreground border-t pt-2">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded-full bg-primary/20 border border-primary" />
-                        <span>Disponible</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded-full bg-muted line-through" />
-                        <span>No disponible</span>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Warning si hubo error cargando días */}
-                {errorDays && (
-                  <Alert variant="destructive" className="py-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-sm">
-                      {errorDays}. Puedes seleccionar cualquier fecha manualmente.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Step 5 (or 4): Time Slot Selection */}
-          <section>
-            <Label className="text-lg font-semibold text-foreground mb-3 block">
-              {getStepNumber(5)}. Seleccionar Horario
-            </Label>
-            
-            {!selectedDoctor || !selectedDate ? (
-              <Alert>
-                <AlertDescription>
-                  {!selectedDoctor 
-                    ? 'Selecciona un médico primero.'
-                    : 'Selecciona una fecha para ver los horarios disponibles.'
-                  }
-                </AlertDescription>
-              </Alert>
-            ) : isLoadingSlots ? (
-              <Alert>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <AlertDescription>Cargando horarios disponibles...</AlertDescription>
-              </Alert>
-            ) : (
-              <SlotSelector
-                slots={availableSlots}
-                selectedSlot={selectedSlot}
-                onSelect={setSelectedSlot}
+              <PatientSearch
+                onSelect={handlePatientSelect}
+                onCreateNew={handleCreateNewPatient}
+                value={selectedPatient}
+                doctorId={selectedDoctor?.id}
               />
-            )}
-          </section>
+              <div className="mt-3">
+                {renderPatientCard()}
+              </div>
+            </section>
 
-          {/* 3-day reminder opt-in */}
-          <div className="flex items-center space-x-2 pt-4">
-            <Checkbox
-              id="reminder-3d"
-              checked={reminder3dEnabled}
-              onCheckedChange={(checked) => setReminder3dEnabled(checked === true)}
-            />
-            <Label htmlFor="reminder-3d" className="text-sm font-normal cursor-pointer">
-              Enviar recordatorio 3 dias antes
-            </Label>
-          </div>
+            {/* Agenda: duración + calendario inline + slots */}
+            <section>
+              <Label className="text-lg font-semibold text-foreground mb-3 block">
+                Agenda
+              </Label>
+              <div className="border rounded-xl p-4 space-y-1">
+                {renderAgendaSection()}
+              </div>
+            </section>
 
-          {/* Submit Button */}
-          <div className="pt-6 border-t">
-            <Button
-              onClick={handleCreateAppointment}
-              disabled={!isFormValid}
-              size="lg"
-              className="w-full"
-            >
-              <CheckCircle className="mr-2 h-5 w-5" />
-              {isCreatingAppointment ? 'Creando cita...' : 'Crear Cita'}
-            </Button>
-            
-            {!isFormValid && (
-              <p className="text-sm text-muted-foreground text-center mt-3">
-                Completa todos los campos para crear la cita
-              </p>
-            )}
+            {/* Botón Agendar */}
+            <div className="pt-6 border-t">
+              <Button
+                onClick={handleCreateAppointment}
+                disabled={!isFormValid}
+                size="lg"
+                className="w-full"
+              >
+                <CheckCircle className="mr-2 h-5 w-5" />
+                {isCreatingAppointment ? 'Agendando...' : 'Agendar'}
+              </Button>
+              {!isFormValid && (
+                <p className="text-sm text-muted-foreground text-center mt-3">
+                  Completa todos los campos para crear la cita
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Create Patient Dialog */}
@@ -618,7 +717,7 @@ export default function NuevaCita() {
               Ingresa los datos del paciente para agregarlo al sistema.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="patient-name">Nombre completo</Label>
@@ -630,7 +729,7 @@ export default function NuevaCita() {
                 autoFocus
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="patient-phone">Teléfono</Label>
               <Input

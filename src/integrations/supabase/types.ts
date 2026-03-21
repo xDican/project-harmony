@@ -931,6 +931,7 @@ export type Database = {
           notes: string | null
           organization_id: string
           phone: string | null
+          reminder_3d_preferred: boolean
         }
         Insert: {
           created_at?: string | null
@@ -942,6 +943,7 @@ export type Database = {
           notes?: string | null
           organization_id: string
           phone?: string | null
+          reminder_3d_preferred?: boolean
         }
         Update: {
           created_at?: string | null
@@ -953,6 +955,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           phone?: string | null
+          reminder_3d_preferred?: boolean
         }
         Relationships: [
           {

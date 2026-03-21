@@ -453,6 +453,7 @@ export async function searchPatients(query: string, doctorId?: string): Promise<
     email: row.email ?? undefined,
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
+    reminder3dPreferred: row.reminder_3d_preferred ?? false,
   }));
 }
 
@@ -492,7 +493,21 @@ export async function getAllPatients(doctorId?: string): Promise<Patient[]> {
     email: row.email ?? undefined,
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
+    reminder3dPreferred: row.reminder_3d_preferred ?? false,
   }));
+}
+
+// --------------------------
+// 7b. updatePatientReminder3d
+// --------------------------
+export async function updatePatientReminder3d(patientId: string, preferred: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("patients")
+    .update({ reminder_3d_preferred: preferred })
+    .eq("id", patientId);
+  if (error) {
+    console.error("Error updating patient reminder preference:", error);
+  }
 }
 
 // --------------------------
