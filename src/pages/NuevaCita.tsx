@@ -418,34 +418,11 @@ export default function NuevaCita() {
 
   const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
 
-  // Step headers for mobile wizard
-  const stepHeaders = [
-    skipDoctorStep ? "Seleccionar paciente" : "Seleccionar médico y paciente",
-    "Agendar cita"
-  ];
-
-  // Shared patient card with reminder toggle
-  const renderPatientCard = () => {
+  // Reminder toggle (shown below PatientSearch when patient is selected)
+  const renderReminderToggle = () => {
     if (!selectedPatient) return null;
     return (
       <div className="border rounded-xl p-4 bg-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">{selectedPatient.name}</p>
-            {selectedPatient.phone && (
-              <p className="text-sm text-muted-foreground">{selectedPatient.phone}</p>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedPatient(null)}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            ✕
-          </Button>
-        </div>
-        <Separator className="my-3" />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bell className="h-4 w-4 text-muted-foreground" />
@@ -565,16 +542,12 @@ export default function NuevaCita() {
   );
 
   return (
-    <MainLayout>
+    <MainLayout
+      headerAction={isMobile ? (
+        <span className="text-sm text-muted-foreground">paso {currentStep + 1}/2</span>
+      ) : undefined}
+    >
       <div className="container mx-auto p-6 max-w-2xl">
-        {/* Mobile wizard header */}
-        {isMobile && (
-          <div className="flex items-center justify-between mb-6">
-            <span className="text-base font-semibold">{stepHeaders[currentStep]}</span>
-            <span className="text-sm text-muted-foreground">paso {currentStep + 1}/2</span>
-          </div>
-        )}
-
         {/* ==================== MOBILE WIZARD ==================== */}
         {isMobile && (
           <div className="space-y-6">
@@ -583,10 +556,7 @@ export default function NuevaCita() {
               <>
                 {/* Doctor search si aplica */}
                 {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
-                  <div>
-                    <Label className="text-sm text-muted-foreground mb-2 block">Médico</Label>
-                    <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
-                  </div>
+                  <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
                 )}
 
                 {/* Patient search */}
@@ -601,7 +571,7 @@ export default function NuevaCita() {
                 </div>
 
                 {/* Card del paciente seleccionado con toggle */}
-                {renderPatientCard()}
+                {renderReminderToggle()}
 
                 {/* Botón Siguiente */}
                 <Button
@@ -619,7 +589,7 @@ export default function NuevaCita() {
             {/* Step 2: Agenda (duración + calendario + slots) */}
             {currentStep === 1 && (
               <>
-                <div className="border rounded-xl p-4 space-y-1">
+                <div className="space-y-1">
                   {renderAgendaSection()}
                 </div>
 
@@ -673,7 +643,7 @@ export default function NuevaCita() {
                 doctorId={selectedDoctor?.id}
               />
               <div className="mt-3">
-                {renderPatientCard()}
+                {renderReminderToggle()}
               </div>
             </section>
 
