@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { CheckCircle, Loader2, AlertCircle, Bell, Calendar as CalendarIcon, ChevronUp, ChevronDown } from 'lucide-react';
@@ -41,6 +41,11 @@ export default function NuevaCita() {
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  };
 
   // Duration state
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -403,6 +408,9 @@ export default function NuevaCita() {
   };
 
   const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
+  const showDoctorStep = !isDoctorView && !loadingDoctors && !isSingleDoctorOrg;
+  const patientStepNum = showDoctorStep ? 2 : 1;
+  const fechaStepNum = showDoctorStep ? 3 : 2;
 
   // Reminder toggle (shown below PatientSearch when patient is selected)
   const renderReminderToggle = () => {
@@ -468,7 +476,11 @@ export default function NuevaCita() {
                 'w-full justify-between text-left font-normal',
                 !selectedDate && 'text-muted-foreground'
               )}
-              onClick={() => setCalendarOpen(!calendarOpen)}
+              onClick={() => {
+                const willOpen = !calendarOpen;
+                setCalendarOpen(willOpen);
+                if (willOpen) scrollToBottom();
+              }}
             >
               <span className="flex items-center">
                 {isLoadingDays ? (
@@ -494,6 +506,7 @@ export default function NuevaCita() {
                   onSelect={(date) => {
                     setSelectedDate(date);
                     setCalendarOpen(false);
+                    scrollToBottom();
                   }}
                   month={currentMonth}
                   onMonthChange={handleMonthChange}
@@ -562,20 +575,20 @@ export default function NuevaCita() {
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="space-y-8">
-            {/* Médico (si aplica) */}
-            {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
+            {/* Paso 1: Médico (si aplica) */}
+            {showDoctorStep && (
               <section>
                 <Label className="text-lg font-semibold text-foreground mb-3 block">
-                  Seleccionar Médico
+                  1. Seleccionar Médico
                 </Label>
                 <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
               </section>
             )}
 
-            {/* Paciente + toggle en card */}
+            {/* Paso: Paciente + toggle en card */}
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
-                Seleccionar Paciente
+                {patientStepNum}. Seleccionar Paciente
               </Label>
               <PatientSearch
                 onSelect={handlePatientSelect}
@@ -588,9 +601,13 @@ export default function NuevaCita() {
               </div>
             </section>
 
-            {/* Agenda: duración + calendario inline + slots */}
+            {/* Paso: Fecha y hora */}
             <section className="space-y-1">
+              <Label className="text-lg font-semibold text-foreground mb-3 block">
+                {fechaStepNum}. Seleccionar Fecha
+              </Label>
               {renderAgendaSection()}
+              <div ref={bottomRef} />
             </section>
 
             {/* Botón Agendar */}

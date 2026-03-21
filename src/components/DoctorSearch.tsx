@@ -61,10 +61,6 @@ const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
 
   return (
     <div className="space-y-2" ref={containerRef}>
-      <label className="text-sm font-medium text-foreground">
-        Médico
-      </label>
-
       {selectedDoctor ? (
         // Selected doctor display
         <Card className="bg-primary/5 border-primary/20">
