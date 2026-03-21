@@ -6,7 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
 import SlotSelector from '@/components/SlotSelector';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
@@ -425,13 +425,6 @@ export default function NuevaCita() {
   // Calendar is not ready until a doctor is selected
   const calendarDisabled = !selectedDoctor;
 
-  // Desktop calendar: full-width cells
-  const desktopCalendarClassNames = {
-    head_cell: "text-muted-foreground rounded-md flex-1 font-normal text-[0.8rem]",
-    cell: "flex-1 h-10 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-    day: cn(buttonVariants({ variant: "ghost" }), "h-10 w-full p-0 font-normal aria-selected:opacity-100"),
-  };
-
   // Shared calendar modifiers
   const calendarModifiers = {
     unavailable: (date: Date) => {
@@ -531,6 +524,7 @@ export default function NuevaCita() {
                   <Label className="text-sm text-muted-foreground">Fecha</Label>
                   <div className={cn(
                     "relative mt-2 border rounded-md p-4 bg-background",
+                    "[&_th]:!w-[calc(100%/7)] [&_td]:!w-[calc(100%/7)] [&_td]:!h-10 [&_td_button]:!w-full [&_td_button]:!h-10",
                     calendarDisabled && "pointer-events-none"
                   )}>
                     {calendarDisabled && (
@@ -548,7 +542,6 @@ export default function NuevaCita() {
                       onMonthChange={handleMonthChange}
                       disabled={isDateDisabled}
                       className={cn("p-0 w-full")}
-                      classNames={desktopCalendarClassNames}
                       modifiers={calendarModifiers}
                       modifiersClassNames={calendarModifiersClassNames}
                     />
