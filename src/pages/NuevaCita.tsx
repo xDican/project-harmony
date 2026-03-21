@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CheckCircle, Loader2, AlertCircle, Bell } from 'lucide-react';
+import { CheckCircle, Loader2, AlertCircle, Bell, Calendar as CalendarIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
@@ -40,6 +40,7 @@ export default function NuevaCita() {
   const [selectedCalendarId, setSelectedCalendarId] = useState<string | undefined>();
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Duration state
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -208,6 +209,7 @@ export default function NuevaCita() {
     setAvailableSlots([]);
     setAvailableDaysMap({});
     setCurrentMonth(new Date());
+    setCalendarOpen(false);
   }, [selectedDoctor]);
 
   // Reset date and slots when duration changes
@@ -387,6 +389,7 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setDurationMinutes(30);
       setReminder3dEnabled(false);
+      setCalendarOpen(false);
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
@@ -448,7 +451,7 @@ export default function NuevaCita() {
 
       <Separator className="my-4" />
 
-      {/* Calendario inline */}
+      {/* Fecha — botón toggle + calendario popup */}
       <div>
         <Label className="text-sm text-muted-foreground">Fecha</Label>
         {!selectedDoctor ? (
@@ -459,29 +462,60 @@ export default function NuevaCita() {
           </Alert>
         ) : (
           <div className="mt-2 space-y-3">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              month={currentMonth}
-              onMonthChange={handleMonthChange}
-              disabled={isDateDisabled}
-              className={cn("p-0 w-full")}
-              modifiers={{
-                unavailable: (date) => {
-                  const dateString = format(date, 'yyyy-MM-dd');
-                  const dayInfo = availableDaysMap[dateString];
-                  return dayInfo ? (!dayInfo.working || !dayInfo.canFit) : false;
-                }
-              }}
-              modifiersClassNames={{
-                unavailable: 'text-muted-foreground/50 line-through cursor-not-allowed'
-              }}
-            />
-            {isLoadingDays && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Cargando disponibilidad...</span>
+            <Button
+              variant="outline"
+              className={cn(
+                'w-full justify-between text-left font-normal',
+                !selectedDate && 'text-muted-foreground'
+              )}
+              onClick={() => setCalendarOpen(!calendarOpen)}
+            >
+              <span className="flex items-center">
+                {isLoadingDays ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                )}
+                {selectedDate
+                  ? format(selectedDate, "PPP", { locale: es })
+                  : 'Seleccionar fecha'}
+              </span>
+              {calendarOpen ? (
+                <ChevronUp className="h-4 w-4 opacity-50" />
+              ) : (
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              )}
+            </Button>
+            {calendarOpen && (
+              <div className="border rounded-md p-3 bg-background">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    setCalendarOpen(false);
+                  }}
+                  month={currentMonth}
+                  onMonthChange={handleMonthChange}
+                  disabled={isDateDisabled}
+                  className={cn("p-0 w-full")}
+                  modifiers={{
+                    unavailable: (date) => {
+                      const dateString = format(date, 'yyyy-MM-dd');
+                      const dayInfo = availableDaysMap[dateString];
+                      return dayInfo ? (!dayInfo.working || !dayInfo.canFit) : false;
+                    }
+                  }}
+                  modifiersClassNames={{
+                    unavailable: 'text-muted-foreground/50 line-through cursor-not-allowed'
+                  }}
+                />
+                {isLoadingDays && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Cargando disponibilidad...</span>
+                  </div>
+                )}
               </div>
             )}
             {errorDays && (
