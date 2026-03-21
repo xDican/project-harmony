@@ -8,7 +8,7 @@ import { Search, User, X, Stethoscope } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DoctorSearchProps {
-  onSelect: (doctor: Doctor) => void;
+  onSelect: (doctor: Doctor | null) => void;
   value?: Doctor | null;
 }
 
@@ -50,6 +50,7 @@ const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
     setSelectedDoctor(null);
     setQuery('');
     setIsOpen(false);
+    onSelect(null);
   };
 
   const handleInputChange = (value: string) => {

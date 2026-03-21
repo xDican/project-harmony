@@ -238,8 +238,14 @@ export default function NuevaCita() {
     }, 150);
   };
 
-  const handleDoctorSelect = (doctor: Doctor) => {
+  const handleDoctorSelect = (doctor: Doctor | null) => {
     setSelectedDoctor(doctor);
+    if (!doctor) {
+      setSelectedDate(undefined);
+      setSelectedSlot(null);
+      setAvailableSlots([]);
+      setCalendarOpen(false);
+    }
   };
 
   const handleMonthChange = (month: Date) => {
@@ -583,6 +589,7 @@ export default function NuevaCita() {
                     <div className="relative mt-2 space-y-3">
                       <Button
                         variant="outline"
+                        disabled={isLoadingDays}
                         className={cn(
                           'w-full justify-between text-left font-normal',
                           !selectedDate && 'text-muted-foreground'
@@ -597,7 +604,9 @@ export default function NuevaCita() {
                           )}
                           {selectedDate
                             ? format(selectedDate, "PPP", { locale: es })
-                            : 'Seleccionar fecha'}
+                            : isLoadingDays
+                              ? 'Cargando disponibilidad...'
+                              : 'Seleccionar fecha'}
                         </span>
                         {calendarOpen ? (
                           <ChevronUp className="h-4 w-4 opacity-50" />
