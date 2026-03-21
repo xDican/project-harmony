@@ -524,7 +524,7 @@ export default function NuevaCita() {
                   <Label className="text-sm text-muted-foreground">Fecha</Label>
                   <div className={cn(
                     "relative mt-2 border rounded-md p-4 bg-background",
-                    "[&_table]:!max-w-none [&_tr]:!w-full [&_th]:!flex-1 [&_th]:!max-w-none [&_td]:!flex-1 [&_td]:!max-w-none [&_td]:!h-10 [&_td_button]:!w-full [&_td_button]:!max-w-none [&_td_button]:!h-10",
+                    "[&_.rdp-months]:!w-full [&_.rdp-month]:!w-full [&_table]:!max-w-none [&_tr]:!w-full [&_th]:!flex-1 [&_th]:!max-w-none [&_td]:!flex-1 [&_td]:!max-w-none [&_td]:!h-10 [&_td_button]:!w-full [&_td_button]:!max-w-none [&_td_button]:!h-10",
                     calendarDisabled && "pointer-events-none"
                   )}>
                     {calendarDisabled && (
