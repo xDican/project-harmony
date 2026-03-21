@@ -6,7 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
 import SlotSelector from '@/components/SlotSelector';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
@@ -234,7 +234,7 @@ export default function NuevaCita() {
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
     setTimeout(() => {
-      fechaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      fechaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, 150);
   };
 
@@ -425,6 +425,13 @@ export default function NuevaCita() {
   // Calendar is not ready until a doctor is selected
   const calendarDisabled = !selectedDoctor;
 
+  // Desktop calendar: full-width cells
+  const desktopCalendarClassNames = {
+    head_cell: "text-muted-foreground rounded-md flex-1 font-normal text-[0.8rem]",
+    cell: "flex-1 h-10 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+    day: cn(buttonVariants({ variant: "ghost" }), "h-10 w-full p-0 font-normal aria-selected:opacity-100"),
+  };
+
   // Shared calendar modifiers
   const calendarModifiers = {
     unavailable: (date: Date) => {
@@ -460,11 +467,9 @@ export default function NuevaCita() {
 
   return (
     <MainLayout>
-      <div className="container mx-auto p-6 max-w-2xl md:max-w-5xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-          {/* ====== Left column: Who ====== */}
-          <div className="space-y-8">
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="space-y-8">
+            {/* Paso 1: Médico (si aplica) */}
             {showDoctorStep && (
               <section>
                 <Label className="text-lg font-semibold text-foreground mb-3 block">
@@ -474,6 +479,7 @@ export default function NuevaCita() {
               </section>
             )}
 
+            {/* Paso: Paciente + toggle en card */}
             <section>
               <Label className="text-lg font-semibold text-foreground mb-3 block">
                 {patientStepNum}. Seleccionar Paciente
@@ -488,140 +494,73 @@ export default function NuevaCita() {
                 {renderReminderToggle()}
               </div>
             </section>
-          </div>
 
-          {/* ====== Right column: When ====== */}
-          <div ref={fechaRef} className="space-y-6">
-            <Label className="text-lg font-semibold text-foreground block">
-              {fechaStepNum}. Seleccionar Fecha
-            </Label>
+            {/* Paso: Fecha y hora */}
+            <section className="space-y-4">
+              <Label className="text-lg font-semibold text-foreground mb-3 block">
+                {fechaStepNum}. Seleccionar Fecha
+              </Label>
 
-            {/* Duration */}
-            <div>
-              <Label className="text-sm text-muted-foreground">Duración</Label>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
-                {durationOptions.map((option) => (
-                  <Button
-                    key={option.value}
-                    type="button"
-                    variant={durationMinutes === option.value ? 'default' : 'outline'}
-                    onClick={() => setDurationMinutes(option.value)}
-                    className={cn(
-                      'h-12',
-                      durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
-                    )}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* ---- Desktop calendar: always visible ---- */}
-            <div className="hidden md:block">
-              <Label className="text-sm text-muted-foreground">Fecha</Label>
-              <div className={cn(
-                "relative mt-2 border rounded-md p-3 bg-background",
-                calendarDisabled && "pointer-events-none"
-              )}>
-                {calendarDisabled && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
-                    <p className="text-sm text-muted-foreground font-medium">
-                      Selecciona un médico para ver disponibilidad
-                    </p>
-                  </div>
-                )}
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => setSelectedDate(date)}
-                  month={currentMonth}
-                  onMonthChange={handleMonthChange}
-                  disabled={isDateDisabled}
-                  className={cn("p-0 w-full")}
-                  modifiers={calendarModifiers}
-                  modifiersClassNames={calendarModifiersClassNames}
-                />
-                {isLoadingDays && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Cargando disponibilidad...</span>
-                  </div>
-                )}
-              </div>
-              {errorDays && (
-                <Alert variant="destructive" className="py-2 mt-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="text-sm">
-                    {errorDays}. Puedes seleccionar cualquier fecha manualmente.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-
-            {/* ---- Mobile calendar: toggle popup ---- */}
-            <div className="md:hidden">
-              <Label className="text-sm text-muted-foreground">Fecha</Label>
-              {calendarDisabled ? (
-                <Alert className="mt-2">
-                  <AlertDescription>
-                    Selecciona un médico primero para ver las fechas disponibles.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <div className="relative mt-2 space-y-3">
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'w-full justify-between text-left font-normal',
-                      !selectedDate && 'text-muted-foreground'
-                    )}
-                    onClick={() => setCalendarOpen(!calendarOpen)}
-                  >
-                    <span className="flex items-center">
-                      {isLoadingDays ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CalendarIcon className="mr-2 h-4 w-4" />
+              {/* Duration */}
+              <div>
+                <Label className="text-sm text-muted-foreground">Duración</Label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+                  {durationOptions.map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={durationMinutes === option.value ? 'default' : 'outline'}
+                      onClick={() => setDurationMinutes(option.value)}
+                      className={cn(
+                        'h-12',
+                        durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
                       )}
-                      {selectedDate
-                        ? format(selectedDate, "PPP", { locale: es })
-                        : 'Seleccionar fecha'}
-                    </span>
-                    {calendarOpen ? (
-                      <ChevronUp className="h-4 w-4 opacity-50" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 opacity-50" />
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Date selector — scroll target */}
+              <div ref={fechaRef}>
+                {/* Desktop calendar: always visible, full-width */}
+                <div className="hidden md:block">
+                  <Label className="text-sm text-muted-foreground">Fecha</Label>
+                  <div className={cn(
+                    "relative mt-2 border rounded-md p-4 bg-background",
+                    calendarDisabled && "pointer-events-none"
+                  )}>
+                    {calendarDisabled && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
+                        <p className="text-sm text-muted-foreground font-medium">
+                          Selecciona un médico para ver disponibilidad
+                        </p>
+                      </div>
                     )}
-                  </Button>
-                  {calendarOpen && (
-                    <div className="absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={(date) => {
-                          setSelectedDate(date);
-                          setCalendarOpen(false);
-                        }}
-                        month={currentMonth}
-                        onMonthChange={handleMonthChange}
-                        disabled={isDateDisabled}
-                        className={cn("p-0 w-full")}
-                        modifiers={calendarModifiers}
-                        modifiersClassNames={calendarModifiersClassNames}
-                      />
-                      {isLoadingDays && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Cargando disponibilidad...</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => setSelectedDate(date)}
+                      month={currentMonth}
+                      onMonthChange={handleMonthChange}
+                      disabled={isDateDisabled}
+                      className={cn("p-0 w-full")}
+                      classNames={desktopCalendarClassNames}
+                      modifiers={calendarModifiers}
+                      modifiersClassNames={calendarModifiersClassNames}
+                    />
+                    {isLoadingDays && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Cargando disponibilidad...</span>
+                      </div>
+                    )}
+                  </div>
                   {errorDays && (
-                    <Alert variant="destructive" className="py-2">
+                    <Alert variant="destructive" className="py-2 mt-2">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription className="text-sm">
                         {errorDays}. Puedes seleccionar cualquier fecha manualmente.
@@ -629,34 +568,105 @@ export default function NuevaCita() {
                     </Alert>
                   )}
                 </div>
-              )}
-            </div>
 
-            <Separator />
+                {/* Mobile calendar: toggle popup */}
+                <div className="md:hidden">
+                  <Label className="text-sm text-muted-foreground">Fecha</Label>
+                  {calendarDisabled ? (
+                    <Alert className="mt-2">
+                      <AlertDescription>
+                        Selecciona un médico primero para ver las fechas disponibles.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="relative mt-2 space-y-3">
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-between text-left font-normal',
+                          !selectedDate && 'text-muted-foreground'
+                        )}
+                        onClick={() => setCalendarOpen(!calendarOpen)}
+                      >
+                        <span className="flex items-center">
+                          {isLoadingDays ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                          )}
+                          {selectedDate
+                            ? format(selectedDate, "PPP", { locale: es })
+                            : 'Seleccionar fecha'}
+                        </span>
+                        {calendarOpen ? (
+                          <ChevronUp className="h-4 w-4 opacity-50" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        )}
+                      </Button>
+                      {calendarOpen && (
+                        <div className="absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={(date) => {
+                              setSelectedDate(date);
+                              setCalendarOpen(false);
+                            }}
+                            month={currentMonth}
+                            onMonthChange={handleMonthChange}
+                            disabled={isDateDisabled}
+                            className={cn("p-0 w-full")}
+                            modifiers={calendarModifiers}
+                            modifiersClassNames={calendarModifiersClassNames}
+                          />
+                          {isLoadingDays && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Cargando disponibilidad...</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {errorDays && (
+                        <Alert variant="destructive" className="py-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-sm">
+                            {errorDays}. Puedes seleccionar cualquier fecha manualmente.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-            {/* Slots */}
-            <div>
-              <Label className="text-sm text-muted-foreground">
-                {selectedDate ? `Horario — ${format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}` : "Horario"}
-              </Label>
-              {!selectedDate ? (
-                <p className="text-sm text-muted-foreground italic text-center py-4">
-                  Selecciona una fecha en el calendario
-                </p>
-              ) : isLoadingSlots ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="mt-2">
-                  <SlotSelector
-                    slots={availableSlots}
-                    selectedSlot={selectedSlot}
-                    onSelect={setSelectedSlot}
-                  />
-                </div>
-              )}
-            </div>
+              <Separator />
+
+              {/* Slots */}
+              <div>
+                <Label className="text-sm text-muted-foreground">
+                  {selectedDate ? `Horario — ${format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}` : "Horario"}
+                </Label>
+                {!selectedDate ? (
+                  <p className="text-sm text-muted-foreground italic text-center py-4">
+                    Selecciona una fecha en el calendario
+                  </p>
+                ) : isLoadingSlots ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <SlotSelector
+                      slots={availableSlots}
+                      selectedSlot={selectedSlot}
+                      onSelect={setSelectedSlot}
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
 
             {/* Botón Agendar */}
             <div ref={agendarRef} className="pt-6 border-t">
@@ -675,8 +685,6 @@ export default function NuevaCita() {
                 </p>
               )}
             </div>
-          </div>
-
         </div>
       </div>
 
