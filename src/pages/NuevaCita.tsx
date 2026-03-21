@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CheckCircle, Loader2, AlertCircle, Bell, ChevronRight } from 'lucide-react';
+import { CheckCircle, Loader2, AlertCircle, Bell } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
@@ -28,8 +28,7 @@ import type { Doctor } from '@/types/doctor';
 /**
  * NuevaCita - New appointment creation page
  *
- * Mobile (<768px): Wizard de 2 pasos (Paciente → Agenda)
- * Desktop (>=768px): Formulario vertical con todas las secciones visibles
+ * Formulario vertical de 1 paso con todas las secciones visibles (mobile y desktop)
  */
 export default function NuevaCita() {
   const { user, isDoctor, isDoctorView } = useCurrentUser();
@@ -66,19 +65,6 @@ export default function NuevaCita() {
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // Wizard state (mobile only)
-  const [currentStep, setCurrentStep] = useState(0);
-
-  // Responsive: mobile vs desktop
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
   // Duration options
   const durationOptions = [
     { value: 15, label: '15 min' },
@@ -87,8 +73,6 @@ export default function NuevaCita() {
     { value: 90, label: '1.5 horas' },
     { value: 120, label: '2 horas' },
   ];
-
-  const skipDoctorStep = isDoctorView || loadingDoctors || isSingleDoctorOrg;
 
   // Auto-fill doctor for logged-in doctors
   useEffect(() => {
@@ -403,7 +387,6 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setDurationMinutes(30);
       setReminder3dEnabled(false);
-      setCurrentStep(0);
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
@@ -542,85 +525,9 @@ export default function NuevaCita() {
   );
 
   return (
-    <MainLayout
-      headerAction={isMobile ? (
-        <span className="text-sm text-muted-foreground">paso {currentStep + 1}/2</span>
-      ) : undefined}
-    >
+    <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
-        {/* ==================== MOBILE WIZARD ==================== */}
-        {isMobile && (
-          <div className="space-y-6">
-            {/* Step 1: Paciente (+ médico si aplica) */}
-            {currentStep === 0 && (
-              <>
-                {/* Doctor search si aplica */}
-                {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
-                  <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
-                )}
-
-                {/* Patient search */}
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-2 block">Paciente</Label>
-                  <PatientSearch
-                    onSelect={handlePatientSelect}
-                    onCreateNew={handleCreateNewPatient}
-                    value={selectedPatient}
-                    doctorId={selectedDoctor?.id}
-                  />
-                </div>
-
-                {/* Card del paciente seleccionado con toggle */}
-                {renderReminderToggle()}
-
-                {/* Botón Siguiente */}
-                <Button
-                  onClick={() => setCurrentStep(1)}
-                  disabled={!selectedPatient || !selectedDoctor}
-                  className="w-full"
-                  size="lg"
-                >
-                  Siguiente
-                  <ChevronRight className="ml-2 h-5 w-5" />
-                </Button>
-              </>
-            )}
-
-            {/* Step 2: Agenda (duración + calendario + slots) */}
-            {currentStep === 1 && (
-              <>
-                <div className="space-y-1">
-                  {renderAgendaSection()}
-                </div>
-
-                {/* Botones Atrás / Agendar */}
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentStep(0)}
-                    className="w-[30%]"
-                    size="lg"
-                  >
-                    Atrás
-                  </Button>
-                  <Button
-                    onClick={handleCreateAppointment}
-                    disabled={!selectedSlot || isCreatingAppointment}
-                    className="flex-1"
-                    size="lg"
-                  >
-                    <CheckCircle className="mr-2 h-5 w-5" />
-                    {isCreatingAppointment ? 'Agendando...' : 'Agendar'}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ==================== DESKTOP FORM ==================== */}
-        {!isMobile && (
-          <div className="space-y-8">
+        <div className="space-y-8">
             {/* Médico (si aplica) */}
             {!isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
               <section>
@@ -675,7 +582,7 @@ export default function NuevaCita() {
               )}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Create Patient Dialog */}
