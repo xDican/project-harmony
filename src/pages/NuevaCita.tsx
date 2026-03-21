@@ -534,10 +534,18 @@ export default function NuevaCita() {
                         </p>
                       </div>
                     )}
+                    {isLoadingDays && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Cargando disponibilidad...</span>
+                        </div>
+                      </div>
+                    )}
                     <Calendar
                       mode="single"
                       selected={selectedDate}
-                      onSelect={(date) => setSelectedDate(date)}
+                      onSelect={(date) => !isLoadingDays && setSelectedDate(date)}
                       month={currentMonth}
                       onMonthChange={handleMonthChange}
                       disabled={isDateDisabled}
@@ -551,12 +559,6 @@ export default function NuevaCita() {
                       modifiers={calendarModifiers}
                       modifiersClassNames={calendarModifiersClassNames}
                     />
-                    {isLoadingDays && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Cargando disponibilidad...</span>
-                      </div>
-                    )}
                   </div>
                   {errorDays && (
                     <Alert variant="destructive" className="py-2 mt-2">
@@ -605,13 +607,22 @@ export default function NuevaCita() {
                       </Button>
                       {calendarOpen && (
                         <div className={cn(
-                          "absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg",
+                          "relative absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg",
                           isLoadingDays && "pointer-events-none"
                         )}>
+                          {isLoadingDays && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Cargando disponibilidad...</span>
+                              </div>
+                            </div>
+                          )}
                           <Calendar
                             mode="single"
                             selected={selectedDate}
                             onSelect={(date) => {
+                              if (isLoadingDays) return;
                               setSelectedDate(date);
                               setCalendarOpen(false);
                             }}
@@ -622,12 +633,6 @@ export default function NuevaCita() {
                             modifiers={calendarModifiers}
                             modifiersClassNames={calendarModifiersClassNames}
                           />
-                          {isLoadingDays && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>Cargando disponibilidad...</span>
-                            </div>
-                          )}
                         </div>
                       )}
                       {errorDays && (
