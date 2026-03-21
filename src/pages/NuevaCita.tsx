@@ -466,7 +466,7 @@ export default function NuevaCita() {
               month={currentMonth}
               onMonthChange={handleMonthChange}
               disabled={isDateDisabled}
-              className={cn("p-3 rounded-md border")}
+              className={cn("p-0 w-full")}
               modifiers={{
                 unavailable: (date) => {
                   const dateString = format(date, 'yyyy-MM-dd');
@@ -555,13 +555,8 @@ export default function NuevaCita() {
             </section>
 
             {/* Agenda: duración + calendario inline + slots */}
-            <section>
-              <Label className="text-lg font-semibold text-foreground mb-3 block">
-                Agenda
-              </Label>
-              <div className="border rounded-xl p-4 space-y-1">
-                {renderAgendaSection()}
-              </div>
+            <section className="space-y-1">
+              {renderAgendaSection()}
             </section>
 
             {/* Botón Agendar */}
