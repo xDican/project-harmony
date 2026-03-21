@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -47,6 +48,7 @@ export default function NuevaCita() {
   
   // Duration state (ahora es el primer paso después de seleccionar médico)
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
+  const [reminder3dEnabled, setReminder3dEnabled] = useState(false);
   
   // Available days state (para bloquear días en el calendario)
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -356,6 +358,7 @@ export default function NuevaCita() {
         time: selectedSlot,
         notes: undefined,
         durationMinutes: durationMinutes,
+        reminder3dEnabled,
       });
 
       const displayDate = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
@@ -386,6 +389,7 @@ export default function NuevaCita() {
       setSelectedSlot(null);
       setAvailableSlots([]);
       setDurationMinutes(30);
+      setReminder3dEnabled(false);
     } catch (error: any) {
       console.error('Error creating appointment:', error);
       toast({
@@ -571,6 +575,18 @@ export default function NuevaCita() {
               />
             )}
           </section>
+
+          {/* 3-day reminder opt-in */}
+          <div className="flex items-center space-x-2 pt-4">
+            <Checkbox
+              id="reminder-3d"
+              checked={reminder3dEnabled}
+              onCheckedChange={(checked) => setReminder3dEnabled(checked === true)}
+            />
+            <Label htmlFor="reminder-3d" className="text-sm font-normal cursor-pointer">
+              Enviar recordatorio 3 dias antes
+            </Label>
+          </div>
 
           {/* Submit Button */}
           <div className="pt-6 border-t">

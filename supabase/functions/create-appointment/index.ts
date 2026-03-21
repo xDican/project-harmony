@@ -15,6 +15,7 @@ const appointmentSchema = z.object({
   time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Time must be in HH:MM or HH:MM:SS format"),
   notes: z.string().max(2000, "Notes must be less than 2000 characters").optional(),
   durationMinutes: z.number().int().min(15).max(480).optional().default(60),
+  reminder3dEnabled: z.boolean().optional().default(false),
   organizationId: z.string().uuid("Invalid organization ID format").optional(),
   calendarId: z.string().uuid("Invalid calendar ID format").optional(),
 });
@@ -143,7 +144,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { doctorId, patientId, date, time, notes, durationMinutes, organizationId: reqOrgId, calendarId: reqCalendarId } = validationResult.data;
+    const { doctorId, patientId, date, time, notes, durationMinutes, reminder3dEnabled, organizationId: reqOrgId, calendarId: reqCalendarId } = validationResult.data;
 
     // 6) Check user permissions: org_members first, fallback to user_roles (same pattern as upsert-doctor-schedules)
     let roles: string[] = [];
@@ -324,6 +325,9 @@ Deno.serve(async (req) => {
         confirmation_message_sent: false,
         reminder_24h_sent: false,
         reminder_24h_sent_at: null,
+        reminder_3d_enabled: reminder3dEnabled,
+        reminder_3d_sent: false,
+        reminder_3d_sent_at: null,
         reschedule_notified_at: null,
       })
       .select()

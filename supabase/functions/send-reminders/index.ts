@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
-import { formatDateForTemplate, formatTimeForTemplate, tomorrowHonduras } from "../_shared/datetime.ts";
+import { formatDateForTemplate, formatTimeForTemplate, tomorrowHonduras, threeDaysFromNowHonduras } from "../_shared/datetime.ts";
 
 interface Appointment {
   id: string;
@@ -286,12 +286,110 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7) Return summary
+    // 7) 3-day reminders: same logic but for appointments 3 days out with reminder_3d_enabled
+    const threeDayDateString = threeDaysFromNowHonduras();
+    console.log("[send-reminders] Looking for 3-day reminder appointments on:", threeDayDateString);
+
+    let threeDayQuery = supabase
+      .from("appointments")
+      .select("id, doctor_id, patient_id, date, time, appointment_at, status, duration_minutes, organization_id")
+      .eq("date", threeDayDateString)
+      .eq("reminder_3d_enabled", true)
+      .eq("reminder_3d_sent", false)
+      .in("status", ["agendada", "confirmada", "pending", "confirmed"]);
+
+    if (disabledOrgIds.length > 0) {
+      threeDayQuery = threeDayQuery.not("organization_id", "in", `(${disabledOrgIds.join(",")})`);
+    }
+
+    const { data: threeDayAppointments, error: threeDayError } = await threeDayQuery;
+
+    if (threeDayError) {
+      console.error("[send-reminders] Error fetching 3-day appointments:", threeDayError);
+    } else if (threeDayAppointments && threeDayAppointments.length > 0) {
+      console.log("[send-reminders] Found", threeDayAppointments.length, "3-day reminder appointments");
+      totalAppointments += threeDayAppointments.length;
+
+      for (const appointment of threeDayAppointments as Appointment[]) {
+        console.log("[send-reminders] Processing 3-day reminder for:", appointment.id);
+
+        const { data: patient, error: patientError } = await supabase
+          .from("patients")
+          .select("id, name, phone")
+          .eq("id", appointment.patient_id)
+          .single();
+
+        if (patientError || !patient) {
+          results.push({ appointmentId: appointment.id, patientName: "Unknown", success: false, error: "Patient not found" });
+          failedCount++;
+          continue;
+        }
+
+        if (!patient.phone) {
+          results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: "No phone number" });
+          failedCount++;
+          continue;
+        }
+
+        const { data: doctor, error: doctorError } = await supabase
+          .from("doctors")
+          .select("id, name, prefix")
+          .eq("id", appointment.doctor_id)
+          .single();
+
+        if (doctorError || !doctor) {
+          results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: "Doctor not found" });
+          failedCount++;
+          continue;
+        }
+
+        const doctorDisplayName = doctor.prefix ? `${doctor.prefix} ${doctor.name}` : `Dr. ${doctor.name}`;
+        const formattedDate = formatDateForTemplate(appointment.date);
+        const formattedTime = formatTimeForTemplate(appointment.time);
+
+        const sendResult = await sendReminderMessage({
+          gatewayUrl,
+          serviceRoleKey: supabaseServiceKey,
+          anonKey: supabaseAnonKey,
+          internalSecret,
+          to: normalizeToE164(patient.phone),
+          templateParams: { "1": patient.name, "2": doctorDisplayName, "3": formattedDate, "4": formattedTime },
+          appointmentId: appointment.id,
+          patientId: patient.id,
+          doctorId: doctor.id,
+          organizationId: appointment.organization_id,
+        });
+
+        if (sendResult.success) {
+          const { error: updateError } = await supabase
+            .from("appointments")
+            .update({ reminder_3d_sent: true, reminder_3d_sent_at: new Date().toISOString() })
+            .eq("id", appointment.id);
+
+          if (updateError) {
+            console.error("[send-reminders] Error updating 3-day reminder:", updateError);
+          }
+
+          results.push({ appointmentId: appointment.id, patientName: patient.name, success: true });
+          successCount++;
+          console.log("[send-reminders] 3-day reminder sent for:", appointment.id);
+        } else {
+          results.push({ appointmentId: appointment.id, patientName: patient.name, success: false, error: sendResult.error });
+          failedCount++;
+          console.error("[send-reminders] 3-day reminder failed:", sendResult.error);
+        }
+      }
+    } else {
+      console.log("[send-reminders] No 3-day reminder appointments found");
+    }
+
+    // 8) Return summary
     console.log("[send-reminders] Completed. Success:", successCount, "Failed:", failedCount);
 
     return jsonResponse(200, {
       ok: true,
       date: tomorrowDateString,
+      date3d: threeDayDateString,
       total: totalAppointments,
       sent: successCount,
       failed: failedCount,

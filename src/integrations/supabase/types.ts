@@ -67,6 +67,9 @@ export type Database = {
           patient_id: string
           reminder_24h_sent: boolean
           reminder_24h_sent_at: string | null
+          reminder_3d_enabled: boolean
+          reminder_3d_sent: boolean
+          reminder_3d_sent_at: string | null
           reschedule_notified_at: string | null
           status: string
           time: string
@@ -85,6 +88,9 @@ export type Database = {
           patient_id: string
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
+          reminder_3d_enabled?: boolean
+          reminder_3d_sent?: boolean
+          reminder_3d_sent_at?: string | null
           reschedule_notified_at?: string | null
           status?: string
           time: string
@@ -103,6 +109,9 @@ export type Database = {
           patient_id?: string
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
+          reminder_3d_enabled?: boolean
+          reminder_3d_sent?: boolean
+          reminder_3d_sent_at?: string | null
           reschedule_notified_at?: string | null
           status?: string
           time?: string

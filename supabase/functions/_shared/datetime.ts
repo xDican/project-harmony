@@ -52,3 +52,10 @@ export function todayHonduras(): string {
 export function tomorrowHonduras(): string {
   return DateTime.now().setZone(TIMEZONE).plus({ days: 1 }).toFormat("yyyy-MM-dd");
 }
+
+/**
+ * Returns the date 3 days from now in Honduras timezone as YYYY-MM-DD
+ */
+export function threeDaysFromNowHonduras(): string {
+  return DateTime.now().setZone(TIMEZONE).plus({ days: 3 }).toFormat("yyyy-MM-dd");
+}

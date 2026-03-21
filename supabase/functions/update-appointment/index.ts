@@ -161,6 +161,8 @@ Deno.serve(async (req) => {
         confirmation_message_sent: false,
         reminder_24h_sent: false,
         reminder_24h_sent_at: null,
+        reminder_3d_sent: false,
+        reminder_3d_sent_at: null,
         reschedule_notified_at: new Date().toISOString(),
       };
 
