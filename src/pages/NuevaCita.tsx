@@ -525,7 +525,7 @@ export default function NuevaCita() {
                   <div className={cn(
                     "relative mt-2 border rounded-md p-4 bg-background",
                     "[&_td_button]:!w-full [&_td_button]:!h-10",
-                    calendarDisabled && "pointer-events-none"
+                    (calendarDisabled || isLoadingDays) && "pointer-events-none"
                   )}>
                     {calendarDisabled && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
@@ -604,7 +604,10 @@ export default function NuevaCita() {
                         )}
                       </Button>
                       {calendarOpen && (
-                        <div className="absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg">
+                        <div className={cn(
+                          "absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg",
+                          isLoadingDays && "pointer-events-none"
+                        )}>
                           <Calendar
                             mode="single"
                             selected={selectedDate}
