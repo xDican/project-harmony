@@ -524,7 +524,7 @@ export default function NuevaCita() {
                   <Label className="text-sm text-muted-foreground">Fecha</Label>
                   <div className={cn(
                     "relative mt-2 border rounded-md p-4 bg-background",
-                    "[&_.rdp-months]:!w-full [&_.rdp-month]:!w-full [&_table]:!max-w-none [&_tr]:!w-full [&_th]:!flex-1 [&_th]:!max-w-none [&_td]:!flex-1 [&_td]:!max-w-none [&_td]:!h-10 [&_td_button]:!w-full [&_td_button]:!max-w-none [&_td_button]:!h-10",
+                    "[&_td_button]:!w-full [&_td_button]:!h-10",
                     calendarDisabled && "pointer-events-none"
                   )}>
                     {calendarDisabled && (
@@ -542,6 +542,12 @@ export default function NuevaCita() {
                       onMonthChange={handleMonthChange}
                       disabled={isDateDisabled}
                       className={cn("p-0 w-full")}
+                      classNames={{
+                        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0 w-full",
+                        month: "space-y-4 w-full",
+                        head_cell: "text-muted-foreground rounded-md flex-1 font-normal text-[0.8rem]",
+                        cell: "h-10 flex-1 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                      }}
                       modifiers={calendarModifiers}
                       modifiersClassNames={calendarModifiersClassNames}
                     />
