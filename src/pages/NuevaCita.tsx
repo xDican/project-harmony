@@ -581,7 +581,6 @@ export default function NuevaCita() {
                 </p>
               )}
             </div>
-          </div>
         </div>
       </div>
 
