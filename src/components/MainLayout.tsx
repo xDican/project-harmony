@@ -268,7 +268,7 @@ export default function MainLayout({
   };
   return <div className="h-dvh flex flex-col md:flex-row overflow-hidden">
       {/* Mobile Header */}
-      <header className="md:hidden sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="md:hidden fixed top-0 left-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center px-4 gap-2">
           {backTo ? <Button variant="ghost" className="gap-1 -ml-2" onClick={() => navigate(backTo)}>
               <ChevronLeft className="h-5 w-5" />
@@ -323,7 +323,7 @@ export default function MainLayout({
       </aside>
 
       {/* Main Content */}
-      <main className={cn("flex-1 min-h-0", mainClassName ?? "overflow-auto")}>
+      <main className={cn("flex-1 min-h-0 pt-16 md:pt-0", mainClassName ?? "overflow-auto")}>
         {children}
       </main>
     </div>;
