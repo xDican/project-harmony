@@ -1,30 +1,34 @@
 # Estado Ads — OrionCare
 
-> Ultima actualizacion: 19 Mar 2026 (AD-007 ACTIVA, AD-005 y AD-006 pausadas con metricas finales)
+> Ultima actualizacion: 21 Mar 2026 (AD-007 budget fix — limite campaña removido, presupuesto subido a $20/dia)
 
 ## Dashboard
 
 | Metrica | Valor actual | Meta |
 |---------|-------------|------|
-| Campanas activas | **1 (AD-007)** — 2 ads, $10/dia cada uno | 1-2 |
-| Gasto total historico | $148.08 (AD-005 $92.30 + AD-006 $55.78) | — |
-| Leads totales historicos | 80 (AD-005: 38 + AD-006: 42) | — |
+| Campanas activas | **1 (AD-007)** — 2 ads, presupuesto campana $20/dia | 1-2 |
+| Gasto total historico | ~$150 (AD-005 $92.30 + AD-006 $57.33 + AD-007 ~$2.40) | — |
+| Leads totales historicos | 80 (AD-005: 38 + AD-006: 42 + AD-007: 0) | — |
 | Cierres totales | **1** (Carla Paredes, $75/mes) | — |
-| Presupuesto AD-007 | $20/dia ($10/dia por ad) | — |
+| Presupuesto AD-007 | **$20/dia** (campana level, limite removido 21 Mar) | — |
+| Limite cuenta | **$20/dia** (subido de $15, 21 Mar) | — |
 
 ## Campanas
 
 ### AD-007 — Asistente Saturada + Doctor Entre Pacientes (ACTIVA 19 Mar)
-- **Estado:** ACTIVA. Aprobada por Meta y en circulacion.
+- **Estado:** ACTIVA. Aprobada por Meta. Entrega casi nula primeros 2 dias (~$2.40 gastados).
+- **Problema detectado 21 Mar:** Limite de cuenta $15/dia + limite campaña $10/dia + $10/dia por ad = 3 capas de restriccion. Meta no encontraba espacio para gastar.
+- **Fix 21 Mar:** Limite cuenta subido a $20/dia. Limite campaña removido. Presupuesto campaña: $20/dia.
 - **Concepto:** 2 imagenes que solo un medico reconoce como "mi dia a dia" = creativo como filtro de calidad.
 - **Imagen A:** "La Asistente Saturada" — perfil empresario. 3 textos + 2 titulos (Advantage+).
 - **Imagen B:** "El Doctor Entre Pacientes" — perfil independiente. 3 textos + 2 titulos (Advantage+).
 - **Config:** 1 campana, 1 ad set, 2 ads. 6 combinaciones por ad, 12 total. Meta optimiza.
-- **Presupuesto:** $20/dia ($10/dia por ad).
+- **Presupuesto:** $20/dia (campana level).
 - **Formulario:** Texto libre en especialidad (escribir requiere intencion = filtro).
 - **Hipotesis:** CTR menor (0.8-1.3%) pero % calificados 70-85% vs 10-31% de AD-006.
 - **Metrica clave:** CPL calificado, NO CTR.
-- **Monitoreo:** Dia 3-5 (~$60-100 gastados): % calificados. Dia 7: pausar imagen con peor % calificados.
+- **Checkpoint lunes 24 Mar:** Si <$30 gastados total → creativo no funciona, pivotar a AD-005 con imagenes frescas.
+- **Plan B:** Reactivar AD-005 (86% calificados, 1 cierre) con creativos nuevos para evitar fatiga.
 - **Detalle completo:** `docs/ad-creatives.md` seccion AD-007.
 
 ### AD-006 — "20 mensajes = 1 cita" (PAUSADA 19 Mar)

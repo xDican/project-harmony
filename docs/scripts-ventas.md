@@ -1,9 +1,13 @@
 # Scripts de Ventas — OrionCare
 
 > Para: Esposa (ventas y seguimiento)
-> Ultima actualizacion: 5 Mar 2026
+> Ultima actualizacion: 12 Mar 2026
 > Estilo: Calido, natural, como un amigo que recomienda algo. NO vendedor.
 > Principio: Ser humano primero, vender despues. Pero siempre tener una brujula hacia el cierre.
+>
+> **Fuente de verdad para tono y reglas:** La Persona de ventas en `docs/ventas/index.md` tiene prioridad
+> sobre estos scripts. Si hay contradiccion, la Persona gana. Estos scripts se actualizan cuando
+> la Persona aprende reglas nuevas del feedback loop.
 
 ---
 
@@ -75,7 +79,7 @@ El lead **no respondio, dijo que no le interesa, o lleva +3 dias sin contestar**
 - En algun momento natural de la conversacion, decir QUE HACE OrionCare en 1 oracion.
 - Esa oracion es: "Sus pacientes se agendan solos por WhatsApp, sin que usted tenga que contestar uno por uno."
 - No tiene que ser al inicio. Puede ser cuando ellos pregunten, o cuando se abra el espacio.
-- Siempre tener claro el siguiente paso (probar bot, ver demo, enviar datos para configurar).
+- Tener claro el siguiente paso (probar bot, ver demo, enviar datos para configurar), pero no necesariamente comunicarlo al lead. En seguimientos tempranos, solo informar + puerta abierta.
 
 ---
 
@@ -126,7 +130,7 @@ Esperar. Si dice "si, quiero saber mas" o algo similar:
 
 Esperar reaccion. Si muestra interes:
 
-> Si quiere lo puede probar usted mismo ahorita. Le comparto el numero del asistente para que lo vea como si fuera un paciente suyo.
+> Si le da curiosidad, le comparto el numero del asistente para que lo vea cuando tenga un chance — como si fuera un paciente suyo.
 
 Compartir contacto del bot demo: +504 9313-3496
 
@@ -164,7 +168,7 @@ Si YA lo probo:
 > Y que le parecio?
 
 Esperar. Dejar que hable. Si es positivo:
-> Asi de facil lo ven sus pacientes. Y lo bueno es que se configura con sus horarios, sus servicios y todo personalizado para su clinica. Le interesa que se lo pongamos en un numero suyo para que lo pruebe en real?
+> Asi de facil lo ven sus pacientes. Y lo bueno es que se configura con sus horarios, sus servicios y todo personalizado para su clinica. Cuando quiera probarlo con sus pacientes reales, me dice y se lo dejo listo.
 
 ---
 
@@ -184,10 +188,14 @@ Nada mas. Sin ofertas, sin informacion adicional.
 
 ---
 
-## SC-004: Ultimo seguimiento (3 dias sin respuesta)
+## SC-004: Ultimo seguimiento (3+ dias sin respuesta)
 
-**Cuando:** No ha respondido en 3 dias.
+**Cuando:** No ha respondido en 3+ dias.
 **Principio:** Cerrar con dignidad. Dejar la puerta abierta sin rogar.
+
+> **Nota de timing:** "3 dias" es guia, no regla rigida. Con leads que mostraron interes real
+> (probaron el bot, preguntaron precio, mandaron datos parciales), esperar mas (5-7 dias).
+> Cubero demostro que 2-3 dias es prematuro si el lead tiene engagement previo.
 
 ### Mensaje
 
@@ -236,7 +244,7 @@ Esperar 3 dias → SC-004.
 
 ### "Cuanto cuesta?"
 
-> Son $40 al mes. Incluye el asistente de WhatsApp, recordatorios automaticos a sus pacientes, y la plataforma donde usted ve todo. Sin contrato, puede cancelar cuando quiera.
+> Son $40 al mes. Incluye el asistente de WhatsApp, recordatorios automaticos a sus pacientes, y la plataforma donde usted ve todo. Aparte se pagan los envios de mensajes de Meta, que es un costo minimo (para 200 citas seria un aproximado de L. 120 lempiras). Sin contrato, puede cancelar cuando quiera.
 
 Si pide descuento:
 
@@ -294,3 +302,41 @@ Dejar que hable. Luego retomar segun lo que diga — si pregunta info, ir a SC-0
 9. **Maximo 1 seguimiento al dia.**
 10. **Si alguien dice "no me interesa":** "Entendido, muchas gracias por su tiempo! Si cambia de opinion, aqui estamos." — No insistir mas.
 11. **Audios:** Estan bien a partir del segundo o tercer intercambio si el lead manda audio primero. Nunca en el primer mensaje.
+12. **Nunca referenciar comportamiento del lead en el bot.** Si sabes algo por los logs, reformularlo como si lo supieras por la conversacion de WhatsApp. Decir "lo que me pregunto" en vez de "lo que vio en el bot". Revelar monitoreo se siente invasivo.
+
+---
+
+## Sincronizacion con Persona de ventas
+
+> Los scripts se actualizan cuando la Persona (`docs/ventas/index.md`) aprende
+> reglas nuevas del feedback loop. La Persona tiene prioridad sobre los scripts.
+
+| Fecha | Cambio | Origen |
+|-------|--------|--------|
+| 12 Mar 2026 | Suavizar CTAs en SC-001/SC-002 — no preguntas si/no | Correccion #2 feedback loop |
+| 12 Mar 2026 | No revelar datos de bot logs — regla #12 agregada | Correccion #3 feedback loop |
+| 12 Mar 2026 | Timing SC-004 mas flexible (3 dias → 3+ dias, nota de esperar mas con leads engaged) | Aprendizaje retroactivo LEAD-002 |
+| 12 Mar 2026 | Filosofia: no comunicar siguiente paso al lead en seguimientos tempranos | Correcciones #2/#3 combinadas |
+
+---
+
+## Vision Junio 2026 — Bot de ventas
+
+> NO implementar hasta Junio. Esta seccion documenta la arquitectura planeada.
+
+**Modelo:** Templates + Reglas (no LLM libre)
+- El bot detecta la intencion del mensaje del lead
+- Selecciona el script (SC-XXX) que corresponde
+- Adapta el template con datos del lead (nombre, tipo de clinica, historial)
+- Aplica reglas de la Persona como filtro final (tono, restricciones culturales)
+
+**Prerequisitos:**
+- [ ] 30+ conversaciones reales como training data
+- [ ] Scripts sincronizados con Persona (completado 12 Mar 2026)
+- [ ] Formato estructurado para scripts (intent → condiciones → template)
+- [ ] Reglas de Persona en formato parseable para system prompt
+
+**Fuentes de datos:**
+- `docs/ventas/index.md` → Persona (system prompt del bot)
+- `docs/scripts-ventas.md` → Templates (respuestas predefinidas)
+- `docs/ventas/leads/` → Training data (conversaciones reales + correcciones)

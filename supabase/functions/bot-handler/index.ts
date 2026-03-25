@@ -270,7 +270,7 @@ async function handleBotMessage(
   // Route to state handler based on current state
   switch (session.state) {
     case 'greeting':
-      response = await handleGreeting(session, organizationId, supabase, handoffLabels);
+      response = await handleGreeting(session, organizationId, supabase, handoffLabels, messageText);
       break;
 
     case 'main_menu':
@@ -323,7 +323,7 @@ async function handleBotMessage(
 
     default:
       // Unknown state, reset to greeting
-      response = await handleGreeting(session, organizationId, supabase, handoffLabels);
+      response = await handleGreeting(session, organizationId, supabase, handoffLabels, messageText);
   }
 
   // Update session with new state and context
@@ -547,7 +547,7 @@ async function handleDirectReschedule(
   const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
 
   return {
-    message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${doctorName}:`,
+    message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${doctorName}:\n👉 Escriba el numero`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
@@ -559,8 +559,28 @@ async function handleGreeting(
   session: BotSession,
   organizationId: string,
   supabase: SupabaseClient,
-  handoffLabels: { menuOption: string; connecting: string; emoji: string }
+  handoffLabels: { menuOption: string; connecting: string; emoji: string },
+  messageText: string = ''
 ): Promise<BotResponse> {
+  // Detect acknowledgment responses (replies to reminders like "Ok", "Gracias", "Listo")
+  const ACKNOWLEDGMENTS = ['ok', 'okey', 'okay', 'listo', 'gracias', 'de acuerdo',
+    'perfecto', 'entendido', 'dale', 'va', 'genial', 'excelente', 'bien',
+    'bueno', 'esta bien', 'recibido', 'anotado', 'si', 'claro'];
+  const ackNorm = messageText.trim().toLowerCase()
+    .replace(/[!¡.,;:?¿🙏😊😁👍👌✅🥰❤️💪]+/g, '').trim();
+  const ackWords = ackNorm.split(/\s+/).filter(w => w.length > 0);
+  const isAck = ackNorm.length > 0 && ackWords.length <= 3 &&
+    ackWords.every(w => ACKNOWLEDGMENTS.includes(w) || w.length <= 2);
+  if (isAck) {
+    return {
+      message: '👍 ¡Recibido! Si necesita algo, escriba *hola*.',
+      requiresInput: false,
+      nextState: 'completed',
+      sessionComplete: true,
+      showMenuHint: false,
+    };
+  }
+
   // Get bot greeting from whatsapp_line
   const { data: lineData } = await supabase
     .from('whatsapp_lines')
@@ -583,6 +603,44 @@ async function handleGreeting(
     nextState: 'main_menu',
     sessionComplete: false,
   };
+}
+
+// Detect user intent from natural language in main menu
+function detectMenuIntent(input: string): 'booking' | 'reschedule' | 'faq' | 'handoff' | null {
+  const n = input.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Order: reschedule before booking to avoid false positive with "mi cita"
+  const RESCHEDULE = ['cambiar cita', 'mover cita', 'cambiar fecha', 'mi cita',
+    'mi agenda', 'cuando es mi cita', 'cuando sera mi cita', 'no puedo ir',
+    'no podre', 'no asistir', 'posponer', 'aplazar'];
+  for (const kw of RESCHEDULE) if (n.includes(kw)) return 'reschedule';
+
+  const FAQ = ['ubicacion', 'direccion', 'donde queda', 'donde estan',
+    'horario', 'horarios', 'a que hora', 'que hora',
+    'precio', 'precios', 'cuanto cuesta', 'costo', 'costos', 'tarifa',
+    'resultado', 'resultados', 'examenes', 'examen',
+    'informacion', 'info', 'estacionamiento', 'parqueo',
+    'seguro', 'seguros', 'aceptan seguro'];
+  for (const kw of FAQ) if (n.includes(kw)) return 'faq';
+
+  const HANDOFF = ['hablar', 'hablame', 'llamar', 'llamame', 'contacto',
+    'contactar', 'humano', 'persona', 'alguien', 'atencion', 'ayuda',
+    'necesito ayuda'];
+  for (const kw of HANDOFF) if (n.includes(kw)) return 'handoff';
+
+  const BOOKING = ['cita', 'consulta', 'turno', 'disponibilidad',
+    'apartar', 'reservar', 'tratamiento', 'procedimiento', 'cirugia',
+    'operacion', 'lunar', 'revision', 'chequeo', 'control',
+    'citologia', 'limpieza', 'extraccion', 'muela'];
+  for (const kw of BOOKING) if (n.includes(kw)) return 'booking';
+
+  // Date/time patterns → booking
+  if (/\b\d{1,2}\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/.test(n)) return 'booking';
+  if (/\bmanana\b/.test(n) || /\bpasado manana\b/.test(n)) return 'booking';
+  if (/\b\d{1,2}\s*(am|pm)\b/.test(n)) return 'booking';
+
+  return null;
 }
 
 async function handleMainMenu(
@@ -638,6 +696,32 @@ async function handleMainMenu(
       nextState: 'main_menu',
       sessionComplete: false,
     };
+  }
+
+  // Detect intent from natural language before giving up
+  const detectedIntent = detectMenuIntent(normalizedInput);
+  if (detectedIntent) {
+    session.context.invalidAttempts = 0;
+    if (detectedIntent === 'booking') return await startBookingFlow(session, organizationId, supabase);
+    if (detectedIntent === 'reschedule') return await startRescheduleFlow(session, organizationId, supabase);
+    if (detectedIntent === 'handoff') return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    if (detectedIntent === 'faq') {
+      delete session.context.lastFaqResult;
+      delete session.context.faqNotFoundCount;
+      const faqResult = await searchFAQ(input, session.context.doctorId, session.context.clinicId, organizationId, supabase);
+      if (faqResult) {
+        session.context.lastFaqResult = 'found';
+        return {
+          message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faqResult.question}*\n${faqResult.answer}`,
+          options: [`${OPT_EMOJI.faq} Otra pregunta`, `${OPT_EMOJI.menu} Menu principal`],
+          requiresInput: true, nextState: 'faq_search', sessionComplete: false,
+        };
+      }
+      return {
+        message: `${OPT_EMOJI.faq} *Preguntas frecuentes*\n\nEscriba su pregunta y buscare la respuesta.`,
+        requiresInput: true, nextState: 'faq_search', sessionComplete: false,
+      };
+    }
   }
 
   // Invalid input - increment attempt counter
@@ -983,6 +1067,28 @@ async function startBookingFlow(
   };
 }
 
+// Fuzzy match user text against a list of displayed options (accent-insensitive)
+function fuzzyMatchOption(input: string, options: string[]): number | null {
+  const n = input.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (n.length < 3) return null;
+
+  // Exact match (accent-insensitive)
+  for (let i = 0; i < options.length; i++) {
+    const opt = options[i].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (n === opt) return i;
+  }
+  // Input contains option name or vice versa — pick longest match
+  let bestIdx = -1, bestLen = 0;
+  for (let i = 0; i < options.length; i++) {
+    const opt = options[i].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (n.includes(opt) && opt.length > bestLen) { bestIdx = i; bestLen = opt.length; }
+    if (opt.includes(n) && n.length > bestLen) { bestIdx = i; bestLen = n.length; }
+  }
+  if (bestIdx >= 0) return bestIdx;
+  return null;
+}
+
 async function handleBookingSelectDoctor(
   input: string,
   session: BotSession,
@@ -990,7 +1096,13 @@ async function handleBookingSelectDoctor(
   supabase: SupabaseClient
 ): Promise<BotResponse> {
   const availableDoctors = session.context.availableDoctors || [];
-  const selection = parseInt(input.trim());
+  let selection = parseInt(input.trim());
+
+  // Fuzzy match text against doctor names
+  if (isNaN(selection) || selection < 1 || selection > availableDoctors.length) {
+    const fuzzyIdx = fuzzyMatchOption(input, availableDoctors.map((d: any) => d.name));
+    if (fuzzyIdx !== null) selection = fuzzyIdx + 1;
+  }
 
   if (isNaN(selection) || selection < 1 || selection > availableDoctors.length) {
     const stepTitle = buildStepTitle(OPT_EMOJI.agendar, 'Agendar cita', 1, session.context.bookingTotalSteps || 5);
@@ -1023,7 +1135,13 @@ async function handleBookingSelectService(
   supabase: SupabaseClient
 ): Promise<BotResponse> {
   const serviceTypes: Array<{ name: string; duration_minutes?: number }> = session.context.availableServiceTypes || [];
-  const selection = parseInt(input.trim());
+  let selection = parseInt(input.trim());
+
+  // Fuzzy match text against service type names
+  if (isNaN(selection) || selection < 1 || selection > serviceTypes.length) {
+    const fuzzyIdx = fuzzyMatchOption(input, serviceTypes.map(st => st.name));
+    if (fuzzyIdx !== null) selection = fuzzyIdx + 1;
+  }
 
   if (isNaN(selection) || selection < 1 || selection > serviceTypes.length) {
     const isReschedule = session.context.isReschedule;
@@ -1035,7 +1153,7 @@ async function handleBookingSelectService(
     const stepTitle = buildStepTitle(flowEmoji, flowName, serviceStep, totalSteps);
 
     return {
-      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n📋 ¿Que tipo de servicio necesita?`,
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n👉 Escriba el *numero* del servicio. Ejemplo: *1*\n\n📋 ¿Que tipo de servicio necesita?`,
       options: serviceTypes.map((st) => st.name),
       requiresInput: true,
       nextState: 'booking_select_service',
@@ -1094,12 +1212,92 @@ async function handleBookingSelectWeek(
   const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
 
   return {
-    message: `${stepTitle}\n\nSeleccione la semana para su cita con ${session.context.doctorName}:`,
+    message: `${stepTitle}\n\nSeleccione la semana para su cita con ${session.context.doctorName}:\n👉 Escriba el numero`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
     sessionComplete: false,
   };
+}
+
+// Parse natural language date hints into a DateTime (Honduras timezone)
+function parseDateHint(input: string): typeof DateTime.prototype | null {
+  const n = input.trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const tz = 'America/Tegucigalpa';
+  const now = DateTime.now().setZone(tz);
+
+  if (/\bhoy\b/.test(n)) return now.startOf('day');
+  if (/\bpasado\s*manana\b/.test(n)) return now.plus({ days: 2 }).startOf('day');
+  if (/\bmanana\b/.test(n)) return now.plus({ days: 1 }).startOf('day');
+
+  // Day of week → next occurrence
+  const dayNames: Record<string, number> = {
+    lunes: 1, martes: 2, miercoles: 3, jueves: 4,
+    viernes: 5, sabado: 6, domingo: 7,
+  };
+  for (const [name, iso] of Object.entries(dayNames)) {
+    if (n.includes(name)) {
+      let target = now.startOf('day');
+      while (target.weekday !== iso) target = target.plus({ days: 1 });
+      return target;
+    }
+  }
+
+  // "DD de MES"
+  const monthNames: Record<string, number> = {
+    enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+    julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+  };
+  const dateMatch = n.match(/(\d{1,2})\s+de\s+(\w+)/);
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1]);
+    const month = monthNames[dateMatch[2]];
+    if (month && day >= 1 && day <= 31) {
+      let dt = DateTime.fromObject({ year: now.year, month, day }, { zone: tz });
+      if (dt < now.startOf('day')) dt = DateTime.fromObject({ year: now.year + 1, month, day }, { zone: tz });
+      if (dt.isValid) return dt;
+    }
+  }
+
+  // "el DD" (assume current or next month)
+  const justDay = n.match(/\bel\s+(\d{1,2})\b/);
+  if (justDay) {
+    const day = parseInt(justDay[1]);
+    if (day >= 1 && day <= 31) {
+      let dt = DateTime.fromObject({ year: now.year, month: now.month, day }, { zone: tz });
+      if (!dt.isValid || dt < now.startOf('day')) dt = dt.plus({ months: 1 });
+      if (dt.isValid) return dt;
+    }
+  }
+
+  return null;
+}
+
+// Parse natural language time hints into 24h format (e.g., "3pm" → "15:00")
+function parseTimeHint(input: string): string | null {
+  const n = input.trim().toLowerCase().replace(/[.,;:?¿!¡]+$/g, '');
+
+  // "3pm" / "3 pm" / "3:00pm" / "3:00 pm" / "3:30pm"
+  const ampm = n.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+  if (ampm) {
+    let hour = parseInt(ampm[1]);
+    const min = ampm[2] ? parseInt(ampm[2]) : 0;
+    if (ampm[3] === 'pm' && hour < 12) hour += 12;
+    if (ampm[3] === 'am' && hour === 12) hour = 0;
+    return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+  }
+
+  // "las 3" / "a las 3" / "a las 3:30" (assume PM if hour < 8)
+  const las = n.match(/(?:a\s+)?las\s+(\d{1,2})(?::(\d{2}))?/);
+  if (las) {
+    let hour = parseInt(las[1]);
+    const min = las[2] ? parseInt(las[2]) : 0;
+    if (hour < 8) hour += 12;
+    return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+  }
+
+  return null;
 }
 
 async function handleBookingSelectDay(
@@ -1109,18 +1307,35 @@ async function handleBookingSelectDay(
   supabase: SupabaseClient
 ): Promise<BotResponse> {
   const availableWeeks = session.context.availableWeeks || [];
-  const selection = parseInt(input.trim());
+  let selection = parseInt(input.trim());
 
   const isReschedule = session.context.isReschedule;
   const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
   const flowName = isReschedule ? 'Reagendar cita' : 'Agendar cita';
   const steps = getStepNumbers(session);
 
+  // Fuzzy match text against week labels
+  if (isNaN(selection) || selection < 1 || selection > availableWeeks.length) {
+    const fuzzyIdx = fuzzyMatchOption(input, availableWeeks.map((w: any) => w.weekLabel));
+    if (fuzzyIdx !== null) selection = fuzzyIdx + 1;
+  }
+  // Parse date hint and find which week contains it
+  if (isNaN(selection) || selection < 1 || selection > availableWeeks.length) {
+    const dateHint = parseDateHint(input);
+    if (dateHint) {
+      for (let i = 0; i < availableWeeks.length; i++) {
+        const ws = DateTime.fromISO(availableWeeks[i].weekStart, { zone: 'America/Tegucigalpa' });
+        const we = ws.plus({ days: 6 });
+        if (dateHint >= ws && dateHint <= we) { selection = i + 1; break; }
+      }
+    }
+  }
+
   // Validate selection
   if (isNaN(selection) || selection < 1 || selection > availableWeeks.length) {
     const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
     return {
-      message: `${stepTitle}\n\n⚠️ Opcion no valida.\nSeleccione una semana:`,
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n👉 Escriba el *numero* de la semana. Ejemplo: *1*\n\nSeleccione una semana:`,
       options: availableWeeks.map((w: any) => w.weekLabel),
       requiresInput: true,
       nextState: 'booking_select_day',
@@ -1175,7 +1390,7 @@ async function handleBookingSelectHour(
   supabase: SupabaseClient
 ): Promise<BotResponse> {
   const availableDays = session.context.availableDays || [];
-  const selection = parseInt(input.trim());
+  let selection = parseInt(input.trim());
 
   // Check if user wants to see more slots
   if (session.context.availableSlots && input.trim().toLowerCase() === String(session.context.availableSlots.length + 1)) {
@@ -1192,6 +1407,22 @@ async function handleBookingSelectHour(
   // Check if user is selecting a time slot (already in hour selection mode)
   if (session.context.availableSlots) {
     const slots = session.context.availableSlots as string[];
+
+    // Fuzzy match text against formatted time options (e.g., "2:00 PM", "3:30 pm")
+    if (!(selection >= 1 && selection <= slots.length)) {
+      const formattedSlots = slots.map((s: string) => formatTimeForTemplate(s));
+      const fuzzyIdx = fuzzyMatchOption(input, formattedSlots);
+      if (fuzzyIdx !== null) selection = fuzzyIdx + 1;
+    }
+    // Parse time hint (e.g., "3pm", "las 2", "a las 3:30") → match to raw slot
+    if (!(selection >= 1 && selection <= slots.length)) {
+      const timeHint = parseTimeHint(input);
+      if (timeHint) {
+        const slotIdx = slots.findIndex((s: string) => s === timeHint);
+        if (slotIdx >= 0) selection = slotIdx + 1;
+      }
+    }
+
     if (selection >= 1 && selection <= slots.length) {
       const selectedTime = slots[selection - 1];
       session.context.selectedTime = selectedTime;
@@ -1219,10 +1450,25 @@ async function handleBookingSelectHour(
   }
 
   // First time: user is selecting a day
+  // Fuzzy match text against day labels (e.g., "lunes 24 mar")
+  if (isNaN(selection) || selection < 1 || selection > availableDays.length) {
+    const fuzzyIdx = fuzzyMatchOption(input, availableDays.map((d: any) => d.label));
+    if (fuzzyIdx !== null) selection = fuzzyIdx + 1;
+  }
+  // Parse date hint and match to available day
+  if (isNaN(selection) || selection < 1 || selection > availableDays.length) {
+    const dateHint = parseDateHint(input);
+    if (dateHint) {
+      const dateStr = dateHint.toISODate();
+      const dayIdx = availableDays.findIndex((d: any) => d.date === dateStr);
+      if (dayIdx >= 0) selection = dayIdx + 1;
+    }
+  }
+
   if (isNaN(selection) || selection < 1 || selection > availableDays.length) {
     const stepTitle = buildStepTitle(flowEmoji, flowName, steps.dayStep, steps.totalSteps);
     return {
-      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n¿Que dia prefiere?`,
+      message: `${stepTitle}\n\n⚠️ Opcion no valida.\n👉 Escriba el *numero* del dia. Ejemplo: *1*\n\n¿Que dia prefiere?`,
       options: availableDays.map((d: any) => d.label),
       requiresInput: true,
       nextState: 'booking_select_hour',
@@ -1530,7 +1776,7 @@ async function startRescheduleFlow(
   session.context.patientId = patient.id;
   session.context.patientName = patient.name;
 
-  return await handleRescheduleList('', session, organizationId, supabase);
+  return await handleRescheduleList('', session, organizationId, supabase, session.context.handoffLabels);
 }
 
 async function handleRescheduleList(
@@ -1581,7 +1827,7 @@ async function handleRescheduleList(
       options.push(`${OPT_EMOJI.volver} Volver al menu`);
 
       return {
-        message: '⚠️ Opcion no valida.\nSeleccione una cita:',
+        message: '⚠️ Opcion no valida.\n👉 Escriba el *numero* de la cita. Ejemplo: *1*\n\nSeleccione una cita:',
         options,
         requiresInput: true,
         nextState: 'reschedule_list',
@@ -1811,7 +2057,7 @@ async function handleCancelConfirm(
     const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
 
     return {
-      message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${session.context.doctorName}:`,
+      message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${session.context.doctorName}:\n👉 Escriba el numero`,
       options: weeks.map((w) => w.weekLabel),
       requiresInput: true,
       nextState: 'booking_select_day',

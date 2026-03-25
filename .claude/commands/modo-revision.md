@@ -17,6 +17,7 @@ Lee TODOS los archivos de estado en orden:
 3. `.claude/memory/estado-contenido.md`
 4. `.claude/memory/estado-estrategia.md`
 5. `.claude/memory/business-plan.md`
+6. `docs/ventas/index.md` (dashboard de leads + persona de ventas)
 
 Luego genera el reporte semanal.
 
@@ -33,9 +34,34 @@ Luego genera el reporte semanal.
 **Desarrollo:** [que se resolvio, que queda, bloqueos]
 **Contenido:** [que se creo, que falta]
 **Estrategia/Negocio:** [clientes, MRR, decisiones pendientes]
+**Ventas/Leads:** [leads nuevos, estados, conversion]
+
+### Analisis de leads (del G-Sheet)
+
+**Funnel (columna "Estado"):**
+- Nuevo | Contactado | En demo | Negociando | Cerrado | Perdido
+- % Conversion (Cerrado / Total)
+
+**Razones de perdida (columna "Razón pérdida"):**
+- Desglose: No respondió, Precio, Tiene secretaria, No le interesó, No es médico, Otra
+- Insight: [que patron emerge — ej. "70% No respondió = problema de calidad de leads"]
+
+**Objeciones activas (columna "Objecion", leads no-perdidos):**
+- Evaluando precio | Tiene secretaria | No responde | Lo va a pensar
+- Insight: [ej. "5 leads con 'No responde' = necesitamos mejor hook en primer contacto"]
+
+**Bot engagement:**
+- Probaron bot / No probaron / Sin dato
+- Insight: [ej. "solo 2 de 15 probaron → el pitch no motiva a probar"]
+
+**Accion derivada:**
+- Si mayoria "No respondio" → revisar targeting/form del ad (modo-ads)
+- Si pocos probaron bot → revisar script SC-001 de primer contacto (modo-seguimiento)
+- Si probaron pero no cierran → revisar objecion de precio/script SC-005 (modo-seguimiento)
 
 ### Conexiones entre areas
 [Ej: "Los ads no estan generando leads, lo cual bloquea las metas de ventas de Marzo"]
+[Incluir conexion datos-de-leads → ajustes-de-ads → ajustes-de-scripts]
 
 ### Semaforo
 - 🟢 Va bien: [areas]

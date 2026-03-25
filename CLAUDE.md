@@ -16,6 +16,7 @@ Activa un modo con su slash command para obtener experticia enfocada:
 | Ads | `/project:modo-ads` | Campanas Meta, metricas, creativos |
 | Contenido | `/project:modo-contenido` | Copy para ads, posts, scripts de venta |
 | Estrategia | `/project:modo-estrategia` | Decisiones de negocio, datos, prioridades |
+| Seguimiento | `/project:modo-seguimiento` | Redactar mensajes de follow-up a leads |
 | Revision semanal | `/project:modo-revision` | Viernes: reporte cruzado de todas las areas |
 
 ## Reglas universales
