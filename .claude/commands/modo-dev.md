@@ -67,6 +67,7 @@ GROUP BY date::date ORDER BY fecha;
 
 **Query 3 — Mensajeria WhatsApp:**
 ```sql
+-- Confirmaciones y recordatorios
 SELECT
   type,
   COUNT(*) as enviados,
@@ -78,6 +79,22 @@ WHERE organization_id = '{ORG_ID}'
   AND created_at >= NOW() - INTERVAL '{DIAS} days'
   AND type IN ('confirmation', 'reminder_24h', 'patient_confirmed')
 GROUP BY type ORDER BY type;
+
+-- Tasa de confirmacion: recordatorios leidos vs pacientes que confirmaron
+SELECT
+  COUNT(*) FILTER (WHERE ml.type = 'reminder_24h') as recordatorios_enviados,
+  COUNT(*) FILTER (WHERE ml.type = 'reminder_24h' AND ml.status = 'read') as recordatorios_leidos,
+  COUNT(*) FILTER (WHERE ml.type = 'reminder_24h' AND ml.status IN ('read', 'delivered')) as recordatorios_llegaron,
+  COUNT(DISTINCT CASE WHEN pc.id IS NOT NULL THEN ml.appointment_id END) as confirmaron_boton,
+  COUNT(DISTINCT CASE WHEN bcl.id IS NOT NULL THEN ml.appointment_id END) as respondieron_bot
+FROM message_logs ml
+LEFT JOIN message_logs pc ON pc.appointment_id = ml.appointment_id AND pc.type = 'patient_confirmed'
+LEFT JOIN bot_conversation_logs bcl ON bcl.patient_phone = ml.to_phone
+  AND bcl.organization_id = ml.organization_id
+  AND bcl.created_at BETWEEN ml.created_at AND ml.created_at + INTERVAL '24 hours'
+WHERE ml.organization_id = '{ORG_ID}'
+  AND ml.created_at >= NOW() - INTERVAL '{DIAS} days'
+  AND ml.type = 'reminder_24h';
 ```
 
 **Query 4 — Dashboard bot:**
@@ -199,7 +216,11 @@ ORDER BY state_before, created_at;
 
    **1. Citas** — tabla de metricas + citas por dia + bot vs manual (% de citas agendadas por el bot)
 
-   **2. Mensajeria WhatsApp** — confirmaciones (enviadas, leidas, fallidas) + recordatorios 24h (enviados, leidos, confirmaron)
+   **2. Mensajeria WhatsApp** — confirmaciones (enviadas, leidas, fallidas) + recordatorios 24h con desglose:
+     - Recordatorios enviados / llegaron (read+delivered) / leidos
+     - Confirmaron via boton vs respondieron al bot (reagendaron, escribieron texto)
+     - Tasa de confirmacion = confirmaron_boton / recordatorios_llegaron
+     - Tasa de respuesta = (confirmaron_boton + respondieron_bot) / recordatorios_llegaron
 
    **3. Salud del bot** — dashboard con comparacion vs objetivos:
      - Tasa completado: objetivo >50%
