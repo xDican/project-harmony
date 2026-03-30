@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 30 Mar 2026 (3 bugs de parsing detectados via log analysis + concepto FAQ auto-poblado documentado)
+> Ultima actualizacion: 30 Mar 2026 (bugs de parsing resueltos + HBR consolidado + intent detection en greeting/FAQ)
 
 ## Fase actual
 
@@ -26,10 +26,13 @@ Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
 ### Producto (blocker para ads)
 - [ ] Flujo "DEMO" en el bot: cuando reciba "DEMO" dar contexto guiado para doctor
 
-### Bot — bugs de parsing (detectados 30 Mar, analisis de logs Medilaser)
-- [ ] **CRITICO — Cancelacion accidental en `cancel_confirm`:** Paciente escribio "1. Reagendar" y bot parseo "1" como confirmar cancelacion (en fase confirm_delete). Paciente perdio su cita. Fix: en handleCancelConfirm, si input contiene "reagendar" tratar como opcion reagendar, no como confirmacion.
-- [ ] **Keywords faltantes en main_menu:** "reprogramar/reprogramelo" no esta en keywords. Agregar a linea 661 y al array RESCHEDULE de detectMenuIntent.
-- [ ] **Texto libre en booking_select_day:** Pacientes escriben "Semana del 30 al 5 abr", "Para la semana del 6 de abril", "Semana del 13 de abril al 17" y dan opcion no valida. El parseDateHint no maneja rangos de semanas.
+### Bot — bugs de parsing (detectados y RESUELTOS 30 Mar)
+- [x] **CRITICO — Cancelacion accidental en `cancel_confirm`:** Guard `hasReagendarIntent` previene que "1. Reagendar" cancele citas. Deploy: e4be0f7
+- [x] **Keywords hondureñas en todo el bot:** reajendar, canselar, ajendar, sita, konsulta, presio, sekretari, bolber, etc. en todos los handlers. Deploy: e4be0f7
+- [x] **Texto libre en booking_select_day:** parseDateHint ahora soporta "semana del DD MES", "DD MES", "esta/proxima semana", meses abreviados. Deploy: e4be0f7
+- [x] **Intent detection en greeting:** Primer mensaje con intent claro ya no se pierde (agendar, reagendar, FAQ, handoff). Deploy: e4be0f7
+- [x] **Intent detection en FAQ:** "quiero agendar" en faq_search redirige a booking. Deploy: e4be0f7
+- [x] **Keywords de FAQs Dr. Guevara:** Ubicacion (0→15 keywords), Extraccion (4→13 keywords). Fix via SQL directo.
 
 ### Junio 2026+ — FAQ auto-poblado (concepto aprobado, no construir aun)
 Tres capas planificadas para despues del feature freeze:
@@ -47,6 +50,15 @@ Tres capas planificadas para despues del feature freeze:
 - [ ] **confirmation_message_sent nunca se marca true** — en `create-appointment/index.ts` linea ~410, despues de `gatewayResult.success` falta `await supabase.from("appointments").update({ confirmation_message_sent: true }).eq("id", appointment.id)`. Los mensajes SI se envian (message_logs lo confirma), solo el flag no se actualiza. Afecta a todas las orgs desde siempre (las citas viejas con true fueron de codigo anterior a la migracion a messaging-gateway).
 
 ## Resuelto recientemente
+
+- **Health Bot Report (HBR) consolidado en modo-dev (30 Mar):**
+  - Unifica FAQ Gap Report + Bot Health Report en un solo reporte de 7 secciones
+  - 8 queries: citas, mensajeria, dashboard bot, embudo, abandonos, eficiencia, horaria, FAQ gaps
+  - Separa cancelaciones reales vs reagendamientos (notes ILIKE '%reagendada%')
+  - Tasa de confirmacion de recordatorios: boton vs respondieron al bot
+  - Commits: e4be0f7, 46a565c, ac20b00, e73ad85, 702fefa
+  - Baseline Medilaser sem2: 30% completion, 15.8% error, 56% citas via bot
+  - Baseline Guevara sem2: 0% completion, 0% error, volumen muy bajo (4 sesiones)
 
 - **PRIORIDAD 1 RESUELTA: Bot entiende texto libre en todos los menus (25 Mar)** — 5 fixes deployados:
   1. **Acknowledgments en greeting:** "Ok", "Gracias", "Listo" en respuesta a recordatorio → respuesta breve sin menu (elimina ~16 sesiones falsas)
