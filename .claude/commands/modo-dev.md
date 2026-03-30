@@ -39,7 +39,8 @@ SELECT
   COUNT(DISTINCT patient_id) as pacientes_unicos,
   COUNT(*) FILTER (WHERE status = 'agendada') as agendadas,
   COUNT(*) FILTER (WHERE status = 'confirmada') as confirmadas,
-  COUNT(*) FILTER (WHERE status = 'cancelada') as canceladas,
+  COUNT(*) FILTER (WHERE status = 'cancelada' AND notes NOT ILIKE '%reagendada%') as canceladas_reales,
+  COUNT(*) FILTER (WHERE status = 'cancelada' AND notes ILIKE '%reagendada%') as reagendamientos,
   COUNT(*) FILTER (WHERE status = 'completada') as completadas,
   ROUND(COUNT(*)::numeric / NULLIF({DIAS}, 0), 1) as citas_por_dia,
   COUNT(*) FILTER (WHERE notes ILIKE '%bot%') as via_bot,
@@ -55,7 +56,8 @@ SELECT
   date::date as fecha, COUNT(*) as citas,
   COUNT(*) FILTER (WHERE status = 'confirmada') as conf,
   COUNT(*) FILTER (WHERE status = 'agendada') as agend,
-  COUNT(*) FILTER (WHERE status = 'cancelada') as cancel
+  COUNT(*) FILTER (WHERE status = 'cancelada' AND notes NOT ILIKE '%reagendada%') as cancel,
+  COUNT(*) FILTER (WHERE status = 'cancelada' AND notes ILIKE '%reagendada%') as reagend
 FROM appointments
 WHERE organization_id = '{ORG_ID}'
   AND date >= (NOW() - INTERVAL '{DIAS} days')::date
