@@ -26,76 +26,59 @@ Eres un **arquitecto senior especializado en React 18 + TypeScript + Vite + Supa
 
 ## Herramientas de diagnostico
 
-### FAQ Gap Report
-Cuando Diego pida un gap report o reporte de FAQ faltantes:
+### Health Bot Report (HBR)
+Cuando Diego pida un HBR, health report, reporte de salud, gap report, o analisis de interacciones:
 
 1. Pregunta por el **org_id** (obligatorio) y **dias** (default: 7)
-2. Ejecuta este query en Supabase (`soxrlxvivuplezssgssq`):
+2. Ejecuta estos 8 queries en Supabase (`soxrlxvivuplezssgssq`), reemplazando `{ORG_ID}` y `{DIAS}`:
 
+**Query 1 — Citas:**
 ```sql
--- PARTE 1: Preguntas que entraron a faq_search y fallaron o dieron mismatch
-WITH faq_interactions AS (
-  SELECT
-    patient_phone,
-    user_message,
-    bot_response,
-    created_at,
-    CASE
-      WHEN bot_response ILIKE '%no encontre una respuesta%' THEN 'sin_respuesta'
-      WHEN state_before = 'faq_search' AND state_after = 'faq_search' THEN 'posible_mismatch'
-      ELSE 'respondido'
-    END as resultado
-  FROM bot_conversation_logs
-  WHERE organization_id = '{ORG_ID}'
-    AND created_at >= NOW() - INTERVAL '{DIAS} days'
-    AND state_before = 'faq_search'
-    AND user_message NOT IN ('1', '2', '3', '4')
-    AND user_message NOT ILIKE '%menu%'
-    AND user_message NOT ILIKE '%volver%'
-    AND LENGTH(user_message) > 3
-)
 SELECT
-  user_message as pregunta,
-  resultado,
-  LEFT(bot_response, 120) as respuesta_dada,
-  patient_phone,
-  created_at
-FROM faq_interactions
-ORDER BY
-  CASE resultado WHEN 'sin_respuesta' THEN 1 WHEN 'posible_mismatch' THEN 2 ELSE 3 END,
-  created_at;
-
--- PARTE 2: Preguntas que murieron en main_menu (nunca llegaron a FAQ)
-SELECT
-  user_message as pregunta,
-  'nunca_llego_a_faq' as resultado,
-  LEFT(bot_response, 120) as respuesta_dada,
-  patient_phone,
-  created_at
-FROM bot_conversation_logs
+  COUNT(*) as total_citas,
+  COUNT(DISTINCT patient_id) as pacientes_unicos,
+  COUNT(*) FILTER (WHERE status = 'agendada') as agendadas,
+  COUNT(*) FILTER (WHERE status = 'confirmada') as confirmadas,
+  COUNT(*) FILTER (WHERE status = 'cancelada') as canceladas,
+  COUNT(*) FILTER (WHERE status = 'completada') as completadas,
+  ROUND(COUNT(*)::numeric / NULLIF({DIAS}, 0), 1) as citas_por_dia,
+  COUNT(*) FILTER (WHERE notes ILIKE '%bot%') as via_bot,
+  COUNT(*) FILTER (WHERE notes IS NULL OR notes NOT ILIKE '%bot%') as via_manual
+FROM appointments
 WHERE organization_id = '{ORG_ID}'
-  AND created_at >= NOW() - INTERVAL '{DIAS} days'
-  AND state_before = 'main_menu'
-  AND state_after = 'main_menu'
-  AND bot_response ILIKE '%no valida%'
-  AND LENGTH(user_message) > 10
-  AND user_message NOT SIMILAR TO '[0-9]%'
-ORDER BY created_at;
+  AND created_at >= NOW() - INTERVAL '{DIAS} days';
 ```
 
-3. Presenta el reporte con:
-   - Tabla de gaps (sin_respuesta, mismatch, nunca_llego_a_faq)
-   - Temas faltantes agrupados (ej: "Precios de laser — 4 preguntas, 2 pacientes")
-   - Total y porcentaje sobre interacciones totales
-   - Nota: NO agregar FAQs directamente — reportar a la clinica para que ellos decidan las respuestas
+**Query 2 — Citas por dia:**
+```sql
+SELECT
+  date::date as fecha, COUNT(*) as citas,
+  COUNT(*) FILTER (WHERE status = 'confirmada') as conf,
+  COUNT(*) FILTER (WHERE status = 'agendada') as agend,
+  COUNT(*) FILTER (WHERE status = 'cancelada') as cancel
+FROM appointments
+WHERE organization_id = '{ORG_ID}'
+  AND date >= (NOW() - INTERVAL '{DIAS} days')::date
+  AND date <= (NOW() + INTERVAL '14 days')::date
+GROUP BY date::date ORDER BY fecha;
+```
 
-### Bot Health Report
-Cuando Diego pida un reporte de salud del bot, health report, o analisis de interacciones:
+**Query 3 — Mensajeria WhatsApp:**
+```sql
+SELECT
+  type,
+  COUNT(*) as enviados,
+  COUNT(*) FILTER (WHERE status = 'read') as leidos,
+  COUNT(*) FILTER (WHERE status = 'delivered') as entregados,
+  COUNT(*) FILTER (WHERE status = 'failed') as fallidos
+FROM message_logs
+WHERE organization_id = '{ORG_ID}'
+  AND created_at >= NOW() - INTERVAL '{DIAS} days'
+  AND type IN ('confirmation', 'reminder_24h', 'patient_confirmed')
+GROUP BY type ORDER BY type;
+```
 
-1. Pregunta por el **org_id** (obligatorio) y **dias** (default: 7)
-2. Ejecuta estos 5 queries en Supabase (`soxrlxvivuplezssgssq`), reemplazando `{ORG_ID}` y `{DIAS}`:
-
-**Query 1 — Dashboard de metricas:**
+**Query 4 — Dashboard bot:**
 ```sql
 WITH stats AS (
   SELECT
@@ -122,7 +105,7 @@ SELECT
 FROM stats;
 ```
 
-**Query 2 — Embudo de conversion:**
+**Query 5 — Embudo de conversion:**
 ```sql
 WITH session_journey AS (
   SELECT
@@ -139,86 +122,100 @@ WITH session_journey AS (
   GROUP BY session_id
 )
 SELECT
-  COUNT(*) as sesiones,
-  SUM(llego_menu) as llegaron_menu,
-  SUM(inicio_flujo) as iniciaron_flujo,
-  SUM(llego_confirm) as llegaron_confirm,
-  SUM(completo) as completaron,
-  SUM(handoff) as pidieron_handoff,
-  SUM(uso_faq) as usaron_faq
+  COUNT(*) as sesiones, SUM(llego_menu) as llegaron_menu,
+  SUM(inicio_flujo) as iniciaron_flujo, SUM(llego_confirm) as llegaron_confirm,
+  SUM(completo) as completaron, SUM(handoff) as pidieron_handoff, SUM(uso_faq) as usaron_faq
 FROM session_journey;
 ```
 
-**Query 3 — Abandonos por estado:**
+**Query 6 — Abandonos + eficiencia:**
 ```sql
-SELECT
-  state_after as estado_abandono,
-  COUNT(*) as sesiones,
+-- Abandonos
+SELECT state_after as estado_abandono, COUNT(*) as sesiones,
   array_agg(DISTINCT LEFT(user_message, 50)) as ultimos_mensajes
 FROM bot_conversation_logs bcl
-WHERE organization_id = '{ORG_ID}'
-  AND created_at >= NOW() - INTERVAL '{DIAS} days'
+WHERE organization_id = '{ORG_ID}' AND created_at >= NOW() - INTERVAL '{DIAS} days'
   AND created_at = (SELECT MAX(created_at) FROM bot_conversation_logs b2 WHERE b2.session_id = bcl.session_id)
   AND state_after NOT IN ('main_menu', 'completed', 'handoff_secretary')
-GROUP BY state_after
-ORDER BY sesiones DESC;
+GROUP BY state_after ORDER BY sesiones DESC;
+
+-- Eficiencia
+SELECT resultado, ROUND(AVG(cnt), 1) as promedio_mensajes,
+  MIN(cnt) as min_mensajes, MAX(cnt) as max_mensajes, COUNT(*) as sesiones
+FROM (
+  SELECT session_id, COUNT(*) as cnt,
+    CASE WHEN bool_or(state_after = 'completed') THEN 'completada'
+      WHEN bool_or(state_after = 'handoff_secretary') THEN 'handoff'
+      ELSE 'abandonada' END as resultado
+  FROM bot_conversation_logs
+  WHERE organization_id = '{ORG_ID}' AND created_at >= NOW() - INTERVAL '{DIAS} days'
+  GROUP BY session_id
+) sub GROUP BY resultado ORDER BY resultado;
 ```
 
-**Query 4 — Eficiencia (mensajes por resultado):**
+**Query 7 — Distribucion horaria:**
 ```sql
-SELECT
-  resultado,
-  ROUND(AVG(cnt), 1) as promedio_mensajes,
-  MIN(cnt) as min_mensajes,
-  MAX(cnt) as max_mensajes,
-  COUNT(*) as sesiones
-FROM (
-  SELECT
-    session_id, COUNT(*) as cnt,
+SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Tegucigalpa')::int as hora,
+  COUNT(*) as mensajes
+FROM bot_conversation_logs
+WHERE organization_id = '{ORG_ID}' AND created_at >= NOW() - INTERVAL '{DIAS} days'
+GROUP BY 1 ORDER BY 1;
+```
+
+**Query 8 — FAQ gaps + keyword misses:**
+```sql
+-- FAQ gaps (preguntas sin respuesta o con mismatch)
+WITH faq_interactions AS (
+  SELECT patient_phone, user_message, bot_response, created_at,
     CASE
-      WHEN bool_or(state_after = 'completed') THEN 'completada'
-      WHEN bool_or(state_after = 'handoff_secretary') THEN 'handoff'
-      ELSE 'abandonada'
+      WHEN bot_response ILIKE '%no encontre una respuesta%' THEN 'sin_respuesta'
+      WHEN state_before = 'faq_search' AND state_after = 'faq_search' THEN 'posible_mismatch'
+      ELSE 'respondido'
     END as resultado
   FROM bot_conversation_logs
-  WHERE organization_id = '{ORG_ID}'
-    AND created_at >= NOW() - INTERVAL '{DIAS} days'
-  GROUP BY session_id
-) sub
-GROUP BY resultado ORDER BY resultado;
-```
+  WHERE organization_id = '{ORG_ID}' AND created_at >= NOW() - INTERVAL '{DIAS} days'
+    AND state_before = 'faq_search'
+    AND user_message NOT IN ('1', '2', '3', '4')
+    AND user_message NOT ILIKE '%menu%' AND user_message NOT ILIKE '%volver%'
+    AND LENGTH(user_message) > 3
+)
+SELECT user_message as pregunta, resultado, LEFT(bot_response, 150) as respuesta_dada,
+  patient_phone, created_at
+FROM faq_interactions
+ORDER BY CASE resultado WHEN 'sin_respuesta' THEN 1 WHEN 'posible_mismatch' THEN 2 ELSE 3 END, created_at;
 
-**Query 5 — Keyword misses (mensajes que dieron "opcion no valida"):**
-```sql
-SELECT
-  state_before as estado,
-  user_message as mensaje,
-  patient_phone,
-  created_at
+-- Keyword misses (mensajes que dieron "opcion no valida")
+SELECT state_before as estado, user_message as mensaje, patient_phone, created_at
 FROM bot_conversation_logs
-WHERE organization_id = '{ORG_ID}'
-  AND created_at >= NOW() - INTERVAL '{DIAS} days'
-  AND state_before = state_after
-  AND bot_response ILIKE '%no valida%'
-  AND LENGTH(user_message) > 3
-  AND user_message NOT SIMILAR TO '[0-9]+'
+WHERE organization_id = '{ORG_ID}' AND created_at >= NOW() - INTERVAL '{DIAS} days'
+  AND state_before = state_after AND bot_response ILIKE '%no valida%'
+  AND LENGTH(user_message) > 3 AND user_message NOT SIMILAR TO '[0-9]+'
 ORDER BY state_before, created_at;
 ```
 
-3. Presenta el reporte con:
-   - **Dashboard**: tabla de metricas con comparacion vs objetivos target:
+3. Presenta el reporte con titulo "Health Bot Report (HBR)" y estas 7 secciones:
+
+   **1. Citas** — tabla de metricas + citas por dia + bot vs manual (% de citas agendadas por el bot)
+
+   **2. Mensajeria WhatsApp** — confirmaciones (enviadas, leidas, fallidas) + recordatorios 24h (enviados, leidos, confirmaron)
+
+   **3. Salud del bot** — dashboard con comparacion vs objetivos:
      - Tasa completado: objetivo >50%
      - Tasa error: objetivo <5%
      - Tasa friccion: objetivo <10%
      - Mensajes promedio completada: objetivo <7
      - Tasa handoff: objetivo <20%
-   - **Embudo**: mostrar visualmente con flechas la caida por etapa
-   - **Abandonos**: tabla con estado, cantidad y ultimos mensajes (pistas del problema)
-   - **Eficiencia**: tabla comparando completadas vs abandonadas vs handoff
-   - **Keyword misses**: lista de mensajes agrupados por estado — cada uno es un potencial keyword faltante o intent no detectado
-   - **Recomendaciones**: 3-5 acciones concretas basadas en los datos (ej: "agregar keyword X", "FAQ faltante sobre Y")
+   - Embudo visual (sin anotar citas bot al lado — separarlas abajo)
+   - Eficiencia (promedio mensajes por resultado)
+   - Abandonos (estado + ultimos mensajes)
 
-4. Si Diego tambien pide FAQ gap report, ejecutar los queries del FAQ Gap Report ademas de estos.
+   **4. Distribucion horaria** — grafico de barras ASCII, marcar % en horario laboral vs fuera de horario
+
+   **5. FAQ Gaps** — tabla de gaps (sin_respuesta, mismatch) agrupados por tema + keyword misses agrupados por estado. Nota: NO agregar FAQs — reportar a la clinica
+
+   **6. Valor cuantificable** — resumen de datos clave para seguimiento con cliente (citas bot, confirmaciones auto, recordatorios, cancelaciones visibles, actividad fuera de horario)
+
+   **7. Problemas y acciones** — tabla priorizada con semaforo (rojo/amarillo/verde) y accion concreta para cada problema
 
 ## Al finalizar la sesion
 
