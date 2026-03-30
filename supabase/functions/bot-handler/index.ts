@@ -216,7 +216,7 @@ async function handleBotMessage(
     'booking_select_doctor', 'booking_select_service', 'booking_select_day',
     'booking_select_hour', 'booking_ask_name',
   ];
-  const ESCAPE_WORDS = ['cancelar', 'salir', 'menu', 'volver'];
+  const ESCAPE_WORDS = ['cancelar', 'canselar', 'salir', 'menu', 'volver', 'bolber'];
   if (BOOKING_ESCAPABLE_STATES.includes(session.state) && ESCAPE_WORDS.includes(trimmedMsg)) {
     console.log('[bot-handler] Booking escape:', trimmedMsg, 'from', session.state);
     // Clean booking context but preserve line config
@@ -581,6 +581,42 @@ async function handleGreeting(
     };
   }
 
+  // Detect intent in first message before showing generic greeting.
+  // Covers cases like "Reagendar", "quiero agendar cita", "cuanto cuesta la consulta"
+  // that would otherwise be lost when greeting responds with menu.
+  const normalizedMsg = messageText.trim().toLowerCase();
+  const detectedIntent = detectMenuIntent(normalizedMsg);
+
+  // Also check direct keywords (same as handleMainMenu lines 658-679)
+  const hasAgendar = (normalizedMsg.includes('agendar') || normalizedMsg.includes('ajendar')) && !normalizedMsg.includes('reagendar') && !normalizedMsg.includes('reajendar');
+  const hasReagendar = normalizedMsg.includes('reagendar') || normalizedMsg.includes('reajendar') || normalizedMsg.includes('reprogram') || normalizedMsg.includes('cancelar') || normalizedMsg.includes('canselar');
+  const hasHandoff = normalizedMsg.includes('secretar') || normalizedMsg.includes('sekretari') || normalizedMsg.startsWith('hablar con') || normalizedMsg.startsWith('ablar con');
+
+  if (hasAgendar || detectedIntent === 'booking') {
+    return await startBookingFlow(session, organizationId, supabase);
+  }
+  if (hasReagendar || detectedIntent === 'reschedule') {
+    return await startRescheduleFlow(session, organizationId, supabase);
+  }
+  if (hasHandoff || detectedIntent === 'handoff') {
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+  }
+  if (detectedIntent === 'faq') {
+    // Search FAQ directly with their message instead of showing menu
+    const faq = await searchFAQ(messageText, session.context.doctorId, session.context.clinicId, organizationId, supabase);
+    if (faq) {
+      session.context.lastFaqResult = 'found';
+      return {
+        message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faq.question}*\n${faq.answer}`,
+        options: [`${OPT_EMOJI.faq} Otra pregunta`, `${OPT_EMOJI.menu} Menu principal`],
+        requiresInput: true,
+        nextState: 'faq_search',
+        sessionComplete: false,
+      };
+    }
+    // FAQ not found — fall through to greeting + menu so they can try other options
+  }
+
   // Get bot greeting from whatsapp_line
   const { data: lineData } = await supabase
     .from('whatsapp_lines')
@@ -611,26 +647,29 @@ function detectMenuIntent(input: string): 'booking' | 'reschedule' | 'faq' | 'ha
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   // Order: reschedule before booking to avoid false positive with "mi cita"
-  const RESCHEDULE = ['cambiar cita', 'mover cita', 'cambiar fecha', 'mi cita',
+  const RESCHEDULE = ['reagendar', 'reajendar', 'cancelar', 'canselar',
+    'cambiar cita', 'mover cita', 'cambiar fecha', 'mi cita',
     'mi agenda', 'cuando es mi cita', 'cuando sera mi cita', 'no puedo ir',
-    'no podre', 'no asistir', 'posponer', 'aplazar'];
+    'no podre', 'no asistir', 'posponer', 'aplazar',
+    'reprogram', 'otra fecha', 'cambiar dia', 'cambiar hora',
+    'mover fecha', 'cambiar el dia', 'pasarla para'];
   for (const kw of RESCHEDULE) if (n.includes(kw)) return 'reschedule';
 
-  const FAQ = ['ubicacion', 'direccion', 'donde queda', 'donde estan',
-    'horario', 'horarios', 'a que hora', 'que hora',
-    'precio', 'precios', 'cuanto cuesta', 'costo', 'costos', 'tarifa',
+  const FAQ = ['ubicacion', 'ubicasion', 'direccion', 'direcion', 'donde queda', 'donde estan',
+    'horario', 'horarios', 'orario', 'a que hora', 'que hora', 'q hora',
+    'precio', 'precios', 'presio', 'presios', 'cuanto cuesta', 'cuanto vale', 'costo', 'costos', 'tarifa',
     'resultado', 'resultados', 'examenes', 'examen',
-    'informacion', 'info', 'estacionamiento', 'parqueo',
+    'informacion', 'informasion', 'info', 'estacionamiento', 'estasionamiento', 'parqueo',
     'seguro', 'seguros', 'aceptan seguro'];
   for (const kw of FAQ) if (n.includes(kw)) return 'faq';
 
   const HANDOFF = ['hablar', 'hablame', 'llamar', 'llamame', 'contacto',
-    'contactar', 'humano', 'persona', 'alguien', 'atencion', 'ayuda',
-    'necesito ayuda'];
+    'contactar', 'humano', 'persona', 'alguien', 'atencion', 'atension', 'ayuda',
+    'necesito ayuda', 'nesesito ayuda', 'comunicarme', 'komunicarme'];
   for (const kw of HANDOFF) if (n.includes(kw)) return 'handoff';
 
-  const BOOKING = ['cita', 'consulta', 'turno', 'disponibilidad',
-    'apartar', 'reservar', 'tratamiento', 'procedimiento', 'cirugia',
+  const BOOKING = ['agendar', 'ajendar', 'cita', 'sita', 'consulta', 'konsulta', 'turno', 'disponibilidad',
+    'apartar', 'reservar', 'reserbar', 'tratamiento', 'procedimiento', 'cirugia', 'sirugia',
     'operacion', 'lunar', 'revision', 'chequeo', 'control',
     'citologia', 'limpieza', 'extraccion', 'muela'];
   for (const kw of BOOKING) if (n.includes(kw)) return 'booking';
@@ -653,17 +692,17 @@ async function handleMainMenu(
   const normalizedInput = input.trim().toLowerCase();
 
   // Parse input - accept number or text matching
-  if (normalizedInput === '1' || normalizedInput.includes('agendar') && !normalizedInput.includes('reagendar')) {
+  if (normalizedInput === '1' || (normalizedInput.includes('agendar') || normalizedInput.includes('ajendar')) && !normalizedInput.includes('reagendar') && !normalizedInput.includes('reajendar')) {
     // Start booking flow
     return await startBookingFlow(session, organizationId, supabase);
   }
 
-  if (normalizedInput === '2' || normalizedInput.includes('reagendar') || normalizedInput.includes('cancelar')) {
+  if (normalizedInput === '2' || normalizedInput.includes('reagendar') || normalizedInput.includes('reajendar') || normalizedInput.includes('reprogram') || normalizedInput.includes('cancelar') || normalizedInput.includes('canselar')) {
     // Start reschedule/cancel flow
     return await startRescheduleFlow(session, organizationId, supabase);
   }
 
-  if (normalizedInput === '3' || normalizedInput.includes('faq') || normalizedInput.includes('pregunta')) {
+  if (normalizedInput === '3' || normalizedInput.includes('faq') || normalizedInput.includes('pregunta') || normalizedInput.includes('duda')) {
     delete session.context.lastFaqResult;
     delete session.context.faqNotFoundCount;
     return {
@@ -674,12 +713,12 @@ async function handleMainMenu(
     };
   }
 
-  if (normalizedInput === '4' || normalizedInput.includes('secretar') || normalizedInput.startsWith('hablar con')) {
+  if (normalizedInput === '4' || normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.startsWith('hablar con') || normalizedInput.startsWith('ablar con')) {
     return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
   }
 
   // Recognize greetings — re-show menu friendly instead of "opcion no valida"
-  const SALUDOS = ['hola', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'buen dia', 'hey'];
+  const SALUDOS = ['hola', 'ola', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'buen dia', 'hey', 'wenas'];
   const isGreeting = SALUDOS.some(s => normalizedInput === s || normalizedInput.startsWith(s + ' ') || normalizedInput.startsWith(s + ','));
   if (isGreeting) {
     session.context.invalidAttempts = 0;
@@ -801,12 +840,12 @@ async function handleFAQSearch(
         sessionComplete: false,
       };
     }
-    if (normalizedInput === '2' || normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
+    if (normalizedInput === '2' || normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.includes('hablar con') || normalizedInput.includes('ablar con')) {
       return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
     }
   } else if (lastFaqResult === 'not_found_auto') {
     // Options shown: [1: Si conectar, 2: Menu principal]
-    if (normalizedInput === '1' || normalizedInput.includes('si') || normalizedInput.includes('secretar') || normalizedInput.includes('conectar')) {
+    if (normalizedInput === '1' || normalizedInput.includes('si') || normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.includes('conectar') || normalizedInput.includes('konectar')) {
       return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
     }
     if (normalizedInput === '2' || normalizedInput.includes('menu') || normalizedInput.includes('menú') || normalizedInput.includes('volver')) {
@@ -851,9 +890,16 @@ async function handleFAQSearch(
       sessionComplete: false,
     };
   }
-  if (normalizedInput.includes('secretar') || normalizedInput.includes('hablar con')) {
+  if (normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.includes('hablar con') || normalizedInput.includes('ablar con')) {
     return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
   }
+
+  // Detect intent for other flows before searching FAQ.
+  // E.g. patient says "quiero agendar cita" while in faq_search → redirect to booking.
+  const faqDetectedIntent = detectMenuIntent(normalizedInput);
+  if (faqDetectedIntent === 'booking') return await startBookingFlow(session, organizationId, supabase);
+  if (faqDetectedIntent === 'reschedule') return await startRescheduleFlow(session, organizationId, supabase);
+  if (faqDetectedIntent === 'handoff') return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
 
   // Get doctor_id and clinic_id from session context if available
   const doctorId = session.context.doctorId;
@@ -1231,6 +1277,10 @@ function parseDateHint(input: string): typeof DateTime.prototype | null {
   if (/\bpasado\s*manana\b/.test(n)) return now.plus({ days: 2 }).startOf('day');
   if (/\bmanana\b/.test(n)) return now.plus({ days: 1 }).startOf('day');
 
+  // "esta semana" / "proxima semana" / "siguiente semana"
+  if (/\besta\s+semana\b/.test(n)) return now.startOf('week');
+  if (/\b(proxima|siguiente)\s+semana\b/.test(n)) return now.plus({ weeks: 1 }).startOf('week');
+
   // Day of week → next occurrence
   const dayNames: Record<string, number> = {
     lunes: 1, martes: 2, miercoles: 3, jueves: 4,
@@ -1248,6 +1298,8 @@ function parseDateHint(input: string): typeof DateTime.prototype | null {
   const monthNames: Record<string, number> = {
     enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
     julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+    ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6,
+    jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12,
   };
   const dateMatch = n.match(/(\d{1,2})\s+de\s+(\w+)/);
   if (dateMatch) {
@@ -1267,6 +1319,30 @@ function parseDateHint(input: string): typeof DateTime.prototype | null {
     if (day >= 1 && day <= 31) {
       let dt = DateTime.fromObject({ year: now.year, month: now.month, day }, { zone: tz });
       if (!dt.isValid || dt < now.startOf('day')) dt = dt.plus({ months: 1 });
+      if (dt.isValid) return dt;
+    }
+  }
+
+  // "semana del DD [de] MES" — e.g., "semana del 6 de abril", "semana del 30 mar"
+  const semanaMatch = n.match(/semana\s+del\s+(\d{1,2})(?:\s+de)?\s+(\w+)/);
+  if (semanaMatch) {
+    const day = parseInt(semanaMatch[1]);
+    const month = monthNames[semanaMatch[2]];
+    if (month && day >= 1 && day <= 31) {
+      let dt = DateTime.fromObject({ year: now.year, month, day }, { zone: tz });
+      if (dt < now.startOf('day')) dt = DateTime.fromObject({ year: now.year + 1, month, day }, { zone: tz });
+      if (dt.isValid) return dt;
+    }
+  }
+
+  // "DD MES" sin "de" — e.g., "30 mar", "5 abr", "13 abril"
+  const bareDateMatch = n.match(/(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/);
+  if (bareDateMatch) {
+    const day = parseInt(bareDateMatch[1]);
+    const month = monthNames[bareDateMatch[2]];
+    if (month && day >= 1 && day <= 31) {
+      let dt = DateTime.fromObject({ year: now.year, month, day }, { zone: tz });
+      if (dt < now.startOf('day')) dt = DateTime.fromObject({ year: now.year + 1, month, day }, { zone: tz });
       if (dt.isValid) return dt;
     }
   }
@@ -1554,7 +1630,7 @@ async function handleBookingConfirm(
   const selection = parseInt(input.trim());
 
   // Option 1: Confirm
-  if (selection === 1 || normalizedInput.includes('si') || normalizedInput.includes('sí') || normalizedInput.includes('confirmar')) {
+  if (selection === 1 || normalizedInput.includes('si') || normalizedInput.includes('sí') || normalizedInput.includes('confirmar') || normalizedInput.includes('konfirmar') || normalizedInput.includes('confirmo')) {
     // Find patient by phone
     let patient = await findPatientByPhone(session.patient_phone, organizationId, supabase);
 
@@ -1589,7 +1665,7 @@ async function handleBookingConfirm(
   }
 
   // Option 3: Cancel
-  if (selection === 3 || normalizedInput.includes('cancelar')) {
+  if (selection === 3 || normalizedInput.includes('cancelar') || normalizedInput.includes('canselar')) {
     return {
       message: `${OPT_EMOJI.cancelar} Proceso cancelado.\n\n¿En que puedo ayudarle?`,
       options: [
@@ -1961,66 +2037,74 @@ async function handleCancelConfirm(
     // Reset phase flag regardless of outcome
     session.context.cancelConfirmPhase = null;
 
-    if (selection === 1 || normalizedInput.includes('sí') || normalizedInput.includes('si') || normalizedInput.includes('cancelar')) {
-      // Execute cancellation
-      const { error: cancelError } = await supabase
-        .from('appointments')
-        .update({ status: 'cancelada', notes: 'Cancelada por paciente via WhatsApp Bot' })
-        .eq('id', session.context.rescheduleAppointmentId);
+    // Guard: si el input contiene keywords de reagendar/reprogram, NO procesar como
+    // confirmación de cancelación. Previene cancelación accidental cuando el paciente
+    // escribe "1. Reagendar" y parseInt parsea el "1" como "Sí, cancelar".
+    const hasReagendarIntent = /reagendar|reajendar|reprogram/.test(normalizedInput);
 
-      if (cancelError) {
-        console.error('[cancel_confirm] Error cancelling:', cancelError);
+    if (!hasReagendarIntent) {
+      if (selection === 1 || normalizedInput.includes('sí') || normalizedInput.includes('si') || normalizedInput.includes('cancelar')) {
+        // Execute cancellation
+        const { error: cancelError } = await supabase
+          .from('appointments')
+          .update({ status: 'cancelada', notes: 'Cancelada por paciente via WhatsApp Bot' })
+          .eq('id', session.context.rescheduleAppointmentId);
+
+        if (cancelError) {
+          console.error('[cancel_confirm] Error cancelling:', cancelError);
+          return {
+            message: `⚠️ Error al cancelar la cita.\n\nConectando con ${handoffLabels.connecting}...`,
+            requiresInput: false,
+            nextState: 'handoff_secretary',
+            sessionComplete: true,
+          };
+        }
+
+        const dateLabel = DateTime.fromISO(session.context.rescheduleAppointmentDate, { zone: 'America/Tegucigalpa' })
+          .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
+
         return {
-          message: `⚠️ Error al cancelar la cita.\n\nConectando con ${handoffLabels.connecting}...`,
-          requiresInput: false,
-          nextState: 'handoff_secretary',
-          sessionComplete: true,
+          message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
+          options: [
+            `${OPT_EMOJI.agendar} Agendar cita`,
+            `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
+            `${OPT_EMOJI.faq} Preguntas frecuentes`,
+            handoffLabels.menuOption,
+          ],
+          showMenuHint: false,
+          requiresInput: true,
+          nextState: 'main_menu',
+          sessionComplete: false,
         };
       }
 
-      const dateLabel = DateTime.fromISO(session.context.rescheduleAppointmentDate, { zone: 'America/Tegucigalpa' })
-        .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
+      // Option 2 or "no" → go back to action selection
+      if (selection === 2 || normalizedInput.includes('no') || normalizedInput.includes('volver')) {
+        return {
+          message: '¿Que desea hacer con esta cita?',
+          options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
+          requiresInput: true,
+          nextState: 'cancel_confirm',
+          sessionComplete: false,
+        };
+      }
 
+      // Invalid input in delete confirm phase
       return {
-        message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
-        options: [
-          `${OPT_EMOJI.agendar} Agendar cita`,
-          `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
-          `${OPT_EMOJI.faq} Preguntas frecuentes`,
-          handoffLabels.menuOption,
-        ],
-        showMenuHint: false,
-        requiresInput: true,
-        nextState: 'main_menu',
-        sessionComplete: false,
-      };
-    }
-
-    // Option 2 or "no" → go back to action selection
-    if (selection === 2 || normalizedInput.includes('no') || normalizedInput.includes('volver')) {
-      return {
-        message: '¿Que desea hacer con esta cita?',
-        options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
+        message: '⚠️ ¿Esta seguro que desea cancelar la cita?',
+        options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
         requiresInput: true,
         nextState: 'cancel_confirm',
         sessionComplete: false,
       };
     }
-
-    // Invalid input in delete confirm phase
-    return {
-      message: '⚠️ ¿Esta seguro que desea cancelar la cita?',
-      options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
-      requiresInput: true,
-      nextState: 'cancel_confirm',
-      sessionComplete: false,
-    };
+    // hasReagendarIntent = true → fall through to Phase 1 (reagendar flow below)
   }
 
   // PHASE 1: Action selection [Reagendar, Cancelar, Volver]
 
   // Option 1: Reagendar - start new booking flow for same doctor
-  if (selection === 1 || normalizedInput.includes('reagendar')) {
+  if (selection === 1 || normalizedInput.includes('reagendar') || normalizedInput.includes('reajendar') || normalizedInput.includes('reprogram')) {
     // We already have doctorId and doctorName in context from reschedule_list
     // Get whatsapp line to fetch default duration
     const { data: lineData } = await supabase
@@ -2066,7 +2150,7 @@ async function handleCancelConfirm(
   }
 
   // Option 2: Cancelar - show confirmation (move to Phase 2)
-  if (selection === 2 || normalizedInput.includes('cancelar')) {
+  if (selection === 2 || normalizedInput.includes('cancelar') || normalizedInput.includes('canselar')) {
     const dateLabel = DateTime.fromISO(session.context.rescheduleAppointmentDate, { zone: 'America/Tegucigalpa' })
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 

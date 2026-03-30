@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 25 Mar 2026 (PRIORIDAD 1 resuelta: bot entiende texto libre en todos los menus)
+> Ultima actualizacion: 30 Mar 2026 (3 bugs de parsing detectados via log analysis + concepto FAQ auto-poblado documentado)
 
 ## Fase actual
 
@@ -26,6 +26,17 @@ Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
 ### Producto (blocker para ads)
 - [ ] Flujo "DEMO" en el bot: cuando reciba "DEMO" dar contexto guiado para doctor
 
+### Bot — bugs de parsing (detectados 30 Mar, analisis de logs Medilaser)
+- [ ] **CRITICO — Cancelacion accidental en `cancel_confirm`:** Paciente escribio "1. Reagendar" y bot parseo "1" como confirmar cancelacion (en fase confirm_delete). Paciente perdio su cita. Fix: en handleCancelConfirm, si input contiene "reagendar" tratar como opcion reagendar, no como confirmacion.
+- [ ] **Keywords faltantes en main_menu:** "reprogramar/reprogramelo" no esta en keywords. Agregar a linea 661 y al array RESCHEDULE de detectMenuIntent.
+- [ ] **Texto libre en booking_select_day:** Pacientes escriben "Semana del 30 al 5 abr", "Para la semana del 6 de abril", "Semana del 13 de abril al 17" y dan opcion no valida. El parseDateHint no maneja rangos de semanas.
+
+### Junio 2026+ — FAQ auto-poblado (concepto aprobado, no construir aun)
+Tres capas planificadas para despues del feature freeze:
+1. **Datos estructurados del onboarding:** Ubicacion, horarios, precios base → el bot responde sin necesidad de FAQ manual. Estos datos ya se recogen parcialmente en el wizard.
+2. **Templates de FAQ por especialidad:** Pre-cargar FAQs tipicas segun tipo de clinica (dermatologia, odontologia, etc). Ya existe `FAQTemplatePicker` con 50 templates genericos — extender con templates por especialidad. Cada template incluye pregunta + keywords + respuesta placeholder que la clinica solo llena con sus datos.
+3. **Deteccion automatica de gaps:** Query semanal contra bot_conversation_logs para detectar preguntas sin respuesta. Generar reporte para cada clinica: "3 pacientes preguntaron sobre X y no tuvimos respuesta". Ya existe el query como herramienta en modo-dev (gap report). Fase futura: notificacion automatica al admin de la clinica via dashboard.
+
 ### Limpieza
 - [ ] Remover `lovable-tagger` de devDependencies en package.json
 
@@ -33,6 +44,7 @@ Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
 
 - [ ] Reagendar muestra "Paso 5/4" — numeracion de pasos incorrecta
 - [ ] Paciente +50433899824 lleva 1 semana en booking_select_hour — verificar timeout de sesiones
+- [ ] **confirmation_message_sent nunca se marca true** — en `create-appointment/index.ts` linea ~410, despues de `gatewayResult.success` falta `await supabase.from("appointments").update({ confirmation_message_sent: true }).eq("id", appointment.id)`. Los mensajes SI se envian (message_logs lo confirma), solo el flag no se actualiza. Afecta a todas las orgs desde siempre (las citas viejas con true fueron de codigo anterior a la migracion a messaging-gateway).
 
 ## Resuelto recientemente
 
