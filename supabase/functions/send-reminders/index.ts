@@ -44,6 +44,7 @@ async function sendReminderMessage(params: {
   patientId: string;
   doctorId: string;
   organizationId?: string | null;
+  type?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(params.gatewayUrl, {
@@ -56,7 +57,7 @@ async function sendReminderMessage(params: {
       },
       body: JSON.stringify({
         to: params.to,
-        type: "reminder_24h",
+        type: params.type || "reminder_24h",
         templateParams: params.templateParams,
         appointmentId: params.appointmentId,
         patientId: params.patientId,
@@ -358,6 +359,7 @@ Deno.serve(async (req) => {
           patientId: patient.id,
           doctorId: doctor.id,
           organizationId: appointment.organization_id,
+          type: "reminder_3d",
         });
 
         if (sendResult.success) {

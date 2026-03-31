@@ -68,6 +68,26 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     ],
   },
   {
+    logical_type: "reminder_3d",
+    template_name: "recordatorio_3d",
+    language: "es_MX",
+    category: "UTILITY",
+    components: [
+      {
+        type: "BODY",
+        text: "Hola {{1}}, le recordamos que tiene cita con {{2}} el {{3}} a las {{4}} \ud83e\ude7a\n\n\u2705 Por favor confirme su asistencia.",
+        example: { body_text: [["Maria", "Dra. Yeni", "miércoles 2 de abril", "10:00 AM"]] },
+      },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "Confirmo" },
+          { type: "QUICK_REPLY", text: "No puedo asistir" },
+        ],
+      },
+    ],
+  },
+  {
     logical_type: "reschedule_doctor",
     template_name: "aviso_reagenda_medico",
     language: "es_MX",
