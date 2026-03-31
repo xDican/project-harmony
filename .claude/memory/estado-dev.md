@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 30 Mar 2026 sesion 3 (sistema de auto-cancelacion por falta de confirmacion)
+> Ultima actualizacion: 31 Mar 2026 sesion 2 (template reminder_3d + prep swap v2 clinicas)
 
 ## Fase actual
 
@@ -49,6 +49,25 @@ Tres capas planificadas para despues del feature freeze:
 - [ ] **Post-QA:** Activar swap en Consultorio Familiar, Dr. Guevara, Medilaser
 - [ ] Reportar a Medilaser: necesitan FAQs sobre precios de laser, blanqueamiento axilas, eliminacion tatuajes, queloide
 
+### Recordatorios 3 dias antes (31 Mar sesion 2)
+- [x] Template `reminder_3d` creado en canonical-templates.ts (sin "manana", usa fecha)
+- [x] messaging-gateway: type `reminder_3d` + TYPES_WITH_QUICK_REPLY
+- [x] send-reminders: seccion 3-day usa `type: "reminder_3d"` en vez de `reminder_24h`
+- [x] Templates `recordatorio_3d_310326` creados en 4 WABAs Meta (PENDING aprobacion)
+- [x] template_mappings insertados (is_active=false hasta APPROVED)
+- [x] meta_status de templates v2 actualizado a APPROVED en DB
+- [x] Deploy: messaging-gateway + send-reminders (ff78b27)
+- [ ] **PENDIENTE 1 Abr:** Esperar aprobacion Meta de `recordatorio_3d_310326` en 4 WABAs
+- [ ] **PENDIENTE 1 Abr:** Swap atomico cuando reminder_3d APPROVED:
+  ```sql
+  -- Activar reminder_3d
+  UPDATE template_mappings SET is_active = true, meta_status = 'APPROVED' WHERE logical_type = 'reminder_3d';
+  -- Desactivar reminder_24h viejo
+  UPDATE template_mappings SET is_active = false WHERE id IN ('790c89ee-1634-4ab3-83ad-20e9fd05032a', '453b64da-773c-44f9-ac58-2e9879e09ee6', '51e9d51c-7294-40be-9533-7f815d9a7e6d');
+  -- Promover v2 a reminder_24h
+  UPDATE template_mappings SET logical_type = 'reminder_24h', is_active = true WHERE id IN ('7cb31c4b-7a2d-461d-9011-14294af29f66', '362b1572-b552-453b-afee-4ac699db910a', '5e18addd-257c-48fe-aa23-e13dabe8e516');
+  ```
+
 ### Soporte numeros internacionales (Junio 2026+)
 - [ ] `normalizeToLocalHN()` en whatsapp-inbound-webhook — deja de asumir 8 digitos Honduras
 - [ ] `findPatientByPhone()` en bot-handler — deja de forzar +504
@@ -61,11 +80,26 @@ Tres capas planificadas para despues del feature freeze:
 
 ## Bugs conocidos
 
-- [ ] Reagendar muestra "Paso 5/4" — numeracion de pasos incorrecta
 - [ ] Paciente +50433899824 lleva 1 semana en booking_select_hour — verificar timeout de sesiones
 - [ ] **confirmation_message_sent nunca se marca true** — en `create-appointment/index.ts` linea ~410, despues de `gatewayResult.success` falta `await supabase.from("appointments").update({ confirmation_message_sent: true }).eq("id", appointment.id)`. Los mensajes SI se envian (message_logs lo confirma), solo el flag no se actualiza. Afecta a todas las orgs desde siempre (las citas viejas con true fueron de codigo anterior a la migracion a messaging-gateway).
 
 ## Resuelto recientemente
+
+- **Template reminder_3d + prep swap v2 (31 Mar sesion 2, ff78b27):**
+  - Nuevo template `reminder_3d` para recordatorios 3 dias antes (sin "manana", usa fecha real)
+  - Botones: "Confirmo" / "No puedo asistir" (sin emojis — Meta no permite)
+  - Flujo: 3-day reminder (dia -3) → paciente confirma → 24h reminder (dia -1) igual se envia
+  - Templates `recordatorio_3d_310326` creados en 4 WABAs, esperando aprobacion Meta
+  - meta_status de templates v2 (recordatorio_v2, sin_confirmar, liberada) actualizado a APPROVED
+  - Swap pendiente: activar reminder_3d + swap reminder_24h_v2 en 3 clinicas cuando Meta apruebe
+
+- **3 bugs de confirmacion (31 Mar, fac1121):**
+  - **detectIntent "No puedo asistir" confirmaba:** "asistir".includes("si") matcheaba CONFIRM antes de CANCEL. Fix: "si" como palabra completa, cancel antes de confirm. Alineado con whatsapp-inbound-webhook.
+  - **"Paso 5/4" en reagendar:** availableDoctors/availableServiceTypes stale causaban offset incorrecto en getStepNumbers(). Fix: limpiar en handleDirectReschedule + handleCancelConfirm opcion Reagendar.
+  - **handleDirectReschedule → opciones:** Ahora muestra Reagendar/Cancelar/Volver en vez de saltar directo a seleccion de semana.
+  - **Follow-up prematuro 15 min:** send-reminder-followup ahora filtra reminder_24h_sent_at < 4h ago. Citas del cron 7pm ya no reciben follow-up a las 7:15pm.
+  - Deploy: meta-webhook + bot-handler + send-reminder-followup
+  - **QA PENDIENTE:** Diego probara y reportara resultados proxima sesion
 
 - **Sistema de confirmacion con consecuencia real (30 Mar sesion 3):**
   - Flujo: Recordatorio 11am → Follow-up 7:15pm si no confirmo → Auto-cancel 7am dia de cita
