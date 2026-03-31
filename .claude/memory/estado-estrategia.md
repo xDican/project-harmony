@@ -1,6 +1,6 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 23 Mar 2026 PM (scripts v2 asistente+doctor, canal llamadas frias analizado, Jorge descartado)
+> Ultima actualizacion: 27 Mar 2026 (AD-007 pausada Semana Santa, Wilmer 9.5/10 + testimonial, Paredes pending Marleny)
 
 ## Dashboard
 
@@ -9,16 +9,18 @@
 | Clientes activos | 3 (Yeni, Ramos, Carla) | 175 |
 | Calendarios activos | 4 (Yeni×1, Ramos×1, Carla×2) | — |
 | MRR | **$145** (Yeni $35 + Ramos $35 + Carla $75) | $7,000 |
-| Gasto total ads | ~$150 (AD-005: $92.30 + AD-006: $57.33 + AD-007: ~$2.40) | $100/mes |
-| Leads calientes | **0** | — |
-| Leads totales historicos | 80 (AD-005: 38 + AD-006: 42) | — |
-| AD-007 | ACTIVA dia 2 — casi sin entrega, budget corregido 21 Mar | Eval lunes 24 Mar |
+| Gasto total ads | **$267.48** (AD-005: $92.30 + AD-006: $57.33 + AD-007: $117.85) | — |
+| Leads calientes | **0** (AD-007 calientes no convirtieron) | — |
+| Leads totales historicos | **117** (AD-005: 38 + AD-006: 44 + AD-007: 35) | — |
+| CPA real | **$267.48** (1 cierre total) | <$20 |
+| Todas las campanas | **PAUSADAS** — Semana Santa 28 Mar - 6 Abr | Reactivar 7 Abr |
 | Churn | 0% | < 5% |
-| Producto | 87% listo | Recordatorio 3d per-appointment aprobado |
-| Canales activos | 5 (ads + llamadas frias ICP + afiliado + referidos + asistente medica) | — |
-| Pipeline efectivo | **3 callbacks frias + 1 info enviada** | Critico pero con señales |
-| Canal llamadas frias | 15 llamadas, 3 callbacks, 1 info enviada (27% contacto) | — |
-| Manuel (afiliado) | Pausado hasta Semana Santa (~7 Abr) | — |
+| Producto | 87% listo | Recordatorio 3d + notificacion doctor pendientes |
+| Canales activos | **0 activos** (todos pausados por Semana Santa) | — |
+| Pipeline efectivo | **0** — AD-007 calientes no contestaron/colgaron, frias sin avance | — |
+| Canal llamadas frias | 15 llamadas, 3 callbacks, 1 info enviada (27% contacto). Sin cierres. | — |
+| Manuel (afiliado) | Pausado hasta post-Semana Santa (~7 Abr) | — |
+| NPS Wilmer | **9.5/10** — testimonial aprobado, 2 referidos (no pagan aun, ~6 meses) | — |
 
 ## Metricas AD-006 "20mensajes1cita" (primeros 3 dias, 13-15 Mar)
 
@@ -105,13 +107,13 @@
 
 ## Riesgos activos
 
-1. **ALTO: Tasa de cierre sigue baja.** 1/80 ads. Scripts v2 con Hormozi listo para probar pero sin data aun.
-2. **ALTO → EN PROCESO: AD-007 sin entregar.** Checkpoint lunes 24 Mar. Si <$30 gastados → pivotar.
-3. **ALTO → MEJORANDO: Pipeline.** Era 0 leads. Ahora: 3 callbacks frias (Microlaser, Paracelso, Joselin) + 1 info enviada (Famisalud). Primer pipeline no-ads.
-4. **MEDIO → EN PROCESO: Dependencia canal ads.** Canal llamadas frias activo con data real (27% contacto). Canal asistente medica con script v2 listo. Manuel pausado hasta Semana Santa.
-5. **BAJO: Deuda tecnica de seguridad.** Advisories de Supabase pendientes.
-6. **RESUELTO: FAQ por keywords ineficiente.** Catalogo de 50 templates con keywords robustas completado (cfe745b, 1629271).
-7. **RESUELTO: Bot UX frustrante.** 5 fixes deployed (2d90f73): escape de booking, FAQ auto-handoff, saludos, logging diagnostico, scoring mejorado. Pacientes ya no quedan atrapados.
+1. **CRITICO: Tasa de cierre inaceptable.** 1/117 leads = 0.85%. Meta era 25%. CPA real $267.48. El cuello de botella NO es generacion — es conversion post-lead.
+2. **ALTO: Pipeline en cero.** AD-007 calientes no convirtieron (no contestaron o colgaron). Callbacks frias sin avance. Todo pausado por Semana Santa.
+3. **MEDIO: Ningun canal de adquisicion funciona consistentemente.** Ads generan leads pero no cierran. Llamadas frias tienen 27% contacto pero 0 cierres. Manuel pausado. Referidos de Wilmer no pagan aun (~6 meses).
+4. **BAJO: Deuda tecnica de seguridad.** Advisories de Supabase pendientes.
+5. **RESUELTO: FAQ por keywords ineficiente.** Catalogo de 50 templates completado.
+6. **RESUELTO: Bot UX frustrante.** Fix texto libre deployed 25 Mar. Data insuficiente post-fix (3 sesiones) pero 0 errores de pacientes reales.
+7. **RESUELTO: AD-007 sin entregar.** Entrego $117.81, 35 leads. Pero calidad 43% y CPL calificado $7.85 — peor que AD-005.
 
 ## Decisiones vigentes
 
@@ -143,8 +145,8 @@
 
 | Hito | Clientes | MRR | Status |
 |------|----------|-----|--------|
-| Arranque (Mar) | 5-8 | $200-320 | En progreso — 3 activos, 0 leads activos, Jorge pre-pipeline. Proyeccion realista: 3-4. |
-| Traccion (May) | 25 | $1,000 | Pendiente |
+| Arranque (Mar) | 5-8 | $200-320 | **FALLIDO — 3 clientes, $145 MRR.** 117 leads, 1 cierre. Conversion es el problema, no generacion. |
+| Traccion (May) | 25 | $1,000 | En riesgo — requiere resolver conversion + nuevos creativos post-Semana Santa |
 | Momentum (Jul) | 50 | $2,000 | Pendiente |
 | Objetivo (Dic) | 175 | $7,000 | Pendiente |
 
@@ -416,6 +418,18 @@ Pena, Banegas, Herrera, Servellon, Cubero, Peralta — todos descartados por dem
 - Snapshot dia 3: 39 pacientes, 22 citas, 83% tasa confirmacion, bot 38.5% completion
 - **Comparar al cumplir 1 semana (23-24 Mar)**
 
+## Caso de estudio: Dr. Wilmer Guevara (analisis 25 Mar)
+
+- **Reportes:** `docs/reporte-guevara-25mar.md` + `docs/reporte-guevara-25mar-llamada.md`
+- **Periodo:** Dic 2025 — Mar 2026 (~3 meses)
+- **Citas totales:** 78 | Pacientes unicos: ~30 | Confirmadas: 36 (46%) | Canceladas: 6 (8%)
+- **Confirmaciones WhatsApp:** 78 enviadas, 75% leidas (status "read" via Meta)
+- **Bot (corregido sin pruebas):** 10 pacientes reales, 3 agendaron solos (30%), 3 handoff, 2 FAQ, 2 perdidos (bugs ya corregidos)
+- **Dato clave:** 2 de 3 autoagendaron de noche (9pm+). Sin bot = perdidos.
+- **FAQs pendientes:** Wilmer debe agregar ubicacion, servicios, precios por servicio
+- **Bug encontrado:** `confirmation_message_sent` nunca se marca true (registrado en estado-dev.md). Mensajes SI se envian.
+- **Llamada programada 25 Mar** — guia de llamada en `docs/reporte-guevara-25mar-llamada.md`
+
 ## Decisiones sesion 23 Mar
 
 ### Canal llamadas frias a ICP — primer data real
@@ -479,19 +493,104 @@ Pena, Banegas, Herrera, Servellon, Cubero, Peralta — todos descartados por dem
 - Carla reporto necesidad de recordatorio 3 dias antes para pacientes fuera de la ciudad.
 - Feature request real de cliente activo = señal de retencion.
 
+## Decisiones sesion 25 Mar
+
+### Analisis profundo Guevara y Medilaser — reportes de llamada creados
+- **Guevara:** `docs/reporte-guevara-25mar.md` + `docs/reporte-guevara-25mar-llamada.md`
+- **Medilaser:** `docs/reporte-medilaser-25mar.md` + `docs/reporte-medilaser-25mar-llamada.md`
+
+### Hallazgo: WhatsApp read tracking via Meta
+- `message_logs` tiene status "read"/"delivered"/"sent"/"failed" actualizado via webhooks de Meta
+- Podemos saber si un paciente leyo el recordatorio/confirmacion
+- No tenemos timestamp de CUANDO lo leyo (solo el status actual)
+- Twilio (pre-migracion) solo reportaba "sent"/"queued" — sin tracking de lectura
+
+### Bug encontrado: confirmation_message_sent nunca se marca true
+- En `create-appointment/index.ts`, despues de enviar confirmacion via gateway, falta UPDATE del flag
+- Los mensajes SI se envian (message_logs lo confirma) — solo el flag no se actualiza
+- **Registrado en estado-dev.md** para /modo-dev
+
+### Guevara — datos corregidos (sin pruebas)
+- 78 citas, ~30 pacientes, 3 meses
+- Confirmaciones: 75% leidas (Meta)
+- Reminders: 68% respondieron, 98% llegaron
+- Bot: 10 pacientes reales, 3 agendaron solos (2 de noche 9pm+), 80% resultado util
+- 2 pacientes perdidos por bugs YA resueltos (texto libre 25 Mar)
+- FAQs pendientes: ubicacion, servicios, precios — tarea de Wilmer
+- Llamada enfocada en contrastar dolor + mostrar beneficio para generar referidos
+
+### Medilaser — datos corregidos (sin pruebas)
+- 76 citas reales en 9 dias, ~8.4/dia, 2 doctoras
+- Confirmaciones: 67% leidas, 95% llegaron
+- Reminders: 52% leidos, 25% respondieron "Confirmar"
+- **Cancelaciones 20%** — preguntar a Marleny si es normal o nuevo
+- Bot: 48 pacientes, 15 completaron (31%)
+- **Llamada con Marleny** (no Carla) — ella vive el dolor del WhatsApp
+- Pregunta clave: ¿los que leen y no confirman, llegan?
+- No-shows: no sabemos, ensenarle a marcar en plataforma
+- Referido NO va con Marleny — eso es con Carla en otra llamada
+
+### Patron validado: pacientes leen pero no confirman
+- Guevara: 5 pacientes leyeron reminder, no respondieron, cita quedo "agendada" — probablemente si llegaron
+- Medilaser: 52% leyo reminder, solo 25% presiono "Confirmar"
+- **"Agendada" no significa que no van** — significa que no les dio la gana de presionar el boton
+
+## Decisiones sesion 27 Mar
+
+### AD-007 resultados finales y PAUSADA (Semana Santa)
+- **Metricas finales CSV (25 Feb - 26 Mar):**
+  - Doctor Independiente: $117.81 | 35 leads | CPL $3.37 | CTR 0.82% | Alcance 39,470 | Frecuencia 2.12
+  - Doctor Empresario: $0.04 | 0 leads | 15 impresiones — **MUERTO, Meta no lo entrego**
+- **Calidad AD-007:** 15 calientes (43%), 15 frios (43%), 5 descartados (14%)
+- **CPL calificado:** $7.85 (peor de las 3 campanas)
+- **Los 15 "calientes":** muchos con especialidades basura ("Perder tiempo", "estar con cel", "hola"). Si filtramos por especialidad real, ~7 calificados = CPL calificado real ~$16.83
+- **Resultado:** 0 cierres. Calientes no contestaron llamadas o colgaron.
+- **Hipotesis "creativo como filtro": parcialmente fallida.** Mejor que AD-006 (43% vs 10-31%) pero muy inferior a AD-005 (86%).
+- **Decision:** PAUSAR por Semana Santa. No reactivar — pivotar a AD-005 refrescado.
+
+### Metricas finales actualizadas AD-006
+- 44 leads (no 42 como se reportaba). CPL $1.30. CTR 1.39%.
+
+### Gasto total ads corregido
+- **$267.48 total** (no $150 como se tenia registrado). AD-007 gasto $117.85 que no estaba contabilizado.
+
+### Wilmer Guevara — NPS 9.5/10, testimonial, referidos
+- **Llamada completada 25 Mar.** Calificacion 9.5/10.
+- **Para 10/10:** Notificacion WhatsApp al doctor cuando un paciente agenda. Evaluar en /modo-dev como polish.
+- **Testimonial aprobado con nombre:** "Porque lo uso en mi dia a dia y realmente me ha funcionado, me facilita el trabajo y me siento seguro recomendandolo."
+- **2 referidos:** Colegas que no estan en posicion de pagar (~6 meses). No son pipeline inmediato.
+- **Uso estrategico:** Integrar a scripts de venta + futuros ads con social proof real.
+
+### Carla Paredes — Marleny pendiente
+- Se compartio dato y se pidio permiso para hablar con Marleny (asistente).
+- **Mensaje sin leer hace 3 dias.** Accion: LLAMAR, no re-mensajear.
+
+### Pausa Semana Santa (28 Mar - 6 Abr)
+- Todas las campanas pausadas. No invertir en ads durante semana muerta.
+- Ahorro estimado: $140-200.
+- Tiempo de preparacion: creativos nuevos, scripts con testimonial, alineacion con Manuel.
+
+### Bot text-libre fix — data insuficiente
+- Fix deployed 25 Mar 19:00 UTC. Solo 3 sesiones post-fix (2 dias).
+- 0 "opcion no valida" de pacientes reales post-fix (1 caso fue spam chino con mensaje vacio).
+- "Reagendar" correctamente ruteado a booking hoy (27 Mar).
+- Necesitamos 15-20 sesiones para evaluar. Revision: semana del 7 Abr.
+
 ## Proximos pasos
 
-### Lunes 24 Mar — Warhol
-1. **Callbacks pendientes de llamadas frias:** Microlaser 2pm (Katherine), Paracelso 1pm (Rosa), Dra. Joselin 2:30pm. Usar scripts v2.
-2. **Completar segunda ventana dorada** con las clinicas restantes de la lista ICP. Usar apertura v2.
-3. **Follow-up Famisalud** — doctora ya recibio info por WhatsApp. Llamar para demo.
+### Antes de Semana Santa (27-29 Mar)
+1. **Llamar a Carla** por permiso Marleny — no mensajear (Diego)
+2. **Integrar testimonial Wilmer a scripts de venta** (Claude, /modo-contenido o /modo-seguimiento)
 
-### Lunes 24 Mar — Diego
-4. **Checkpoint AD-007** — Si <$30 gastados → pivotar a AD-005 con imagenes frescas. Si $30+ → evaluar % calificados.
-5. **Implementar recordatorio 3d** — migracion + edge function + template. (~3-4 hrs)
-6. **Comparar caso estudio Medilaser** — snapshot semana 1 vs dia 3.
+### Semana Santa (30 Mar - 6 Abr) — preparacion
+3. **Generar creativo AD-005 refrescado** — mismo concepto "doctor de noche", imagen nueva (Diego + Claude)
+4. **Evaluar notificacion WhatsApp a doctor** como polish (Diego, /modo-dev)
+5. **Fix confirmation_message_sent** — en /modo-dev
+6. **Advisories Supabase** — si hay tiempo
 
-### Esta semana (24-28 Mar)
-7. **Prueba canal asistente** — Warhol completa 10 llamadas con script v2. Metrica: 1+ callback de doctor = canal viable.
-8. **Regraba audio de Diego** con framing Hormozi v2.
-9. **Revision semanal** — viernes 28 Mar.
+### Post-Semana Santa (7 Abr) — reactivacion
+7. **Lanzar AD-005 refrescado** con presupuesto $10-15/dia
+8. **Activar Manuel** (afiliado) — ya dijo que post-Semana Santa
+9. **Scripts actualizados** con testimonial Wilmer listos para Warhol
+10. **Evaluar data bot text-libre** — 2 semanas post-fix
+11. **Revision semanal** — viernes 11 Abr

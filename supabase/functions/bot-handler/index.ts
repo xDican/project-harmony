@@ -528,29 +528,20 @@ async function handleDirectReschedule(
   if (appointment.service_type) {
     session.context.selectedServiceType = appointment.service_type;
   }
-  session.context.bookingTotalSteps = 4; // Direct reschedule always 4 steps
+  // Clean stale booking context to prevent "Paso 5/4" bug
+  delete session.context.availableDoctors;
+  delete session.context.availableServiceTypes;
+  session.context.bookingTotalSteps = 4;
 
-  // 6. Get available weeks
-  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId, slotGranularity);
-
-  if (weeks.length === 0) {
-    return {
-      message: `⚠️ No encontramos disponibilidad en las proximas semanas para reagendar su cita con ${doctorName}.\n\nConectando con ${handoffLabels.connecting}...`,
-      requiresInput: false,
-      nextState: 'handoff_secretary',
-      sessionComplete: true,
-    };
-  }
-
-  session.context.availableWeeks = weeks;
-
-  const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
+  // 6. Show action options (Reagendar / Cancelar / Volver) instead of jumping to reschedule
+  const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
+    .toFormat("EEEE dd 'de' MMMM yyyy", { locale: 'es' });
 
   return {
-    message: `${stepTitle}\n\nSeleccione la nueva semana para su cita con ${doctorName}:\n👉 Escriba el numero`,
-    options: weeks.map((w) => w.weekLabel),
+    message: `¿Que desea hacer con su cita?\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}`,
+    options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
     requiresInput: true,
-    nextState: 'booking_select_day',
+    nextState: 'cancel_confirm',
     sessionComplete: false,
   };
 }
@@ -2117,6 +2108,9 @@ async function handleCancelConfirm(
     session.context.durationMinutes = selectedApt?.durationMinutes || lineData?.default_duration_minutes || 60;
     session.context.slotGranularity = Math.min(session.context.durationMinutes, 30);
     session.context.isReschedule = true; // Flag to know we're rescheduling
+    // Clean stale booking context to prevent "Paso 5/4" bug
+    delete session.context.availableDoctors;
+    delete session.context.availableServiceTypes;
     session.context.bookingTotalSteps = 4; // Reschedule always 4 steps (doctor already selected)
 
     // Carry over service type from original appointment

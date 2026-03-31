@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 30 Mar 2026 (bugs de parsing resueltos + HBR consolidado + intent detection en greeting/FAQ)
+> Ultima actualizacion: 30 Mar 2026 sesion 3 (sistema de auto-cancelacion por falta de confirmacion)
 
 ## Fase actual
 
@@ -40,6 +40,22 @@ Tres capas planificadas para despues del feature freeze:
 2. **Templates de FAQ por especialidad:** Pre-cargar FAQs tipicas segun tipo de clinica (dermatologia, odontologia, etc). Ya existe `FAQTemplatePicker` con 50 templates genericos — extender con templates por especialidad. Cada template incluye pregunta + keywords + respuesta placeholder que la clinica solo llena con sus datos.
 3. **Deteccion automatica de gaps:** Query semanal contra bot_conversation_logs para detectar preguntas sin respuesta. Generar reporte para cada clinica: "3 pacientes preguntaron sobre X y no tuvimos respuesta". Ya existe el query como herramienta en modo-dev (gap report). Fase futura: notificacion automatica al admin de la clinica via dashboard.
 
+### Recordatorios / Engagement (descubierto y resuelto 30 Mar)
+- [x] Segundo cron 7pm para cubrir citas creadas en la tarde (pg_cron job #8)
+- [x] Sistema de confirmacion con consecuencia real (auto-cancel 7am)
+- [x] Nuevo template con deadline + follow-up 7:15pm + notificacion de slot liberado
+- [x] Intent detection: "ahi estare"→confirm, "no puedo"→cancel
+- [ ] **QA 31 Mar:** Verificar resultados en OrionCare Demo Bot
+- [ ] **Post-QA:** Activar swap en Consultorio Familiar, Dr. Guevara, Medilaser
+- [ ] Reportar a Medilaser: necesitan FAQs sobre precios de laser, blanqueamiento axilas, eliminacion tatuajes, queloide
+
+### Soporte numeros internacionales (Junio 2026+)
+- [ ] `normalizeToLocalHN()` en whatsapp-inbound-webhook — deja de asumir 8 digitos Honduras
+- [ ] `findPatientByPhone()` en bot-handler — deja de forzar +504
+- [ ] UI de ingreso de pacientes — validacion de numeros extranjeros
+- [ ] Caso: Mirian Yanira Zelaya Carias (+14794030090, USA) — recibe recordatorios OK pero confirmacion/bot no funciona
+- [ ] Nota: clienta viaja cada 8 meses, no urgente
+
 ### Limpieza
 - [ ] Remover `lovable-tagger` de devDependencies en package.json
 
@@ -50,6 +66,54 @@ Tres capas planificadas para despues del feature freeze:
 - [ ] **confirmation_message_sent nunca se marca true** — en `create-appointment/index.ts` linea ~410, despues de `gatewayResult.success` falta `await supabase.from("appointments").update({ confirmation_message_sent: true }).eq("id", appointment.id)`. Los mensajes SI se envian (message_logs lo confirma), solo el flag no se actualiza. Afecta a todas las orgs desde siempre (las citas viejas con true fueron de codigo anterior a la migracion a messaging-gateway).
 
 ## Resuelto recientemente
+
+- **Sistema de confirmacion con consecuencia real (30 Mar sesion 3):**
+  - Flujo: Recordatorio 11am → Follow-up 7:15pm si no confirmo → Auto-cancel 7am dia de cita
+  - 2 edge functions nuevas: `send-reminder-followup`, `auto-cancel-unconfirmed`
+  - 2 crons nuevos: job #9 (follow-up 7:15pm), job #10 (auto-cancel 7am)
+  - DB: columnas `reminder_followup_sent`, `auto_cancelled`, `auto_cancelled_at`, `auto_cancel_enabled` (por org)
+  - Auto-cancel activado en 4 orgs produccion: Consultorio Familiar, Dr. Guevara, Medilaser, OrionCare
+  - Intent detection actualizado: "ahi estare"→confirm, "no puedo"→cancel (meta-webhook + whatsapp-inbound-webhook)
+  - Cancel intent nuevo: status→cancelada con notes
+  - 3 templates Meta creados en 4 WABAs (12 total):
+    - `recordatorio_v2_300326` — nuevo reminder con deadline 7AM (8/12 APPROVED, 4 PENDING)
+    - `recordatorio_sin_confirmar_300326` — follow-up de urgencia
+    - `cita_liberada_no_confirmacion_300326` — notificacion de slot liberado
+  - template_mappings insertados: `reminder_followup` y `appointment_released` activos, `reminder_24h_v2` inactivos (activar cuando 4/4 APPROVED)
+  - Nota: botones Meta NO permiten emojis. Botones: "Si, ahi estare" / "No puedo asistir" / "Confirmo"
+  - Swap activado en OrionCare: `reminder_24h` → `recordatorio_v2_300326` (APPROVED)
+  - QA en curso: 3 citas creadas para 31 Mar en Demo Bot (+50493133496), paciente dican (+50433899824)
+    - Cita A: flujo completo (no confirmar → follow-up → auto-cancel)
+    - Cita B: confirmar con boton "Si, ahi estare"
+    - Cita C: cancelar con boton "No puedo asistir"
+  - **PENDIENTE proxima sesion:**
+    - Revisar resultados QA del 31 Mar (crons 7pm follow-up + 7am auto-cancel)
+    - Si QA OK → activar swap en las otras 3 clinicas (Consultorio Familiar, Dr. Guevara, Medilaser)
+    - Swap = borrar mapping viejo de `reminder_24h` + renombrar `reminder_24h_v2` a `reminder_24h` + activar
+    - Verificar que los 4 templates PENDING ya esten APPROVED antes de swap
+    - Limpiar templates duplicados con sufijo `_223520` (del batch que hizo timeout)
+    - Comunicar a clinicas: "citas no confirmadas antes de las 7AM se cancelan automaticamente"
+  - Nota: template matutino (morning nudge) descartado — innecesario si ya confirmaron o se cancelo
+
+- **Segundo cron de recordatorios 7pm (30 Mar sesion 2):**
+  - Problema: 28% de citas (23/82) no recibian recordatorio — creadas despues del cron de 11am
+  - Fix: pg_cron job #8 `send-reminders-evening` a las 01:00 UTC (7pm Honduras)
+  - La funcion send-reminders ya era idempotente (checa `reminder_24h_sent = false`)
+  - Cobertura estimada: 72% → 85-88%
+  - Citas despues de 7pm siguen sin cobertura (pocas, ~4-6 en 15 dias)
+
+- **Telefonos corregidos Medilaser (30 Mar sesion 2):**
+  - Marlon Enamorado: `+5049798084` → `+50497983084` (faltaba digito)
+  - Ana Solis: `+50499590522` → `+50494510434` (numero incorrecto)
+
+- **HBR Medilaser 15 dias (30 Mar sesion 2):**
+  - 89 citas, 5.9/dia, 37% via bot, 40% show-up rate (dato de Elena)
+  - Engagement: solo 20% de pacientes interactuan con recordatorios
+  - Embudo recordatorios: 61 enviados → 56 llegaron (92%) → 33 leidos (54%) → 17 confirmaron (28%)
+  - 23 sin recordatorio: 13 por timing del cron (RESUELTO), 8 reagendadas (esperado), 2 edge cases
+  - Bot: 34.5% completion, 11.1% error, 34.5% handoff, 14.3 msgs/completada
+  - FAQ gaps: precios de laser (5 mismatch), eliminacion tatuajes, blanqueamiento — reportar a clinica
+  - Feedback Elena: siente trabajo doble, pacientes "perezosos" no confirman, no sabia marcar completadas
 
 - **Health Bot Report (HBR) consolidado en modo-dev (30 Mar):**
   - Unifica FAQ Gap Report + Bot Health Report en un solo reporte de 7 secciones

@@ -51,6 +51,8 @@ const GatewayRequestSchema = z.object({
     .enum([
       "confirmation",
       "reminder_24h",
+      "reminder_followup",
+      "appointment_released",
       "reschedule_doctor",
       "patient_confirmed",
       "patient_reschedule",
@@ -348,7 +350,7 @@ Deno.serve(async (req) => {
     // For Meta templates with quick reply buttons (confirmation, reminder_24h),
     // embed the appointmentId as each button's payload so the inbound webhook
     // knows exactly which appointment was replied to — avoids fuzzy search.
-    const TYPES_WITH_QUICK_REPLY = new Set(["confirmation", "reminder_24h"]);
+    const TYPES_WITH_QUICK_REPLY = new Set(["confirmation", "reminder_24h", "reminder_followup"]);
     const buttonPayloads =
       line.provider === "meta" &&
       appointmentId &&

@@ -77,11 +77,12 @@ interface MetaStatus {
 }
 
 // Intent patterns (Spanish) — same as whatsapp-inbound-webhook
-const CONFIRM_PATTERNS = ["confirm", "confirmar", "si", "sí"];
+const CONFIRM_PATTERNS = ["confirm", "confirmar", "ahi estare", "ahí estaré", "estare", "estaré", "confirmo"];
+const CANCEL_PATTERNS = ["no puedo", "cancelar", "cancelo"];
 const RESCHEDULE_PATTERNS = ["reagend", "reagendar", "cambiar"];
 const ACTIVE_STATUSES = ["agendada", "pending", "confirmada", "confirmed"];
 
-type MessageIntent = "confirm" | "reschedule" | "unknown";
+type MessageIntent = "confirm" | "reschedule" | "cancel" | "unknown";
 
 // ---------------------------------------------------------------------------
 // Signature validation
@@ -127,12 +128,18 @@ function detectIntent(body: string): MessageIntent {
   if (!body) return "unknown";
   const lower = body.toLowerCase().trim();
 
+  // Cancel BEFORE confirm to avoid "asistir".includes("si") false positive
+  for (const p of CANCEL_PATTERNS) {
+    if (lower.includes(p)) return "cancel";
+  }
   for (const p of CONFIRM_PATTERNS) {
     if (lower.includes(p)) return "confirm";
   }
   for (const p of RESCHEDULE_PATTERNS) {
     if (lower.includes(p)) return "reschedule";
   }
+  // "si" as whole word only (same pattern as whatsapp-inbound-webhook)
+  if (lower === "si" || lower === "sí" || lower.includes(" si ") || lower.includes(" sí ")) return "confirm";
   return "unknown";
 }
 
@@ -323,9 +330,13 @@ async function handleIncomingMessage(
   // Update appointment status based on intent
   if (appointment && intent !== "unknown") {
     let newStatus: string | null = null;
+    const updatePayload: Record<string, unknown> = {};
 
     if (intent === "confirm") {
       newStatus = "confirmada";
+    } else if (intent === "cancel") {
+      newStatus = "cancelada";
+      updatePayload.notes = "Cancelada por paciente via WhatsApp";
     } else if (intent === "reschedule") {
       newStatus = "reagendar";
     }
@@ -333,7 +344,7 @@ async function handleIncomingMessage(
     if (newStatus) {
       const { error: updateError } = await supabase
         .from("appointments")
-        .update({ status: newStatus })
+        .update({ status: newStatus, ...updatePayload })
         .eq("id", appointment.id);
 
       if (updateError) {

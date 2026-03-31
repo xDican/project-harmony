@@ -20,7 +20,7 @@ const corsHeaders = {
 
 const ACTIVE_STATUSES = ["agendada", "confirmada", "pending", "confirmed"];
 
-type MessageIntent = "confirm" | "reschedule" | "unknown";
+type MessageIntent = "confirm" | "reschedule" | "cancel" | "unknown";
 
 function parseFormUrlEncoded(rawBody: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -86,7 +86,8 @@ function detectIntent(params: Record<string, string>): MessageIntent {
 
   const haystack = [payload, buttonText, body].filter(Boolean).join(" ");
 
-  if (haystack.includes("confirm")) return "confirm";
+  if (haystack.includes("confirm") || haystack.includes("ahi estare") || haystack.includes("ahí estaré") || haystack.includes("estare") || haystack.includes("estaré") || haystack.includes("confirmo")) return "confirm";
+  if (haystack.includes("no puedo") || haystack.includes("cancelar") || haystack.includes("cancelo")) return "cancel";
   if (haystack.includes("reagend") || haystack.includes("resched") || haystack.includes("cambiar")) return "reschedule";
 
   if (haystack === "si" || haystack === "sí" || haystack.includes(" si ")) return "confirm";
@@ -641,6 +642,7 @@ Deno.serve(async (req: Request) => {
 
     if (appointment?.id && intent !== "unknown") {
       if (intent === "confirm") newStatus = "confirmada";
+      if (intent === "cancel") newStatus = "cancelada";
       if (intent === "reschedule") newStatus = "reagendar";
 
       // ========== CONFIRM FLOW ==========
@@ -679,6 +681,21 @@ Deno.serve(async (req: Request) => {
               console.error("[whatsapp-inbound-webhook] Failed to notify patient confirmation:", patientConfirmationNotifyError);
             }
           }
+        }
+      }
+
+      // ========== CANCEL FLOW ==========
+      if (newStatus === "cancelada") {
+        const { error: updError } = await supabase
+          .from("appointments")
+          .update({ status: "cancelada", notes: "Cancelada por paciente via WhatsApp" })
+          .eq("id", appointment.id);
+
+        if (updError) {
+          console.error("[whatsapp-inbound-webhook] Error cancelling appointment:", updError);
+        } else {
+          updated = true;
+          console.log("[whatsapp-inbound-webhook] Appointment cancelled:", appointment.id);
         }
       }
 

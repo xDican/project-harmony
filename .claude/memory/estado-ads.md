@@ -1,34 +1,33 @@
 # Estado Ads — OrionCare
 
-> Ultima actualizacion: 21 Mar 2026 (AD-007 budget fix — limite campaña removido, presupuesto subido a $20/dia)
+> Ultima actualizacion: 27 Mar 2026 (AD-007 pausada Semana Santa, metricas finales CSV, todas campanas inactivas)
 
 ## Dashboard
 
 | Metrica | Valor actual | Meta |
 |---------|-------------|------|
-| Campanas activas | **1 (AD-007)** — 2 ads, presupuesto campana $20/dia | 1-2 |
-| Gasto total historico | ~$150 (AD-005 $92.30 + AD-006 $57.33 + AD-007 ~$2.40) | — |
-| Leads totales historicos | 80 (AD-005: 38 + AD-006: 42 + AD-007: 0) | — |
+| Campanas activas | **0** — todas pausadas (Semana Santa 28 Mar - 6 Abr) | Reactivar 7 Abr |
+| Gasto total historico | **$267.48** (AD-005: $92.30 + AD-006: $57.33 + AD-007: $117.85) | — |
+| Leads totales historicos | **117** (AD-005: 38 + AD-006: 44 + AD-007: 35) | — |
 | Cierres totales | **1** (Carla Paredes, $75/mes) | — |
-| Presupuesto AD-007 | **$20/dia** (campana level, limite removido 21 Mar) | — |
-| Limite cuenta | **$20/dia** (subido de $15, 21 Mar) | — |
+| CPA real | **$267.48** | <$20 |
+| Tasa cierre global | **0.85%** (1/117) | 25% |
+| Limite cuenta | **$20/dia** | — |
 
 ## Campanas
 
-### AD-007 — Asistente Saturada + Doctor Entre Pacientes (ACTIVA 19 Mar)
-- **Estado:** ACTIVA. Aprobada por Meta. Entrega casi nula primeros 2 dias (~$2.40 gastados).
-- **Problema detectado 21 Mar:** Limite de cuenta $15/dia + limite campaña $10/dia + $10/dia por ad = 3 capas de restriccion. Meta no encontraba espacio para gastar.
-- **Fix 21 Mar:** Limite cuenta subido a $20/dia. Limite campaña removido. Presupuesto campaña: $20/dia.
-- **Concepto:** 2 imagenes que solo un medico reconoce como "mi dia a dia" = creativo como filtro de calidad.
-- **Imagen A:** "La Asistente Saturada" — perfil empresario. 3 textos + 2 titulos (Advantage+).
-- **Imagen B:** "El Doctor Entre Pacientes" — perfil independiente. 3 textos + 2 titulos (Advantage+).
-- **Config:** 1 campana, 1 ad set, 2 ads. 6 combinaciones por ad, 12 total. Meta optimiza.
-- **Presupuesto:** $20/dia (campana level).
-- **Formulario:** Texto libre en especialidad (escribir requiere intencion = filtro).
-- **Hipotesis:** CTR menor (0.8-1.3%) pero % calificados 70-85% vs 10-31% de AD-006.
-- **Metrica clave:** CPL calificado, NO CTR.
-- **Checkpoint lunes 24 Mar:** Si <$30 gastados total → creativo no funciona, pivotar a AD-005 con imagenes frescas.
-- **Plan B:** Reactivar AD-005 (86% calificados, 1 cierre) con creativos nuevos para evitar fatiga.
+### AD-007 — Asistente Saturada + Doctor Entre Pacientes (PAUSADA 27 Mar — Semana Santa)
+- **Estado:** PAUSADA 27 Mar. No reactivar — pivotar a AD-005 refrescado.
+- **Metricas finales (CSV 25 Feb - 26 Mar):**
+  - Doctor Independiente: Gasto $117.81 | 35 leads | CPL $3.37 | CTR 0.82% | CPM $1.41 | Alcance 39,470 | Frecuencia 2.12
+  - Doctor Empresario: Gasto $0.04 | 0 leads | 15 impresiones — **Meta no lo entrego**
+- **Calidad:** 15 calientes (43%), 15 frios (43%), 5 descartados (14%)
+- **CPL calificado:** $7.85 (con 15 calientes) o $16.83 (con ~7 calificados reales por especialidad)
+- **Resultado final:** 0 cierres. Calientes no contestaron o colgaron.
+- **Hipotesis "creativo como filtro":** Parcialmente fallida. Mejor que AD-006 (43% vs 10-31%) pero muy inferior a AD-005 (86%).
+- **Doctor Empresario muerto:** Meta envio 100% del presupuesto al Independiente. $0.04 en 8 dias.
+- **Frecuencia 2.12:** Fatiga activa al momento de pausar.
+- **Leccion:** Texto libre en especialidad no filtra lo suficiente. Creativos "solo un medico reconoce" no alcanzaron la especificidad de AD-005 ("doctor en cama de noche").
 - **Detalle completo:** `docs/ad-creatives.md` seccion AD-007.
 
 ### AD-006 — "20 mensajes = 1 cita" (PAUSADA 19 Mar)
@@ -185,10 +184,22 @@
 
 ## Proximos pasos
 
-1. **Monitorear AD-007 dia 3-5** (~$60-100 gastados) — % calificados es la metrica clave
-2. **Evaluacion dia 7 (~26 Mar):** % calificados vs meta 70%. Cual imagen rinde mejor. Pausar la peor.
-3. **Siguiente rotacion:** Carousel o video (AD-001/AD-003) si AD-007 se fatiga
-4. **Regla:** Siempre generar 3 formatos por creativo: 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
+### Semana Santa (28 Mar - 6 Abr) — preparacion
+1. **Generar creativo AD-005 refrescado** — mismo concepto "doctor de noche" con imagen nueva para resetear fatiga
+2. **Integrar testimonial Wilmer** al copy: "Un colega suyo lo usa a diario y lo recomienda"
+3. **Evaluar carousel** como formato alternativo (benchmarks: 30-50% menor costo por conversion)
+
+### Post-Semana Santa (7 Abr)
+4. **Lanzar AD-005 refrescado** — $10-15/dia, misma audiencia
+5. **Monitorear frecuencia** — rotar creativo al llegar a 2.0
+6. **Regla:** Siempre generar 3 formatos por creativo: 1:1 (1080x1080), 9:16 (1143x2048), 1.91:1 (1200x628)
+
+### Ranking de campanas (para referencia futura)
+| Campana | CPL calificado | % calificados | Cierres | Veredicto |
+|---------|---------------|---------------|---------|-----------|
+| AD-005 | **$2.83** | **86%** | **1** | GANADORA — refrescar concepto |
+| AD-007 | $7.85 | 43% | 0 | Filtro parcial, CPL alto |
+| AD-006 | $4.30-$13.30 | 10-31% | 0 | Volumen sin calidad |
 
 ## Restricciones Meta para salud
 

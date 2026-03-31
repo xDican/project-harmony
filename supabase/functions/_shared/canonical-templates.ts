@@ -55,14 +55,14 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "⏰ Recordatorio de cita médica\n\nHola {{1}},\n\nTienes una cita programada con:\n\n🩺 {{2}}\n📅 {{3}}\n⏰ {{4}}\n\nPor favor confirme su asistencia o reagende su cita usando los botones de abajo 👇\n\nGracias por su tiempo 😊",
-        example: { body_text: [["Juan", "Dr. Lopez", "25 de febrero", "10:00 AM"]] },
+        text: "{{1}}, la {{2}} le espera mañana {{3}} a las {{4}} 🩺\n\n⚠️ Confirme antes de las 7AM o su espacio sera ofrecido a otro paciente.",
+        example: { body_text: [["Maria", "Dra. Yeni", "miércoles 2 de abril", "10:00 AM"]] },
       },
       {
         type: "BUTTONS",
         buttons: [
-          { type: "QUICK_REPLY", text: "Confirmar" },
-          { type: "QUICK_REPLY", text: "Reagendar" },
+          { type: "QUICK_REPLY", text: "Sí, ahí estaré ✅" },
+          { type: "QUICK_REPLY", text: "No puedo 😔" },
         ],
       },
     ],
@@ -115,6 +115,39 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
         type: "BODY",
         text: "📋 Nuevo paciente requiere atención\n\nUn paciente ha solicitado comunicarse con usted desde el asistente virtual de OrionCare.\n\n📞 Teléfono: {{1}}\n👤 Nombre: {{2}}\n\nPor favor comuníquese con el paciente para atenderle.",
         example: { body_text: [["50412345678", "Juan Perez"]] },
+      },
+    ],
+  },
+  {
+    logical_type: "reminder_followup",
+    template_name: "recordatorio_sin_confirmar",
+    language: "es_MX",
+    category: "UTILITY",
+    components: [
+      {
+        type: "BODY",
+        text: "⏰ {{1}}, aún no ha confirmado su cita de mañana a las {{2}} con {{3}}.\n\n⚠️ Si no confirma antes de las 7AM, su espacio sera ofrecido a otro paciente.",
+        example: { body_text: [["Maria", "10:00 AM", "Dra. Yeni"]] },
+      },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "Confirmo ✅" },
+          { type: "QUICK_REPLY", text: "No puedo 😔" },
+        ],
+      },
+    ],
+  },
+  {
+    logical_type: "appointment_released",
+    template_name: "cita_liberada_no_confirmacion",
+    language: "es_MX",
+    category: "UTILITY",
+    components: [
+      {
+        type: "BODY",
+        text: "📋 {{1}}, su cita de hoy a las {{2}} con {{3}} fue liberada por falta de confirmación.\n\n📲 Si desea reagendar, escriba *agendar* a este número.",
+        example: { body_text: [["Maria", "10:00 AM", "Dra. Yeni"]] },
       },
     ],
   },
