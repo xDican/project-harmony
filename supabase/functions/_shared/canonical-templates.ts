@@ -61,8 +61,8 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
       {
         type: "BUTTONS",
         buttons: [
-          { type: "QUICK_REPLY", text: "Sí, ahí estaré ✅" },
-          { type: "QUICK_REPLY", text: "No puedo 😔" },
+          { type: "QUICK_REPLY", text: "Si, ahi estare" },
+          { type: "QUICK_REPLY", text: "No puedo asistir" },
         ],
       },
     ],
@@ -152,8 +152,8 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
       {
         type: "BUTTONS",
         buttons: [
-          { type: "QUICK_REPLY", text: "Confirmo ✅" },
-          { type: "QUICK_REPLY", text: "No puedo 😔" },
+          { type: "QUICK_REPLY", text: "Confirmo" },
+          { type: "QUICK_REPLY", text: "No puedo asistir" },
         ],
       },
     ],
