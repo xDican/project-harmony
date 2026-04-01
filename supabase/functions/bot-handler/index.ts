@@ -246,11 +246,11 @@ async function handleBotMessage(
     return escapeResponse;
   }
 
-  // Direct reschedule: when appointmentId arrives and session is fresh (greeting),
-  // skip the menu and jump straight to the reschedule week-selection flow.
+  // Direct reschedule: when appointmentId arrives (from reminder button click),
+  // skip the menu and jump straight to the reschedule/cancel options.
   let response: BotResponse;
 
-  if (input.appointmentId && session.state === 'greeting') {
+  if (input.appointmentId) {
     response = await handleDirectReschedule(input.appointmentId, session, organizationId, supabase, handoffLabels);
 
     // Update session and log, then return early
