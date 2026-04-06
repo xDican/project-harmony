@@ -66,6 +66,12 @@ export function UserProvider({ children }: UserProviderProps) {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        // Skip token refresh — user/org haven't changed, avoid unnecessary fetch
+        if (event === 'TOKEN_REFRESHED') {
+          setSession(session);
+          return;
+        }
+
         setSession(session);
 
         // Fetch user with role when session changes
@@ -89,27 +95,6 @@ export function UserProvider({ children }: UserProviderProps) {
         }
       }
     );
-
-    // Check for existing session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-
-      if (session?.user) {
-        getCurrentUserWithRole()
-          .then(handleUserFetch)
-          .catch((error) => {
-            console.error('Error fetching current user:', error);
-            setUser(null);
-            setIsNewUser(false);
-            setOnboardingStatus(null);
-          })
-          .finally(() => {
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
 
     return () => subscription.unsubscribe();
   }, [handleUserFetch]);
