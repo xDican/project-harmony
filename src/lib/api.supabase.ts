@@ -73,17 +73,17 @@ async function fetchAppointmentWithRelations(row: any): Promise<AppointmentWithD
       id: row.patient?.id,
       name: row.patient?.name,
       phone: row.patient?.phone,
-      email: row.patient?.email,
+      email: row.patient?.email ?? undefined,
       notes: row.patient?.notes ?? undefined,
-      createdAt: row.patient?.created_at,
+      createdAt: row.patient?.created_at ?? undefined,
     },
     doctor: {
       id: row.doctor?.id,
       name: row.doctor?.name,
-      phone: row.doctor?.phone,
-      email: row.doctor?.email,
+      phone: row.doctor?.phone ?? undefined,
+      email: row.doctor?.email ?? undefined,
       specialtyId: row.doctor?.specialty_id,
-      createdAt: row.doctor?.created_at,
+      createdAt: row.doctor?.created_at ?? undefined,
     },
   };
 }
@@ -206,18 +206,13 @@ export async function getAllUsers(): Promise<UserWithRelations[]> {
 // --------------------------
 export async function getTodayAppointments(date: string): Promise<AppointmentWithDetails[]> {
   const orgId = await getActiveOrganizationId();
-  // Carga las citas del día con relations anidadas (doctor, patient)
   let query = supabase
     .from("appointments")
     .select(
       `
-      *,
-      doctor:doctor_id (
-        id, name, phone, email, specialty_id, created_at
-      ),
-      patient:patient_id (
-        id, name, phone, email, notes, created_at
-      )
+      id, date, time, status, duration_minutes, notes, doctor_id, patient_id,
+      doctor:doctor_id (id, name, specialty_id),
+      patient:patient_id (id, name, phone)
       `
     )
     .eq("date", date)
@@ -244,13 +239,9 @@ export async function getTodayAppointmentsByDoctor(doctorId: string, date: strin
     .from("appointments")
     .select(
       `
-      *,
-      doctor:doctor_id (
-        id, name, phone, email, specialty_id, created_at
-      ),
-      patient:patient_id (
-        id, name, phone, email, notes, created_at
-      )
+      id, date, time, status, duration_minutes, notes, doctor_id, patient_id,
+      doctor:doctor_id (id, name, specialty_id),
+      patient:patient_id (id, name, phone)
       `
     )
     .eq("date", date)
@@ -282,13 +273,9 @@ export async function getWeekAppointments(
     .from("appointments")
     .select(
       `
-      *,
-      doctor:doctor_id (
-        id, name, phone, email, specialty_id, created_at
-      ),
-      patient:patient_id (
-        id, name, phone, email, notes, created_at
-      )
+      id, date, time, status, duration_minutes, notes, doctor_id, patient_id,
+      doctor:doctor_id (id, name, specialty_id),
+      patient:patient_id (id, name, phone)
       `
     )
     .gte("date", startDate)
@@ -605,6 +592,58 @@ export async function getSpecialties(): Promise<Specialty[]> {
     description: row.description ?? undefined,
     createdAt: row.created_at,
   }));
+}
+
+// --------------------------
+// RPC: get_weekly_agenda — single call for doctors + appointments
+// --------------------------
+export async function getWeeklyAgenda(
+  userId: string,
+  weekStart: string,
+  weekEnd: string,
+  doctorId?: string | null
+): Promise<{ doctors: Doctor[]; appointments: AppointmentWithDetails[] }> {
+  const { data, error } = await supabase.rpc('get_weekly_agenda', {
+    p_user_id: userId,
+    p_week_start: weekStart,
+    p_week_end: weekEnd,
+    p_doctor_id: doctorId || null,
+  });
+
+  if (error) {
+    console.error("Error getWeeklyAgenda:", error);
+    throw error;
+  }
+
+  const result = data as { doctors: any[]; appointments: any[] };
+
+  return {
+    doctors: (result.doctors || []).map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      specialtyId: d.specialty_id,
+    })) as Doctor[],
+    appointments: (result.appointments || []).map((a: any) => ({
+      id: a.id,
+      doctorId: a.doctor_id,
+      patientId: a.patient_id,
+      date: a.date,
+      time: a.time,
+      status: a.status,
+      notes: a.notes ?? undefined,
+      durationMinutes: a.duration_minutes ?? 60,
+      doctor: {
+        id: a.doctor?.id,
+        name: a.doctor?.name,
+        specialtyId: a.doctor?.specialty_id,
+      },
+      patient: {
+        id: a.patient?.id,
+        name: a.patient?.name,
+        phone: a.patient?.phone,
+      },
+    })) as AppointmentWithDetails[],
+  };
 }
 
 // --------------------------

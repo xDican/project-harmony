@@ -54,6 +54,7 @@ interface ApiModule {
   getTodayAppointments: (date: string) => Promise<AppointmentWithDetails[]>;
   getTodayAppointmentsByDoctor: (doctorId: string, date: string) => Promise<AppointmentWithDetails[]>;
   getWeekAppointments: (startDate: string, endDate: string, doctorId?: string | null) => Promise<AppointmentWithDetails[]>;
+  getWeeklyAgenda: (userId: string, weekStart: string, weekEnd: string, doctorId?: string | null) => Promise<{ doctors: any[]; appointments: AppointmentWithDetails[] }>;
   getPatientAppointments: (patientId: string) => Promise<AppointmentWithDetails[]>;
   updateAppointmentStatus: (appointmentId: string, newStatus: AppointmentStatus) => Promise<Appointment | null>;
   createAppointment: (input: {
@@ -130,6 +131,19 @@ export async function getTodayAppointmentsByDoctor(
 ): Promise<AppointmentWithDetails[]> {
   const apiModule = await getApiModule();
   return await apiModule.getTodayAppointmentsByDoctor(doctorId, date);
+}
+
+/**
+ * Get doctors + appointments for a week in a single RPC call
+ */
+export async function getWeeklyAgenda(
+  userId: string,
+  weekStart: string,
+  weekEnd: string,
+  doctorId?: string | null
+): Promise<{ doctors: any[]; appointments: AppointmentWithDetails[] }> {
+  const apiModule = await getApiModule();
+  return await apiModule.getWeeklyAgenda(userId, weekStart, weekEnd, doctorId);
 }
 
 /**

@@ -10,8 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Calendar, AlertCircle, Stethoscope, User, ChevronLeft, ChevronRight, CalendarClock, CalendarDays } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
-import { useWeekAppointments } from '@/hooks/useWeekAppointments';
-import { useSingleDoctor } from '@/hooks/useSingleDoctor';
+import { useWeeklyAgenda } from '@/hooks/useWeeklyAgenda';
 import StatusBadge from '@/components/StatusBadge';
 import { RescheduleModal } from '@/components/RescheduleModal';
 import { getLocalToday } from '@/lib/dateUtils';
@@ -88,8 +87,22 @@ export default function AgendaSemanal() {
     }
   };
 
-  // Fetch doctors list
-  const { doctors, isSingleDoctorOrg, singleDoctor, isLoading: loadingDoctors } = useSingleDoctor();
+  // Determine the doctorId to use for fetching appointments
+  // Doctors see only their own, admin/secretary can filter by doctor or see all
+  const doctorIdToFetch = isDoctorView
+    ? user?.doctorId || undefined
+    : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
+
+  // Single RPC call: fetches doctors + appointments for the week
+  const {
+    doctors, isSingleDoctorOrg, singleDoctor,
+    appointmentsByDate, weekDates,
+    isLoading: loadingAgenda, refetch,
+  } = useWeeklyAgenda({
+    userId: user?.id,
+    weekStart: weekStartStr,
+    doctorId: doctorIdToFetch,
+  });
 
   // Auto-select doctor for single-doctor orgs
   useEffect(() => {
@@ -98,19 +111,6 @@ export default function AgendaSemanal() {
       localStorage.setItem('oc_last_doctor', singleDoctor.id);
     }
   }, [isSingleDoctorOrg, singleDoctor]);
-
-  // Determine the doctorId to use for fetching appointments
-  // Doctors see only their own, admin/secretary can filter by doctor or see all
-  const doctorIdToFetch = isDoctorView
-    ? user?.doctorId || undefined
-    : (selectedDoctorId === 'all' ? undefined : selectedDoctorId);
-
-  // Fetch appointments for the week
-  const { data: appointmentsByDate, weekDates, isLoading: loadingAppointments, refetch } = useWeekAppointments({
-    doctorId: doctorIdToFetch,
-    weekStart: weekStartStr,
-    enabled: true,
-  });
 
   // Get appointments for the selected day
   const selectedDate = weekDates[selectedDayIndex] || weekDates[0];
@@ -275,7 +275,7 @@ export default function AgendaSemanal() {
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-4 py-4">
             {/* Doctor Selection (for admin/secretary, hidden when in Vista Médico) */}
-            {isAdminOrSecretary && !isDoctorView && !loadingDoctors && !isSingleDoctorOrg && (
+            {isAdminOrSecretary && !isDoctorView && !loadingAgenda && !isSingleDoctorOrg && (
               <div className="mb-6">
                 <Label className="text-base font-semibold text-foreground mb-3 block">
                   Médico
@@ -308,7 +308,7 @@ export default function AgendaSemanal() {
             )}
 
             {/* Loading State */}
-            {(loadingAppointments || loadingDoctors) && (
+            {(loadingAgenda || loadingAgenda) && (
               <div className="space-y-4">
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
@@ -317,7 +317,7 @@ export default function AgendaSemanal() {
             )}
 
             {/* Appointments List */}
-            {!loadingAppointments && !loadingDoctors && (
+            {!loadingAgenda && !loadingAgenda && (
               <>
                 {appointments.length === 0 ? (
                   <Alert>
