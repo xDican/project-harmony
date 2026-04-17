@@ -6,20 +6,25 @@
     <title>OrionCare</title>
     <meta name="description" content="Sistema de gestión de citas médicas" />
     <meta name="author" content="OrionCare" />
-    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
 
     <meta property="og:title" content="OrionCare" />
     <meta property="og:description" content="Sistema de gestión de citas médicas" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@OrionCare" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <style>
+        .app-loader{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f9fafb}
+        .app-spinner{width:36px;height:36px;border:3px solid #e5e7eb;border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+      </style>
+      <div class="app-loader"><div class="app-spinner"></div></div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

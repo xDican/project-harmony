@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,42 +7,45 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
 import { UserRole } from "./types/user";
 import MainLayout from "./components/MainLayout";
-import AgendaSecretaria from "./pages/AgendaSecretaria";
-import NuevaCita from "./pages/NuevaCita";
-import Pacientes from "./pages/Pacientes";
-import AgendaMedico from "./pages/AgendaMedico";
-import AgendaSemanal from "./pages/AgendaSemanal";
-import AdminDashboard from "./pages/AdminDashboard";
-import UsersList from "./pages/UsersList";
-import CreateUserPage from "./pages/CreateUserPage";
-import EditUserPage from "./pages/EditUserPage";
-import DoctorSchedulePage from "./pages/DoctorSchedulePage";
-import AppointmentsReport from "./pages/AppointmentsReport";
-import Login from "./pages/Login";
-import NotFound from "./pages/NotFound";
-import PatientDetail from "./pages/PatientDetail";
-
-import ConfiguracionMedico from "./pages/ConfiguracionMedico";
-import PerfilMedico from "./pages/PerfilMedico";
-import UsoMensajes from "./pages/UsoMensajes";
-import DebugWhatsappPage from "./pages/DebugWhatsappPage";
-import WhatsAppSettings from "./pages/WhatsAppSettings";
-import WhatsAppPlantillaNueva from "./pages/WhatsAppPlantillaNueva";
-import WhatsAppPlantillaDetalle from "./pages/WhatsAppPlantillaDetalle";
-import MetaOAuthCallback from "./pages/MetaOAuthCallback";
-import OrganizationSettings from "./pages/OrganizationSettings";
-import ClinicsList from "./pages/ClinicsList";
-import CalendarsList from "./pages/CalendarsList";
-import CalendarSchedulePage from "./pages/CalendarSchedulePage";
-import WhatsAppLinesList from "./pages/WhatsAppLinesList";
-import BotFAQsPage from "./pages/BotFAQsPage";
-import ActivationPanel from "./pages/ActivationPanel";
 import SuperAdminRoute from "./components/SuperAdminRoute";
+
+// Eagerly loaded — entry points for all users
+import Login from "./pages/Login";
 import Register from "./pages/Register";
-import StepClinic from "./pages/onboarding/StepClinic";
-import StepDoctor from "./pages/onboarding/StepDoctor";
-import StepSchedule from "./pages/onboarding/StepSchedule";
-import StepSummary from "./pages/onboarding/StepSummary";
+import NotFound from "./pages/NotFound";
+
+// Lazy-loaded — only downloaded when the route is visited
+const AgendaSecretaria = lazy(() => import("./pages/AgendaSecretaria"));
+const NuevaCita = lazy(() => import("./pages/NuevaCita"));
+const Pacientes = lazy(() => import("./pages/Pacientes"));
+const AgendaMedico = lazy(() => import("./pages/AgendaMedico"));
+const AgendaSemanal = lazy(() => import("./pages/AgendaSemanal"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const UsersList = lazy(() => import("./pages/UsersList"));
+const CreateUserPage = lazy(() => import("./pages/CreateUserPage"));
+const EditUserPage = lazy(() => import("./pages/EditUserPage"));
+const DoctorSchedulePage = lazy(() => import("./pages/DoctorSchedulePage"));
+const AppointmentsReport = lazy(() => import("./pages/AppointmentsReport"));
+const PatientDetail = lazy(() => import("./pages/PatientDetail"));
+const ConfiguracionMedico = lazy(() => import("./pages/ConfiguracionMedico"));
+const PerfilMedico = lazy(() => import("./pages/PerfilMedico"));
+const UsoMensajes = lazy(() => import("./pages/UsoMensajes"));
+const DebugWhatsappPage = lazy(() => import("./pages/DebugWhatsappPage"));
+const WhatsAppSettings = lazy(() => import("./pages/WhatsAppSettings"));
+const WhatsAppPlantillaNueva = lazy(() => import("./pages/WhatsAppPlantillaNueva"));
+const WhatsAppPlantillaDetalle = lazy(() => import("./pages/WhatsAppPlantillaDetalle"));
+const MetaOAuthCallback = lazy(() => import("./pages/MetaOAuthCallback"));
+const OrganizationSettings = lazy(() => import("./pages/OrganizationSettings"));
+const ClinicsList = lazy(() => import("./pages/ClinicsList"));
+const CalendarsList = lazy(() => import("./pages/CalendarsList"));
+const CalendarSchedulePage = lazy(() => import("./pages/CalendarSchedulePage"));
+const WhatsAppLinesList = lazy(() => import("./pages/WhatsAppLinesList"));
+const BotFAQsPage = lazy(() => import("./pages/BotFAQsPage"));
+const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
+const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
+const StepDoctor = lazy(() => import("./pages/onboarding/StepDoctor"));
+const StepSchedule = lazy(() => import("./pages/onboarding/StepSchedule"));
+const StepSummary = lazy(() => import("./pages/onboarding/StepSummary"));
 
 const queryClient = new QueryClient();
 
@@ -146,6 +150,11 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+              <p className="text-muted-foreground">Cargando...</p>
+            </div>
+          }>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -338,6 +347,7 @@ const App = () => {
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </UserProvider>

@@ -76,6 +76,10 @@ export function UserProvider({ children }: UserProviderProps) {
 
         // Fetch user with role when session changes
         if (session?.user) {
+          const timeoutId = setTimeout(() => {
+            setLoading(false);
+          }, 10_000);
+
           getCurrentUserWithRole()
             .then(handleUserFetch)
             .catch((error) => {
@@ -85,6 +89,7 @@ export function UserProvider({ children }: UserProviderProps) {
               setOnboardingStatus(null);
             })
             .finally(() => {
+              clearTimeout(timeoutId);
               setLoading(false);
             });
         } else {
