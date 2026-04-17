@@ -16,6 +16,14 @@ export default function Login() {
   const navigate = useNavigate();
   const { user, loading: userLoading, isNewUser, onboardingStatus } = useCurrentUser();
 
+  // Prefetch: while user types credentials, download the page they'll need after login
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      import('./AgendaSemanal');
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Redirigir si el usuario ya está autenticado
   useEffect(() => {
     if (userLoading) return;
