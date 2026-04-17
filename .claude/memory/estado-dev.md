@@ -1,10 +1,104 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 31 Mar 2026 sesion 2 (template reminder_3d + prep swap v2 clinicas)
+> Ultima actualizacion: 17 Abr 2026 (optimizacion rendimiento mobile — 3 commits de JS/assets deployed + plan de 3 niveles para data layer)
 
 ## Fase actual
 
 Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
+
+## Optimizacion rendimiento mobile (17 Abr 2026)
+
+### COMPLETADO — Carga JS/assets
+- Code splitting 31 paginas con React.lazy (1 MB monolito → chunks lazy)
+- Vendor splitting: react, supabase, radix, query, recharts, dates
+- modulePreload filtrado (vendor-radix/recharts/dates excluidos del preload)
+- Lazy-load Toaster (Radix), TooltipProvider removido del root, MainLayout lazy
+- Auth timeout 10s en UserContext (evita hang infinito)
+- Spinner CSS inline en index.html
+- Favicon 307 KB → 1.2 KB (logo OrionCare 32x32)
+- Service Worker (vite-plugin-pwa, autoUpdate)
+- Prefetch AgendaSemanal desde Login (1s despues del render)
+- **Resultado:** login 30s→11s primera visita, <2s visitas recurrentes (3G)
+
+### EN PROGRESO — Plan de optimizacion data layer (3 niveles)
+**Plan detallado:** `.claude/plans/zesty-dazzling-kitten.md`
+
+**Hallazgos criticos:**
+- BUG SEGURIDAD: `getTodayAppointmentsByDoctor` no filtra por org_id
+- Sin indices en appointments(date) ni appointments(doctor_id)
+- 7 hooks de data manuales (useState/useEffect), React Query instalado pero sin usar
+- 10-11 round trips a Supabase para cargar agenda semanal
+- SELECT * en todas las queries (19 cols, se usan ~8)
+
+**Nivel 1 (pre-martes 22 Abr):** Fix seguridad org_id, consolidar 7→1 query, eliminar waterfall, QueryClient defaults, doctor en localStorage, select columnas, RPC get_weekly_agenda
+**Nivel 2 (post-martes):** Migrar hooks a React Query, persistencia IndexedDB, optimistic UI, skeletons con contexto, prefetch por intencion
+**Nivel 3 (Junio):** Supabase Realtime, indices PostgreSQL, critical CSS, Brotli check, Edge Middleware, background sync offline
+
+## 🚨 Prioridad proxima sesion — Bot Medilaser UX (descubierto 10 Abr)
+
+**Reporte completo con los 20 flujos reales:** `docs/reporte-medilaser-10abr-bot-flows.md`
+
+**Contexto rapido:** Los fixes de texto libre (25 Mar) funcionaron parcialmente (-58% errores/dia), pero el sistema de auto-cancel (30 Mar) creo un nuevo pain point en `cancel_confirm`. Completion rate del bot bajo 36.2% → 31.0%. Stuck en `cancel_*` explotó 1 → 7 (+600%). De 20 sesiones con error post-fix: 0 volvieron al bot despues, y 10 de 12 no-completion fueron rescatadas manualmente por Marleny — **el bot le agrego trabajo en vez de quitarselo**.
+
+### BUG #1 — CRITICO: `cancel_confirm` no acepta texto humano (~1-2h)
+**Evidencia en reporte:** 4 casos reales post-fix de pacientes que abandonaron despues de escribir explicaciones humanas en `cancel_confirm`:
+- `+50494566053`: "Esta fuera de la ciudad y regresa hasta la proxima semana"
+- `+50499926100`: "Ok ay estaré mañana .con la doctora marleni verdad ??" (queria CONFIRMAR, no cancelar)
+- `+50494550191`: "Tengo un proceso infeccioso" (paciente con problema medico real)
+- `+50495084967`: "Quiero reprogramar la cita" (estaba en main_menu pero patron identico)
+
+**Fix propuesto:**
+- En handler de `cancel_confirm` aceptar texto libre y `detectIntent()`:
+  - "ahi estare" / "alli estare" / "ok" / "voy" → re-rutear a confirmacion (NO cancelar)
+  - "reagendar" / "reprogramar" / "otro dia" → flujo reagenda
+  - "cancelar" / "no puedo" / "ya no" → avanzar a confirmacion cancelacion
+  - Explicacion sin verbo ("estoy enfermo", "tengo infeccion") → guardar en `notes` + preguntar "¿quiere reagendar o cancelar?"
+- Archivo: `supabase/functions/bot-handler/index.ts` funcion `handleCancelConfirm()`
+- **Impacto:** resuelve la regresion mas cara de Medilaser (cliente $75/mes, mayor volumen)
+
+### BUG #2 — MEDIO: Respuestas tardias a reminders caen en `main_menu` (~1-1.5h)
+**Evidencia:** 3 pacientes respondieron al reminder con "ahi estare" horas/dias despues. Sesion ya expiro (30 min timeout). Entraron en `main_menu` sin contexto del reminder pendiente.
+- `+50492789875`: "Ahí estaré" → error
+- `+50499915409`: "Hola. Allí estaré" + "y me confirmó que si" → terminó en handoff
+- `+50494566053`: "No puedo asistir" → entro a cancel_confirm sin contexto previo
+
+**Fix propuesto:**
+- En `whatsapp-inbound-webhook` o `bot-handler` cuando recibe mensaje en `main_menu`/`greeting`:
+  1. Query: ¿paciente tiene cita proxima (<48h) con `reminder_24h_sent=true` y sin confirmar?
+  2. Si si + mensaje contiene intent de confirmacion/cancelacion → rutear directo al flow, saltando menu
+  3. Intents a detectar: "ahi estare", "alli estare", "voy", "si voy", "ok estare" → confirmar; "no puedo", "no voy" → cancel_confirm
+- **Impacto:** resuelve 3+ casos y es el patron mas frecuente de abandono.
+
+### BUG #3 — MEDIO: `parseDateHint` no cubre prefijos comunes y rangos (~45 min)
+**Evidencia:** 4 casos reales en `booking_select_day`:
+- `+50499282398`: "Para la semana del 6 de abril" (prefijo "Para la")
+- `+50495083227`: "Me gustaria dejar la cita para el 24 de abril" (prefijo "Me gustaria")
+- `+50433899824` (tu QA): "Semana del 30 de marzo" (sin "al" al final)
+- `+50432801129`: "Semana del 13 de abril al 17" (rango con "al DD" sin segundo mes)
+
+**Fix propuesto:**
+- En `parseDateHint()`: stripear prefijos antes de parsear: `"Para la "`, `"Me gustaria "`, `"Quiero "`, `"Quisiera "`, `"Para el "`
+- Patron adicional: `/semana del (\d+) de (\w+)(\s+al \d+(?:\s+de (\w+))?)?/i`
+- Si rango termina con solo dia, asumir mismo mes
+- **Impacto:** resuelve 4 casos + patron generalizado de hondureños escribiendo frases completas.
+
+### Casos destacados documentados en reporte (relevantes para Carla)
+
+- **`+50499796391`** (25 Mar): el bot canceló su cita cuando ella queria reagendar (escribio "1. Reagendar" copiando del menu, bot lo interpreto como "1 = confirmar cancelacion"). Tuvo que volver 7 dias despues a agendar de nuevo. Guard `hasReagendarIntent` ya deployado 30 Mar (e4be0f7) — **verificar no se repite post-fix**.
+- **`+50495083227`**: despues de fallar el bot con "Me gustaria dejar la cita para el 24 de abril", contacto directo a la doctora para reagendar. Bot perdio el punto.
+- **`+50494550191`** (paciente con infeccion): 3 "opcion no valida" en 2 dias, nunca completo en el bot. Ejemplo perfecto del daño al UX.
+
+### Criterios de exito (re-correr queries en 1-2 semanas)
+- [ ] Stuck en `cancel_*` bajo de 7 a ≤ 2
+- [ ] 0 "opcion no valida" en `cancel_confirm` con texto libre
+- [ ] Completion rate bot ≥ 35%
+- [ ] 0 cancelaciones erroneas (paciente queria reagendar pero bot canceló)
+- [ ] Tasa de "opcion no valida" en `booking_select_day` -50%
+
+### Bugs secundarios del mismo analisis (BAJA prioridad)
+- [ ] BUG #4: `booking_select_hour` no redirige cuando paciente escribe fecha ("17 de abril")
+- [ ] BUG #5: `booking_select_doctor` acepta numeros fuera de rango sin mensaje claro ("elija del 1 al 3")
+- [ ] BUG #6: FAQ matching por keywords atrapa preguntas irrelevantes (paciente pregunto por "blanqueamiento genital", bot respondio "consulta dermatologica"). Ya planificado para Junio 2026+ con FAQ+AI. Mitigacion temporal: "no encontre respuesta, ¿quiere hablar con secretaria?"
 
 ## Sprint mini — progreso (aprobado 6 Mar, max 2-3 dias)
 
@@ -45,9 +139,26 @@ Tres capas planificadas para despues del feature freeze:
 - [x] Sistema de confirmacion con consecuencia real (auto-cancel 7am)
 - [x] Nuevo template con deadline + follow-up 7:15pm + notificacion de slot liberado
 - [x] Intent detection: "ahi estare"→confirm, "no puedo"→cancel
-- [ ] **QA 31 Mar:** Verificar resultados en OrionCare Demo Bot
-- [ ] **Post-QA:** Activar swap en Consultorio Familiar, Dr. Guevara, Medilaser
+- [x] **QA 31 Mar:** Verificado en Demo Bot — funciona correctamente
+- [x] **Post-QA:** Swap v2 activado en Consultorio Familiar, Dr. Guevara, Medilaser (1 Abr)
 - [ ] Reportar a Medilaser: necesitan FAQs sobre precios de laser, blanqueamiento axilas, eliminacion tatuajes, queloide
+
+### Templates gender-neutral + copy corto (5 Abr)
+- [x] Reescribir 7 de 9 canonical templates: copy corto para Honduras, gender-neutral, Meta-compliant
+- [x] `reminder_24h`: ya no inicia con variable (Meta lo rechazaba), quitado "la" hardcodeado
+- [x] `confirmation`: simplificado de 8 a 4 lineas
+- [x] `reschedule_doctor`: quitado "El paciente" (genero), simplificado
+- [x] `patient_confirmed`, `patient_reschedule`, `handoff_notification`: simplificados
+- [x] `appointment_released`: mejorado con ❌ y "cancelada" (mas visible que "liberada")
+- [x] `reminder_3d` y `reminder_followup`: sin cambio (ya estaban bien)
+- [x] `meta-webhook.ts`: fallback body de reschedule alineado con nuevo texto
+- [x] `recreate-templates`: nuevo parametro `logical_types` para recrear templates especificos (no todos)
+- [x] Deploy: recreate-templates, meta-embedded-signup, meta-webhook
+- [x] **Fix Ecoclinicas:** mapping corregido a `recordatorio_cita_24h_050426`, meta_status=PENDING
+- [x] **APROBADO 7 Abr:** `recordatorio_cita_24h_050426` en Ecoclinicas → meta_status=APPROVED en BD (actualizado manualmente)
+- [x] **Prueba manual enviada 7 Abr:** template recibido OK en +50433899824. Encoding de acentos se corrompe en curl Windows pero el cron envia dd/MM/yyyy (sin acentos) — no es issue en produccion
+- **0 templates PENDING en toda la BD** — todos APPROVED
+- Nota: templates canonicos solo afectan nuevos onboardings. Clinicas existentes (Guevara, Consultorio, Medilaser) no se afectan — usan `recordatorio_v2_300326`
 
 ### Recordatorios 3 dias antes (31 Mar sesion 2)
 - [x] Template `reminder_3d` creado en canonical-templates.ts (sin "manana", usa fecha)
@@ -57,16 +168,7 @@ Tres capas planificadas para despues del feature freeze:
 - [x] template_mappings insertados (is_active=false hasta APPROVED)
 - [x] meta_status de templates v2 actualizado a APPROVED en DB
 - [x] Deploy: messaging-gateway + send-reminders (ff78b27)
-- [ ] **PENDIENTE 1 Abr:** Esperar aprobacion Meta de `recordatorio_3d_310326` en 4 WABAs
-- [ ] **PENDIENTE 1 Abr:** Swap atomico cuando reminder_3d APPROVED:
-  ```sql
-  -- Activar reminder_3d
-  UPDATE template_mappings SET is_active = true, meta_status = 'APPROVED' WHERE logical_type = 'reminder_3d';
-  -- Desactivar reminder_24h viejo
-  UPDATE template_mappings SET is_active = false WHERE id IN ('790c89ee-1634-4ab3-83ad-20e9fd05032a', '453b64da-773c-44f9-ac58-2e9879e09ee6', '51e9d51c-7294-40be-9533-7f815d9a7e6d');
-  -- Promover v2 a reminder_24h
-  UPDATE template_mappings SET logical_type = 'reminder_24h', is_active = true WHERE id IN ('7cb31c4b-7a2d-461d-9011-14294af29f66', '362b1572-b552-453b-afee-4ac699db910a', '5e18addd-257c-48fe-aa23-e13dabe8e516');
-  ```
+- [x] **APROBADO 6 Abr:** `recordatorio_3d_310326` en 5 WABAs — ya estaban APPROVED y activos en BD
 
 ### Soporte numeros internacionales (Junio 2026+)
 - [ ] `normalizeToLocalHN()` en whatsapp-inbound-webhook — deja de asumir 8 digitos Honduras
@@ -82,8 +184,81 @@ Tres capas planificadas para despues del feature freeze:
 
 - [ ] Paciente +50433899824 lleva 1 semana en booking_select_hour — verificar timeout de sesiones
 - [ ] **confirmation_message_sent nunca se marca true** — en `create-appointment/index.ts` linea ~410, despues de `gatewayResult.success` falta `await supabase.from("appointments").update({ confirmation_message_sent: true }).eq("id", appointment.id)`. Los mensajes SI se envian (message_logs lo confirma), solo el flag no se actualiza. Afecta a todas las orgs desde siempre (las citas viejas con true fueron de codigo anterior a la migracion a messaging-gateway).
+- [ ] **`appointment_at` se guarda 6 horas desfasada (Honduras UTC-6)** — severidad **BAJA hoy, ALTA si algo nuevo la empieza a usar**. Descubierto 10 Abr analizando citas de Consultorio Familiar (horarios apareciendo a las 2-5 AM en queries con `AT TIME ZONE 'America/Tegucigalpa'`).
+  - **Causa raiz:** `create-appointment/index.ts:217` construye `const appointmentAt = \`${date}T${normalizedTime}\`` (string ISO sin offset). `update-appointment/index.ts:151` (accion reschedule) tiene el mismo patron. Postgres con columna `timestamptz` asume UTC → guarda `2026-04-18 11:30:00+00` cuando deberia ser `2026-04-18 17:30:00+00` (11:30 AM local Honduras).
+  - **Por que NO afecta reminders hoy:**
+    - `send-reminders/index.ts` filtra por columna legacy `date` (`tomorrowHonduras()`) y formatea hora con `appointment.time` — nunca lee `appointment_at` en logica real (solo esta en el SELECT).
+    - `send-reminder-followup/index.ts` idem.
+    - `auto-cancel-unconfirmed/index.ts:34,52,119` idem — usa `date` y `time`.
+    - Frontend (`src/`): `appointment_at` solo aparece en `integrations/supabase/types.ts` (generado), no se usa en ningun componente.
+  - **Lecturas de riesgo bajo (no criticas pero existen):**
+    - `meta-webhook/index.ts:297-298` — fallback cuando el paciente responde con texto libre sin `appointmentIdFromPayload`: `.gte("appointment_at", twoDaysAgo.toISOString())` + `.order("appointment_at")`. El desfase de 6h es uniforme en todas las citas, asi que el orden relativo es correcto. Edge case solo en bordes del umbral de 2 dias (muy raro).
+    - `whatsapp-inbound-webhook/index.ts:670,763` — pasa `appointmentAt` al bot-handler como parametro. **Codigo muerto: `bot-handler/index.ts` no lee `appointmentAt` en ningun lado.**
+  - **Fix propuesto (minimo):** cambiar en `create-appointment:217` y `update-appointment:151`:
+    ```ts
+    const appointmentAt = `${date}T${normalizedTime}-06:00`; // Honduras sin DST
+    ```
+    O con Luxon (consistente con `_shared/datetime.ts`):
+    ```ts
+    const appointmentAt = DateTime.fromISO(`${date}T${normalizedTime}`, { zone: 'America/Tegucigalpa' }).toUTC().toISO();
+    ```
+  - **Migracion de datos existentes:** `UPDATE appointments SET appointment_at = appointment_at + interval '6 hours'` — opcional, solo si algun codigo nuevo empieza a leer la columna. Por ahora se puede dejar como esta.
+  - **Por que no es urgente:** ningun flujo productivo depende de esta columna. Pero ES bomba de tiempo — proximo dev que agregue un feature (ej. notificacion al doctor cuando paciente agenda, vista "proximas citas ordenadas", API externa) y use `appointment_at` como fuente de verdad lo rompe silenciosamente.
+- [ ] **`reminder_morning_sent` / `reminder_morning_sent_at` huerfanos** — las columnas existen en la tabla `appointments` pero **ningun codigo las lee ni las escribe**. Grep completo en `supabase/functions/` y `src/` = 0 matches. Decidir: (a) implementar cron matutino que las usa, o (b) hacer migration para eliminar columnas. Probablemente feature a medio hacer. No afecta hoy.
+
+- [ ] **Estados `completada` / `no_asistio` sin uso en produccion — problema de adopcion, NO de automatizacion.** Descubierto 10 Abr analizando citas de todos los clientes. Wilmer tiene 71 citas pasadas en limbo (31 agendada + 40 confirmada), Medilaser 80 (47 agendada + 33 confirmada), Yeni 5. **Cero** citas marcadas como `completada` o `no_asistio` en clientes pagos reales. Consecuencia: no podemos medir tasa de asistencia ni no-shows — la metrica central del producto.
+  - **UI existe:** dropdown en `src/pages/AgendaSecretaria.tsx:370-375, 483-488` permite cambiar a `completada` o `no_asistio`. StatusBadge renderiza los 5 estados. Tipos en `src/types/appointment.ts:1`.
+  - **Backend no hace nada:** 0 edge functions transicionan estados post-cita, 0 crons procesan citas pasadas. El unico cron que toca status es `auto-cancel-unconfirmed` (pre-cita, no post).
+  - **Regla operacional (Diego, 10 Abr):** NO implementar cron que rellene estados automaticamente. Prefiere que el medico/secretaria se acostumbren al workflow manual. Datos inferidos ensucian metricas reales. Ver `feedback_no-data-inferida.md` en memoria Claude.
+  - **Diego trabajara por su cuenta en la adopcion** (Opcion A — educacion + UX). Propuestas validas de Claude si vuelve el tema: nudges in-app, recordatorio visual post-cita, onboarding explicito. **Propuestas invalidas:** cron de inferencia, default pesimista, asumir "confirmada = completada".
+  - **Implicacion comercial:** los reportes tipo Guevara/Medilaser son incompletos — tenemos el funnel de mensajeria (enviado/leido/confirmado) pero NO el funnel final (llego/no llego). Tesis del producto "reducimos no-shows" sin validacion de datos duros hasta que la adopcion suba.
+
+- [ ] **Estado `reagendar` huerfano en DB** — no esta en `src/types/appointment.ts` pero existe en la tabla `appointments`: Wilmer 4, OrionCare 1, OrionCareEditado 32. Alguien (probablemente bot-handler en un flow antiguo) escribe ese valor. Decidir: agregar al type o normalizar a `agendada`/`cancelada`.
+
+- [ ] **Cita huerfana sin `appointment_at` — flujo del bot crashea** — descubierto en Consultorio Familiar: cita de Kensi Nicol Carcamo Bonilla (24 Mar) quedo con `appointment_at=null`, notes "Agendada via WhatsApp Bot". El bot agendo pero no guardo timestamp. Sin `date`/`time` tampoco recibe reminders. Buscar que rama del bot-handler crea citas sin appointment_at y arreglar. Probablemente relacionado con bot-handler creando appointments via otra ruta que no pasa por `create-appointment`.
+- [x] **Template reminder_24h rechazado por Meta en Ecoclinicas** — causa: Meta no permite iniciar con variable `{{1}}`. Fix: reescrito template + mapping corregido (5 Abr). Pendiente aprobacion Meta.
+- [x] **Race condition UserContext redirige a onboarding** — usuarios existentes redirigidos a /onboarding/clinic tras login. Causa: dos llamadas concurrentes a getCurrentUserWithRole() (onAuthStateChange + getSession). Fix: eliminado getSession duplicado + skip TOKEN_REFRESHED. Commit: 47443e4
+- [ ] **Dual Supabase client** — dos instancias: `src/lib/supabaseClient.ts` (minimal, sin auth config) y `src/integrations/supabase/client.ts` (full config). No causa bugs visibles ahora pero es deuda tecnica. Diferir unificacion a Junio 2026.
+- [ ] **+50488844585 (Jonathan Ayala, Medilaser)** — todos los mensajes quedan en `sent` (nunca delivered). WhatsApp Business inactivo o desregistrado. No es bug de OrionCare — reportar a clinica.
 
 ## Resuelto recientemente
+
+- **Sesion 7 Abr — template Ecoclinicas APPROVED + prueba flujo completo:**
+  - Template `recordatorio_cita_24h_050426` actualizado a APPROVED en BD (era el unico PENDING)
+  - Prueba manual via Meta API: template recibido OK. Acento en "miércoles" se corrompe desde curl Windows — no afecta produccion (cron envia dd/MM/yyyy)
+  - Cita de prueba creada: 8 Abr 10:00 AM, id `2c9aa52e`, reminder enviado manualmente, `reminder_24h_sent=true`
+  - 6 message_logs FAILED (132001) de crons anteriores cuando template estaba PENDING — ya no deberia repetirse
+  - **Pendiente verificar:** cron 7pm (01:00 UTC) deberia enviar reminder_24h a 2 citas de manana (b8f8 18:30, 7fb2 19:00), y follow-up a la cita de prueba (2c9a 10:00) a las 7:15pm
+  - 2 citas de hoy (7 Abr) nunca recibieron reminder — ya pasaron, sin accion
+
+- **Sesion 6 Abr (2) — race condition UserContext + analisis Medilaser:**
+  - **Fix race condition:** UserContext.tsx tenia dos paths concurrentes (onAuthStateChange + getSession) que ambos llamaban getCurrentUserWithRole(). El ultimo en resolver ganaba — si retornaba null, seteaba isNewUser=true y redirigía a onboarding. Fix: eliminado getSession duplicado (INITIAL_SESSION de onAuthStateChange cubre el caso desde Supabase v2.39+), agregado skip de TOKEN_REFRESHED. Commit: 47443e4
+  - **Hallazgo dual-client Supabase:** dos instancias separadas (`lib/supabaseClient.ts` minimal vs `integrations/supabase/client.ts` full config). Comparten localStorage pero tienen listeners independientes. No causa el bug actual, diferido a Junio.
+  - **Analisis citas Medilaser semana 6-12 Abr:** 16 citas total, 5 auto-canceladas (todas manuales del lunes, flujo correcto: reminder→followup→auto-cancel), 3 reagendadas via bot, 8 pendientes. 0 pacientes usaron boton de confirmar. Citas del bot NO fueron auto-canceladas — pacientes del bot reagendan proactivamente.
+  - **Caso +50488844585 (Jonathan Ayala):** 4 mensajes en `sent` (nunca delivered). WhatsApp Business inactivo — no es bug nuestro. Reportar a clinica.
+
+- **Sesion 6 Abr — templates + auto_cancel + cita prueba Ecoclinicas:**
+  - Ultimo template PENDING (`recordatorio_cita_24h_050426` Ecoclinicas) → APPROVED + is_active=true
+  - Templates `recordatorio_3d_310326` verificados APPROVED en 5 WABAs (ya estaban OK)
+  - Templates Pinares verificados APPROVED (ya estaban OK)
+  - 0 templates pendientes en toda la BD
+  - `auto_cancel_enabled` activado para Ecoclinicas (estaba false por default)
+  - **Default de columna `auto_cancel_enabled` cambiado a `true`** — nuevos clientes lo tendran activo automaticamente
+  - Cita de prueba creada via SQL para Diego en Ecoclinicas (7 Abr 7:45 PM, id: cd6b5a2d) — sin confirmacion WhatsApp porque bypass create-appointment. Doctor hara prueba desde dashboard.
+  - Nota: no se pudo invocar messaging-gateway sin service_role_key. CLI no tiene `functions invoke`.
+
+- **Templates gender-neutral + copy corto + fix Ecoclinicas (5 Abr):**
+  - Causa raiz: Meta rechaza templates que inician con variable (`{{1}}, la {{2}} le espera...`)
+  - Tambien: "la" hardcodeado no funciona para doctores masculinos (Dr. vs Dra.)
+  - Fix: 7 de 9 canonical templates reescritos — copy corto para Honduras, gender-neutral
+  - `reminder_24h`: "Hola {{1}}, {{2}} le espera mañana {{3}} a las {{4}}. ⚠️ Confirme antes de las 7AM o se libera su espacio."
+  - `confirmation`: simplificado de 8→4 lineas
+  - `reschedule_doctor`: quitado "El paciente", simplificado a 2 lineas
+  - `appointment_released`: ❌ + "cancelada" (mas visible que "liberada")
+  - `recreate-templates`: nuevo filtro `logical_types` para recrear solo templates especificos
+  - Deploy: recreate-templates, meta-embedded-signup, meta-webhook
+  - Ecoclinicas: mapping corregido a `recordatorio_cita_24h_050426` (PENDING aprobacion Meta)
+  - Solo afecta nuevos onboardings. Clinicas existentes usan `recordatorio_v2_300326` (no se tocan)
 
 - **Template reminder_3d + prep swap v2 (31 Mar sesion 2, ff78b27):**
   - Nuevo template `reminder_3d` para recordatorios 3 dias antes (sin "manana", usa fecha real)
@@ -92,6 +267,16 @@ Tres capas planificadas para despues del feature freeze:
   - Templates `recordatorio_3d_310326` creados en 4 WABAs, esperando aprobacion Meta
   - meta_status de templates v2 (recordatorio_v2, sin_confirmar, liberada) actualizado a APPROVED
   - Swap pendiente: activar reminder_3d + swap reminder_24h_v2 en 3 clinicas cuando Meta apruebe
+
+- **Swap reminder_24h v2 + fix direct reschedule (1 Abr, 54aab1a):**
+  - Swap activado en 3 clinicas: Consultorio Familiar, Dr. Guevara, Medilaser
+  - Templates viejos renombrados a `reminder_24h_legacy` (is_active=false) para rollback
+  - Templates v2 (`recordatorio_v2_300326`) promovidos a `reminder_24h` (is_active=true)
+  - **Bug fix:** "No puedo asistir" en recordatorio mostraba menu principal en clinicas reales
+  - Causa: `handleDirectReschedule` requeria `session.state === 'greeting'`, pero pacientes con sesiones existentes (estado `completed`) no pasaban el check
+  - Fix: removida restriccion de estado — `handleDirectReschedule` es autónomo y resetea todo el context
+  - Deploy: bot-handler (54aab1a)
+  - **Canonical templates fix (edf9796):** Botones de `reminder_24h` y `reminder_followup` tenian emojis que Meta rechaza. Alineados con templates aprobados en produccion. Deploy: meta-embedded-signup + recreate-templates
 
 - **3 bugs de confirmacion (31 Mar, fac1121):**
   - **detectIntent "No puedo asistir" confirmaba:** "asistir".includes("si") matcheaba CONFIRM antes de CANCEL. Fix: "si" como palabra completa, cancel antes de confirm. Alineado con whatsapp-inbound-webhook.
@@ -234,8 +419,8 @@ Tres capas planificadas para despues del feature freeze:
 
 ## Pendiente
 
-- [ ] **Templates Pinares (6 nuevos, sufijo _100326_*)**: esperando aprobacion Meta (24-48h). Una vez APPROVED, activarlos y desactivar los viejos (_050326_*)
-- [ ] **QA handoff notification**: esperar aprobacion de Meta templates, luego probar con Demo Bot (+50493133496). Verificar que doctor/secretaria recibe WhatsApp con datos del paciente
+- [x] **Templates Pinares (6 nuevos, sufijo _100326_*)**: APPROVED y activos en BD (verificado 6 Abr)
+- [ ] **QA handoff notification**: templates aprobados — probar con Demo Bot (+50493133496). Verificar que doctor/secretaria recibe WhatsApp con datos del paciente
 - [ ] Dra. Yeni Ramos no tiene phone en tabla doctors — agregar si algun dia cambian handoff a doctor
 - [ ] `TBD_LEGACY_NAME` en canonical-templates.ts para WABA OrionCare — no urgente, no se usa con bot
 - [ ] Verificar webhook: WABA 1491078449281051 debe apuntar a whatsapp-inbound-webhook de Supabase

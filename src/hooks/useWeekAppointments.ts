@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { getTodayAppointments, getTodayAppointmentsByDoctor, AppointmentWithDetails } from '@/lib/api';
+import { getWeekAppointments, AppointmentWithDetails } from '@/lib/api';
 
 /**
- * Hook to fetch appointments for a week range
- * 
+ * Hook to fetch appointments for a week range using a single query
+ *
  * @param options - Configuration object
  * @param options.doctorId - If provided, fetches appointments for specific doctor only
  * @param options.weekStart - ISO date string for the start of the week (YYYY-MM-DD)
+ * @param options.enabled - If false, skips fetching
  * @returns Object with appointments grouped by date, loading state, and refetch function
  */
 export const useWeekAppointments = (options: {
@@ -22,7 +23,7 @@ export const useWeekAppointments = (options: {
   const weekDates = useMemo(() => {
     const dates: string[] = [];
     const startDate = new Date(options.weekStart + 'T00:00:00');
-    
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i);
@@ -31,29 +32,34 @@ export const useWeekAppointments = (options: {
       const day = String(date.getDate()).padStart(2, '0');
       dates.push(`${year}-${month}-${day}`);
     }
-    
+
     return dates;
   }, [options.weekStart]);
+
+  // Calculate week end date string
+  const weekEndStr = weekDates[weekDates.length - 1];
 
   const fetchAppointments = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Fetch appointments for all 7 days in parallel
-      const fetchPromises = weekDates.map(date => {
-        if (options.doctorId) {
-          return getTodayAppointmentsByDoctor(options.doctorId, date);
-        }
-        return getTodayAppointments(date);
-      });
+      // Single query for entire week range
+      const allAppointments = await getWeekAppointments(
+        options.weekStart,
+        weekEndStr,
+        options.doctorId
+      );
 
-      const results = await Promise.all(fetchPromises);
-      
       // Group appointments by date
       const appointmentsByDate: Record<string, AppointmentWithDetails[]> = {};
-      weekDates.forEach((date, index) => {
-        appointmentsByDate[date] = results[index] || [];
+      weekDates.forEach(date => {
+        appointmentsByDate[date] = [];
+      });
+      allAppointments.forEach(apt => {
+        if (appointmentsByDate[apt.date]) {
+          appointmentsByDate[apt.date].push(apt);
+        }
       });
 
       setData(appointmentsByDate);
@@ -62,7 +68,7 @@ export const useWeekAppointments = (options: {
       setError(err instanceof Error ? err : new Error('Failed to fetch week appointments'));
       setIsLoading(false);
     }
-  }, [weekDates, options.doctorId]);
+  }, [options.weekStart, weekEndStr, options.doctorId, weekDates]);
 
   useEffect(() => {
     if (options.enabled === false) return;

@@ -239,7 +239,8 @@ export async function getTodayAppointments(date: string): Promise<AppointmentWit
 // 2. getTodayAppointmentsByDoctor
 // --------------------------
 export async function getTodayAppointmentsByDoctor(doctorId: string, date: string): Promise<AppointmentWithDetails[]> {
-  const { data, error } = await supabase
+  const orgId = await getActiveOrganizationId();
+  let query = supabase
     .from("appointments")
     .select(
       `
@@ -256,8 +257,52 @@ export async function getTodayAppointmentsByDoctor(doctorId: string, date: strin
     .eq("doctor_id", doctorId)
     .order("time", { ascending: true });
 
+  if (orgId) query = query.eq("organization_id", orgId);
+
+  const { data, error } = await query;
+
   if (error) {
     console.error("Error getTodayAppointmentsByDoctor:", error);
+    throw error;
+  }
+
+  return Promise.all((data as any[]).map(fetchAppointmentWithRelations));
+}
+
+// --------------------------
+// 2b. getWeekAppointments — single query for a date range (replaces 7x getTodayAppointments)
+// --------------------------
+export async function getWeekAppointments(
+  startDate: string,
+  endDate: string,
+  doctorId?: string | null
+): Promise<AppointmentWithDetails[]> {
+  const orgId = await getActiveOrganizationId();
+  let query = supabase
+    .from("appointments")
+    .select(
+      `
+      *,
+      doctor:doctor_id (
+        id, name, phone, email, specialty_id, created_at
+      ),
+      patient:patient_id (
+        id, name, phone, email, notes, created_at
+      )
+      `
+    )
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("date", { ascending: true })
+    .order("time", { ascending: true });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  if (doctorId) query = query.eq("doctor_id", doctorId);
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error getWeekAppointments:", error);
     throw error;
   }
 

@@ -48,7 +48,16 @@ const StepDoctor = lazy(() => import("./pages/onboarding/StepDoctor"));
 const StepSchedule = lazy(() => import("./pages/onboarding/StepSchedule"));
 const StepSummary = lazy(() => import("./pages/onboarding/StepSummary"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const App = () => {
   /**

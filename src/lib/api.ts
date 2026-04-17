@@ -53,6 +53,7 @@ export interface AppointmentWithDetails extends Appointment {
 interface ApiModule {
   getTodayAppointments: (date: string) => Promise<AppointmentWithDetails[]>;
   getTodayAppointmentsByDoctor: (doctorId: string, date: string) => Promise<AppointmentWithDetails[]>;
+  getWeekAppointments: (startDate: string, endDate: string, doctorId?: string | null) => Promise<AppointmentWithDetails[]>;
   getPatientAppointments: (patientId: string) => Promise<AppointmentWithDetails[]>;
   updateAppointmentStatus: (appointmentId: string, newStatus: AppointmentStatus) => Promise<Appointment | null>;
   createAppointment: (input: {
@@ -129,6 +130,18 @@ export async function getTodayAppointmentsByDoctor(
 ): Promise<AppointmentWithDetails[]> {
   const apiModule = await getApiModule();
   return await apiModule.getTodayAppointmentsByDoctor(doctorId, date);
+}
+
+/**
+ * Get all appointments for a date range (single query instead of N per day)
+ */
+export async function getWeekAppointments(
+  startDate: string,
+  endDate: string,
+  doctorId?: string | null
+): Promise<AppointmentWithDetails[]> {
+  const apiModule = await getApiModule();
+  return await apiModule.getWeekAppointments(startDate, endDate, doctorId);
 }
 
 /**

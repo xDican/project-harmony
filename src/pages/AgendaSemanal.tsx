@@ -25,7 +25,9 @@ import { cn } from '@/lib/utils';
  */
 export default function AgendaSemanal() {
   const { user, loading, isAdmin, isDoctor, isSecretary, isAdminOrSecretary, isDoctorView } = useCurrentUser();
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(
+    () => localStorage.getItem('oc_last_doctor') || 'all'
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
@@ -93,6 +95,7 @@ export default function AgendaSemanal() {
   useEffect(() => {
     if (isSingleDoctorOrg && singleDoctor) {
       setSelectedDoctorId(singleDoctor.id);
+      localStorage.setItem('oc_last_doctor', singleDoctor.id);
     }
   }, [isSingleDoctorOrg, singleDoctor]);
 
@@ -106,7 +109,7 @@ export default function AgendaSemanal() {
   const { data: appointmentsByDate, weekDates, isLoading: loadingAppointments, refetch } = useWeekAppointments({
     doctorId: doctorIdToFetch,
     weekStart: weekStartStr,
-    enabled: isDoctorView || !loadingDoctors,
+    enabled: true,
   });
 
   // Get appointments for the selected day
@@ -277,7 +280,10 @@ export default function AgendaSemanal() {
                 <Label className="text-base font-semibold text-foreground mb-3 block">
                   Médico
                 </Label>
-                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                <Select value={selectedDoctorId} onValueChange={(val) => {
+                  setSelectedDoctorId(val);
+                  localStorage.setItem('oc_last_doctor', val);
+                }}>
                   <SelectTrigger className="w-full max-w-md">
                     <SelectValue placeholder="Selecciona un médico" />
                   </SelectTrigger>
