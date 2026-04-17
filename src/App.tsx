@@ -1,12 +1,13 @@
 import { lazy, Suspense } from 'react';
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// Lazy-load Radix Toaster — login uses Sonner, not Radix toasts
+const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ default: m.Toaster })));
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
 import { UserRole } from "./types/user";
-import MainLayout from "./components/MainLayout";
+const MainLayout = lazy(() => import("./components/MainLayout"));
 import SuperAdminRoute from "./components/SuperAdminRoute";
 
 // Eagerly loaded — entry points for all users
@@ -146,8 +147,7 @@ const App = () => {
   return (
   <QueryClientProvider client={queryClient}>
     <UserProvider>
-      <TooltipProvider>
-        <Toaster />
+        <Suspense fallback={null}><Toaster /></Suspense>
         <Sonner />
         <BrowserRouter>
           <Suspense fallback={
@@ -349,7 +349,6 @@ const App = () => {
           </Routes>
           </Suspense>
         </BrowserRouter>
-      </TooltipProvider>
     </UserProvider>
   </QueryClientProvider>
   );
