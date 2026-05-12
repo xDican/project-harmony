@@ -1,10 +1,41 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 11 May 2026 (Sprint 1 ejecutado + deployado a produccion. QA parcial OK. Esperando 14 dias de medicion antes de Sprint 2)
+> Ultima actualizacion: 12 May 2026 (Hotfix Sprint 1 deployado + validado en produccion real. Esperando data de la semana antes de decidir Sprint 2)
 
 ## Fase actual
 
 Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
+
+## ✅ HOTFIX SPRINT 1 DEPLOYADO 12 May 17:00 UTC (~11am HN)
+
+**Motivo:** Analisis del cron 11 May 7pm HN revelo 2 bugs reales en los 4 pacientes que recibieron recordatorio. Plan en `.claude/plans/debemos-hacer-hotfix-ahorita-tender-whistle.md`.
+
+**Deploys ejecutados:**
+- `meta-webhook` v40 (Fix A)
+- `bot-handler` v61 (Fix B + Bonus)
+
+### Fixes incluidos
+
+| Fix | Archivo | Cambio |
+|-----|---------|--------|
+| **A** state stale post-boton | `meta-webhook/index.ts` `logBotInteractionFromLegacy` | Cuando ya existe sesion del paciente, UPDATE bot_sessions.state='completed' (antes solo escribia log, dejaba state stale en booking_*/cancel_confirm). |
+| **B** texto libre confirm/reschedule/cancel | `bot-handler/index.ts` `handleGreeting` + 2 helpers nuevos | Cuando intent='confirm'/'reschedule'/'cancel' y hay cita inminente: actua (UPDATE status o entra a reschedule/cancel destructive). Antes solo respondia "Recibido" sin tocar BD — paciente creia que confirmo y a las 7am auto-cancel la liberaba. |
+| **Bonus** "no puedo" pelado | `_shared/honduras-intents.ts` `RESCHEDULE_PHRASES` | Agregado "no puedo", "hoy no puedo" (sin "asistir"). Diego ya no tiene que escribir 2 veces. |
+
+### Validacion en produccion (cron 11am HN del 12 May)
+
+| Caso | Resultado |
+|------|-----------|
+| **Diego (QA)** texto "No puedo ir" → reschedule directo | ✅ Bonus funciono |
+| **Diego (QA)** "Gracias!" post-boton legacy | ✅ Fix A — ack normal (anoche era "Opcion no valida") |
+| **Paciente real +50497870752** "Confirmo" texto libre | ✅✅ Fix B — `status='confirmada'` + mensaje formal (anoche era "Recibido" sin UPDATE) |
+| **Paciente real +50499478944 (Medilaser)** boton confirm | ✅ Flujo legacy normal, state queda completed |
+
+### Esperando data de la semana
+
+Antes de pasar a Sprint 2 (planeado 19 May), dejar correr 1 semana con el hotfix vivo. Medir si los 3 bugs reaparecen o si surgen variantes nuevas. **Sprint 2 confirmado solo si las metricas justifican (parser fechas, slot mas cercano, aliases servicios).**
+
+---
 
 ## ✅ SPRINT 1 DEPLOYADO 11 May 23:45 UTC — Humanizacion del bot
 
