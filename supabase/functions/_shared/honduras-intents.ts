@@ -146,10 +146,10 @@ const RESCHEDULE_PHRASES = [
   'para la proxima', 'para la proxima semana', 'prox semana',
   'para la siguiente',
   // Imposibilidad (en Honduras = reschedule, no cancel)
-  'no puedo asistir', 'no puedo a esa hora', 'no puedo ir',
+  'no puedo', 'no puedo asistir', 'no puedo a esa hora', 'no puedo ir',
   'no podre', 'no podre asistir', 'no voy a poder', 'no voy a poder ir',
   'no me sera posible', 'no me dara tiempo',
-  'manana no puedo', 'no podia',
+  'manana no puedo', 'hoy no puedo', 'no podia',
   // Razones humanas comunes
   'estare fuera', 'estoy fuera de ciudad', 'estoy fuera del pais',
   'no estoy en el pais', 'fuera de tegus',

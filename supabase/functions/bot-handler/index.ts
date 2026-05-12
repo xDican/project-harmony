@@ -662,16 +662,30 @@ async function handleGreeting(
 
   // Pre-check con detector hondureno natural (cubre lenguaje libre, typos, preambulos)
   const hnIntent = detectIntent(messageText);
-  if (hnIntent.intent === 'confirm') {
-    // Confirmacion espontanea ("ahi estare", "primero dios") → ack y cerrar
-    return {
-      message: '👍 ¡Recibido! Le esperamos.',
-      requiresInput: false,
-      nextState: 'completed',
-      sessionComplete: true,
-      showMenuHint: false,
-    };
+
+  // Texto libre con intent claro de confirm/reschedule/cancel: replica el camino feliz
+  // del boton del recordatorio (meta-webhook). Sin esto, "Confirmo" solo respondia
+  // "Recibido" sin actualizar appointments.status — la cita seguia 'agendada' y a las
+  // 7am auto-cancel la liberaba silenciosamente.
+  if (hnIntent.intent === 'confirm' || hnIntent.intent === 'reschedule' || hnIntent.intent === 'cancel') {
+    const patient = await findPatientByPhone(session.patient_phone, organizationId, supabase);
+    const upcoming = patient ? await getPatientUpcomingAppointments(patient.id, organizationId, supabase) : [];
+
+    if (upcoming.length > 0) {
+      const apt = upcoming[0];
+      if (hnIntent.intent === 'confirm') {
+        return await confirmAppointmentFromText(apt, supabase);
+      }
+      if (hnIntent.intent === 'reschedule') {
+        return await handleDirectReschedule(apt.id, session, organizationId, supabase, handoffLabels);
+      }
+      if (hnIntent.intent === 'cancel') {
+        return await startDestructiveCancelFromText(apt, session);
+      }
+    }
+    // Sin cita inminente: cae al greeting + menu generico (decision UX alineada con Diego)
   }
+
   if (hnIntent.intent === 'wrong_number' || hnIntent.intent === 'spam_external_bot') {
     // No abrir menu — paciente no es relevante
     return {
@@ -2807,6 +2821,69 @@ async function findPatientByPhone(
     .maybeSingle();
 
   return patient || null;
+}
+
+/**
+ * Confirma una cita inminente cuando el paciente escribio texto libre con intent
+ * 'confirm' (ej. "Confirmo", "Ahi estare"). Replica el camino feliz del boton
+ * "Si, ahi estare" del recordatorio_24h. Idempotente: si la cita ya esta confirmada,
+ * solo responde el ack visual.
+ */
+async function confirmAppointmentFromText(
+  appointment: any,
+  supabase: SupabaseClient,
+): Promise<BotResponse> {
+  if (appointment.status !== 'confirmada' && appointment.status !== 'confirmed') {
+    const { error } = await supabase
+      .from('appointments')
+      .update({ status: 'confirmada' })
+      .eq('id', appointment.id);
+    if (error) {
+      console.error('[bot-handler] confirmAppointmentFromText UPDATE error:', error);
+    } else {
+      console.log('[bot-handler] Appointment confirmed via free text:', appointment.id);
+    }
+  }
+  const doctor = appointment.doctors as any;
+  const doctorName = doctor ? `${doctor.prefix} ${doctor.name}` : 'el doctor';
+  const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
+    .toFormat("EEEE dd 'de' MMMM", { locale: 'es' });
+  return {
+    message: `✅ *Cita confirmada*\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n¡Le esperamos!`,
+    requiresInput: false,
+    nextState: 'completed',
+    sessionComplete: true,
+    showMenuHint: false,
+  };
+}
+
+/**
+ * Entra al prompt destructivo de cancel_confirm (phase 2) cuando el paciente escribio
+ * texto libre con intent 'cancel'. Replica el patron del booking_* + "cancelar" durante
+ * reschedule (linea 271-297). El UPDATE a status='cancelada' ocurre cuando el paciente
+ * responde "Si, cancelar cita" en handleCancelConfirm.
+ */
+async function startDestructiveCancelFromText(
+  appointment: any,
+  session: BotSession,
+): Promise<BotResponse> {
+  const doctor = appointment.doctors as any;
+  const doctorName = doctor ? `${doctor.prefix} ${doctor.name}` : 'el doctor';
+  const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
+    .toFormat("EEEE dd 'de' MMMM yyyy", { locale: 'es' });
+  session.context.rescheduleAppointmentId = appointment.id;
+  session.context.rescheduleAppointmentDate = appointment.date;
+  session.context.rescheduleAppointmentTime = appointment.time;
+  session.context.rescheduleAppointmentDoctorName = doctorName;
+  session.context.cancelConfirmPhase = 'confirm_delete';
+  session.context.isReschedule = true;
+  return {
+    message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n_Esta accion no se puede deshacer._`,
+    options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
+    requiresInput: true,
+    nextState: 'cancel_confirm',
+    sessionComplete: false,
+  };
 }
 
 async function getPatientUpcomingAppointments(

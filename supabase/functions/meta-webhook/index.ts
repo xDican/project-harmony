@@ -404,7 +404,25 @@ async function logBotInteractionFromLegacy(
 
   let sessionId: string | null = (existing as { id?: string } | null)?.id || null;
 
-  if (!sessionId) {
+  if (sessionId) {
+    // Sesion existente: limpiar state stale. El paciente puede estar en booking_*,
+    // cancel_confirm, etc. (caso real: texto libre "No puedo asistir" abre reschedule
+    // y luego presiona boton del recordatorio). Sin esto, proximo mensaje cae en menu
+    // equivocado con "Opcion no valida".
+    const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+    const { error: updErr } = await supabase
+      .from("bot_sessions")
+      .update({
+        state: "completed",
+        context: { source: "legacy_button", intent },
+        last_message_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      })
+      .eq("id", sessionId);
+    if (updErr) {
+      console.warn("[meta-webhook] Could not reset session state post-button:", updErr.message);
+    }
+  } else {
     const expiresAt = new Date(Date.now() + 60_000).toISOString(); // 1 min — efimera
     const { data: created, error: createErr } = await supabase
       .from("bot_sessions")
@@ -412,7 +430,7 @@ async function logBotInteractionFromLegacy(
         whatsapp_line_id: lineId,
         patient_phone: patientPhone,
         state: "completed",
-        context: { source: "legacy_button" },
+        context: { source: "legacy_button", intent },
         last_message_at: new Date().toISOString(),
         expires_at: expiresAt,
       })
