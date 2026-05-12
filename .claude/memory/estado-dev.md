@@ -1,10 +1,235 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 17 Abr 2026 (optimizacion rendimiento mobile — 3 commits de JS/assets deployed + plan de 3 niveles para data layer)
+> Ultima actualizacion: 11 May 2026 (Sprint 1 ejecutado + deployado a produccion. QA parcial OK. Esperando 14 dias de medicion antes de Sprint 2)
 
 ## Fase actual
 
 Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
+
+## ✅ SPRINT 1 DEPLOYADO 11 May 23:45 UTC — Humanizacion del bot
+
+**Deploys ejecutados (todos retornan 200 post-deploy):**
+- `bot-handler` v59
+- `meta-webhook` v38
+- `messaging-gateway` v39 (por el fix en `_shared/message-logger.ts`)
+
+**QA parcial completado por Diego en Demo Bot:**
+- FAQ matching (B.1.x) ✓
+- Greeting/main_menu naturales (B.4.x) ✓
+- Mensaje vacio (B.5.x) ✓
+- Regresion (B.7.x) ✓
+- Pendiente: B.6.x (boton "Confirmar" — cron 7PM HN del 11 May con 2 citas test)
+
+**Proxima sesion dev: 19 May (Sprint 2).** Esta semana NO codear — dejar correr Sprint 1 para acumular data real. Diego enfoca en 6 demos del canal asistente (12-14 May) + segundas visitas (19+).
+
+
+
+### Items completados
+
+| # | Cambio | Archivo |
+|---|--------|---------|
+| 1.0 | 2 FAQs Wilmer pobladas (12+10 kw), 7 keywords promocionales quitadas de "consulta de diagnostico" | DB (`bot_faqs` UPDATE directo) |
+| 1.1 | Modulo `honduras-intents.ts` (50+ frases del diccionario) + tests con 30+ casos reales | `supabase/functions/_shared/honduras-intents.ts` + `.test.ts` |
+| 1.2 | `detectIntent` aplicado en 4 handlers. `handleDirectReschedule` salta menu redundante (fix 47% abandono). Escape "cancelar" en booking_* durante reschedule → phase 2 destructive | `bot-handler/index.ts` |
+| 1.3 | Migration `bot_faqs.min_match_score NUMERIC NOT NULL DEFAULT 1.0` | `migrations/20260511120001_add_bot_faqs_min_match_score.sql` |
+| 1.4 | `searchFAQ` usa threshold per-FAQ. Sin matches por solo prefix | `bot-handler/index.ts:2391` |
+| 1.5 | Guard `user_message=""` con dedupe handoffs (5s window) | `bot-handler/index.ts` |
+| 1.6 | `logBotInteractionFromLegacy` — insert en `bot_conversation_logs` desde meta-webhook flujo legacy | `meta-webhook/index.ts` |
+| 1.7 | **Bug billable_requires_doctor encontrado y fixado.** Detalle abajo | `_shared/message-logger.ts` |
+
+### Hallazgo critico Item 1.7
+
+**Bug:** check constraint `message_logs_billable_requires_doctor` (billable=false OR doctor_id NOT NULL) hacia que TODOS los inbounds del flujo bot (no solo button_replies) fallaran al insertar en `message_logs`. logMessage logueaba el error a console.error pero el flujo continuaba.
+
+**Causa:** flujo bot loggea inbound del paciente ANTES de identificar doctor → `doctorId=undefined` → `billable=true` (default) → check viola → insert rechazado.
+
+**Fix:** `logMessage` auto-deduce `billable` del doctorId: si no hay doctorId → billable=false → check pasa. Caller puede sobrescribir pasando `billable` explicito.
+
+**Impacto post-deploy:** `message_logs` empezara a tener entries para todos los inbounds del bot. Hoy hay 30+ entries en `bot_conversation_logs` sin contraparte en message_logs.
+
+### QA pendiente (item del Sprint 1)
+
+Antes de cerrar Sprint 1, validar en Demo Bot con org de Wilmer:
+
+1. **FAQ matching:**
+   - "cuanto cuestan las resinas?" → restauraciones ✓
+   - "tienen blanqueamiento?" → blanqueamiento ✓
+   - "tienen promo?" → handoff (no falso positivo) ✓
+
+2. **Flujo reschedule:**
+   - Boton "No puedo asistir" → directo a seleccion de semana (NO menu intermedio)
+   - "cancelar" durante booking_* (con isReschedule) → confirmacion destructiva
+   - "ahi estare" en cancel_confirm → cierra como confirmado
+
+3. **Edge cases:**
+   - Sticker/audio sin texto → pide texto, no handoff
+   - Mensaje vacio duplicado en <5s → no respuesta dup
+
+4. **Validacion SQL post-deploy (24h):**
+   ```sql
+   -- Inbounds del bot ahora deben aparecer en message_logs
+   SELECT COUNT(*), MIN(created_at) FROM message_logs
+   WHERE direction='inbound' AND provider='meta' AND billable=false
+     AND created_at >= NOW() - INTERVAL '24 hours';
+   ```
+
+### Medicion 14 dias post-deploy
+
+Correr el SQL de medicion (al final de la seccion plan) y comparar contra baseline V2 (14-28 Abr):
+
+| Metrica | Baseline V2 | Esperado post-Sprint 1 |
+|---------|------------:|----------------------:|
+| Exito Medilaser | 31.5% | 45-50% |
+| Exito Wilmer | 0% | 30-40% |
+| Exito Yeni/CF | 40% | 55% |
+| Abandono cancel_confirm | 70% | 30% |
+| Mensajes vacios → handoff dup | 4-6/qna | 0 |
+| Inbounds button "No puedo asistir" loggeados en message_logs | 0 | >20/qna |
+
+### Pendiente para Sprint 2 (19 May)
+
+Items NO incluidos en Sprint 1, planeados originalmente:
+- Parser fechas/horas naturales
+- "Buscar slot mas cercano" cuando fecha pedida no existe
+- Aliases en `bot_service_types` (papanicolau → citologia, tatuaje → procedimiento)
+- Validar duplicado de cita
+
+### Pendiente para Sprint 3 (2 Jun)
+
+- Onboarding pasos Servicios + FAQs
+- Preambulos / out-of-scope / terceros
+- Yeni y Ecoclinicas tienen **0 FAQs activas** — acción comercial: pedirles poblar paquete básico (ubicación, horario, métodos de pago, servicios). NO bloquea Sprints anteriores.
+
+---
+
+> Ultima actualizacion previa: 4 May 2026 (Sprint 1 humanizacion del bot priorizado — plan completo en .claude/plans/bot-humanizacion.md)
+
+## SPRINT 1 PRIORIZADO — Humanizacion del bot (~9.5h, 3 sesiones) [HISTORICO]
+
+**Plan completo:** `.claude/plans/bot-humanizacion.md` (incluye Sprints 2 y 3)
+**Diccionario fuente:** `.claude/memory/diccionario-hondurenismos.md` (2,357 mensajes reales)
+**Analisis fuente:** `docs/analisis-bot-detalle-pacientes-14abr-28abr.md` (56 sesiones)
+
+### Arquitectura: 2 capas
+- **Universal (estatica, codigo):** `_shared/honduras-intents.ts` — hondurenismos + intents top + parser. ~50 frases.
+- **Cliente (dinamica, DB):** `bot_faqs.keywords` + `bot_service_types.aliases`. Crece sin deploy.
+
+### Items Sprint 1 (orden sugerido de ejecucion)
+
+### ⚠️ ITEM 1.0 — PREREQ: Auditar keywords de FAQs activas (30 min, ANTES de codear)
+
+**Por que primero:** El item 1.4 sube el umbral de match a `min_match_score=1.0`. Si una FAQ activa tiene `keywords: []` o keywords debiles, dejara de matchear despues del deploy. Auditar y completar antes de tocar codigo.
+
+**FAQs criticas confirmadas vacias (4 May):**
+- Wilmer org `c7234d61-1586-42ae-bc0a-db8abb96a75c`:
+  - "¿Cuál es el precio de las restauraciones dentales?" — `keywords: []` ⚠️
+  - "¿Cuál es el precio del Blanqueamiento Dental?" — `keywords: []` ⚠️
+
+**Pendiente revisar (correr SQL antes de codear):**
+```sql
+SELECT
+  o.name AS cliente,
+  f.question,
+  COALESCE(array_length(f.keywords, 1), 0) AS num_keywords,
+  f.keywords
+FROM bot_faqs f
+JOIN organizations o ON o.id = f.organization_id
+WHERE f.is_active = true
+  AND o.id IN (
+    'c7234d61-1586-42ae-bc0a-db8abb96a75c', -- Wilmer
+    '1eec1734-9cc0-4e2c-ae67-31aab1393df8', -- Medilaser
+    'a182a362-62e4-45f4-84c7-f76c0735390c', -- Yeni/CF
+    '7daa9810-13d2-44f9-bbf6-a7ea4f57ab74'  -- Ecoclinicas
+  )
+ORDER BY o.name, num_keywords ASC;
+```
+
+**Acciones segun resultado:**
+- FAQs con `num_keywords = 0` → poblar con 5-10 keywords reales (sinonimos, typos comunes hondurenos del diccionario, palabras del title de la pregunta)
+- FAQs con `num_keywords < 3` → expandir
+- FAQs con keywords ambiciosos (ej. la "consulta de diagnostico" de Wilmer con 30+ keywords incluyendo "promo", "descuento") → recortar a los esenciales para evitar falsos positivos
+
+**Caso especifico Wilmer:** ademas de poblar las 2 FAQs vacias, considerar agregar FAQ nueva "¿Cuanto cuesta la limpieza dental?" — paciente W1 (sesion del 25 Abr) la pidio 2 veces y nunca la obtuvo. Diego puede pedir el precio a Wilmer en la proxima llamada de seguimiento.
+
+**Sin esta auditoria, el deploy de Sprint 1 puede empeorar las cosas para los clientes que dependen de FAQs con matching debil.** El plan ya identifica esto como riesgo #1.
+
+---
+
+**Sesion 1 (~4h, despues del prereq 1.0):**
+
+| # | Item | Esfuerzo | Archivos clave |
+|---|------|----------|----------------|
+| 1.3 | Migracion `bot_faqs.min_match_score numeric NOT NULL DEFAULT 1.0` | 30min | `supabase/migrations/2026XXXX_bot_humanizacion.sql` |
+| 1.4 | Ajustar `searchFAQ` con umbral: `bestScore >= (faq.min_match_score ?? 1.0)` | 30min | `bot-handler/index.ts:2403` |
+| 1.1 | Crear `_shared/honduras-intents.ts` con `detectIntent()`, `normalizeTypos()`, `isAcknowledgment()`. 50 frases del diccionario. Tests unitarios con 30+ casos del dataset. | 3h | `_shared/honduras-intents.ts` (nuevo) + `_shared/honduras-intents.test.ts` |
+
+**Sesion 2 (~3.5h):**
+
+| # | Item | Esfuerzo | Archivos clave |
+|---|------|----------|----------------|
+| 1.2 | Aplicar `detectIntent` en 4 handlers: `handleGreeting`, `handleMainMenu`, `handleCancelConfirm`, `handleDirectReschedule`. **Cambio clave:** `handleDirectReschedule` retorna `nextState: 'booking_select_day'` (no `cancel_confirm`) con copy humano. Agregar escape "cancelar" en booking_*. | 2h | `bot-handler/index.ts:464-547`, `:549-630`, `:676-695`, `:2000+` |
+| 1.5 | Bug `user_message=""` (M37, M1, M39, E1) — early return con mensaje claro + dedupe de handoffs si la transicion previa fue <5s | 1h | `bot-handler/index.ts` `processMessage` + `handleHandoffToSecretary` |
+| 1.6 | Logging boton "Confirmar" — insert en `bot_conversation_logs` desde flujo legacy de meta-webhook | 30min | `meta-webhook/index.ts:335-360` |
+
+**Sesion 3 (~2h):**
+
+| # | Item | Esfuerzo | Archivos clave |
+|---|------|----------|----------------|
+| 1.7 | **Bug logging button_replies que van al bot.** Diagnostico (logs detallados en meta-webhook ramas botEnabled, deploy, test real con Diego presionando boton). Fix segun hallazgo. Validar con SQL post-fix. | 1h | `meta-webhook/index.ts:200-251` |
+| QA | Pruebas en Demo Bot: confirmacion explicita en greeting, "no puedo asistir" → reagendar directo, "cancelar" en booking_*, FAQ con umbral, mensajes vacios, dedupe. Verificar bot_conversation_logs y message_logs. | 1h | testing manual |
+
+### Resultados esperados Sprint 1 (medir 14 dias post-deploy)
+
+| Metrica | Baseline (V2) | Esperado |
+|---------|--------------|----------|
+| Tasa exito Medilaser | 31.5% | **45-50%** |
+| Tasa exito Wilmer | 0% | **30-40%** |
+| Tasa exito Yeni/CF | 40% | **55%** |
+| Abandono cancel_confirm | 70% | **30%** |
+| Confirmaciones perdidas | 8-15/qna | **0-2** |
+| FAQs respondidas incorrecto | 5/qna | **<1** |
+| Mensajes vacios → handoff dup | 4-6/qna | **0** |
+| Inbounds "No puedo asistir" loggeados | 0 (de ~23 recibidos) | **>20/qna** |
+
+### Riesgos Sprint 1
+
+- `min_match_score=1.0` puede romper FAQs con keywords debiles. **Mitigacion:** auditar las 7 FAQs activas de Wilmer + Medilaser/Yeni/Eco antes de subir umbral. Agregar keywords reales.
+- Falsos positivos del detector ("siempre voy" interpretado como reschedule). **Mitigacion:** tests unitarios con casos reales, reglas culturales documentadas en codigo y `diccionario-hondurenismos.md`.
+- Pérdida UX en cancel_confirm si paciente queria cancelar definitivo. **Mitigacion:** keyword "cancelar" disponible en cualquier paso de booking_*.
+
+### Items NO incluidos en Sprint 1 (van en Sprint 2 y 3)
+
+- Parser fechas/horas naturales (Sprint 2)
+- "Buscar slot mas cercano" cuando fecha pedida no existe (Sprint 2)
+- Aliases en `bot_service_types` (Sprint 2)
+- Validar duplicado de cita (Sprint 2)
+- Onboarding pasos Servicios + FAQs (Sprint 3)
+- Preambulos / out-of-scope / terceros (Sprint 3)
+
+### SQL de medicion (correr 14 dias post-deploy)
+
+```sql
+WITH sessions AS (
+  SELECT
+    session_id, organization_id,
+    bool_or(state_after = 'completed') AS reached_completed,
+    string_agg(DISTINCT state_before, ',') AS states_visited
+  FROM bot_conversation_logs
+  WHERE created_at >= 'YYYY-MM-DD' AND created_at < 'YYYY-MM-DD'
+  GROUP BY session_id, organization_id
+)
+SELECT
+  o.name AS cliente,
+  COUNT(*) AS sessions,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE reached_completed) / NULLIF(COUNT(*),0), 1) AS pct_exito,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE states_visited LIKE '%cancel_confirm%' AND NOT reached_completed)
+                / NULLIF(COUNT(*) FILTER (WHERE states_visited LIKE '%cancel_confirm%'),0), 1) AS pct_abandono_cancel
+FROM sessions s JOIN organizations o ON o.id = s.organization_id
+WHERE o.id IN (
+  'c7234d61-1586-42ae-bc0a-db8abb96a75c', '1eec1734-9cc0-4e2c-ae67-31aab1393df8',
+  'a182a362-62e4-45f4-84c7-f76c0735390c', '7daa9810-13d2-44f9-bbf6-a7ea4f57ab74'
+) GROUP BY o.name;
+```
 
 ## Optimizacion rendimiento mobile (17 Abr 2026)
 
@@ -20,85 +245,66 @@ Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
 - Prefetch AgendaSemanal desde Login (1s despues del render)
 - **Resultado:** login 30s→11s primera visita, <2s visitas recurrentes (3G)
 
-### EN PROGRESO — Plan de optimizacion data layer (3 niveles)
-**Plan detallado:** `.claude/plans/zesty-dazzling-kitten.md`
+### COMPLETADO — Nivel 1 data layer (17 Abr)
+- Fix seguridad: org_id en getTodayAppointmentsByDoctor (DONE)
+- RPC `get_weekly_agenda`: 10+ round trips → 1 llamada PostgreSQL (DONE)
+- Select solo columnas necesarias: 19 → 8 (DONE)
+- Eliminar waterfall doctors → appointments (DONE)
+- QueryClient defaults: staleTime 30s, sin refetchOnWindowFocus (DONE)
+- Doctor seleccionado persiste en localStorage (DONE)
+- Prefetch semanas adyacentes en background (DONE)
+- **Resultado:** 2G segunda visita 19s→14s, primera visita 1:01→56s
 
-**Hallazgos criticos:**
-- BUG SEGURIDAD: `getTodayAppointmentsByDoctor` no filtra por org_id
-- Sin indices en appointments(date) ni appointments(doctor_id)
-- 7 hooks de data manuales (useState/useEffect), React Query instalado pero sin usar
-- 10-11 round trips a Supabase para cargar agenda semanal
-- SELECT * en todas las queries (19 cols, se usan ~8)
+### Metricas acumuladas (2G simulado, 50 kbps)
 
-**Nivel 1 (pre-martes 22 Abr):** Fix seguridad org_id, consolidar 7→1 query, eliminar waterfall, QueryClient defaults, doctor en localStorage, select columnas, RPC get_weekly_agenda
-**Nivel 2 (post-martes):** Migrar hooks a React Query, persistencia IndexedDB, optimistic UI, skeletons con contexto, prefetch por intencion
-**Nivel 3 (Junio):** Supabase Realtime, indices PostgreSQL, critical CSS, Brotli check, Edge Middleware, background sync offline
+| Escenario | Original | Post JS/assets | Post Nivel 1 |
+|-----------|----------|----------------|--------------|
+| Primera visita | 1:15 | 1:01 | **56s** |
+| Segunda visita (SW) | 35s | 19s | **14s** |
 
-## 🚨 Prioridad proxima sesion — Bot Medilaser UX (descubierto 10 Abr)
+### PENDIENTE — Nivel 2: Refactor data layer (~8-10 horas, post-martes 22 Abr)
 
-**Reporte completo con los 20 flujos reales:** `docs/reporte-medilaser-10abr-bot-flows.md`
+| # | Item | Esfuerzo | Impacto | Archivos clave |
+|---|------|----------|---------|----------------|
+| 2.1 | **Migrar 7 hooks a React Query** — reemplazar useState/useEffect por useQuery con queryKeys. Habilita cache, dedup, retry. Hooks: useWeekAppointments, useDoctors, useTodayAppointments, usePatientAppointments, useDoctorsSearch, usePatientsSearch, useSingleDoctor | 3-4h | ALTO | `src/hooks/*.ts` |
+| 2.2 | **Persistencia IndexedDB** — `@tanstack/react-query-persist-client` + `idb-keyval`. Al abrir la app, la agenda de ayer se pinta en 0ms, revalida en background (stale-while-revalidate). Requiere 2.1 | 2h | ALTO | `src/App.tsx`, `package.json` |
+| 2.3 | **Optimistic UI** — `useMutation` con `onMutate` optimistico para confirmar/cancelar/reagendar citas. Se siente instantaneo, sync en background. Revert automatico en `onError`. Requiere 2.1 | 2h | ALTO | `src/hooks/useAppointmentMutations.ts` (nuevo) |
+| 2.4 | **Skeleton screens con contexto** — Reemplazar 3 rectangulos grises por estructura de agenda con nombre del doctor (del localStorage). Mostrar slots de hora vacios | 1h | BAJO | `src/pages/AgendaSemanal.tsx:305-311` |
+| 2.5 | **Prefetch por intencion** — Hook `usePrefetchOnHover` que dispara `queryClient.prefetchQuery` en hover/touch de links de navegacion y botones. Requiere 2.1 | 1h | MEDIO | `src/hooks/usePrefetchOnHover.ts` (nuevo), `src/components/MainLayout.tsx` |
 
-**Contexto rapido:** Los fixes de texto libre (25 Mar) funcionaron parcialmente (-58% errores/dia), pero el sistema de auto-cancel (30 Mar) creo un nuevo pain point en `cancel_confirm`. Completion rate del bot bajo 36.2% → 31.0%. Stuck en `cancel_*` explotó 1 → 7 (+600%). De 20 sesiones con error post-fix: 0 volvieron al bot despues, y 10 de 12 no-completion fueron rescatadas manualmente por Marleny — **el bot le agrego trabajo en vez de quitarselo**.
+### PENDIENTE — Nivel 3: Infraestructura (post-freeze Junio, ~6-8 horas)
 
-### BUG #1 — CRITICO: `cancel_confirm` no acepta texto humano (~1-2h)
-**Evidencia en reporte:** 4 casos reales post-fix de pacientes que abandonaron despues de escribir explicaciones humanas en `cancel_confirm`:
-- `+50494566053`: "Esta fuera de la ciudad y regresa hasta la proxima semana"
-- `+50499926100`: "Ok ay estaré mañana .con la doctora marleni verdad ??" (queria CONFIRMAR, no cancelar)
-- `+50494550191`: "Tengo un proceso infeccioso" (paciente con problema medico real)
-- `+50495084967`: "Quiero reprogramar la cita" (estaba en main_menu pero patron identico)
+| # | Item | Esfuerzo | Impacto | Archivos clave |
+|---|------|----------|---------|----------------|
+| 3.1 | **Supabase Realtime** — Suscripcion a cambios en `appointments`. Cuando bot confirma o paciente reagenda, agenda se actualiza sin recargar. Requiere 2.1 para `invalidateQueries` | 3h | MEDIO | `src/hooks/useWeeklyAgenda.ts`, Supabase dashboard |
+| 3.2 | **Indices PostgreSQL** — `CREATE INDEX idx_appointments_org_date ON appointments(organization_id, date)` + composito con doctor_id + parcial para status. Hoy cada query hace full table scan | 1h | MEDIO | `supabase/migrations/` |
+| 3.3 | **Critical CSS inlining** — Tailwind genera 71 KB CSS, login necesita ~5 KB. Plugin `critters` extrae CSS critico e inline en HTML | 2h | BAJO | `vite.config.ts` |
+| 3.4 | **Verificar Brotli en Vercel** — `curl -I -H "Accept-Encoding: br"` al dominio. Vercel lo activa por defecto pero confirmar | 15min | BAJO | Verificacion, no codigo |
+| 3.5 | **Edge Middleware auth** — Vercel Edge verifica sesion antes de servir HTML. Usuarios no autenticados redirigidos sin cargar React | 3h | MEDIO | `middleware.ts` (nuevo) |
+| 3.6 | **Background sync offline** — `onlineManager` de React Query + queue de mutaciones. Si secretaria confirma cita sin internet, sync al reconectar. Requiere 2.1 + 2.2 | 2h | BAJO | Config en QueryClient |
 
-**Fix propuesto:**
-- En handler de `cancel_confirm` aceptar texto libre y `detectIntent()`:
-  - "ahi estare" / "alli estare" / "ok" / "voy" → re-rutear a confirmacion (NO cancelar)
-  - "reagendar" / "reprogramar" / "otro dia" → flujo reagenda
-  - "cancelar" / "no puedo" / "ya no" → avanzar a confirmacion cancelacion
-  - Explicacion sin verbo ("estoy enfermo", "tengo infeccion") → guardar en `notes` + preguntar "¿quiere reagendar o cancelar?"
-- Archivo: `supabase/functions/bot-handler/index.ts` funcion `handleCancelConfirm()`
-- **Impacto:** resuelve la regresion mas cara de Medilaser (cliente $75/mes, mayor volumen)
+### Orden sugerido de ejecucion
 
-### BUG #2 — MEDIO: Respuestas tardias a reminders caen en `main_menu` (~1-1.5h)
-**Evidencia:** 3 pacientes respondieron al reminder con "ahi estare" horas/dias despues. Sesion ya expiro (30 min timeout). Entraron en `main_menu` sin contexto del reminder pendiente.
-- `+50492789875`: "Ahí estaré" → error
-- `+50499915409`: "Hola. Allí estaré" + "y me confirmó que si" → terminó en handoff
-- `+50494566053`: "No puedo asistir" → entro a cancel_confirm sin contexto previo
+**Semana 1 post-martes:** 3.2 (indices, 1h) → 2.1 (React Query, 3-4h) — los indices benefician todo y son independientes
+**Semana 2:** 2.2 (IndexedDB, 2h) → 2.3 (Optimistic UI, 2h) → 2.4 (Skeletons, 1h) → 2.5 (Prefetch, 1h)
+**Junio:** 3.1 (Realtime, 3h) → 3.3-3.6 segun prioridad
 
-**Fix propuesto:**
-- En `whatsapp-inbound-webhook` o `bot-handler` cuando recibe mensaje en `main_menu`/`greeting`:
-  1. Query: ¿paciente tiene cita proxima (<48h) con `reminder_24h_sent=true` y sin confirmar?
-  2. Si si + mensaje contiene intent de confirmacion/cancelacion → rutear directo al flow, saltando menu
-  3. Intents a detectar: "ahi estare", "alli estare", "voy", "si voy", "ok estare" → confirmar; "no puedo", "no voy" → cancel_confirm
-- **Impacto:** resuelve 3+ casos y es el patron mas frecuente de abandono.
+## Bot UX (analisis 10 Abr) — ABSORBIDO por Sprint 1 humanizacion
 
-### BUG #3 — MEDIO: `parseDateHint` no cubre prefijos comunes y rangos (~45 min)
-**Evidencia:** 4 casos reales en `booking_select_day`:
-- `+50499282398`: "Para la semana del 6 de abril" (prefijo "Para la")
-- `+50495083227`: "Me gustaria dejar la cita para el 24 de abril" (prefijo "Me gustaria")
-- `+50433899824` (tu QA): "Semana del 30 de marzo" (sin "al" al final)
-- `+50432801129`: "Semana del 13 de abril al 17" (rango con "al DD" sin segundo mes)
+> Los BUG #1, #2, #3 originales del analisis Medilaser 10 Abr estan ahora cubiertos en Sprint 1 (items 1.1-1.7). Reporte completo del analisis: `docs/reporte-medilaser-10abr-bot-flows.md`. Detalle del plan en `.claude/plans/bot-humanizacion.md`.
 
-**Fix propuesto:**
-- En `parseDateHint()`: stripear prefijos antes de parsear: `"Para la "`, `"Me gustaria "`, `"Quiero "`, `"Quisiera "`, `"Para el "`
-- Patron adicional: `/semana del (\d+) de (\w+)(\s+al \d+(?:\s+de (\w+))?)?/i`
-- Si rango termina con solo dia, asumir mismo mes
-- **Impacto:** resuelve 4 casos + patron generalizado de hondureños escribiendo frases completas.
+**Casos historicos relevantes (mantener para QA del Sprint 1):**
 
-### Casos destacados documentados en reporte (relevantes para Carla)
+- **`+50499796391`** (25 Mar): bot canceló cita cuando ella queria reagendar (escribio "1. Reagendar"). Guard `hasReagendarIntent` deployado 30 Mar (e4be0f7) — verificar no se repite post-Sprint 1.
+- **`+50495083227`**: bot fallo con "Me gustaria dejar la cita para el 24 de abril" (prefijo). Sprint 2 lo cubre (parser fechas).
+- **`+50494550191`** (paciente con infeccion): 3 "opcion no valida" en cancel_confirm. Sprint 1 lo cubre (texto libre via detectIntent).
+- **`+50499926100`**: "Ok ay estaré mañana .con la doctora marleni verdad ??" (queria CONFIRMAR en cancel_confirm). Sprint 1 lo cubre.
 
-- **`+50499796391`** (25 Mar): el bot canceló su cita cuando ella queria reagendar (escribio "1. Reagendar" copiando del menu, bot lo interpreto como "1 = confirmar cancelacion"). Tuvo que volver 7 dias despues a agendar de nuevo. Guard `hasReagendarIntent` ya deployado 30 Mar (e4be0f7) — **verificar no se repite post-fix**.
-- **`+50495083227`**: despues de fallar el bot con "Me gustaria dejar la cita para el 24 de abril", contacto directo a la doctora para reagendar. Bot perdio el punto.
-- **`+50494550191`** (paciente con infeccion): 3 "opcion no valida" en 2 dias, nunca completo en el bot. Ejemplo perfecto del daño al UX.
+### Bugs secundarios (cubiertos en Sprints siguientes)
 
-### Criterios de exito (re-correr queries en 1-2 semanas)
-- [ ] Stuck en `cancel_*` bajo de 7 a ≤ 2
-- [ ] 0 "opcion no valida" en `cancel_confirm` con texto libre
-- [ ] Completion rate bot ≥ 35%
-- [ ] 0 cancelaciones erroneas (paciente queria reagendar pero bot canceló)
-- [ ] Tasa de "opcion no valida" en `booking_select_day` -50%
-
-### Bugs secundarios del mismo analisis (BAJA prioridad)
-- [ ] BUG #4: `booking_select_hour` no redirige cuando paciente escribe fecha ("17 de abril")
-- [ ] BUG #5: `booking_select_doctor` acepta numeros fuera de rango sin mensaje claro ("elija del 1 al 3")
-- [ ] BUG #6: FAQ matching por keywords atrapa preguntas irrelevantes (paciente pregunto por "blanqueamiento genital", bot respondio "consulta dermatologica"). Ya planificado para Junio 2026+ con FAQ+AI. Mitigacion temporal: "no encontre respuesta, ¿quiere hablar con secretaria?"
+- BUG #4: `booking_select_hour` no redirige cuando paciente escribe fecha → **Sprint 2 (parser fechas)**
+- BUG #5: `booking_select_doctor` acepta numeros fuera de rango sin mensaje claro → polish menor, agregar a Sprint 1 sesion 3 si hay tiempo
+- BUG #6: FAQ matching atrapa preguntas irrelevantes ("blanqueamiento genital" → "consulta dermatologica") → **Sprint 1 (item 1.4 umbral)** ya lo resuelve
 
 ## Sprint mini — progreso (aprobado 6 Mar, max 2-3 dias)
 

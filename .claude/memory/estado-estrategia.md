@@ -1,26 +1,385 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 27 Mar 2026 (AD-007 pausada Semana Santa, Wilmer 9.5/10 + testimonial, Paredes pending Marleny)
+> Ultima actualizacion: 11 May 2026 (canal asistente validado en campo, ICP individual eliminado, hito $1,500 paz mental, Sprint 1 ejecuta hoy)
+
+## UPDATE 11 May — Canal asistente validado + ICP final + reframe meta
+
+### Hallazgo critico: canal asistente multi-doctor validado en una salida
+
+Diego visito edificios medicos en Tegucigalpa (Torre Zafiro, CMH, Hospimed) en **medio dia** y agendo 6 demos para esta semana con asistentes champion. Pitch validado:
+
+**Apertura sin OrionCare:** *"Estoy ayudando a las clinicas a digitalizar y simplificar el proceso de administracion de citas — un asistente virtual para USTED *(enfasis en usted)* la asistente."*
+
+**Preguntas calificadoras (SPIN):**
+1. ¿A que hora deja de contestar mensajes? → respuesta comun: **4 PM**
+2. Al dia siguiente, ¿cuantos mensajes acumulados? → **10-20 mensajes POR medico**
+3. ¿Cuales son las mismas preguntas? → "casi todos son lo mismo" (precios, ubicacion)
+4. ¿Si le reduzco 80% de ese trabajo, como se sentiria? → 100% respondieron positivo tras ver demo
+
+**Cierre demo:** Mostrar bot agendando + plataforma → "me ayudaria mucho" → abren puerta a segunda visita (con doctor).
+
+### 6 demos agendadas esta semana
+
+| Asistente | Edificio | Dia/hora | Estado |
+|-----------|----------|----------|--------|
+| Ingrid Espino | Torre Zafiro | Mar 12, 3 PM | Confirmado |
+| Suley Coello | Torre Zafiro | Mar 12, PM | Confirmado |
+| Maryori/Isabel | Torre Zafiro | Mar 12, 3:30 PM | Confirmado |
+| Dulce Torres | Torre Zafiro | Mie 13, 3 PM | Confirmado |
+| Dunia | CMH | Mie 13, AM | Confirmado |
+| Escarleth | Hospimed | Jue 14, AM | Confirmado |
+
+**Filtro presencial confirmado:** En Hospimed 1.5 de varias dijeron si (champion), las otras dieron portazo (no calificadas). El pitch auto-filtra sin quemar el edificio. **Modelo replicable sin vendedor experto.**
+
+### TAM canal asistente — corregido
+
+- **~50 asistentes champion en TODA Honduras** (no por ciudad)
+- Quedan ~2 edificios mas en Tegucigalpa por visitar
+- Resto en SPS, La Ceiba, otras ciudades = ~30-35 asistentes
+- Cierre realista 40% → ~20 edificios convertidos
+- Doctores promedio/edif: 3-5 (rango 2-16)
+- **MRR techo del canal: ~$3,000-5,000** ($40 + $35×(N-1) por edificio)
+
+Conclusion: canal asistente **finito y agotable en 60-90 dias** de ejecucion concentrada. Llega holgadamente al hito de $1,500 paz mental. NO llega a $7K solo — requiere motor #2 despues (decision diferida a Julio+).
+
+### Reframe meta: $1,500 paz mental (Q2-Q3 2026)
+
+**Nuevo hito explicito antes de $7K:**
+
+| Meta | MRR | Clientes | Plazo realista | Significado |
+|------|-----|----------|----------------|-------------|
+| **Paz mental** | **$1,500** | 8-9 edificios | **Jun-Jul 2026** | Cubre vida + permite ahorrar |
+| Libertad | $7,000 | ~40 edificios | 2027+ | Objetivo original, no urgencia |
+
+**Horizonte real:** 3 anos para llegar a libertad. Primeros 12-18 meses criticos para **cash conservation y acumular efectivo protegido**. Cada dolar mal gastado tiene costo de oportunidad alto. Implicacion para decisiones: ROI rapido y conservacion de capital > experimentos de largo plazo.
+
+### ICP — formalizacion final
+
+**OUT definitivo** (ya no targeting):
+
+| Segmento | Razon |
+|----------|-------|
+| Medico independiente sin asistente | Wilmer outlier feliz. 1.6 msgs/dia. No replicable. |
+| Medico con asistente sin saturacion | No hay dolor → no compra |
+| Medico que va a contratar asistente | Ya decidio "humano, no sistema". Invisible Y resistente. |
+
+**IN definitivo:**
+
+| Segmento | Canal | LTV |
+|----------|-------|-----|
+| **Edificio medico con asistente champion multi-doctor** | Presencial puerta a puerta | $180-400 MRR/edif × 12+ meses |
+| **Clinica con volumen + asistente saturada** | Ads ICP-A (futuro, post $1,500) | $75-180 MRR × 12+ meses |
+
+Wilmer/Yeni quedan como clientes activos por ingreso y testimonial, **NO se replican como targeting**. Yeni requiere acompanamiento quincenal (defensa churn). Wilmer ya hizo su trabajo (testimonial).
+
+### Decision ads: PAUSADAS hasta llegar a $1,500
+
+ROI comparativo brutal:
+- Ads pagas (45 dias): 1 cierre / 117 leads / $267 → CPA $267
+- Asistentes presencial (1 salida): 6 calientes / ~$10 gasolina → ~$2 lead calificado
+- **Presencial: >100x ROI que ads**
+
+Reactivar SOLO cuando:
+1. MRR ≥ $1,500
+2. Sprint 3 del bot completado (producto ≥50% success rate)
+3. Targeting estricto ICP-A puro (no doctor independiente)
+4. Presupuesto minimo $3-5/dia
+5. Canal asistente agotandose o estancado
+
+### Capacidad Diego — restriccion real
+
+- **Diego solo es el cuello de botella.** Warhol en casa con nino, no acompana en ventas por ahora.
+- Sin embargo, ritmo real es ~2x lo que asumi: 6 contactos en medio dia cuando estan concentrados en edificios.
+- Esta semana al limite: Sprint 1 (9.5h) + 6 demos + activacion clientes
+- Sostenible mientras dure (mximo 4-5 hrs/dia)
+
+### Cronograma actualizado
+
+| Semana | Foco |
+|--------|------|
+| 11 May (hoy) | Sprint 1 bot (9.5h) |
+| 12-16 May | 6 primeras visitas asistente |
+| 19-23 May | Segundas visitas (doctores) + 2 edificios restantes Tegucigalpa + Sprint 2 inicio |
+| 26 May - 6 Jun | Activar primeros cierres + Sprint 2 + Sprint 3 |
+| 9-13 Jun | Viaje SPS (sab-lun, ~$300) — si conversion doctor ≥30% |
+| Resto Jun | La Ceiba + activar SPS |
+| Jul | Canal asistente agotado → decidir motor #2 |
+
+**Proyeccion realista:** 10-12 edificios cerrados fin de Junio = **$1,800-2,400 MRR**. Paz mental antes de Julio si todo sale bien.
+
+### Riesgos reordenados
+
+1. **CRITICO: % conversion doctor desconocido.** La asistente es champion pero NO paga. El doctor decide. Toda la tesis del canal colapsa si los doctores no cierran. Validacion empieza la semana del 19 May.
+2. **ALTO: canal finito.** 50 asistentes total. 60-90 dias de motor concentrado, despues necesitas motor #2.
+3. **ALTO: capacidad Diego.** Sin Warhol en ventas, el cuello de botella es real. Sostenible para esta fase pero impide paralelizar.
+4. **ALTO: edificio quemable.** 1 demo mala con asistente = perder 5-10 doctores del edificio. Calidad > velocidad.
+5. **MEDIO: bot V2 actual (28% exito).** Si los doctores nuevos llegan antes del Sprint 1 deployed, churn anunciado. Sprint 1 hoy es path critico.
+6. **MITIGADO: ads quemando capital.** Pausadas. No reactivar hasta $1,500.
+7. **ELIMINADO: Alan / The Brand Be.** No hubo respuesta despues de la reunion. No persistir.
+
+### Acciones hoy
+
+- [ ] **Sprint 1 humanizacion del bot** (9.5h, plan en `.claude/plans/bot-humanizacion.md`)
+- [ ] Cancelar Lovable si no se ha hecho ya (cash conservation)
+
+### Acciones esta semana
+
+- [ ] 6 demos asistente (mar 12, mie 13, jue 14)
+- [ ] Medir post-demo: % asistentes que efectivamente abrieron puerta a doctor
+
+> Ultima actualizacion previa: 4 May 2026 (plan de humanizacion del bot en 3 sprints + diccionario de hondurenismos)
+
+## UPDATE 4 May — Plan de humanizacion del bot definido
+
+**Decision:** ejecutar plan de 3 sprints (~26.5h en 6 semanas) para que el bot procese lenguaje natural hondureno sin IA. Documentos producidos:
+
+- `.claude/plans/bot-humanizacion.md` — plan completo con items, estimaciones, resultados esperados, mapping a Tiers originales, riesgos y bitacora de medicion
+- `.claude/memory/diccionario-hondurenismos.md` — vivo, base de 2,357 mensajes reales (25 Feb - 4 May), 14 categorias de intent, 5 reglas culturales documentadas
+
+**Arquitectura adoptada (capas):**
+- **Capa universal** (estatica, codigo): hondurenismos + intents top + parser fechas/horas. ~50 frases. Estable.
+- **Capa cliente** (dinamica, DB): `bot_faqs.keywords` + `bot_service_types.aliases`. Crece sin deploy. Cliente nuevo configura en onboarding.
+
+**Hallazgos clave de la investigacion (4 May):**
+
+1. **Boton "No puedo asistir" SI esta wired** en meta-webhook+bot-handler — el problema es UX (menu redundante "Reagendar/Cancelar/Volver" tras presionar el boton). 47% abandono en cancel_confirm.
+2. **Caducidad NO es el problema** — 17/23 respondieron en <30 min del recordatorio. Todos dentro de la ventana 24h de WhatsApp.
+3. **Bug de logging confirmado:** 23 "No puedo asistir" en `bot_conversation_logs` V2 vs 0 contraparte en `message_logs`. Templates en Meta SI tienen el boton (Diego verifico). Hay bug en logMessage o duplicate detection. Item 1.7 del plan.
+4. **FAQ matching sin umbral:** `searchFAQ` retorna match con score=0.25 (un prefijo) — explica por que Wilmer responde "consulta de diagnostico" cuando preguntan "limpieza". Bug T2#7.
+5. **bot_service_types sin sinonimos:** "Citologia" no matchea "papanicolau", "Procedimiento" no matchea "tatuaje". Sprint 2.
+6. **Onboarding wizard solo tiene 4 pasos** (Clinica, Medico, Horario, Confirmacion) — no captura servicios ni FAQs. Cliente nuevo arranca sin vocabulario. Sprint 3.
+
+**Metricas baseline V2 (14-28 Abr) — punto de partida para medicion:**
+
+| Cliente | Sesiones | Exito | Abandono cancel_confirm | Opciones invalidas |
+|---------|---------:|------:|------------------------:|-------------------:|
+| Medilaser | 54 | **31.5%** | 62.5% | 22% del total |
+| Wilmer | 6 | **0%** | 100% | — |
+| Yeni/CF | 5 | 40% | 100% | — |
+| Ecoclinicas | 2 | 0% | — | — |
+| **Total** | **67** | **28.4%** | **70%** | — |
+
+**Metas post Sprint 3:**
+- Exito agregado >50%
+- Abandono cancel_confirm <25%
+- Opciones invalidas <10%
+- Wilmer >40%, Medilaser >55%, Yeni/CF >55%
+- Cliente nuevo >90% configurado dia 1 con vocabulario
+
+**Cronograma:**
+- 5-11 May: Sprint 1 (~9.5h, 3 sesiones)
+- 12-18 May: medicion + ajustes
+- 19-25 May: Sprint 2 (~8h)
+- 26 May - 1 Jun: medicion
+- 2-8 Jun: Sprint 3 (~9h)
+- 9-15 Jun: medicion + cliente nuevo de prueba
+
+**Items Sprint 1 (priorizados, en estado-dev.md):**
+1.1 Crear `_shared/honduras-intents.ts` (3h)
+1.2 Aplicar detector en greeting/main_menu/cancel_confirm/handleDirectReschedule (2h)
+1.3 Migracion `bot_faqs.min_match_score` (30min)
+1.4 Ajustar `searchFAQ` con umbral (30min)
+1.5 Bug `user_message=""` + dedupe handoffs (1h)
+1.6 Logging boton "Confirmar" (1h)
+1.7 Bug logging button_replies que van al bot (1h)
+
+**Mapping a Tiers originales:** cero items perdidos. T1#1-4, T2#5-7, T3#8-10 todos cubiertos en sprints.
+
+> Ultima actualizacion previa: 28 Abr 2026 (analisis exhaustivo del bot por cliente — 56 sesiones documentadas)
+
+## UPDATE 28 Abr — Analisis bot V2 (14-28 Abr) por cliente
+
+**3 reportes nuevos en `docs/`:**
+- `analisis-bot-medilaser-14abr-vs-28abr.md` — comparativo V1 vs V2 Medilaser
+- `analisis-bot-por-cliente-14abr-28abr.md` (no escrito como archivo, en conversacion) — patrones por los 4 clientes
+- `analisis-bot-detalle-pacientes-14abr-28abr.md` — **56 sesiones palabra por palabra** para lectura/analisis manual
+
+**Distribucion outcomes V2 (14-28 Abr):**
+
+| Cliente | Sesiones | Reagendo OK | Agendo OK | Escalo | Aband CC | Aband Booking | Tasa éxito |
+|---------|---------:|------------:|----------:|-------:|---------:|--------------:|-----------:|
+| Medilaser | 44 | 7 | 5 | 4 | 11 | 4 | 27% |
+| Yeni/CF | 5 | 0 | 1 | 0 | 1 | 2 | 20% |
+| Wilmer | 5 | 0 | 0 | 0 | 3 | 0 | **0%** |
+| Ecoclinicas | 2 | 0 | 0 | 0 | 0 | 0 | 0% |
+
+**Hallazgos criticos:**
+
+1. **Wilmer 0% éxito en 14 dias.** Tu cliente NPS 9.5/10 testimonial estrella. 5 sesiones, 3 abandonos en cancel_confirm, 1 prospecto web perdido por FAQ erroneo, 1 disculpa formal "no podre asistir" rebotada. **Riesgo:** si descubre que el bot le pierde pacientes, dana la relacion. **Oportunidad:** caso real para vender "polish de bot".
+
+2. **15 confirmaciones explicitas perdidas en Medilaser** — pacientes escribieron "Confirmo mi asistencia", "Confirmo ✅", "Listo gracias", "Ahi estare" y el bot las trato como saludos. Todas esas citas probablemente se marcaron como no-confirmadas y se liberaron.
+
+3. **El boton "No puedo asistir" del recordatorio no esta wired.** "No puedo asistir" aparece literal 17 veces en 4 clientes — es texto de un boton interactivo de Meta WhatsApp que el sistema recibe como texto plano. El paciente cree que ya aviso, ve un menu nuevo y abandona.
+
+4. **Pacientes hondurenos hablan al bot como humano.** Yeni/CF: 100% de sus pacientes escriben en libre ("Sita", "Holis", "Mire q tengo clases"). Medilaser tiene mezcla. Frases reales rechazadas: "Para el 14 de Mayo preferiblemente", "Confirmo ✅", "Hola fijese que la cita era para el dia viernes". El bot SI clasifica intent correcto, pero el SEGUNDO paso solo acepta numeros — abandono masivo ahi.
+
+5. **Bug nuevo del 24 Abr** — 3 sesiones (M37, Y5 final) con `user_message=""` desde main_menu disparando handoffs duplicados en milisegundos. Probable: bot recibe sticker/audio/ubicacion sin transcribir y default-escala. Costo investigacion: 30 min.
+
+6. **2 pacientes desde EEUU asumieron consulta online** (M36 Dariela, M40 Edwin) — agendaron presencial. Probable no-show.
+
+7. **Tesis "autocancelacion = prediccion no-show" sigue viva.** Medilaser V2: 19/32 citas creadas = canceladas (59%, vs 44% historico). Cero marcadas como `completada`/`no_asistio` — sigue gap de adopcion del estado real.
+
+**Para conversacion Marleny martes 28 Abr:**
+- Llevar dato 59% canceladas (vs 44% historico)
+- Preguntar percepcion no-shows
+- Validar cuales de M36/M40 (US) llegaron o no
+- Preguntar si el botón "No puedo asistir" se ve como botón en el WhatsApp del paciente o como texto
+
+**Acciones pendientes (orden de impacto):**
+1. Investigar bug `user_message=""` 24 Abr (30 min)
+2. Investigar boton "No puedo asistir" — payload Meta vs texto (1h)
+3. Aceptar texto libre en `cancel_confirm` ("reagendar"/"cancelar"/"confirmo"/"ok") (1h)
+4. Intent `consultar_mi_cita` (2h)
+5. Logging del boton Confirmar (sin implementar desde 14 Abr)
+
+**Decisiones pendientes:**
+- ¿Se le muestran los hallazgos a Wilmer o se arregla primero?
+- ¿Yeni/CF es churn aceptable dada la incompatibilidad cultural (lenguaje natural vs flujo numerado)?
+- Implementar fixes ANTES de cualquier escalamiento de ads, dado que estamos perdiendo pacientes que ya estan en la puerta.
+
+> Ultima actualizacion previa: 23 Abr 2026 (ICP formalizado A+B en paralelo, scouting de edificios medicos iniciado)
+
+## UPDATE 23 Abr — ICP definido formalmente
+
+**Decision tomada:** perseguir **ICP-A (Clinica con Volumen)** e **ICP-B (Asistente Multi-doctor Champion)** en paralelo los proximos 60 dias. Documento formal en `.claude/memory/icp.md`.
+
+**Validacion cuantitativa del threshold 20+ msgs/dia** (query 23 Abr a bot_conversation_logs, 30 dias):
+
+| Cliente | msgs/dia (30d) | Pacientes unicos | Dias activos | Clasificacion |
+|---------|---------------:|-----------------:|-------------:|---------------|
+| Medilaser | **21.4** | 109 | 28/30 | **ICP-A puro** |
+| Ecoclinicas (David) | 3.0 | 9 | 9/30 | NO-ICP rechazable |
+| Consultorio Familiar (Yeni) | 1.6 | 7 | 9/30 | NO-ICP orgánico tolerado |
+| Wilmer Guevara | 1.6 | 10 | 11/30 | NO-ICP orgánico tolerado (feliz accidental) |
+
+**Hallazgo clave:** Wilmer y Yeni tienen **mismo volumen** (1.6 msgs/dia) pero Wilmer retiene feliz (NPS 9.5) y Yeni requiere acompanamiento quincenal. Conclusion: Wilmer es un outlier no replicable — cliente feliz accidental, no ICP. Los medicos individuales NO escalan automaticamente (Wilmer lleva 5 meses en 1.6 msgs/dia).
+
+**Dato Wilmer sobre Google reseñas:** "casi no invierto en publicidad, mi fuente es Google con reseñas". Implicacion: los medicos hondurenos individuales NO invierten en marketing → no llegan al threshold nunca → el bot-closer (Junio+) NO los convierte en ICP. Closer amplifica a quien ya invierte; no crea inversion.
+
+**Accion: scouting de edificios medicos** para identificar ICP-B (asistentes multi-doctor). Ver seccion "Plan scouting edificios" abajo.
+
+**Proximos actualizacion de assets:**
+- [Claude /modo-ads] Actualizar creativos y scripts con ICP formalizado (senal = volumen, canal = agencia + edificios)
+- [Claude /modo-seguimiento] Integrar checklist de 6 preguntas de calificacion ICP a scripts de llamada fria
+- [Diego + Claude] Perfil de afiliado Manuel con nuevo filtro: no medico independiente generico, medico que invierte en marketing
+
+## UPDATE 22 Abr — sintesis de sesion
+
+**Canal asistente 7 doctores: ENFRIADO.** Respuesta via texto "los medicos dijeron que por los momentos no". Diagnostico pendiente viernes (Diego visitara clinica pendiente del mismo edificio + pasa a saludar a la asistente con curiosidad genuina, NO rescate). Hipotesis mas probable: miedo de la asistente a ser reemplazada filtro el mensaje; los doctores probablemente nunca vieron el producto. Regla: no insistir con esta asistente — quemarla significa perder el edificio completo.
+
+**Buyer persona refinado (hallazgo critico).** Diego visito 2 clinicas con asistente y volumen bajo (5-10 msgs/dia). Ambas NO son ICP. **Senal real = volumen de mensajes WhatsApp/dia, NO rol administrativo.**
+- 20+ msgs/dia = dolor real = ICP
+- 5-10 msgs/dia = no ve beneficio
+- <5 msgs/dia = churn garantizado
+- Pregunta permitida para calificar: *"¿como manejan los mensajes de pacientes en WhatsApp?"* (NO preguntar volumen de pacientes — regla Honduras)
+- Impacto: ads, scripts y perfil afiliado Manuel deben actualizarse con esta senal.
+
+**David Diaz (Ecoclinicas): churn aceptado.** Dijo que si deja de pagar solo "pausaria". Sin capital publicidad → bot invisible → no ICP. No invertir tiempo rescatando. Aceptar como aprendizaje: medicos sin capital publicidad NO son ICP.
+
+**Nueva hipotesis estrategica: bot como conversion engine para agencias de marketing.** Reframe del canal B2B: agencia de marketing trae leads caros, pero clinica tarda horas en contestar y 70-80% se enfrian. Bot cierra ese gap (respuesta en 5s). Positioning nuevo: no es "vende mi bot", es "mi producto resuelve el problema #1 de tu servicio".
+
+**Primer contacto agencia: Alan R. Bulnes / The Brand Be (agencia branding, Tegucigalpa).** Diego le vendio un monitor previamente. Al enviarle audio describiendo bot + buscar si tiene clinica cliente, Alan respondio afirmativo y acepto reunion presencial. Reunion propuesta 23 Abr en su oficina (pendiente confirmar hora). Perfil: agencia de branding corporativo (Lacthosa, Unilever, USAID en portfolio) — NO performance marketing, pero tiene al menos 1 clinica como cliente. Arquetipo: ex-corporativo emprendiendo, profesional, 18 anos experiencia. Guion reescrito como reunion caliente (no frio) en `docs/ventas/guion-agencia-marketing.md`. Objetivo concreto: salir con fecha de piloto en la clinica actual de Alan, O presentacion directa a esa clinica, O segunda reunion con agenda cerrada. Decisiones pre-tomadas: piloto 90 dias sin contrato, 25% × 12 meses, precio $40/$75 firme, sin exclusividad.
+
+**Insight dual de propuesta de valor (22 Abr).** El producto tiene DOS propuestas para DOS audiencias: (1) a la asistente = "menos trabajo", traccionado por canal asistente interno; (2) al medico = "convierte leads caros en pacientes", traccionado por canal agencia marketing. El medico directo no siente dolor operativo (no usa el sistema). Por eso los ads con angulo "eficiencia operativa" no convierten medicos directamente — necesitan canal mediado (asistente o agencia). Ambos canales se refuerzan: agencia trae lead → bot agenda → asistente administra sin saturacion → medico ve ingresos. Implicacion: no construir ads ataque-directo al medico con angulo ingresos; apalancarse en funnel existente de la agencia (sales enablement, no campanas propias).
+
+**Hallazgo validando tesis del producto (22 Abr — pendiente investigar con Marleny martes 28 Abr).** Las 92 "autocancelaciones" de Medilaser (44%) NO son perdida — son **predicciones**. Segun pruebas internas: semana 1 = 100% correlacion entre autocancelacion y no-show real, semana 2 = 92% correlacion. El boton Confirmar funciona como oraculo de asistencia. Esto reclasifica riesgo #4 (tesis sin validar) de ALTO a MITIGADO — la tesis esta validada por proxy (confirmacion = asistencia) aunque falte adopcion de "completada"/"no_asistio". Reframe comercial mayor: pasar de "reducimos no-shows" a "sabemos cuales van a ser no-shows ANTES con 92-100% precision". Llamada con Marleny reagendada de miercoles 22 a martes 28 Abr (miercoles es su dia pico con 35 citas efectivas, jueves 24 + sabado 23 tambien altos, martes 9 = ventana mas calmada).
+
+**Volumen por dia de la semana analizado (22 Abr).** Corrida por status revelo que la gráfica inicial (incluía canceladas) distorsionaba. Gráfica efectiva (agendada+confirmada+completada):
+- Medilaser 115 efectivas: pico miercoles 35, sabado 23, jueves 24
+- Guevara 75 efectivas: pico viernes 21, consistente L-M-M (11-13)
+- Yeni 16 efectivas: pico viernes 6, miercoles 4 — resto minimo
+- Ecoclinicas 7 efectivas: muestra muy chica para patron
+- **Tasas de cancelacion contrastan brutal:** Guevara 11% (sanísimo), Yeni 20%, Medilaser 44%, Ecoclinicas 46%. Mismo producto, comportamientos de paciente muy distintos por segmento — estetica/multi-doctor vs general.
+- **Operacional:** evitar seguimientos/llamadas a clinicas en miercoles/viernes (dias pico). Martes = ventana mas calmada en todas.
+
+**Modelo "agencia gratis hasta exito": RECHAZADO.** Financieramente insostenible para la agencia. Si funcionara, ya existiria. Mantener modelo Manuel estandar (25% × 12 meses o bounty $80).
+
+**Volumen por dia de la semana analizado (4 clientes reales).** Miercoles y viernes son dias pico globales (96 y 51 citas sumadas). Medilaser concentra brutal en miercoles (70 citas, 3x promedio). Sabado es significativo en 3 de 4 clinicas. Insight operacional: evitar llamadas/seguimientos en miercoles/viernes — clinicas saturadas. Ver detalle en query o regenerar.
+
+## HALLAZGO ESTRATEGICO: Canal "Asistente como Vendedora" (17 Abr)
+
+**Diego visito una asistente que maneja calendario de 7 medicos independientes.** Ella esta encantada con OrionCare porque le quitaria carga nocturna. Ya hablo con los doctores: "si a usted le funciona, mandeme al muchacho". Demo martes (edificio 1) y miercoles (edificio 2).
+
+- **Potencial inmediato:** 7 doctores × $40 = $280/mes MRR (mas que el MRR actual completo)
+- **Efecto red:** 11 anos en el edificio, conoce a todas las asistentes
+- **Competencia neutralizada:** "Doctor Ya" intento sustituir a la asistente → rechazo total. OC la potencia → aceptacion
+- **Posicionamiento:** "OrionCare no te quita el trabajo, te quita la carga" — la asistente es la heroina, no la amenazada
+- **Precio:** $40/mes cada doctor individual. No descuento a menos que lo pidan. La asistente no paga, es la administradora de los 7 calendarios.
+
+**Riesgo:** Miedo latente de la asistente a ser reemplazada por tecnologia. Nunca usar palabras "automatizar" o "reemplazar" frente a ella.
+
+**Problema tecnico encontrado:** App no cargaba en datos moviles de la asistente. Diagnosticado y resuelto en esta sesion (ver seccion rendimiento).
+
+## Optimizacion rendimiento mobile (17 Abr) — COMPLETADA
+
+La app no cargaba en datos moviles Honduras (Tigo/Claro). Sesion completa de diagnostico y fix en 3 fases:
+
+### Fase 1: Carga JS/assets (deployed)
+- Code splitting 31 paginas con React.lazy
+- Vendor splitting + modulePreload filtrado (vendor-radix excluido del preload)
+- Lazy-load Toaster, TooltipProvider removido del root, MainLayout lazy
+- Auth timeout 10s, spinner CSS inline
+- Service Worker (PWA), prefetch AgendaSemanal desde Login
+- Favicon 307 KB → 1.2 KB OrionCare
+
+### Fase 2: Carga datos — Nivel 1 (deployed)
+- Fix seguridad: org_id faltante en getTodayAppointmentsByDoctor
+- RPC `get_weekly_agenda`: 10+ round trips → 1 sola llamada PostgreSQL
+- Select solo columnas necesarias (19 → 8)
+- Doctor seleccionado persiste en localStorage
+- QueryClient defaults: staleTime 30s, sin refetchOnWindowFocus
+- Prefetch semanas adyacentes en background
+
+### Metricas medidas (2G simulado, 50 kbps)
+
+| Escenario | Original | Despues |
+|-----------|----------|---------|
+| **Primera visita** (login → agenda) | 1 min 15s | **56s** (-25%) |
+| **Segunda visita** (con SW) | 35s | **14s** (-60%) |
+
+En 3G real la segunda visita esta en ~3-5 segundos.
+
+### Pendiente: Nivel 2 y 3
+Plan detallado en `.claude/plans/zesty-dazzling-kitten.md` y `estado-dev.md`.
+- **Nivel 2 (post-martes):** Migrar hooks a React Query, IndexedDB persistence, optimistic UI, skeletons, prefetch por intencion
+- **Nivel 3 (Junio):** Supabase Realtime, indices PostgreSQL, critical CSS, background sync
+
+## PENDIENTE REVISAR (14 Abr)
+
+**2 reportes de análisis del bot completados y listos para decisiones:**
+
+- `docs/analisis-bot-flujo-a.md` — Flujo reactivo (paciente con cita). 15 días, 236 notificaciones. Hallazgos: 31% confirma, 41% cita liberada, 0 cancelaciones explícitas registradas, gap de observabilidad en botón "Confirmar". 5 micro-ajustes propuestos.
+- `docs/analisis-bot-flujo-b.md` — Flujo proactivo (paciente nuevo). 30 días, 181 sesiones. Hallazgos: bot da respuestas FAQ incorrectas (matching retorna FAQ "menos mala" sin umbral), 2 FAQs de Guevara sin keywords → nunca matchean, Medilaser con gap enorme de FAQs vs servicios, Consultorio Familiar con 0 FAQs. 5 micro-ajustes propuestos.
+
+**Top 3 ajustes cross-flow (~4 horas total):**
+1. Agregar keywords a FAQs de Guevara sin keywords (30 min, alto ROI)
+2. Subir umbral de matching FAQ para evitar respuestas incorrectas (1-2h)
+3. Loggear confirmaciones por botón (1h — hoy invisible en datos)
+
+**Método usado:** `.claude/memory/playbook-analisis-bot.md` (reproducible, cadencia mensual sugerida).
+
+> Ultima actualizacion previa: 10 Abr 2026 (llamada Yeni, dashboard corregido, Ecoclinicas descubierto como 4to cliente, regla acompañamiento quincenal)
 
 ## Dashboard
 
 | Metrica | Valor | Meta |
 |---------|-------|------|
-| Clientes activos | 3 (Yeni, Ramos, Carla) | 175 |
-| Calendarios activos | 4 (Yeni×1, Ramos×1, Carla×2) | — |
-| MRR | **$145** (Yeni $35 + Ramos $35 + Carla $75) | $7,000 |
+| **Clientes activos** | **4** (Wilmer, Yeni, Carla/Medilaser, David/Ecoclinicas) | 175 |
+| Calendarios activos | **5** (Wilmer×1, Yeni×1, Medilaser×2, Ecoclinicas×1) | — |
+| **MRR** | **$180** (Wilmer $35 + Yeni $35 + Carla $75 + David $35) | $7,000 |
 | Gasto total ads | **$267.48** (AD-005: $92.30 + AD-006: $57.33 + AD-007: $117.85) | — |
-| Leads calientes | **0** (AD-007 calientes no convirtieron) | — |
+| Leads calientes | **0** | — |
 | Leads totales historicos | **117** (AD-005: 38 + AD-006: 44 + AD-007: 35) | — |
-| CPA real | **$267.48** (1 cierre total) | <$20 |
-| Todas las campanas | **PAUSADAS** — Semana Santa 28 Mar - 6 Abr | Reactivar 7 Abr |
-| Churn | 0% | < 5% |
-| Producto | 87% listo | Recordatorio 3d + notificacion doctor pendientes |
-| Canales activos | **0 activos** (todos pausados por Semana Santa) | — |
-| Pipeline efectivo | **0** — AD-007 calientes no contestaron/colgaron, frias sin avance | — |
+| CPA real | **$267.48** (1 cierre total via ads) | <$20 |
+| Todas las campanas | **PAUSADAS** desde 27 Mar — reactivacion prevista 7 Abr **NO ejecutada aun** | Reactivar |
+| Churn | 0% (Yeni estuvo en riesgo, neutralizado 10 Abr) | < 5% |
+| Producto | 87% listo | Recordatorio 3d DONE, notificacion doctor pendiente |
+| Canales activos | **0 activos** | — |
+| Pipeline efectivo | **0** | — |
 | Canal llamadas frias | 15 llamadas, 3 callbacks, 1 info enviada (27% contacto). Sin cierres. | — |
-| Manuel (afiliado) | Pausado hasta post-Semana Santa (~7 Abr) | — |
+| Manuel (afiliado) | Pausado — reactivar post-Semana Santa (pendiente) | — |
 | NPS Wilmer | **9.5/10** — testimonial aprobado, 2 referidos (no pagan aun, ~6 meses) | — |
+| **Data de no-shows** | **NO CAPTURADA** — 0 citas marcadas como `completada`/`no_asistio` en clientes reales. Tesis del producto sin validar con datos duros. | — |
 
 ## Metricas AD-006 "20mensajes1cita" (primeros 3 dias, 13-15 Mar)
 
@@ -59,13 +418,16 @@
 - CTR: 0.54% → 0.73% (+35%)
 - **Frecuencia 2.19 — fatiga activa, creativos nuevos necesarios**
 
-## Clientes actuales
+## Clientes actuales (corregido 10 Abr tras auditoria DB)
 
-| Cliente | Estado | Pago | Notas |
-|---------|--------|------|-------|
-| B (Dra. Yeni) | Activo — configurada | $35/mes | 2 clinicas con secretaria, operativa. Solicito features, se completaron hand-off y bug secretaria. |
-| Dra. Ramos | Activo — recien integrada | $35/mes | Integrada hace 5 dias (4 Mar). Hand-off completado. |
-| Carla Paredes | Activo — instalada 16 Mar | **$75/mes** ($40 + $35) | SPS, 2 asistentes, ERM sin mensajeria. 2 doctores (2do a $35). Posible 3er doctor en futuro. Primer cierre AD-005. |
+| Cliente | Org ID | Estado | Pago | Notas |
+|---------|--------|--------|------|-------|
+| **Dr. Wilmer Guevara** | c7234d61 | Activo — early adopter | **$35/mes** | 85 citas gestionadas. NPS 9.5/10, testimonial aprobado, 2 referidos (~6 meses). Ultimo login 25 Mar. Caso de estudio estrella. **No estaba en el dashboard anterior** — error de omision corregido. |
+| **Dra. Yeni Ramos** / Consultorio Familiar | a182a362 | Activo — volumen bajo | $35/mes | **1 clinica, SIN secretaria** (ella es unica admin). No "2 clinicas con secretaria" como decia memoria anterior — Yeni y "Ramos" eran la misma persona duplicada. 12 citas en 39 dias. Llamada 10 Abr: "lento pero usando, va a continuar". |
+| **Dra. Carla Paredes** / Medilaser | 1eec1734 | Activo — volumen alto | **$75/mes** ($40 + $35) | SPS, asistente Marleny Vargas, 2 doctoras (Carla + Alejandra Ortiz). 143 citas. ERM sin mensajeria. Primer cierre AD-005. Posible 3er doctor futuro. |
+| **Dr. David Diaz** / Ecoclinicas | 7daa9810 | Activo — recien conectado | $35/mes | **Cliente nuevo descubierto 10 Abr**. Se conecto 2 Abr durante Semana Santa. Precio early adopter ofrecido hace tiempo, se honro. 12 citas iniciales. Ultimo login 9 Abr. No estaba en memoria anterior. |
+
+**Pendiente confirmar:** Pinares Clinic (`andygodoyco96@hotmail.com`, ultimo login 25 Feb), Clinica Dicolle (`lvblccnt01@gmail.com`), Clinica Escalante (`digitalbooshn@gmail.com`) aparecen como `manual_paid` en DB pero sin actividad. Verificar si son tests abandonados o prospectos no arrancados. No cuentan en MRR hasta confirmar.
 
 ## Pipeline
 
@@ -108,12 +470,16 @@
 ## Riesgos activos
 
 1. **CRITICO: Tasa de cierre inaceptable.** 1/117 leads = 0.85%. Meta era 25%. CPA real $267.48. El cuello de botella NO es generacion — es conversion post-lead.
-2. **ALTO: Pipeline en cero.** AD-007 calientes no convirtieron (no contestaron o colgaron). Callbacks frias sin avance. Todo pausado por Semana Santa.
-3. **MEDIO: Ningun canal de adquisicion funciona consistentemente.** Ads generan leads pero no cierran. Llamadas frias tienen 27% contacto pero 0 cierres. Manuel pausado. Referidos de Wilmer no pagan aun (~6 meses).
-4. **BAJO: Deuda tecnica de seguridad.** Advisories de Supabase pendientes.
-5. **RESUELTO: FAQ por keywords ineficiente.** Catalogo de 50 templates completado.
-6. **RESUELTO: Bot UX frustrante.** Fix texto libre deployed 25 Mar. Data insuficiente post-fix (3 sesiones) pero 0 errores de pacientes reales.
-7. **RESUELTO: AD-007 sin entregar.** Entrego $117.81, 35 leads. Pero calidad 43% y CPL calificado $7.85 — peor que AD-005.
+2. **ALTO: Pipeline en cero.** AD-007 calientes no convirtieron. Callbacks frias sin avance. Todo pausado desde 27 Mar. Reactivacion post-Semana Santa (7 Abr) NO ejecutada — llevamos 14 dias sin actividad comercial.
+3. **ALTO: Churn pasivo por silencio en clientes de bajo volumen.** Yeni estuvo a punto de caer por 14 dias sin contacto. La llamada 10 Abr revelo que "lento pero usando" = realidad del mercado, no problema del producto. Pero sin acompañamiento proactivo, el siguiente churn silencioso ya esta gestandose. Aplica a Yeni, Ecoclinicas (recien conectado), potencialmente Wilmer post-vacaciones.
+4. **ALTO: Tesis del producto sin validar con datos duros.** "Reducimos no-shows" es la propuesta de valor central pero NO podemos medir no-shows. 0 citas marcadas como `completada`/`no_asistio` en clientes reales (Wilmer 71 pasadas en limbo, Medilaser 80, Yeni 5). Diego trabajara la adopcion del dropdown manual por su cuenta — Claude NO debe proponer automatizacion (ver feedback_no-data-inferida). Impacto: reportes a clientes incompletos, scripts de venta sin KPI duro.
+5. **MEDIO: Ningun canal de adquisicion funciona consistentemente.** Ads generan leads pero no cierran. Llamadas frias 27% contacto, 0 cierres. Manuel pausado. Referidos de Wilmer no pagan aun (~6 meses).
+6. **BAJO: Deuda tecnica de seguridad.** Advisories de Supabase pendientes.
+7. **BAJO: Bug `appointment_at` timezone (bomba de tiempo).** Registrado en estado-dev. No afecta flujos productivos hoy pero rompe cualquier feature futuro que lea la columna.
+8. **RESUELTO: FAQ por keywords ineficiente.** Catalogo de 50 templates completado.
+9. **RESUELTO: Bot UX frustrante.** Fix texto libre deployed 25 Mar.
+10. **RESUELTO: AD-007 sin entregar.** Entrego $117.81, 35 leads. Calidad 43% — peor que AD-005.
+11. **NEUTRALIZADO 10 Abr: Churn Yeni.** Llamada confirmo continuidad. Requiere seguimiento quincenal.
 
 ## Decisiones vigentes
 
@@ -145,8 +511,8 @@
 
 | Hito | Clientes | MRR | Status |
 |------|----------|-----|--------|
-| Arranque (Mar) | 5-8 | $200-320 | **FALLIDO — 3 clientes, $145 MRR.** 117 leads, 1 cierre. Conversion es el problema, no generacion. |
-| Traccion (May) | 25 | $1,000 | En riesgo — requiere resolver conversion + nuevos creativos post-Semana Santa |
+| Arranque (Mar) | 5-8 | $200-320 | **PARCIAL — 4 clientes, $180 MRR** (corregido 10 Abr: antes se contaba 3/$145 por error). Sigue por debajo de la meta baja ($200) pero mas cerca. 117 leads, 1 cierre via ads. Conversion sigue siendo el problema. |
+| Traccion (May) | 25 | $1,000 | En riesgo — requiere resolver conversion + reactivar ads + adoptar acompañamiento quincenal como defensa de churn |
 | Momentum (Jul) | 50 | $2,000 | Pendiente |
 | Objetivo (Dic) | 175 | $7,000 | Pendiente |
 
@@ -576,21 +942,83 @@ Pena, Banegas, Herrera, Servellon, Cubero, Peralta — todos descartados por dem
 - "Reagendar" correctamente ruteado a booking hoy (27 Mar).
 - Necesitamos 15-20 sesiones para evaluar. Revision: semana del 7 Abr.
 
-## Proximos pasos
+## Decisiones sesion 10 Abr
 
-### Antes de Semana Santa (27-29 Mar)
-1. **Llamar a Carla** por permiso Marleny — no mensajear (Diego)
-2. **Integrar testimonial Wilmer a scripts de venta** (Claude, /modo-contenido o /modo-seguimiento)
+### Auditoria de clientes reales — dashboard corregido
+- **Dashboard anterior estaba mal:** decia 3 clientes / MRR $145. Realidad: **4 clientes / MRR $180**.
+- **Yeni y "Ramos" eran la misma persona** (Dra. Yeni Ramos) duplicada en memoria desde ~4 Mar.
+- **Wilmer no estaba en el dashboard** como cliente pago aunque si paga $35/mes. Error de omision.
+- **Ecoclinicas (David Diaz) es cliente nuevo descubierto** — se conecto 2 Abr durante Semana Santa, precio early adopter $35 honrando oferta anterior.
+- **Yeni tiene 1 clinica sin secretaria**, no 2 con secretaria como decia memoria. Ella es unica admin.
 
-### Semana Santa (30 Mar - 6 Abr) — preparacion
-3. **Generar creativo AD-005 refrescado** — mismo concepto "doctor de noche", imagen nueva (Diego + Claude)
-4. **Evaluar notificacion WhatsApp a doctor** como polish (Diego, /modo-dev)
-5. **Fix confirmation_message_sent** — en /modo-dev
-6. **Advisories Supabase** — si hay tiempo
+### Llamada Yeni (Diego) — churn neutralizado
+- Yeni dijo: "sigue algo lento pero si estan usando, voy a continuar usando el servicio".
+- Los datos confirman: 12 citas en 39 dias, 9 pacientes unicos, 3 citas futuras confirmadas (18/24/25 Abr), ayer 8 Abr un paciente confirmo con boton automaticamente.
+- Disonancia "yo pensaba que no usaban" vs "si usan": fue error de vara — compare contra Medilaser (8+ citas/dia) en vez de contra realidad del mercado de Yeni.
+- **Leccion:** 2 semanas de silencio en cliente de bajo volumen = 100% riesgo de churn pasivo aunque el producto funcione. El problema no era producto, era falta de acompañamiento.
 
-### Post-Semana Santa (7 Abr) — reactivacion
-7. **Lanzar AD-005 refrescado** con presupuesto $10-15/dia
-8. **Activar Manuel** (afiliado) — ya dijo que post-Semana Santa
-9. **Scripts actualizados** con testimonial Wilmer listos para Warhol
-10. **Evaluar data bot text-libre** — 2 semanas post-fix
-11. **Revision semanal** — viernes 11 Abr
+### Regla nueva: acompañamiento quincenal proactivo para clientes de bajo volumen
+- Contactar cada 2 semanas con mini-reporte tipo Guevara/Medilaser: "esto hizo el sistema por usted"
+- Aplica a: Yeni, Ecoclinicas (recien conectado — critico primeras 4 semanas), Wilmer (ya establecido, quizas mensual basta)
+- Medilaser NO necesita (alto volumen, uso diario de Marleny).
+- Formato: llamada corta o audio de WhatsApp. No mensaje de texto ("los mensajes se pierden").
+
+### Hallazgo: tesis del producto sin validar con datos duros
+- 0 citas marcadas como `completada`/`no_asistio` en clientes reales. Wilmer 71 en limbo, Medilaser 80, Yeni 5.
+- Los reportes a clientes tienen funnel de mensajeria (enviado/leido/confirmado) pero NO el funnel final (llego/no llego).
+- **Decision Diego:** NO automatizar inferencia de estados. El doctor/secretaria se deben acostumbrar a marcar. Opcion A (adopcion) en sus manos.
+- **Regla persistente:** feedback_no-data-inferida guardado en memoria Claude. No volver a proponer crons de inferencia.
+- **Impacto comercial:** scripts de venta NO deben prometer metricas de no-shows hasta que adopcion suba y haya data real.
+
+### Bugs tecnicos descubiertos (todos en estado-dev.md)
+- `appointment_at` se guarda desfasada 6h (Honduras UTC-6). No afecta flujos productivos. Bomba de tiempo.
+- `reminder_morning_sent` columna huerfana — ningun codigo la toca.
+- Estado `reagendar` huerfano — existe en DB pero no en type definition (Wilmer 4, OrionCare 1, OrionCareEditado 32).
+- Cita de Kensi Nicol Carcamo (Yeni, 24 Mar) sin `appointment_at` — bot-handler crasheo en algun flujo alterno.
+
+### Reactivacion post-Semana Santa NO ejecutada
+- Plan del 27 Mar decia: lanzar AD-005 refrescado, activar Manuel, integrar testimonial Wilmer, revisar data bot text-libre — todo para 7 Abr.
+- Hoy es 10 Abr. **Nada de eso se ejecuto.** Llevamos 14 dias sin actividad comercial.
+- Pregunta abierta: retomar el plan original, o repriorizar tras lo aprendido esta sesion?
+
+## Proximos pasos (actualizado 23 Abr)
+
+### Deliverables sesion 23 Abr (completados)
+- [x] ICP formalizado en `.claude/memory/icp.md` (A + B + no-ICP aceptable + no-ICP rechazable + checklist calificacion 6 preguntas)
+- [x] Validacion cuantitativa volumen msgs/dia por cliente (Medilaser 21.4 / Ecoclinicas 3.0 / Yeni 1.6 / Wilmer 1.6)
+- [x] Prompts Gemini para research de edificios ICP-B y clinicas ICP-A en Tegucigalpa (Diego ejecuto ambos, listas obtenidas)
+
+### Pendiente proxima sesion estrategia
+- **[Diego]** Revisar las 2 listas de Gemini (ICP-A clinicas con volumen TGU + ICP-B edificios multi-doctor). Filtrar manualmente antes de pasarlas a Claude.
+- **[Claude /modo-estrategia proxima sesion]** Cruzar ambas listas: identificar edificios donde coexistan ICP-A e ICP-B (doble rentabilidad por viaje). Priorizar por zona geografica y señal de inversion publicitaria (Meta Ads Library).
+- **[Claude /modo-estrategia]** Generar itinerario fisico de scouting semana 29 Abr - 3 May con 3-5 edificios priorizados.
+
+### Jueves 23 Abr (probable reunion Alan / The Brand Be)
+1. **[Diego]** Revisar guion actualizado `docs/ventas/guion-agencia-marketing.md` (reunion caliente, no fria).
+2. **[Diego]** Preparar material en telefono: bot en vivo, screenshots volumen Medilaser/Guevara, testimonial Wilmer, screenshot 44% autocancel como predictor.
+3. **[Diego]** Confirmar hora con Alan. Reunion 60-90 min en oficina de el.
+4. **[Diego]** Objetivo minimo: salir con fecha de piloto en clinica de Alan O presentacion directa esta semana O segunda reunion con fecha exacta.
+
+### Viernes 25 Abr — Visita edificio medico
+2. **[Diego]** Visita clinica pendiente (prioridad declarada). Es el proposito real de la salida.
+3. **[Diego]** Pasar a saludar asistente 7 doctores con curiosidad genuina: *"Me quede pensando en su mensaje, ¿que le preocupaba?"* → diagnosticar si el no fue de ella o de los doctores. NO rescatar el deal. NO insistir.
+4. **[Diego]** Si es miedo de ella: reframe "no te reemplaza, te potencia" + ofrecer demo a ella primero sin compromiso. Si es de los doctores: pedir 5 min directo con 1 solo.
+
+### Esta semana y proxima (22 Abr - 6 May)
+5. **[Diego]** Reunion 20 min con contacto agencia. Usar las 5 preguntas de Fase 2 + test Fase 3 del guion. Descartar rapido si red flags.
+6. **[Diego]** Seguimiento quincenal a Yeni (~24 Abr).
+7. **[Diego]** Verificar Pinares/Dicolle/Escalante — tests o clientes reales?
+8. **[Claude /modo-ads]** Actualizar scripts y creativos con buyer persona refinado (senal = volumen de mensajes, no rol). Preparar perfil para reactivar Manuel lunes 28 Abr.
+9. **[Claude /modo-dev]** Nivel 2 optimizacion: migrar hooks a React Query (habilita IndexedDB + optimistic UI).
+
+### Pendientes arrastrados
+- Integrar testimonial Wilmer a scripts de venta
+- Reactivar Manuel (afiliado TikToker) con buyer persona actualizado
+- Bug `appointment_at` timezone
+- Adopcion dropdown `completada`/`no_asistio`
+- Auditar FAQs (prerequisito para modelo agencia): Guevara keywords faltantes, Medilaser gap FAQs vs servicios, Consultorio Familiar 0 FAQs
+
+### Descartes recientes
+- **David Diaz (Ecoclinicas):** churn aceptado. No invertir tiempo en rescate.
+- **Modelo "agencia gratis hasta exito":** financieramente insostenible. Mantener modelo Manuel estandar.
+- **Aprender modelo agencia de marketing a fondo:** rabbit hole. 20 min conversacion basta para diagnosticar.

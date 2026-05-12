@@ -43,3 +43,7 @@ Actualiza `.claude/memory/estado-estrategia.md` con:
 - Decisiones tomadas y su razonamiento
 - Riesgos activos (agregar/quitar/repriorizar)
 - Proximos pasos con responsable y fecha
+
+## Playbooks disponibles
+
+- `.claude/memory/playbook-analisis-bot.md` — Método reproducible para auditar el bot (2 flujos × 3 preguntas → micro-ajustes concretos). Output: `docs/analisis-bot-flujo-a.md` y `docs/analisis-bot-flujo-b.md`.
