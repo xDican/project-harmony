@@ -50,6 +50,8 @@ Deno.serve(async (req) => {
     // Parse body
     const body = await req.json().catch(() => ({}));
     const whatsappLineId = body.whatsapp_line_id;
+    // Optional: only recreate specific logical types (e.g. ["reminder_24h"])
+    const filterTypes: string[] | null = Array.isArray(body.logical_types) ? body.logical_types : null;
 
     if (!whatsappLineId) {
       return jsonResponse(400, { ok: false, error: "Missing whatsapp_line_id" });
@@ -72,22 +74,34 @@ Deno.serve(async (req) => {
 
     const { meta_waba_id: wabaId, meta_access_token: accessToken } = line;
 
-    console.log("[recreate-templates] Starting for line:", whatsappLineId, "WABA:", wabaId);
+    console.log("[recreate-templates] Starting for line:", whatsappLineId, "WABA:", wabaId, filterTypes ? `filter: ${filterTypes.join(",")}` : "all templates");
 
-    // 2) Get existing template mappings
+    // Determine which canonical templates to process
+    const templatesToProcess = filterTypes
+      ? CANONICAL_TEMPLATES.filter((t) => filterTypes.includes(t.logical_type))
+      : CANONICAL_TEMPLATES;
+
+    if (templatesToProcess.length === 0) {
+      return jsonResponse(400, { ok: false, error: `No canonical templates match logical_types: ${filterTypes?.join(",")}` });
+    }
+
+    const logicalTypesSet = new Set(templatesToProcess.map((t) => t.logical_type));
+
+    // 2) Get existing template mappings (only for types being processed)
     const { data: existingMappings } = await supabase
       .from("template_mappings")
       .select("id, template_name, logical_type")
       .eq("whatsapp_line_id", whatsappLineId);
 
-    // 3) Delete existing templates from Meta and DB
+    const mappingsToDelete = existingMappings?.filter((m) => logicalTypesSet.has(m.logical_type)) ?? [];
+
+    // 3) Delete existing templates from Meta and DB (only matching types)
     const deleteResults: Array<{ name: string; ok: boolean; error?: string }> = [];
 
-    if (existingMappings && existingMappings.length > 0) {
-      console.log("[recreate-templates] Deleting", existingMappings.length, "existing templates");
+    if (mappingsToDelete.length > 0) {
+      console.log("[recreate-templates] Deleting", mappingsToDelete.length, "existing templates");
 
-      for (const mapping of existingMappings) {
-        // Delete from Meta
+      for (const mapping of mappingsToDelete) {
         const delResult = await deleteTemplateInWaba(wabaId, accessToken, mapping.template_name);
         deleteResults.push({
           name: mapping.template_name,
@@ -97,11 +111,12 @@ Deno.serve(async (req) => {
         console.log("[recreate-templates] DELETE", mapping.template_name, delResult.ok ? "OK" : `FAILED: ${delResult.error}`);
       }
 
-      // Delete all mappings from DB
+      // Delete matching mappings from DB
+      const idsToDelete = mappingsToDelete.map((m) => m.id);
       const { error: dbDelError } = await supabase
         .from("template_mappings")
         .delete()
-        .eq("whatsapp_line_id", whatsappLineId);
+        .in("id", idsToDelete);
 
       if (dbDelError) {
         console.error("[recreate-templates] Error deleting DB mappings:", dbDelError);
@@ -113,7 +128,7 @@ Deno.serve(async (req) => {
     const createResults: Array<{ logical_type: string; name: string; ok: boolean; templateId?: string; error?: string }> = [];
     const newMappings: Array<Record<string, unknown>> = [];
 
-    for (const tmpl of CANONICAL_TEMPLATES) {
+    for (const tmpl of templatesToProcess) {
       const templateName = generateTemplateName(tmpl.template_name);
       console.log("[recreate-templates] Creating template:", templateName);
 
@@ -156,10 +171,10 @@ Deno.serve(async (req) => {
     // 5) Insert new mappings
     const { error: insertError } = await supabase
       .from("template_mappings")
-      .insert(newMappings);
+      .upsert(newMappings, { onConflict: "whatsapp_line_id,logical_type,provider", ignoreDuplicates: false });
 
     if (insertError) {
-      console.error("[recreate-templates] Error inserting new mappings:", insertError);
+      console.error("[recreate-templates] Error upserting new mappings:", insertError);
       return jsonResponse(500, {
         ok: false,
         error: "Templates created in Meta but failed to save mappings to DB",

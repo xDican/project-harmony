@@ -24,16 +24,25 @@ export interface LogMessageParams {
   rawPayload?: unknown;
   errorCode?: string;
   errorMessage?: string;
+  /** Si no se especifica, billable=true cuando hay doctorId, false cuando no. */
+  billable?: boolean;
 }
 
 /**
  * Inserts a record into the message_logs table.
  * Never throws -- logs errors to console and returns silently.
+ *
+ * Nota: la tabla tiene check constraint `message_logs_billable_requires_doctor`
+ * (billable=false OR doctor_id NOT NULL). Si caller no pasa `billable`, lo
+ * deducimos del doctorId para evitar que inserts sin doctor (ej. inbound del bot
+ * antes de identificar al paciente) fallen silenciosamente.
  */
 export async function logMessage(
   supabase: SupabaseClient,
   params: LogMessageParams,
 ): Promise<void> {
+  const billable = params.billable ?? (params.doctorId !== undefined && params.doctorId !== null);
+
   const { error } = await supabase.from("message_logs").insert({
     direction: params.direction,
     channel: params.channel ?? "whatsapp",
@@ -53,9 +62,17 @@ export async function logMessage(
     raw_payload: params.rawPayload ?? null,
     error_code: params.errorCode ?? null,
     error_message: params.errorMessage ?? null,
+    billable,
   });
 
   if (error) {
-    console.error("[message-logger] Error logging message:", error);
+    console.error("[message-logger] Error logging message:", error, {
+      direction: params.direction,
+      provider: params.provider,
+      providerMessageId: params.providerMessageId,
+      from: params.fromPhone,
+      hasDoctorId: !!params.doctorId,
+      billable,
+    });
   }
 }

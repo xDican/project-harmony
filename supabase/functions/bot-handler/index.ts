@@ -16,6 +16,7 @@ import { DateTime } from 'https://esm.sh/luxon@3.4.4';
 import { formatTimeForTemplate } from '../_shared/datetime.ts';
 import { OPT_EMOJI, buildStepTitle } from '../_shared/bot-messages.ts';
 import { normalizeToE164 } from '../_shared/phone.ts';
+import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -91,6 +92,7 @@ interface BotFAQ {
   scope_priority: number;
   is_active: boolean;
   display_order: number;
+  min_match_score?: number;
 }
 
 interface BotHandlerInput {
@@ -203,6 +205,50 @@ async function handleBotMessage(
 
   const stateBefore = session.state;
 
+  // Guard: mensaje vacio (sticker/audio/imagen/ubicacion sin transcribir).
+  // Antes: caia al handler del estado, marcaba "opcion no valida", incrementaba
+  //   invalidAttempts y eventualmente disparaba handoff (a veces duplicado en ms).
+  // Ahora: pedimos texto sin avanzar el estado.
+  if (!messageText || messageText.trim().length === 0) {
+    console.log('[bot-handler] Empty user_message (likely media without transcript). State:', session.state, 'Phone:', patientPhone);
+
+    // Dedupe: si en los ultimos 5s ya respondimos a este caso, no repetir
+    const recentCutoff = new Date(Date.now() - 5000).toISOString();
+    const { data: recentLogs } = await supabase
+      .from('bot_conversation_logs')
+      .select('id, user_message')
+      .eq('session_id', session.id)
+      .gte('created_at', recentCutoff)
+      .limit(2);
+
+    const recentDup = (recentLogs || []).some((r: any) => !r.user_message || r.user_message.trim() === '');
+    if (recentDup) {
+      console.log('[bot-handler] Duplicate empty-message detected, skipping response');
+      return {
+        message: '',
+        requiresInput: false,
+        nextState: session.state,
+        sessionComplete: false,
+      };
+    }
+
+    const emptyResp: BotResponse = {
+      message: '🤔 Solo veo un audio/imagen/sticker. Por favor escriba su mensaje en texto para poder ayudarle.',
+      requiresInput: true,
+      nextState: session.state, // mantener estado actual sin avanzar
+      sessionComplete: false,
+    };
+    // Log para tracking de incidencia
+    const emptyMs = Date.now() - startTime;
+    const emptyIntent = 'media_no_text';
+    logConversation(
+      session.id, whatsappLineId, organizationId, patientPhone,
+      stateBefore, session.state, '', emptyResp.message,
+      [], emptyIntent, emptyMs, supabase
+    ).catch((err) => console.error('[bot-handler] Log error (non-fatal):', err));
+    return emptyResp;
+  }
+
   // Universal escape: "0" or "reiniciar" resets to greeting from any state
   const trimmedMsg = messageText.trim().toLowerCase();
   if (session.state !== 'greeting' && (trimmedMsg === '0' || trimmedMsg === 'reiniciar' || trimmedMsg === 'inicio')) {
@@ -216,7 +262,40 @@ async function handleBotMessage(
     'booking_select_doctor', 'booking_select_service', 'booking_select_day',
     'booking_select_hour', 'booking_ask_name',
   ];
-  const ESCAPE_WORDS = ['cancelar', 'canselar', 'salir', 'menu', 'volver', 'bolber'];
+  const CANCEL_WORDS = ['cancelar', 'canselar'];
+  const EXIT_WORDS = ['salir', 'menu', 'volver', 'bolber'];
+  const ESCAPE_WORDS = [...CANCEL_WORDS, ...EXIT_WORDS];
+
+  // Caso especial: durante reschedule en booking_*, "cancelar" = confirmar destruccion
+  // de la cita original (no salir del flow). Lleva al phase 2 de cancel_confirm.
+  if (
+    BOOKING_ESCAPABLE_STATES.includes(session.state) &&
+    CANCEL_WORDS.includes(trimmedMsg) &&
+    session.context.isReschedule &&
+    session.context.rescheduleAppointmentId
+  ) {
+    console.log('[bot-handler] Cancel during reschedule: jumping to phase 2 confirmation');
+    const dateLabel = DateTime.fromISO(session.context.rescheduleAppointmentDate, { zone: 'America/Tegucigalpa' })
+      .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
+    session.context.cancelConfirmPhase = 'confirm_delete';
+    const cancelResp: BotResponse = {
+      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
+      options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
+      requiresInput: true,
+      nextState: 'cancel_confirm',
+      sessionComplete: false,
+    };
+    await updateSession(session.id, cancelResp.nextState, session.context, false, supabase);
+    const cancelMs = Date.now() - startTime;
+    const cancelIntent = detectSessionIntent(stateBefore, cancelResp.nextState, messageText);
+    logConversation(
+      session.id, whatsappLineId, organizationId, patientPhone,
+      stateBefore, cancelResp.nextState, messageText, cancelResp.message,
+      cancelResp.options || [], cancelIntent, cancelMs, supabase
+    ).catch((err) => console.error('[bot-handler] Log error (non-fatal):', err));
+    return cancelResp;
+  }
+
   if (BOOKING_ESCAPABLE_STATES.includes(session.state) && ESCAPE_WORDS.includes(trimmedMsg)) {
     console.log('[bot-handler] Booking escape:', trimmedMsg, 'from', session.state);
     // Clean booking context but preserve line config
@@ -237,7 +316,7 @@ async function handleBotMessage(
     };
     await updateSession(session.id, escapeResponse.nextState, session.context, false, supabase);
     const escResponseTimeMs = Date.now() - startTime;
-    const escIntent = detectIntent(stateBefore, escapeResponse.nextState, messageText);
+    const escIntent = detectSessionIntent(stateBefore,escapeResponse.nextState, messageText);
     logConversation(
       session.id, whatsappLineId, organizationId, patientPhone,
       stateBefore, escapeResponse.nextState, messageText, escapeResponse.message,
@@ -257,7 +336,7 @@ async function handleBotMessage(
     await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
 
     const responseTimeMs = Date.now() - startTime;
-    const intent = detectIntent(stateBefore, response.nextState, messageText);
+    const intent = detectSessionIntent(stateBefore,response.nextState, messageText);
     logConversation(
       session.id, whatsappLineId, organizationId, patientPhone,
       stateBefore, response.nextState, messageText, response.message,
@@ -331,7 +410,7 @@ async function handleBotMessage(
 
   // Log conversation asynchronously (fire and forget - don't block response)
   const responseTimeMs = Date.now() - startTime;
-  const intent = detectIntent(stateBefore, response.nextState, messageText);
+  const intent = detectSessionIntent(stateBefore,response.nextState, messageText);
   logConversation(
     session.id, whatsappLineId, organizationId, patientPhone,
     stateBefore, response.nextState, messageText, response.message,
@@ -533,15 +612,32 @@ async function handleDirectReschedule(
   delete session.context.availableServiceTypes;
   session.context.bookingTotalSteps = 4;
 
-  // 6. Show action options (Reagendar / Cancelar / Volver) instead of jumping to reschedule
+  // 6. Saltar menu intermedio — paciente vino del boton "No puedo asistir" o intent
+  //    explicito ("reagendar", "no puedo"), no necesita re-seleccionar accion.
+  //    Antes: nextState='cancel_confirm' con 3 opciones (47% abandono).
+  //    Ahora: directo a seleccion de semana. Escape "cancelar" disponible en booking_*.
   const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
     .toFormat("EEEE dd 'de' MMMM yyyy", { locale: 'es' });
 
+  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId, slotGranularity);
+
+  if (weeks.length === 0) {
+    return {
+      message: `⚠️ No encontramos disponibilidad en las proximas semanas.\n\nConectando con ${handoffLabels.connecting}...`,
+      requiresInput: false,
+      nextState: 'handoff_secretary',
+      sessionComplete: true,
+    };
+  }
+
+  session.context.availableWeeks = weeks;
+  const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
+
   return {
-    message: `¿Que desea hacer con su cita?\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}`,
-    options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
+    message: `Entendido, le ayudo a reagendar.\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n${stepTitle}\n\nSeleccione la nueva semana:\n👉 Escriba el numero\n\n_Si prefiere cancelar definitivamente, escriba *cancelar*._`,
+    options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
-    nextState: 'cancel_confirm',
+    nextState: 'booking_select_day',
     sessionComplete: false,
   };
 }
@@ -553,16 +649,8 @@ async function handleGreeting(
   handoffLabels: { menuOption: string; connecting: string; emoji: string },
   messageText: string = ''
 ): Promise<BotResponse> {
-  // Detect acknowledgment responses (replies to reminders like "Ok", "Gracias", "Listo")
-  const ACKNOWLEDGMENTS = ['ok', 'okey', 'okay', 'listo', 'gracias', 'de acuerdo',
-    'perfecto', 'entendido', 'dale', 'va', 'genial', 'excelente', 'bien',
-    'bueno', 'esta bien', 'recibido', 'anotado', 'si', 'claro'];
-  const ackNorm = messageText.trim().toLowerCase()
-    .replace(/[!¡.,;:?¿🙏😊😁👍👌✅🥰❤️💪]+/g, '').trim();
-  const ackWords = ackNorm.split(/\s+/).filter(w => w.length > 0);
-  const isAck = ackNorm.length > 0 && ackWords.length <= 3 &&
-    ackWords.every(w => ACKNOWLEDGMENTS.includes(w) || w.length <= 2);
-  if (isAck) {
+  // Acks puros ("ok", "gracias", emoji solo) — confirma recepcion sin abrir menu
+  if (isAcknowledgment(messageText)) {
     return {
       message: '👍 ¡Recibido! Si necesita algo, escriba *hola*.',
       requiresInput: false,
@@ -570,6 +658,32 @@ async function handleGreeting(
       sessionComplete: true,
       showMenuHint: false,
     };
+  }
+
+  // Pre-check con detector hondureno natural (cubre lenguaje libre, typos, preambulos)
+  const hnIntent = detectIntent(messageText);
+  if (hnIntent.intent === 'confirm') {
+    // Confirmacion espontanea ("ahi estare", "primero dios") → ack y cerrar
+    return {
+      message: '👍 ¡Recibido! Le esperamos.',
+      requiresInput: false,
+      nextState: 'completed',
+      sessionComplete: true,
+      showMenuHint: false,
+    };
+  }
+  if (hnIntent.intent === 'wrong_number' || hnIntent.intent === 'spam_external_bot') {
+    // No abrir menu — paciente no es relevante
+    return {
+      message: '👍 Anotado, gracias.',
+      requiresInput: false,
+      nextState: 'completed',
+      sessionComplete: true,
+      showMenuHint: false,
+    };
+  }
+  if (hnIntent.intent === 'out_of_scope') {
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
   }
 
   // Detect intent in first message before showing generic greeting.
@@ -681,6 +795,29 @@ async function handleMainMenu(
   handoffLabels: { menuOption: string; connecting: string; emoji: string }
 ): Promise<BotResponse> {
   const normalizedInput = input.trim().toLowerCase();
+
+  // Pre-check con detector hondureno natural (lenguaje libre, typos, preambulos)
+  // Solo aplica si NO es un numero (numeros van a las ramas explicitas debajo)
+  if (!/^[1-9]$/.test(normalizedInput)) {
+    const hnIntent = detectIntent(input);
+    if (hnIntent.intent === 'reschedule' || hnIntent.intent === 'cancel') {
+      session.context.invalidAttempts = 0;
+      return await startRescheduleFlow(session, organizationId, supabase);
+    }
+    if (hnIntent.intent === 'handoff' || hnIntent.intent === 'out_of_scope') {
+      session.context.invalidAttempts = 0;
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    }
+    if (hnIntent.intent === 'wrong_number' || hnIntent.intent === 'spam_external_bot') {
+      return {
+        message: '👍 Anotado, gracias.',
+        requiresInput: false,
+        nextState: 'completed',
+        sessionComplete: true,
+      };
+    }
+    // confirm / faq_* / greeting / unknown → caer a la logica viejo (que ya cubre esos casos)
+  }
 
   // Parse input - accept number or text matching
   if (normalizedInput === '1' || (normalizedInput.includes('agendar') || normalizedInput.includes('ajendar')) && !normalizedInput.includes('reagendar') && !normalizedInput.includes('reajendar')) {
@@ -2177,6 +2314,34 @@ async function handleCancelConfirm(
     };
   }
 
+  // Antes de fallar como invalid, intentar detectar intent natural (texto libre hondureno)
+  const hnIntent = detectIntent(input);
+
+  // Confirmacion explicita ("ahi estare", "confirmo") en phase 1 → mantener la cita y salir
+  if (hnIntent.intent === 'confirm') {
+    return {
+      message: `${OPT_EMOJI.agendar} ¡Perfecto! Su cita queda como esta.\n\n¡Le esperamos!`,
+      requiresInput: false,
+      nextState: 'completed',
+      sessionComplete: true,
+    };
+  }
+
+  // "No puedo asistir" / razon humana → reagendar (mismo handler con selection=1)
+  if (hnIntent.intent === 'reschedule') {
+    return await handleCancelConfirm('1', session, organizationId, supabase, handoffLabels);
+  }
+
+  // "Cancelar" en texto libre → mover a phase 2 (mismo handler con selection=2)
+  if (hnIntent.intent === 'cancel') {
+    return await handleCancelConfirm('2', session, organizationId, supabase, handoffLabels);
+  }
+
+  // Handoff explicito
+  if (hnIntent.intent === 'handoff') {
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+  }
+
   // Invalid input
   return {
     message: '⚠️ Opcion no valida.\n\n¿Que desea hacer con esta cita?',
@@ -2387,20 +2552,21 @@ async function searchFAQ(
       }
     }
 
-    if (score > bestScore) {
+    const threshold = faq.min_match_score ?? 1.0;
+    if (score >= threshold && score > bestScore) {
       bestScore = score;
       bestMatch = faq;
     }
   }
 
-  if (bestScore > 0 && bestMatch) {
-    console.log('[searchFAQ] Best match:', bestMatch.question, '| Score:', bestScore);
+  if (bestMatch) {
+    console.log('[searchFAQ] Best match:', bestMatch.question, '| Score:', bestScore, '| Threshold:', bestMatch.min_match_score ?? 1.0);
   } else {
     const queryWords = normalizedQuery.split(/\s+/);
-    console.log('[searchFAQ] No match | Query words:', queryWords);
+    console.log('[searchFAQ] No match (or all below threshold) | Query words:', queryWords);
   }
 
-  return bestScore > 0 ? bestMatch : null;
+  return bestMatch;
 }
 
 async function getAvailableWeeks(
@@ -2682,7 +2848,7 @@ async function getPatientUpcomingAppointments(
 // ANALYTICS & LOGGING
 // ============================================================================
 
-function detectIntent(
+function detectSessionIntent(
   stateBefore: string,
   stateAfter: string,
   userMessage: string

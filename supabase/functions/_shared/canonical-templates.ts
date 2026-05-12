@@ -26,8 +26,8 @@ export interface CanonicalTemplate {
 }
 
 /**
- * The 6 canonical templates that every client WABA should have.
- * Bodies are identical to the approved OrionCare originals.
+ * The 9 canonical templates that every client WABA should have.
+ * Copy optimizado para WhatsApp Honduras: corto, directo, gender-neutral.
  */
 export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
   {
@@ -38,7 +38,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "👋 Hola {{1}}\n\n✅ Su cita ha sido agendada con éxito\n\n🩺 {{2}}\n📅 {{3}}\n⏰ {{4}}\n\nSi necesita cambiar la fecha u hora, puede hacerlo fácilmente:\n👉 Presione el botón *Reagendar* o escriba la palabra *REAGENDAR*.\n\nEstamos para ayudarle 😊",
+        text: "✅ {{1}}, su cita fue agendada:\n\n🩺 {{2}}\n📅 {{3}} ⏰ {{4}}\n\nPara cambios, presione Reagendar.",
         example: { body_text: [["Juan", "Dr. Lopez", "25 de febrero", "10:00 AM"]] },
       },
       {
@@ -55,7 +55,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "{{1}}, la {{2}} le espera mañana {{3}} a las {{4}} 🩺\n\n⚠️ Confirme antes de las 7AM o su espacio sera ofrecido a otro paciente.",
+        text: "Hola {{1}}, {{2}} le espera mañana {{3}} a las {{4}}.\n\n⚠️ Confirme antes de las 7AM o se libera su espacio.",
         example: { body_text: [["Maria", "Dra. Yeni", "miércoles 2 de abril", "10:00 AM"]] },
       },
       {
@@ -95,7 +95,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "📞 Solicitud de reagendación\n\nEl paciente {{1}} ha solicitado reagendar su cita.\n\n👉 Por favor comuníquese con el paciente para coordinar la nueva fecha y hora.\n\n📱 Teléfono: {{2}}\n\n—\nSistema de Citas",
+        text: "📞 {{1}} quiere reagendar su cita.\n\n📱 {{2}}",
         example: { body_text: [["Juan Perez", "+50412345678"]] },
       },
     ],
@@ -108,7 +108,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "✅ Cita Confirmada. \n\nNos dará mucho gusto recibirle *mañana* a las {{1}} en nuestro consultorio.\n\n¡Que tenga un gran día!",
+        text: "✅ Cita confirmada para mañana a las {{1}}.\n\nLe esperamos!",
         example: { body_text: [["10:00 AM"]] },
       },
     ],
@@ -121,7 +121,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "🔄 Su solicitud de reagendación ha sido recibida.\n\n📞 En breve, el consultorio se pondrá en contacto para confirmar la nueva fecha y hora.\n\nGracias por su comprensión 😊",
+        text: "🔄 Solicitud de reagendación recibida.\n\nEn breve le contactamos para coordinar nueva fecha.",
       },
     ],
   },
@@ -133,7 +133,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "📋 Nuevo paciente requiere atención\n\nUn paciente ha solicitado comunicarse con usted desde el asistente virtual de OrionCare.\n\n📞 Teléfono: {{1}}\n👤 Nombre: {{2}}\n\nPor favor comuníquese con el paciente para atenderle.",
+        text: "📋 {{2}} necesita atención.\n\n📞 {{1}}",
         example: { body_text: [["50412345678", "Juan Perez"]] },
       },
     ],
@@ -166,7 +166,7 @@ export const CANONICAL_TEMPLATES: CanonicalTemplate[] = [
     components: [
       {
         type: "BODY",
-        text: "📋 {{1}}, su cita de hoy a las {{2}} con {{3}} fue liberada por falta de confirmación.\n\n📲 Si desea reagendar, escriba *agendar* a este número.",
+        text: "❌ {{1}}, su cita de hoy a las {{2}} con {{3}} fue cancelada por falta de confirmación.\n\n📲 Escriba *agendar* para reagendar.",
         example: { body_text: [["Maria", "10:00 AM", "Dra. Yeni"]] },
       },
     ],

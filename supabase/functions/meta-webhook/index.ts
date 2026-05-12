@@ -359,6 +359,94 @@ async function handleIncomingMessage(
       await sendIntentNotification(supabase, intent, appointment, patient!, fromPhone, toPhone, effectiveOrgId);
     }
   }
+
+  // Log a bot_conversation_logs para analytics V2 (Sprint 1 item 1.6)
+  // Flujo legacy: paciente presiono boton "Confirmar"/"No puedo asistir" o escribio texto
+  // que matcheo intent confirm/cancel/reschedule. Sin esto, esos eventos eran invisibles
+  // en bot_conversation_logs (23 "No puedo asistir" sin contraparte en V2 14-28 Abr).
+  if (intent !== "unknown" && lineId) {
+    const effectiveOrgIdLog = lineOrgId || appointment?.organization_id || null;
+    logBotInteractionFromLegacy(
+      supabase, lineId, effectiveOrgIdLog, fromPhone, intent, body || "",
+      appointment?.id || null,
+    ).catch((err) => console.warn("[meta-webhook] Bot log failed (non-fatal):", err));
+  }
+}
+
+/**
+ * Logs a legacy-flow patient interaction (button click or text-matched intent) into
+ * bot_conversation_logs so analytics V2 sees them. Creates a minimal bot_session if
+ * none exists. Fire-and-forget — failure does not block the webhook response.
+ */
+async function logBotInteractionFromLegacy(
+  supabase: ReturnType<typeof createClient>,
+  lineId: string,
+  orgId: string | null,
+  patientPhone: string,
+  intent: string,
+  body: string,
+  appointmentId: string | null,
+): Promise<void> {
+  if (!orgId) {
+    console.warn("[meta-webhook] logBotInteractionFromLegacy: missing orgId, skipping");
+    return;
+  }
+
+  // Find or create session
+  const { data: existing } = await supabase
+    .from("bot_sessions")
+    .select("id")
+    .eq("whatsapp_line_id", lineId)
+    .eq("patient_phone", patientPhone)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let sessionId: string | null = (existing as { id?: string } | null)?.id || null;
+
+  if (!sessionId) {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString(); // 1 min — efimera
+    const { data: created, error: createErr } = await supabase
+      .from("bot_sessions")
+      .insert({
+        whatsapp_line_id: lineId,
+        patient_phone: patientPhone,
+        state: "completed",
+        context: { source: "legacy_button" },
+        last_message_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      })
+      .select("id")
+      .single();
+
+    if (createErr || !created) {
+      console.warn("[meta-webhook] Could not create session for log:", createErr?.message);
+      return;
+    }
+    sessionId = (created as { id: string }).id;
+  }
+
+  // Insert log entry
+  const { error: logErr } = await supabase
+    .from("bot_conversation_logs")
+    .insert({
+      session_id: sessionId,
+      whatsapp_line_id: lineId,
+      organization_id: orgId,
+      patient_phone: patientPhone,
+      direction: "inbound",
+      state_before: "legacy_button",
+      state_after: "completed",
+      user_message: body || null,
+      bot_response: `[legacy] intent=${intent} appointment=${appointmentId || "none"}`,
+      options_shown: [],
+      intent_detected: intent,
+      metadata: { source: "meta-webhook-legacy", appointment_id: appointmentId },
+    });
+
+  if (logErr) {
+    console.warn("[meta-webhook] Could not insert bot log:", logErr.message);
+  }
 }
 
 /**
@@ -450,7 +538,7 @@ async function sendIntentNotification(
               "1": patient.name,
               "2": _patientPhone,
             },
-            body: `Solicitud de reagendación\n\nEl paciente ${patient.name} ha solicitado reagendar su cita.\n\nTeléfono: ${_patientPhone}`,
+            body: `${patient.name} quiere reagendar su cita.\n\nTeléfono: ${_patientPhone}`,
             appointmentId: appointment.id,
             patientId: patient.id,
             doctorId: appointment.doctor_id,
