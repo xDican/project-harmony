@@ -1,10 +1,165 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 12 May 2026 (Hotfix Sprint 1 deployado + validado en produccion real. Esperando data de la semana antes de decidir Sprint 2)
+> Ultima actualizacion: 15 May 2026 (3 fixes pre-sabado Mendoza deployados — bot-handler v62)
 
 ## Fase actual
 
 Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
+
+## ✅ FIXES PRE-SABADO MENDOZA DEPLOYADOS 15 May ~21:50 UTC — bot-handler v62
+
+> **Contexto:** Mendoza (estetica, Torre Zafiro) se instala sabado 16 May 9:30 AM. Es path critico del canal asistente (Dulce administra ~5 medicos en Torre Zafiro; el resultado con Mendoza decide si Dulce pasa a los otros). Barrido de produccion (12-15 May post Sprint 1) detecto 3 bugs reales que se arreglaron antes del sabado. Plan completo en `C:\Users\dican\.claude\plans\genera-un-plan-para-adaptive-sprout.md`.
+
+### Items deployados
+
+| Fix | Archivo | Cambio |
+|-----|---------|--------|
+| **#1** dedupe handoff (Sury 14-May) | `bot-handler/index.ts` `handleHandoffToSecretary` (linea 2391) | Agregado dedupe 5min basado en `bot_conversation_logs(session_id, state_after='handoff_secretary')`. Si hit, paciente recibe "✅ Su caso ya fue escalado a [connecting]. Dentro de poco se estara comunicando..." y secretario NO recibe notif dup. Firma extendida con `sessionId?: string`, 13 callsites actualizadas. |
+| **#2** SOFT_NO confirmo (14-May) | `_shared/honduras-intents.ts:179` + test | Agregadas 4 frases: "yo le confirmo despues", "le confirmo despues", "confirmo despues", "confirmo luego". Test nuevo en `honduras-intents.test.ts`. |
+| **#3** parseTimeHint HH:MM (Jennyfer 14-May) | `bot-handler/index.ts` `parseTimeHint` (linea 1518) | Tercera regex `^(\d{1,2}):(\d{2})$` con regla `<7 → +12` (no hay slots de noche). Tambien ajustada regla de regex "las X" de `<8` a `<7` por consistencia. Wiring en `handleBookingSelectHour` ya existia (linea 1655). |
+
+### Validacion post-deploy
+
+| Check | Resultado |
+|-------|-----------|
+| `list_edge_functions` post-deploy | bot-handler **v62 ACTIVE** ✅ |
+| SQL dedupe handoff (24h) | Solo 2 rows con diff_seconds < 300 — ambos del bug pre-fix de Sury (15-May 01:13-01:15 UTC). 0 nuevos casos post-deploy ✅ |
+| QA Demo Bot | **PENDIENTE viernes 16-May AM** — Diego validara los 3 fixes en demo bot antes de instalacion Mendoza 9:30 AM |
+
+### QA pendiente viernes 16 May AM (~30 min)
+
+Antes de instalar en Mendoza, validar en Demo Bot con org de Wilmer:
+
+1. **Fix #1 — Dedupe handoff:**
+   - Disparar handoff (ej. "necesito hablar con alguien"). Confirmar mensaje al paciente + notif a Diego.
+   - Dispararlo de nuevo en <5min. Esperado: paciente recibe "✅ Su caso ya fue escalado...". Diego NO recibe segunda notif.
+
+2. **Fix #2 — SOFT_NO confirmo:**
+   - En main_menu, escribir "yo le confirmo despues" → bot responde con copy SOFT_NO (no navigation).
+   - Variantes: "le confirmo despues", "confirmo despues".
+   - SQL check: `intent_detected = 'soft_no'` en bot_conversation_logs.
+
+3. **Fix #3 — Horas HH:MM:**
+   - Llegar a `booking_select_hour` con un slot AM disponible.
+   - Escribir "8:15" (si slot 08:15 existe) → avanza a booking_confirm.
+   - Variantes: "08:15", "8:15 am", "14:30".
+   - Caso negativo: "25:00" / "8:99" → "opcion no valida".
+
+### SQL de monitoreo continuo (correr ~48h post-deploy)
+
+```sql
+-- Confirmar 0 handoffs duplicados POST-deploy (15-May 21:50 UTC en adelante)
+WITH handoffs AS (
+  SELECT session_id, created_at,
+    LAG(created_at) OVER (PARTITION BY session_id ORDER BY created_at) AS prev_created
+  FROM bot_conversation_logs
+  WHERE state_after = 'handoff_secretary'
+    AND created_at >= '2026-05-15 21:50:00+00'
+)
+SELECT session_id, created_at, prev_created,
+  EXTRACT(EPOCH FROM (created_at - prev_created)) AS diff_seconds
+FROM handoffs
+WHERE prev_created IS NOT NULL
+  AND EXTRACT(EPOCH FROM (created_at - prev_created)) < 300
+ORDER BY created_at DESC;
+```
+Esperado: 0 rows.
+
+### Bugs descartados / postergados del barrido
+
+- **Mensajes sin texto (`media_no_text`):** Sprint 1 funciona — 6 casos en 4 dias todos respondidos correctamente.
+- **Loops post-completed** ("Hola", "Ok" despues que cerro la sesion): edge case conversacional, no critico.
+- **Loops en faq_search** sin respuesta: NO bug de codigo, configuracion de FAQs. Se resuelve en pre-config Mendoza viernes PM.
+
+### Bugs de observabilidad descubiertos (NO bloqueantes, backlog)
+
+1. **`appointment_released` no se loguea siempre** — 13 de 47 auto-cancelaciones (27.7%) NO crean event en `message_logs` aunque flag `auto_cancelled=TRUE` si se setea. Reportes que cuentan liberaciones via message_logs subestiman ~28%. Postponer a Sprint 2 o 3.
+
+2. **Recordatorios huerfanos sin `appointment_id`** — 3 de 98 (3%) no graban el FK. Probable race condition. Postponer.
+
+---
+
+## ⚠️ HISTORICO PREVIO — 3 FIXES PRE-SABADO MENDOZA (ANTES DEL DEPLOY)
+
+> **Contexto:** Mendoza (estetica, Torre Zafiro) se instala sabado 16 May 9:30 AM. Es path critico del canal asistente (Dulce administra ~5 medicos en Torre Zafiro; el resultado con Mendoza decide si Dulce pasa a los otros). Barrido de produccion (12-15 May post Sprint 1) detecto 3 bugs reales fixeables antes del sabado.
+
+### Fix #1 — Dedupe handoffs: ampliar ventana 5s → 5min (15 min)
+
+**Bug confirmado:** Sury Madrid (Tel +504...6875) escalo 3 veces consecutivas a Marleny:
+- 19:13:00 (primera)
+- 19:14:23 (+63 seg)
+- 19:15:44 (+81 seg)
+
+Sprint 1 item 1.5 implemento dedupe a 5 segundos. Ambas duplicadas pasaron muy encima de la ventana.
+
+**Por que importa para sabado:** la asistente del canal (Dulce, y Mendoza) NO PUEDE recibir notificaciones duplicadas — destruye confianza desde dia 1. Punto cero del pitch "OrionCare te quita la carga".
+
+**Fix:** en `bot-handler/index.ts` `handleHandoffToSecretary`, cambiar ventana de dedupe de 5s a 5min. Verificar que el check tambien aplica por `(session_id, intent)` y no solo por timestamp absoluto.
+
+**Validacion post-fix:** repetir SQL que detecto el bug — `LAG(created_at) ... WHERE diff_seconds < 300`.
+
+### Fix #2 — "Yo le aviso" no clasificado como SOFT_NO (10 min)
+
+**Bug confirmado:** Tel +504...9562, 14-May 7:41 AM:
+- `user_message` = `"Yo le aviso."`
+- `intent_detected` = `navigation` (debio ser `SOFT_NO`)
+- `state_after` = `main_menu → main_menu` (loop)
+
+Plan Sprint 1 declaraba 8 frases SOFT_NO incluyendo "yo aviso" pero "yo le aviso" (con "le") no fue cubierta.
+
+**Fix:** en `_shared/honduras-intents.ts`, agregar al array SOFT_NO:
+- "yo le aviso"
+- "yo le aviso despues"
+- "yo le confirmo despues"
+- "le aviso luego"
+
+**Test:** agregar caso al `.test.ts` de honduras-intents.
+
+### Fix #3 — Horas HH:MM no aceptadas en booking_select_hour (30 min)
+
+**Bug confirmado:** Jennyfer (Consultorio Familiar, 14-May 15:21):
+```
+Bot: "Horarios disponibles. Escriba el numero"
+Paciente: "11"     → loop (no hay opcion 11)
+Paciente: "8:15"   → loop (bot espera numero del menu)
+Paciente: "2 de las 8:15" → acepta el "2" pero agenda 10:45 AM (no 8:15)
+Paciente: "2" → re-elige el slot correcto
+Paciente: "1" → ✅ confirma
+```
+
+Paciente sufrio 4 min de pelea antes de completar. Sprint 2 (parser fechas completo) resuelve esto, pero un mini-fix vale antes del sabado porque **pacientes esteticos de Mendoza escriben horas literales** ("9 am", "2:30", "10:15").
+
+**Fix:** en `bot-handler/index.ts` `handleBookingSelectHour`, antes del check de numero del menu:
+- Regex: `/^\d{1,2}:\d{2}(\s?(am|pm))?$/i`
+- Si matchea, buscar slot en `options_shown` cuya hora coincida (normalizar "8:15" vs "08:15" vs "8:15 AM")
+- Si encuentra, avanzar a confirm. Si no, responder "Esa hora no esta en los slots disponibles. Elija uno del menu: ..."
+
+**Test:** caso real de Jennyfer + variantes ("8:15", "08:15", "8:15 am", "8:15 AM").
+
+### Roadmap del jueves 15 May tarde / viernes 16 May AM
+
+| Bloque | Item | Tiempo |
+|---|---|---:|
+| Jueves PM | Fix #1 (dedupe) + tests + deploy | 30 min |
+| Jueves PM | Fix #2 (SOFT_NO) + tests + deploy | 20 min |
+| Viernes AM | Fix #3 (horas HH:MM) + tests + deploy | 45 min |
+| Viernes AM | QA en demo bot con frases reales de los 3 bugs | 30 min |
+| Viernes PM | Pre-config Mendoza (servicios + FAQs esteticos) | 1.5h |
+| Sabado 9:30 | Instalacion en sitio | 2h |
+
+### NO arreglar antes del sabado (descartado del barrido)
+
+- **Mensajes sin texto (`media_no_text`):** Sprint 1 SI funciona — 6 casos en 4 dias todos respondidos correctamente con "🤔 Solo veo un audio/imagen/sticker..." Falsa alarma del analisis previo.
+- **Loops post-completed** ("Hola", "Ok" despues que cerro la sesion): edge case conversacional, no critico.
+- **Loops en faq_search** sin respuesta: NO es bug de codigo, es configuracion de FAQs por cliente. Se resuelve en pre-config Mendoza viernes.
+
+### Bugs de observabilidad descubiertos (NO bloqueantes para sabado, ir en backlog)
+
+1. **`appointment_released` no se loguea siempre** — 13 de 47 auto-cancelaciones (27.7%) NO crean event en `message_logs` aunque flag `auto_cancelled=TRUE` si se setea. Reportes que cuentan liberaciones via message_logs subestiman ~28%. Postponer a Sprint 2 o 3.
+
+2. **Recordatorios huerfanos sin `appointment_id`** — 3 de 98 (3%) no graban el FK. Probable race condition. Postponer.
+
+---
 
 ## ✅ HOTFIX SPRINT 1 DEPLOYADO 12 May 17:00 UTC (~11am HN)
 
