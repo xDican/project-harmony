@@ -175,6 +175,8 @@ const SOFT_NO_PHRASES = [
   'por ahora no', 'por el momento no', 'por los momentos no',
   'mas adelante', 'otro dia', 'despues vemos',
   'estamos en contacto', 'hablamos despues', 'en otro momento',
+  // Variantes con "confirmo" detectadas en produccion 14-May 2026
+  'yo le confirmo despues', 'le confirmo despues', 'confirmo despues', 'confirmo luego',
 ];
 
 // CANCEL: cancelar definitivo (raro en Honduras, validar antes de ejecutar)

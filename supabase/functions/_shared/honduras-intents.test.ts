@@ -125,6 +125,16 @@ Deno.test('soft_no: "yo aviso" y variantes', () => {
   expectIntent('por los momentos no', 'soft_no');
 });
 
+Deno.test('soft_no: variantes con "confirmo" (caso 14-May 2026)', () => {
+  expectIntent('yo le confirmo despues', 'soft_no');
+  expectIntent('le confirmo despues', 'soft_no');
+  expectIntent('confirmo despues', 'soft_no');
+  expectIntent('confirmo luego', 'soft_no');
+  // Sanity: variantes con "aviso" que ya matcheaban por substring
+  expectIntent('yo le aviso despues', 'soft_no');
+  expectIntent('le aviso luego', 'soft_no');
+});
+
 // =====================================================================
 // CANCEL intent
 // =====================================================================

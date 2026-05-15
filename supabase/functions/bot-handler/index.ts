@@ -397,7 +397,7 @@ async function handleBotMessage(
       break;
 
     case 'handoff_secretary':
-      response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase, handoffLabels, session.context);
+      response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase, handoffLabels, session.context, session.id);
       break;
 
     default:
@@ -697,7 +697,7 @@ async function handleGreeting(
     };
   }
   if (hnIntent.intent === 'out_of_scope') {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
   // Detect intent in first message before showing generic greeting.
@@ -718,7 +718,7 @@ async function handleGreeting(
     return await startRescheduleFlow(session, organizationId, supabase);
   }
   if (hasHandoff || detectedIntent === 'handoff') {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
   if (detectedIntent === 'faq') {
     // Search FAQ directly with their message instead of showing menu
@@ -820,7 +820,7 @@ async function handleMainMenu(
     }
     if (hnIntent.intent === 'handoff' || hnIntent.intent === 'out_of_scope') {
       session.context.invalidAttempts = 0;
-      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
     }
     if (hnIntent.intent === 'wrong_number' || hnIntent.intent === 'spam_external_bot') {
       return {
@@ -856,7 +856,7 @@ async function handleMainMenu(
   }
 
   if (normalizedInput === '4' || normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.startsWith('hablar con') || normalizedInput.startsWith('ablar con')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
   // Recognize greetings — re-show menu friendly instead of "opcion no valida"
@@ -885,7 +885,7 @@ async function handleMainMenu(
     session.context.invalidAttempts = 0;
     if (detectedIntent === 'booking') return await startBookingFlow(session, organizationId, supabase);
     if (detectedIntent === 'reschedule') return await startRescheduleFlow(session, organizationId, supabase);
-    if (detectedIntent === 'handoff') return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    if (detectedIntent === 'handoff') return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
     if (detectedIntent === 'faq') {
       delete session.context.lastFaqResult;
       delete session.context.faqNotFoundCount;
@@ -911,7 +911,7 @@ async function handleMainMenu(
 
   if (invalidAttempts >= 3) {
     // Auto-handoff after 3 invalid attempts
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
   return {
@@ -983,12 +983,12 @@ async function handleFAQSearch(
       };
     }
     if (normalizedInput === '2' || normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.includes('hablar con') || normalizedInput.includes('ablar con')) {
-      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
     }
   } else if (lastFaqResult === 'not_found_auto') {
     // Options shown: [1: Si conectar, 2: Menu principal]
     if (normalizedInput === '1' || normalizedInput.includes('si') || normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.includes('conectar') || normalizedInput.includes('konectar')) {
-      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+      return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
     }
     if (normalizedInput === '2' || normalizedInput.includes('menu') || normalizedInput.includes('menú') || normalizedInput.includes('volver')) {
       return {
@@ -1033,7 +1033,7 @@ async function handleFAQSearch(
     };
   }
   if (normalizedInput.includes('secretar') || normalizedInput.includes('sekretari') || normalizedInput.includes('hablar con') || normalizedInput.includes('ablar con')) {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
   // Detect intent for other flows before searching FAQ.
@@ -1041,7 +1041,7 @@ async function handleFAQSearch(
   const faqDetectedIntent = detectMenuIntent(normalizedInput);
   if (faqDetectedIntent === 'booking') return await startBookingFlow(session, organizationId, supabase);
   if (faqDetectedIntent === 'reschedule') return await startRescheduleFlow(session, organizationId, supabase);
-  if (faqDetectedIntent === 'handoff') return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+  if (faqDetectedIntent === 'handoff') return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
 
   // Get doctor_id and clinic_id from session context if available
   const doctorId = session.context.doctorId;
@@ -1506,13 +1506,31 @@ function parseTimeHint(input: string): string | null {
     return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
   }
 
-  // "las 3" / "a las 3" / "a las 3:30" (assume PM if hour < 8)
+  // "las 3" / "a las 3" / "a las 3:30" (assume PM if hour < 7 — clinicas no tienen slots de noche)
   const las = n.match(/(?:a\s+)?las\s+(\d{1,2})(?::(\d{2}))?/);
   if (las) {
     let hour = parseInt(las[1]);
     const min = las[2] ? parseInt(las[2]) : 0;
-    if (hour < 8) hour += 12;
+    if (hour < 7) hour += 12;
     return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+  }
+
+  // "8:15" / "08:15" / "14:30" — hora literal sin "las" ni am/pm.
+  // Caso real: Jennyfer (Consultorio Familiar, 14-May 2026) escribio "8:15"
+  // para seleccionar slot literal del menu.
+  // Convencion OrionCare: clinicas NO tienen slots despues de ~18:00.
+  //   1-6 → +12 → 13:00-18:00 (tarde clinica)
+  //   7   → 07:00 (apertura temprana AM)
+  //   8-12 → tal cual (manana / mediodia)
+  //   13-23 → tal cual (formato 24h literal)
+  const hhmm = n.match(/^(\d{1,2}):(\d{2})$/);
+  if (hhmm) {
+    let hour = parseInt(hhmm[1]);
+    const min = parseInt(hhmm[2]);
+    if (hour < 24 && min < 60) {
+      if (hour < 7) hour += 12;
+      return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+    }
   }
 
   return null;
@@ -2353,7 +2371,7 @@ async function handleCancelConfirm(
 
   // Handoff explicito
   if (hnIntent.intent === 'handoff') {
-    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context);
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
   // Invalid input
@@ -2376,10 +2394,36 @@ async function handleHandoffToSecretary(
   organizationId: string,
   supabase: SupabaseClient,
   handoffLabels?: { menuOption: string; connecting: string; emoji: string },
-  sessionContext?: Record<string, any>
+  sessionContext?: Record<string, any>,
+  sessionId?: string,
 ): Promise<BotResponse> {
   const emoji = handoffLabels?.emoji || '\ud83d\udc69\ud83c\udffb\u200d\ud83d\udcbc';
   const connecting = handoffLabels?.connecting || 'la secretaria';
+
+  // Dedupe: si en los ultimos 5min ya hubo handoff_secretary para esta session,
+  // responder al paciente con confirmacion explicita sin volver a notificar al target.
+  // Caso real: Sury (Medilaser, 14-May) escalo 3 veces a Marleny en 2 min.
+  if (sessionId) {
+    const dedupeCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: recentHandoff } = await supabase
+      .from('bot_conversation_logs')
+      .select('id')
+      .eq('session_id', sessionId)
+      .eq('state_after', 'handoff_secretary')
+      .gte('created_at', dedupeCutoff)
+      .limit(1)
+      .maybeSingle();
+
+    if (recentHandoff) {
+      console.log('[bot-handler] Handoff dedup hit, skipping notification. Session:', sessionId);
+      return {
+        message: `\u2705 Su caso ya fue escalado a ${connecting}. Dentro de poco se estara comunicando con usted. Muchas gracias por su paciencia.`,
+        requiresInput: false,
+        nextState: 'handoff_secretary',
+        sessionComplete: true,
+      };
+    }
+  }
 
   // Determine handoff target from whatsapp_line config
   const { data: lineConfig } = await supabase
