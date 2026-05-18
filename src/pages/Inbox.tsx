@@ -1,13 +1,14 @@
 /**
  * Inbox / Bandeja — Centro de atencion WhatsApp.
  *
- * Sprint 3 Fase 1: estructura base + layout responsive.
+ * Sprint 3.
  *
  * Desktop (md+): 2 columnas — lista 384px + detalle flex-1.
  * Mobile: 1 columna — muestra lista o detalle segun seleccion.
  *
+ * Fase 2 ✅ — lista real con filtros + buscador (datos de Supabase).
+ *
  * Fases siguientes:
- *   - Fase 2: lista de conversaciones (datos reales + filtros + buscador)
  *   - Fase 3: detalle conversacion (timeline + composer)
  *   - Fase 4: tomar / devolver al bot
  *   - Fase 5: realtime Supabase channels
@@ -19,17 +20,21 @@ import { useState } from "react";
 import { Inbox as InboxIcon, ChevronLeft } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
 import { Button } from "@/components/ui/button";
+import { InboxList } from "@/components/inbox/InboxList";
+import { useCurrentUser } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
 
 export default function Inbox() {
-  // Conversation seleccionada (state local en Fase 1; en Fase 7 sincronizar con URL).
+  // Conversation seleccionada (state local en Fase 2; en Fase 7 sincronizar con URL).
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+
+  const { user } = useCurrentUser();
+  const organizationId = user?.organizationId;
 
   return (
     <MainLayout mainClassName="overflow-hidden">
       <div className="flex h-full">
         {/* === Columna lista de conversaciones === */}
-        {/* Desktop: w-96 fija. Mobile: full-width si no hay seleccion, oculta si la hay. */}
         <aside
           className={cn(
             "flex flex-col border-r bg-card",
@@ -38,45 +43,19 @@ export default function Inbox() {
               : "flex w-full md:w-96 md:flex-shrink-0",
           )}
         >
-          {/* Header lista (solo desktop — mobile usa el header de MainLayout que ya
-              dice "Bandeja"). En Fase 6 agregar contador unread aqui. */}
+          {/* Header desktop (mobile usa el de MainLayout) */}
           <div className="hidden md:block px-4 py-4 border-b">
             <h2 className="text-2xl font-bold">Bandeja</h2>
           </div>
 
-          {/* Placeholder lista — Fase 2 */}
-          <div className="flex-1 overflow-auto">
-            <div className="p-6 text-center text-muted-foreground text-sm">
-              <p>Lista de conversaciones</p>
-              <p className="text-xs mt-2 opacity-60">Se carga en Fase 2</p>
-
-              {/* Placeholder items para probar layout */}
-              <div className="mt-6 space-y-2 text-left">
-                {[1, 2, 3].map((i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedConvId(`conv-${i}`)}
-                    className={cn(
-                      "w-full px-3 py-3 rounded-lg border text-left hover:bg-accent transition-colors",
-                      selectedConvId === `conv-${i}` &&
-                        "bg-primary/10 border-primary/30",
-                    )}
-                  >
-                    <div className="font-medium text-foreground">
-                      Conversation placeholder #{i}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Click para abrir detalle (mobile: full screen)
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <InboxList
+            organizationId={organizationId}
+            selectedConvId={selectedConvId}
+            onSelect={setSelectedConvId}
+          />
         </aside>
 
         {/* === Columna detalle === */}
-        {/* Desktop: flex-1 siempre. Mobile: full-width solo si hay seleccion. */}
         <section
           className={cn(
             "flex-1 flex-col bg-background min-w-0",
@@ -98,7 +77,7 @@ export default function Inbox() {
                 </Button>
                 <div className="flex-1">
                   <div className="font-semibold">
-                    Conversation {selectedConvId}
+                    Conversation {selectedConvId.slice(0, 8)}…
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Detalle en Fase 3
@@ -126,19 +105,15 @@ export default function Inbox() {
   );
 }
 
-/**
- * Estado vacio en desktop cuando no hay conversacion seleccionada.
- * Mobile nunca renderiza esto (cuando no hay seleccion, ve la lista).
- */
 function EmptyDetailState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
       <InboxIcon className="h-16 w-16 opacity-20 mb-4" />
       <p className="text-lg font-medium text-foreground/60">
-        Selecciona una conversacion
+        Selecciona una conversación
       </p>
       <p className="text-sm mt-1 opacity-60">
-        Las conversaciones de WhatsApp apareceran aqui
+        Las conversaciones de WhatsApp aparecerán aquí
       </p>
     </div>
   );
