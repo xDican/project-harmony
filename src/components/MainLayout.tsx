@@ -9,6 +9,7 @@ import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
 import OrgSwitcher from '@/components/OrgSwitcher';
+import { useInboxUnreadCount } from '@/hooks/useInboxUnreadCount';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -71,6 +72,9 @@ export default function MainLayout({
     setAdminView,
   } = useCurrentUser();
 
+  // Badge global de Bandeja: cuantas conversaciones sin leer
+  const inboxUnread = useInboxUnreadCount(user?.organizationId ?? undefined);
+
   // Keep admin menu open if current route is an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
   const [adminMenuOpen, setAdminMenuOpen] = useState(isAdminRoute);
@@ -95,7 +99,8 @@ export default function MainLayout({
       items.push({
         to: '/inbox',
         label: 'Bandeja',
-        icon: InboxIcon
+        icon: InboxIcon,
+        badge: inboxUnread
       }, {
         to: '/agenda-semanal',
         label: 'Agenda Semanal',
@@ -141,7 +146,8 @@ export default function MainLayout({
       items.push({
         to: '/inbox',
         label: 'Bandeja',
-        icon: InboxIcon
+        icon: InboxIcon,
+        badge: inboxUnread
       }, {
         to: '/agenda-semanal',
         label: 'Agenda Semanal',
@@ -226,7 +232,12 @@ export default function MainLayout({
     return <nav className="flex flex-col gap-2">
         {navigationItems.map(item => <NavLink key={item.to} to={item.to} className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" activeClassName="bg-primary/10 text-primary font-medium" onClick={onClick}>
             <item.icon className="h-5 w-5" />
-            <span>{item.label}</span>
+            <span className="flex-1">{item.label}</span>
+            {'badge' in item && typeof item.badge === 'number' && item.badge > 0 && (
+              <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold inline-flex items-center justify-center">
+                {item.badge > 99 ? '99+' : item.badge}
+              </span>
+            )}
           </NavLink>)}
 
         {/* Admin collapsible menu — hidden when admin-doctor is in Vista Médico */}
