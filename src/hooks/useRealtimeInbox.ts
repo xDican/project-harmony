@@ -75,74 +75,95 @@ export function useRealtimeInbox(
 
     const channelName = `clinic:${organizationId}`;
     let channel: RealtimeChannel | null = null;
+    let cancelled = false;
 
-    channel = supabase
-      .channel(channelName)
-      .on(
-        // @ts-expect-error supabase-js postgres_changes types
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "conversations",
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        (payload: { new: ConversationRowDb }) => {
-          callbacksRef.current.onConversationInserted?.(payload.new);
-        },
-      )
-      .on(
-        // @ts-expect-error supabase-js postgres_changes types
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "conversations",
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        (payload: { new: ConversationRowDb }) => {
-          callbacksRef.current.onConversationUpdated?.(payload.new);
-        },
-      )
-      .on(
-        // @ts-expect-error supabase-js postgres_changes types
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "message_logs",
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        (payload: { new: MessageRowDb }) => {
-          if (payload.new.conversation_id) {
-            callbacksRef.current.onMessageInserted?.(payload.new);
+    // Esperar a que la sesion auth este lista y aplicar el JWT al WS ANTES de
+    // subscribirse. Si el socket arranca con anon, RLS bloquea los eventos.
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (data.session?.access_token) {
+        supabase.realtime.setAuth(data.session.access_token);
+      }
+
+      channel = supabase
+        .channel(channelName)
+        .on(
+          // @ts-expect-error supabase-js postgres_changes types
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "conversations",
+            filter: `organization_id=eq.${organizationId}`,
+          },
+          (payload: { new: ConversationRowDb }) => {
+            console.log("[useRealtimeInbox] conv INSERT", payload.new.id);
+            callbacksRef.current.onConversationInserted?.(payload.new);
+          },
+        )
+        .on(
+          // @ts-expect-error supabase-js postgres_changes types
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "conversations",
+            filter: `organization_id=eq.${organizationId}`,
+          },
+          (payload: { new: ConversationRowDb }) => {
+            console.log("[useRealtimeInbox] conv UPDATE", payload.new.id);
+            callbacksRef.current.onConversationUpdated?.(payload.new);
+          },
+        )
+        .on(
+          // @ts-expect-error supabase-js postgres_changes types
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "message_logs",
+            filter: `organization_id=eq.${organizationId}`,
+          },
+          (payload: { new: MessageRowDb }) => {
+            console.log(
+              "[useRealtimeInbox] msg INSERT",
+              payload.new.id,
+              payload.new.conversation_id,
+              payload.new.source,
+            );
+            if (payload.new.conversation_id) {
+              callbacksRef.current.onMessageInserted?.(payload.new);
+            }
+          },
+        )
+        .on(
+          // @ts-expect-error supabase-js postgres_changes types
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "message_logs",
+            filter: `organization_id=eq.${organizationId}`,
+          },
+          (payload: { new: MessageRowDb }) => {
+            console.log("[useRealtimeInbox] msg UPDATE", payload.new.id);
+            if (payload.new.conversation_id) {
+              callbacksRef.current.onMessageUpdated?.(payload.new);
+            }
+          },
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log(`[useRealtimeInbox] subscribed to ${channelName}`);
+          } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+            console.warn(`[useRealtimeInbox] channel status: ${status}`);
           }
-        },
-      )
-      .on(
-        // @ts-expect-error supabase-js postgres_changes types
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "message_logs",
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        (payload: { new: MessageRowDb }) => {
-          if (payload.new.conversation_id) {
-            callbacksRef.current.onMessageUpdated?.(payload.new);
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log(`[useRealtimeInbox] subscribed to ${channelName}`);
-        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-          console.warn(`[useRealtimeInbox] channel status: ${status}`);
-        }
-      });
+        });
+    })();
 
     return () => {
+      cancelled = true;
       if (channel) {
         supabase.removeChannel(channel);
         console.log(`[useRealtimeInbox] unsubscribed from ${channelName}`);
