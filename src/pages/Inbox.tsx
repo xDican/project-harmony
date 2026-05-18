@@ -79,7 +79,7 @@ export default function Inbox() {
             <ConversationDetail
               conversation={liveSelected}
               onBack={() => setSelectedConv(null)}
-              onMessageSent={refetch}
+              onConversationUpdated={refetch}
             />
           ) : (
             <EmptyDetailState />

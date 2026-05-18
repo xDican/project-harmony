@@ -1,21 +1,38 @@
 /**
  * ConversationDetail — vista de detalle de una conversacion.
  *
- * Sprint 3 Fase 3.
+ * Sprint 3 Fase 4.
  *
- * Layout: header (avatar + nombre + telefono + badge status + botones) +
- * timeline scrolleable de mensajes + composer fijo al pie.
+ * Header: avatar + nombre + telefono + badge status + botones Tomar/Devolver.
+ * Timeline scrolleable con separadores de fecha.
+ * Composer fijo al pie (Fase 3).
  *
- * En Fase 4 se completa: boton Tomar / Devolver al bot con AlertDialog confirm.
- * Hoy ya muestra el badge "BOT ATIENDE" o "TÚ ATENDIENDO" para reflejar el estado.
+ * - "Tomar conversacion" — visible si bot_active. Llama inbox-handoff.
+ * - "Devolver al bot" — visible si human_active. Abre AlertDialog confirm,
+ *   despues llama inbox-return-bot.
+ *
+ * Auto-handoff sigue funcionando: si la asistente escribe sin presionar Tomar,
+ * inbox-send hace el handoff automaticamente (Fase 3 backend).
  */
 
-import { useEffect, useRef } from "react";
-import { Bot, User, ChevronLeft, Loader2, AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, User, ChevronLeft, Loader2, AlertCircle, UserPlus, Undo2 } from "lucide-react";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useConversationMessages } from "@/hooks/useConversationMessages";
+import { takeConversation, returnToBot } from "@/lib/inboxActions";
 import { MessageBubble } from "./MessageBubble";
 import { MessageComposer } from "./MessageComposer";
 import type { ConversationListRow } from "@/hooks/useConversations";
@@ -23,16 +40,15 @@ import { cn } from "@/lib/utils";
 
 interface ConversationDetailProps {
   conversation: ConversationListRow;
-  /** Callback mobile back button (volver a lista) */
   onBack: () => void;
-  /** Callback tras envio exitoso, para que el padre refresque conversations list */
-  onMessageSent?: () => void;
+  /** Callback tras envio o cambio de status, para que el padre refresque la lista */
+  onConversationUpdated?: () => void;
 }
 
 export function ConversationDetail({
   conversation,
   onBack,
-  onMessageSent,
+  onConversationUpdated,
 }: ConversationDetailProps) {
   const { messages, isLoading, error, refetch } = useConversationMessages(
     conversation.id,
@@ -43,7 +59,6 @@ export function ConversationDetail({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    // requestAnimationFrame para esperar al render
     requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
     });
@@ -90,7 +105,13 @@ export function ConversationDetail({
           </div>
         </div>
 
-        {/* Fase 4: botones Tomar / Devolver al bot */}
+        <HandoffControls
+          conversation={conversation}
+          onUpdated={() => {
+            refetch();
+            onConversationUpdated?.();
+          }}
+        />
       </div>
 
       {/* Timeline */}
@@ -131,11 +152,116 @@ export function ConversationDetail({
         conversationStatus={conversation.status}
         onSent={() => {
           refetch();
-          onMessageSent?.();
+          onConversationUpdated?.();
         }}
       />
     </>
   );
+}
+
+/**
+ * Botones Tomar / Devolver al bot segun status.
+ */
+function HandoffControls({
+  conversation,
+  onUpdated,
+}: {
+  conversation: ConversationListRow;
+  onUpdated: () => void;
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleTake = async () => {
+    setIsLoading(true);
+    try {
+      await takeConversation(conversation.id);
+      toast.success("Conversación tomada");
+      onUpdated();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      toast.error("No se pudo tomar la conversación", { description: msg });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReturn = async () => {
+    setIsLoading(true);
+    setConfirmOpen(false);
+    try {
+      await returnToBot(conversation.id);
+      toast.success("Conversación devuelta al bot");
+      onUpdated();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      toast.error("No se pudo devolver al bot", { description: msg });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (conversation.status === "bot_active") {
+    return (
+      <Button
+        size="sm"
+        onClick={handleTake}
+        disabled={isLoading}
+        className="flex-shrink-0 gap-1.5"
+      >
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <UserPlus className="h-4 w-4" />
+        )}
+        <span className="hidden sm:inline">Tomar conversación</span>
+        <span className="sm:hidden">Tomar</span>
+      </Button>
+    );
+  }
+
+  if (conversation.status === "human_active") {
+    return (
+      <>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setConfirmOpen(true)}
+          disabled={isLoading}
+          className="flex-shrink-0 gap-1.5"
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Undo2 className="h-4 w-4" />
+          )}
+          <span className="hidden sm:inline">Devolver al bot</span>
+          <span className="sm:hidden">Devolver</span>
+        </Button>
+
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Devolver al bot?</AlertDialogTitle>
+              <AlertDialogDescription>
+                El bot automático volverá a responder al paciente. Tú dejarás de
+                atender esta conversación, pero puedes retomarla en cualquier
+                momento.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleReturn}>
+                Sí, devolver al bot
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+  }
+
+  return null;
 }
 
 function StatusBadge({ status }: { status: ConversationListRow["status"] }) {
@@ -171,9 +297,6 @@ function StatusBadge({ status }: { status: ConversationListRow["status"] }) {
   return null;
 }
 
-/**
- * Inserta separadores "Hoy", "Ayer", "12 de mayo" entre mensajes de fechas distintas.
- */
 function renderMessagesWithDateSeparators(messages: Parameters<typeof MessageBubble>[0]["message"][]) {
   const result: JSX.Element[] = [];
   let lastDate: string | null = null;
