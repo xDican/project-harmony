@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ default: m.Toaster })));
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
+import { InboxProvider } from "./context/InboxContext";
 import { UserRole } from "./types/user";
 const MainLayout = lazy(() => import("./components/MainLayout"));
 import SuperAdminRoute from "./components/SuperAdminRoute";
@@ -157,6 +158,7 @@ const App = () => {
   return (
   <QueryClientProvider client={queryClient}>
     <UserProvider>
+      <InboxProvider>
         <Suspense fallback={null}><Toaster /></Suspense>
         <Sonner />
         <BrowserRouter>
@@ -364,6 +366,7 @@ const App = () => {
           </Routes>
           </Suspense>
         </BrowserRouter>
+      </InboxProvider>
     </UserProvider>
   </QueryClientProvider>
   );

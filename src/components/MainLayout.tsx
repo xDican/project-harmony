@@ -9,7 +9,7 @@ import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
 import OrgSwitcher from '@/components/OrgSwitcher';
-import { useInboxUnreadCount } from '@/hooks/useInboxUnreadCount';
+import { useInbox } from '@/context/InboxContext';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -72,8 +72,9 @@ export default function MainLayout({
     setAdminView,
   } = useCurrentUser();
 
-  // Badge global de Bandeja: cuantas conversaciones sin leer
-  const inboxUnread = useInboxUnreadCount(user?.organizationId ?? undefined);
+  // Badge global de Bandeja: derivado del InboxContext (misma fuente de
+  // verdad que la lista del inbox — sin lag entre badge y burbuja).
+  const { unreadCount: inboxUnread } = useInbox();
 
   // Keep admin menu open if current route is an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');

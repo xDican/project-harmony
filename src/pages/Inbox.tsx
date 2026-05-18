@@ -21,54 +21,18 @@ import { Inbox as InboxIcon } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
 import { InboxList } from "@/components/inbox/InboxList";
 import { ConversationDetail } from "@/components/inbox/ConversationDetail";
-import {
-  useConversations,
-  type ConversationListRow,
-} from "@/hooks/useConversations";
-import {
-  useRealtimeInbox,
-  playNotificationBeep,
-} from "@/hooks/useRealtimeInbox";
-import { useCurrentUser } from "@/context/UserContext";
+import type { ConversationListRow } from "@/hooks/useConversations";
+import { useInbox } from "@/context/InboxContext";
 import { cn } from "@/lib/utils";
 
 export default function Inbox() {
   const [selectedConv, setSelectedConv] =
     useState<ConversationListRow | null>(null);
 
-  const { user } = useCurrentUser();
-  const organizationId = user?.organizationId;
-
-  // Hook elevado a parent para compartir data con detalle (sin duplicar fetch)
-  const {
-    conversations,
-    isLoading,
-    error,
-    refetch,
-    upsertConversation,
-    applyMessageToConversation,
-  } = useConversations(organizationId);
-
-  // Sprint 3 Fase 5: realtime para que la lista se actualice al instante.
-  // useConversationMessages tiene su propio subscribe para el timeline activo.
-  useRealtimeInbox(organizationId, {
-    onConversationInserted: (row) => {
-      upsertConversation(row);
-    },
-    onConversationUpdated: (row) => {
-      upsertConversation(row);
-    },
-    onMessageInserted: (row) => {
-      applyMessageToConversation(row);
-      if (row.source === "patient") {
-        playNotificationBeep();
-      }
-    },
-    onMessageUpdated: (row) => {
-      // Si llego transcripcion despues, refrescar preview
-      applyMessageToConversation(row);
-    },
-  });
+  // Fuente unica del state del inbox: el InboxContext (montado en App.tsx).
+  // Asi el badge del sidebar y la lista de aqui derivan del MISMO state —
+  // se actualizan exactamente a la vez al recibir un evento realtime.
+  const { conversations, isLoading, error, refetch } = useInbox();
 
   // Cuando se actualiza la lista, refrescar selectedConv con la version mas reciente
   const liveSelected = selectedConv
