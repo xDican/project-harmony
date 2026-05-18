@@ -117,7 +117,7 @@ export function ConversationDetail({
       {/* Timeline */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-3 md:px-6 py-4 bg-muted/20"
+        className="flex-1 min-h-0 overflow-y-auto px-3 md:px-6 py-4 bg-muted/20"
       >
         {isLoading && messages.length === 0 && (
           <div className="flex items-center justify-center h-full text-muted-foreground">

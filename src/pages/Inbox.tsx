@@ -45,11 +45,11 @@ export default function Inbox() {
 
   return (
     <MainLayout mainClassName="overflow-hidden">
-      <div className="flex h-full">
+      <div className="flex h-full min-h-0">
         {/* === Columna lista de conversaciones === */}
         <aside
           className={cn(
-            "flex flex-col border-r bg-card",
+            "flex flex-col border-r bg-card min-h-0",
             liveSelected
               ? "hidden md:flex md:w-96 md:flex-shrink-0"
               : "flex w-full md:w-96 md:flex-shrink-0",
@@ -71,7 +71,7 @@ export default function Inbox() {
         {/* === Columna detalle === */}
         <section
           className={cn(
-            "flex-1 flex-col bg-background min-w-0",
+            "flex-1 flex-col bg-background min-w-0 min-h-0",
             liveSelected ? "flex" : "hidden md:flex",
           )}
         >
