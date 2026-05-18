@@ -48,13 +48,19 @@ export function ConversationListItem({
   const isUnread = unread_count > 0;
   const isHumanActive = status === "human_active";
 
+  const ariaLabel = isUnread
+    ? `${displayName}, ${unread_count} ${unread_count === 1 ? "mensaje sin leer" : "mensajes sin leer"}`
+    : displayName;
+
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={ariaLabel}
+      aria-current={isSelected ? "true" : undefined}
       className={cn(
         "w-full text-left px-4 py-3 border-b transition-colors flex gap-3 items-start relative",
-        "hover:bg-accent/50",
+        "hover:bg-accent/50 focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         isSelected && "bg-primary/10",
       )}
     >

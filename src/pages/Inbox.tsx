@@ -97,6 +97,7 @@ export default function Inbox() {
             error={error}
             selectedConvId={liveSelected?.id ?? null}
             onSelect={setSelectedConv}
+            onRetry={refetch}
           />
         </aside>
 

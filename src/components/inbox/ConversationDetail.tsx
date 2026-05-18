@@ -16,11 +16,12 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, User, ChevronLeft, Loader2, AlertCircle, UserPlus, Undo2 } from "lucide-react";
+import { Bot, User, ChevronLeft, Loader2, AlertCircle, UserPlus, Undo2, RefreshCw, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,23 +120,36 @@ export function ConversationDetail({
         ref={scrollContainerRef}
         className="flex-1 min-h-0 overflow-y-auto px-3 md:px-6 py-4 bg-muted/20"
       >
-        {isLoading && messages.length === 0 && (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        )}
+        {isLoading && messages.length === 0 && <TimelineSkeleton />}
 
         {error && (
-          <div className="flex flex-col items-center justify-center h-full text-destructive gap-2">
-            <AlertCircle className="h-8 w-8" />
+          <div className="flex flex-col items-center justify-center h-full text-destructive gap-3 px-4 text-center">
+            <AlertCircle className="h-8 w-8" aria-hidden="true" />
             <p className="text-sm">No se pudieron cargar los mensajes</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
+            <p className="text-xs text-muted-foreground break-words max-w-xs">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refetch}
+              className="gap-1.5"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              Reintentar
+            </Button>
           </div>
         )}
 
         {!isLoading && !error && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
-            <p className="text-sm">No hay mensajes en esta conversación</p>
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-8 px-4 text-center">
+            <MessageSquare className="h-12 w-12 opacity-30" aria-hidden="true" />
+            <p className="text-sm font-medium text-foreground/70">
+              Sin mensajes todavía
+            </p>
+            <p className="text-xs max-w-xs">
+              {conversation.status === "human_active"
+                ? "Escribe el primer mensaje al paciente abajo."
+                : "Cuando el paciente escriba, los mensajes aparecerán aquí."}
+            </p>
           </div>
         )}
 
@@ -349,4 +363,28 @@ function getInitials(name: string): string {
   if (parts.length === 0) return "??";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Skeleton de burbujas alternadas (inbound/outbound) mientras carga el timeline.
+ * Hace el loading menos jarring que un spinner centrado.
+ */
+function TimelineSkeleton() {
+  const widths = ["w-48", "w-64", "w-32", "w-56", "w-40"];
+  return (
+    <div
+      className="space-y-3 px-1"
+      role="status"
+      aria-label="Cargando mensajes"
+    >
+      {widths.map((w, i) => (
+        <div
+          key={i}
+          className={cn("flex", i % 2 === 0 ? "justify-start" : "justify-end")}
+        >
+          <Skeleton className={cn("h-12 rounded-2xl", w)} />
+        </div>
+      ))}
+    </div>
+  );
 }

@@ -7,7 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Inbox as InboxIcon, Loader2, AlertCircle } from "lucide-react";
+import { Inbox as InboxIcon, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import {
   filterConversations,
   type ConversationListRow,
@@ -16,6 +16,7 @@ import {
 import { ConversationListItem } from "./ConversationListItem";
 import { InboxFilters } from "./InboxFilters";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface InboxListProps {
   conversations: ConversationListRow[];
@@ -23,6 +24,7 @@ interface InboxListProps {
   error: string | null;
   selectedConvId: string | null;
   onSelect: (conversation: ConversationListRow) => void;
+  onRetry?: () => void;
 }
 
 export function InboxList({
@@ -31,6 +33,7 @@ export function InboxList({
   error,
   selectedConvId,
   onSelect,
+  onRetry,
 }: InboxListProps) {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -54,10 +57,21 @@ export function InboxList({
         {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
         {error && (
-          <div className="p-6 text-center text-destructive flex flex-col items-center gap-2">
-            <AlertCircle className="h-8 w-8" />
+          <div className="p-6 text-center text-destructive flex flex-col items-center gap-3">
+            <AlertCircle className="h-8 w-8" aria-hidden="true" />
             <p className="text-sm">No se pudieron cargar las conversaciones</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
+            <p className="text-xs text-muted-foreground break-words max-w-xs">{error}</p>
+            {onRetry && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRetry}
+                className="gap-1.5"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                Reintentar
+              </Button>
+            )}
           </div>
         )}
 
@@ -69,7 +83,7 @@ export function InboxList({
         )}
 
         {filtered.length > 0 && (
-          <ul className="divide-y">
+          <ul className="divide-y" aria-label="Lista de conversaciones">
             {filtered.map((conv) => (
               <li key={conv.id}>
                 <ConversationListItem
