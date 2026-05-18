@@ -61,14 +61,17 @@ Deno.serve(async (req) => {
     if (!authHeader.startsWith("Bearer ")) {
       return jsonResponse(401, { ok: false, error: "Unauthorized" });
     }
+    const jwt = authHeader.replace("Bearer ", "");
 
     // Cliente con JWT del usuario — RLS scopa a sus orgs
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    // Pasar el JWT explicitamente a getUser() — sin args usa session interna que no existe.
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
     if (authErr || !user) {
+      console.error("[inbox-send] getUser failed:", authErr?.message);
       return jsonResponse(401, { ok: false, error: "Invalid token" });
     }
 
