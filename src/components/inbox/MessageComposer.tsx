@@ -126,11 +126,7 @@ export function MessageComposer({
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              showHandoffHint
-                ? "Escribir mensaje (tomarás la conversación)..."
-                : "Escribir mensaje..."
-            }
+            placeholder="Escribir mensaje..."
             rows={1}
             className={cn(
               "resize-none min-h-10 max-h-32 py-2.5",
