@@ -38,13 +38,10 @@ export default function Inbox() {
               : "flex w-full md:w-96 md:flex-shrink-0",
           )}
         >
-          {/* Header lista */}
-          <div className="px-4 py-4 border-b">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold">Bandeja</h2>
-              {/* Fase 6: badge dinamico con unread count */}
-              <span className="text-sm text-muted-foreground">— sin leer</span>
-            </div>
+          {/* Header lista (solo desktop — mobile usa el header de MainLayout que ya
+              dice "Bandeja"). En Fase 6 agregar contador unread aqui. */}
+          <div className="hidden md:block px-4 py-4 border-b">
+            <h2 className="text-2xl font-bold">Bandeja</h2>
           </div>
 
           {/* Placeholder lista — Fase 2 */}
