@@ -42,6 +42,7 @@ const CalendarsList = lazy(() => import("./pages/CalendarsList"));
 const CalendarSchedulePage = lazy(() => import("./pages/CalendarSchedulePage"));
 const WhatsAppLinesList = lazy(() => import("./pages/WhatsAppLinesList"));
 const BotFAQsPage = lazy(() => import("./pages/BotFAQsPage"));
+const Inbox = lazy(() => import("./pages/Inbox"));
 const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
 const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
 const StepDoctor = lazy(() => import("./pages/onboarding/StepDoctor"));
@@ -189,6 +190,11 @@ const App = () => {
             <Route path="/pacientes" element={
               <RoleBasedRoute allowedRoles={['admin', 'secretary', 'doctor']}>
                 <Pacientes />
+              </RoleBasedRoute>
+            } />
+            <Route path="/inbox" element={
+              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+                <Inbox />
               </RoleBasedRoute>
             } />
             <Route path="/pacientes/:id" element={

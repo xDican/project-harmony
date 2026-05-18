@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
@@ -25,7 +25,8 @@ const routeTitles: Record<string, string> = {
   '/admin/calendars': 'Calendarios',
   '/admin/whatsapp-lines': 'WhatsApp Lines',
   '/admin/bot-faqs': 'Bot FAQs',
-  '/admin/reports/appointments': 'Reporte de Citas'
+  '/admin/reports/appointments': 'Reporte de Citas',
+  '/inbox': 'Bandeja'
 };
 const getPageTitle = (pathname: string): string => {
   // Exact match first
@@ -92,6 +93,10 @@ export default function MainLayout({
     // Secretary
     if (isSecretary) {
       items.push({
+        to: '/inbox',
+        label: 'Bandeja',
+        icon: InboxIcon
+      }, {
         to: '/agenda-semanal',
         label: 'Agenda Semanal',
         icon: CalendarDays
@@ -131,9 +136,13 @@ export default function MainLayout({
       });
     }
 
-    // Admin (not in doctor view): Agenda Semanal primero, Agenda de Hoy, Nueva Cita, Pacientes
+    // Admin (not in doctor view): Bandeja, Agenda Semanal primero, Agenda de Hoy, Nueva Cita, Pacientes
     if (isAdmin && !(isAdminDoctor && adminView === 'doctor')) {
       items.push({
+        to: '/inbox',
+        label: 'Bandeja',
+        icon: InboxIcon
+      }, {
         to: '/agenda-semanal',
         label: 'Agenda Semanal',
         icon: CalendarDays
