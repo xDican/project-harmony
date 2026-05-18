@@ -25,6 +25,7 @@ import {
   useConversations,
   type ConversationListRow,
 } from "@/hooks/useConversations";
+import { useConversationMessages } from "@/hooks/useConversationMessages";
 import {
   useRealtimeInbox,
   playNotificationBeep,
@@ -49,8 +50,18 @@ export default function Inbox() {
     applyMessageToConversation,
   } = useConversations(organizationId);
 
-  // Sprint 3 Fase 5: realtime para que la lista se actualice al instante.
-  // useConversationMessages tiene su propio subscribe para el timeline activo.
+  // Cuando se actualiza la lista, refrescar selectedConv con la version mas reciente
+  const liveSelected = selectedConv
+    ? conversations.find((c) => c.id === selectedConv.id) ?? selectedConv
+    : null;
+
+  // Hook de mensajes tambien al padre — asi el realtime channel del org puede
+  // propagar inserts al timeline activo sin re-suscribirse al cambiar de conv.
+  const messagesHook = useConversationMessages(liveSelected?.id ?? null);
+
+  // Sprint 3 Fase 5: realtime UNIFICADO en un solo channel a nivel org.
+  // No hay channel adicional por conv — los inserts/updates se propagan al
+  // timeline activo via messagesHook.insertRealtimeMessage / updateRealtimeMessage.
   useRealtimeInbox(organizationId, {
     onConversationInserted: (row) => {
       upsertConversation(row);
@@ -63,17 +74,19 @@ export default function Inbox() {
       if (row.source === "patient") {
         playNotificationBeep();
       }
+      // Si la conv del mensaje es la abierta, agregar al timeline
+      if (row.conversation_id && row.conversation_id === liveSelected?.id) {
+        messagesHook.insertRealtimeMessage(row);
+      }
     },
     onMessageUpdated: (row) => {
-      // Si llego transcripcion despues, refrescar preview
+      // Si llego transcripcion despues, refrescar preview de la lista
       applyMessageToConversation(row);
+      if (row.conversation_id && row.conversation_id === liveSelected?.id) {
+        messagesHook.updateRealtimeMessage(row);
+      }
     },
   });
-
-  // Cuando se actualiza la lista, refrescar selectedConv con la version mas reciente
-  const liveSelected = selectedConv
-    ? conversations.find((c) => c.id === selectedConv.id) ?? selectedConv
-    : null;
 
   return (
     <MainLayout mainClassName="overflow-hidden">
@@ -110,6 +123,10 @@ export default function Inbox() {
           {liveSelected ? (
             <ConversationDetail
               conversation={liveSelected}
+              messages={messagesHook.messages}
+              isLoadingMessages={messagesHook.isLoading}
+              messagesError={messagesHook.error}
+              refetchMessages={messagesHook.refetch}
               onBack={() => setSelectedConv(null)}
               onConversationUpdated={refetch}
             />

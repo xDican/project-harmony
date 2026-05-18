@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useConversationMessages } from "@/hooks/useConversationMessages";
+import type { MessageRow } from "@/hooks/useConversationMessages";
 import { takeConversation, returnToBot } from "@/lib/inboxActions";
 import { MessageBubble } from "./MessageBubble";
 import { MessageComposer } from "./MessageComposer";
@@ -40,6 +40,11 @@ import { cn } from "@/lib/utils";
 
 interface ConversationDetailProps {
   conversation: ConversationListRow;
+  // Mensajes del hook elevado a parent — comparte estado con el realtime central
+  messages: MessageRow[];
+  isLoadingMessages: boolean;
+  messagesError: string | null;
+  refetchMessages: () => void;
   onBack: () => void;
   /** Callback tras envio o cambio de status, para que el padre refresque la lista */
   onConversationUpdated?: () => void;
@@ -47,12 +52,13 @@ interface ConversationDetailProps {
 
 export function ConversationDetail({
   conversation,
+  messages,
+  isLoadingMessages: isLoading,
+  messagesError: error,
+  refetchMessages: refetch,
   onBack,
   onConversationUpdated,
 }: ConversationDetailProps) {
-  const { messages, isLoading, error, refetch } = useConversationMessages(
-    conversation.id,
-  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll al ultimo mensaje al cargar / cuando llega nuevo

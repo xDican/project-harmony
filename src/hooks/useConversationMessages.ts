@@ -13,8 +13,7 @@
  * recibir respuesta del servidor).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface MessageRow {
@@ -109,59 +108,10 @@ export function useConversationMessages(conversationId: string | null) {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchMessages]);
 
-  // Realtime: subscribe a inserts/updates de mensajes de esta conv
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const channel = supabase
-      .channel(`messages:${conversationId}`)
-      .on(
-        // @ts-expect-error supabase-js postgres_changes types
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "message_logs",
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload: { new: MessageRow }) => {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
-          });
-        },
-      )
-      .on(
-        // @ts-expect-error supabase-js postgres_changes types
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "message_logs",
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload: { new: MessageRow }) => {
-          setMessages((prev) => {
-            const idx = prev.findIndex((m) => m.id === payload.new.id);
-            if (idx === -1) return prev;
-            const next = [...prev];
-            next[idx] = payload.new;
-            return next;
-          });
-        },
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-    };
-  }, [conversationId]);
+  // NOTA: el realtime se maneja a nivel org (useRealtimeInbox en Inbox.tsx)
+  // que llama insertRealtimeMessage/updateRealtimeMessage cuando llega evento
+  // a este conversationId. Asi hay UN solo channel, sin race conditions de
+  // re-suscripcion al cambiar de conv.
 
   /**
    * Agrega un mensaje optimisticamente al timeline. Despues del servidor,
