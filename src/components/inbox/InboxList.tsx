@@ -1,30 +1,37 @@
 /**
  * InboxList — columna lista del inbox.
  *
- * Sprint 3 Fase 2.
- *
- * Junta: hook useConversations + InboxFilters + items + estados (loading, empty, error).
+ * Sprint 3 Fase 3 (refactor): recibe conversations como prop. El parent
+ * (Inbox.tsx) maneja el hook useConversations para compartir data con
+ * ConversationDetail sin duplicar fetch.
  */
 
 import { useMemo, useState } from "react";
 import { Inbox as InboxIcon, Loader2, AlertCircle } from "lucide-react";
-import { useConversations, filterConversations, type InboxFilter } from "@/hooks/useConversations";
+import {
+  filterConversations,
+  type ConversationListRow,
+  type InboxFilter,
+} from "@/hooks/useConversations";
 import { ConversationListItem } from "./ConversationListItem";
 import { InboxFilters } from "./InboxFilters";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface InboxListProps {
-  organizationId: string | undefined;
+  conversations: ConversationListRow[];
+  isLoading: boolean;
+  error: string | null;
   selectedConvId: string | null;
-  onSelect: (conversationId: string) => void;
+  onSelect: (conversation: ConversationListRow) => void;
 }
 
 export function InboxList({
-  organizationId,
+  conversations,
+  isLoading,
+  error,
   selectedConvId,
   onSelect,
 }: InboxListProps) {
-  const { conversations, isLoading, error } = useConversations(organizationId);
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -43,7 +50,7 @@ export function InboxList({
         onSearchChange={setSearchQuery}
       />
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto relative">
         {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
         {error && (
@@ -68,16 +75,16 @@ export function InboxList({
                 <ConversationListItem
                   conversation={conv}
                   isSelected={selectedConvId === conv.id}
-                  onClick={() => onSelect(conv.id)}
+                  onClick={() => onSelect(conv)}
                 />
               </li>
             ))}
           </ul>
         )}
 
-        {/* Indicador de refresh on top si esta cargando con datos previos */}
+        {/* Indicador refresh on top si esta cargando con datos previos */}
         {isLoading && conversations.length > 0 && (
-          <div className="absolute top-32 right-4 z-10">
+          <div className="absolute top-2 right-2 z-10">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         )}

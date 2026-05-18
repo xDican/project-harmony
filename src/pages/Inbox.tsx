@@ -6,10 +6,10 @@
  * Desktop (md+): 2 columnas — lista 384px + detalle flex-1.
  * Mobile: 1 columna — muestra lista o detalle segun seleccion.
  *
- * Fase 2 ✅ — lista real con filtros + buscador (datos de Supabase).
+ * Fase 2 ✅ — lista real con filtros + buscador
+ * Fase 3 ✅ — detalle con timeline + audio player + composer
  *
  * Fases siguientes:
- *   - Fase 3: detalle conversacion (timeline + composer)
  *   - Fase 4: tomar / devolver al bot
  *   - Fase 5: realtime Supabase channels
  *   - Fase 6: marcar leido + badge global
@@ -17,19 +17,31 @@
  */
 
 import { useState } from "react";
-import { Inbox as InboxIcon, ChevronLeft } from "lucide-react";
+import { Inbox as InboxIcon } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
-import { Button } from "@/components/ui/button";
 import { InboxList } from "@/components/inbox/InboxList";
+import { ConversationDetail } from "@/components/inbox/ConversationDetail";
+import {
+  useConversations,
+  type ConversationListRow,
+} from "@/hooks/useConversations";
 import { useCurrentUser } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
 
 export default function Inbox() {
-  // Conversation seleccionada (state local en Fase 2; en Fase 7 sincronizar con URL).
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [selectedConv, setSelectedConv] =
+    useState<ConversationListRow | null>(null);
 
   const { user } = useCurrentUser();
   const organizationId = user?.organizationId;
+
+  // Hook elevado a parent para compartir data con detalle (sin duplicar fetch)
+  const { conversations, isLoading, error, refetch } = useConversations(organizationId);
+
+  // Cuando se actualiza la lista, refrescar selectedConv con la version mas reciente
+  const liveSelected = selectedConv
+    ? conversations.find((c) => c.id === selectedConv.id) ?? selectedConv
+    : null;
 
   return (
     <MainLayout mainClassName="overflow-hidden">
@@ -38,20 +50,21 @@ export default function Inbox() {
         <aside
           className={cn(
             "flex flex-col border-r bg-card",
-            selectedConvId
+            liveSelected
               ? "hidden md:flex md:w-96 md:flex-shrink-0"
               : "flex w-full md:w-96 md:flex-shrink-0",
           )}
         >
-          {/* Header desktop (mobile usa el de MainLayout) */}
           <div className="hidden md:block px-4 py-4 border-b">
             <h2 className="text-2xl font-bold">Bandeja</h2>
           </div>
 
           <InboxList
-            organizationId={organizationId}
-            selectedConvId={selectedConvId}
-            onSelect={setSelectedConvId}
+            conversations={conversations}
+            isLoading={isLoading}
+            error={error}
+            selectedConvId={liveSelected?.id ?? null}
+            onSelect={setSelectedConv}
           />
         </aside>
 
@@ -59,43 +72,15 @@ export default function Inbox() {
         <section
           className={cn(
             "flex-1 flex-col bg-background min-w-0",
-            selectedConvId ? "flex" : "hidden md:flex",
+            liveSelected ? "flex" : "hidden md:flex",
           )}
         >
-          {selectedConvId ? (
-            <>
-              {/* Header detalle (mobile incluye back, desktop no) */}
-              <div className="px-4 py-3 border-b flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden"
-                  onClick={() => setSelectedConvId(null)}
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                  <span className="sr-only">Volver</span>
-                </Button>
-                <div className="flex-1">
-                  <div className="font-semibold">
-                    Conversation {selectedConvId.slice(0, 8)}…
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Detalle en Fase 3
-                  </div>
-                </div>
-              </div>
-
-              {/* Placeholder timeline */}
-              <div className="flex-1 overflow-auto p-6 text-center text-muted-foreground text-sm">
-                <p>Timeline de mensajes</p>
-                <p className="text-xs mt-2 opacity-60">Se carga en Fase 3</p>
-              </div>
-
-              {/* Placeholder composer */}
-              <div className="border-t p-4 text-center text-muted-foreground text-sm">
-                <p className="text-xs opacity-60">Composer en Fase 3</p>
-              </div>
-            </>
+          {liveSelected ? (
+            <ConversationDetail
+              conversation={liveSelected}
+              onBack={() => setSelectedConv(null)}
+              onMessageSent={refetch}
+            />
           ) : (
             <EmptyDetailState />
           )}
