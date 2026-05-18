@@ -18,7 +18,7 @@ export interface SendMessageRequest {
   /** E.164 phone: +504XXXXXXXX */
   to: string;
   /** Message format */
-  type: "template" | "text";
+  type: "template" | "text" | "media";
   /** Meta template name (resolved by gateway from template_mappings) */
   templateName?: string;
   /** Template language code. Default: "es" */
@@ -39,6 +39,13 @@ export interface SendMessageRequest {
   appointmentId?: string;
   patientId?: string;
   doctorId?: string;
+  /**
+   * Sprint 2: Outbound multimedia. Cuando `type='media'`, gateway/provider envia
+   * el archivo precargado en Meta como `image|audio|document`. El `body` opcional
+   * se usa como caption (solo para image/document).
+   */
+  mediaId?: string;
+  mediaKind?: "image" | "audio" | "document";
 }
 
 /** Provider-agnostic response from sending a message */

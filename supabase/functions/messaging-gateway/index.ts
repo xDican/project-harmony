@@ -27,6 +27,11 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders, handleCors, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
 import { logMessage } from "../_shared/message-logger.ts";
+import {
+  persistOutboundMessage,
+  type MessageType,
+} from "../_shared/inbox-messages.ts";
+import { updateConversationOnOutbound } from "../_shared/conversations.ts";
 import type {
   MessagingProvider,
   SendMessageRequest,
@@ -69,6 +74,21 @@ const GatewayRequestSchema = z.object({
   patientId: z.string().uuid().optional(),
   doctorId: z.string().uuid().optional(),
   organizationId: z.string().uuid().optional(),
+  // Sprint 1 Fase 2: campos opcionales del inbox. Si presentes, escribimos
+  // message_logs con conversation_id/source/sent_by/message_type y refrescamos
+  // la conversation. Si NO presentes, mantenemos el path legacy (logMessage).
+  conversationId: z.string().uuid().optional(),
+  source: z.enum(["bot", "assistant", "template"]).optional(),
+  sentBy: z.string().uuid().optional(),
+  messageType: z.enum(["text", "audio", "image", "document", "voice_call", "system"]).optional(),
+  // Sprint 2: outbound multimedia. Si mediaId presente, gateway delega al provider
+  // como type='media' con kind=image|audio|document. body queda como caption.
+  // mediaUrl es el path en Storage que se persiste en message_logs (para futura
+  // descarga). mediaMime para almacenar el MIME real.
+  mediaId: z.string().optional(),
+  mediaKind: z.enum(["image", "audio", "document"]).optional(),
+  mediaUrl: z.string().optional(),
+  mediaMime: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -233,7 +253,19 @@ Deno.serve(async (req) => {
       patientId,
       doctorId,
       organizationId,
+      conversationId,
+      source,
+      sentBy,
+      messageType,
+      mediaId,
+      mediaKind,
+      mediaUrl,
+      mediaMime,
     } = parsed.data;
+    const hasMedia = !!(mediaId && mediaKind);
+
+    // Inbox-linked si caller envia source + conversationId.
+    const linkToConversation = !!(source && conversationId);
 
     const normalizedTo = normalizeToE164(to);
     console.log("[messaging-gateway] Request:", { to: normalizedTo, type, hasBody: !!body, organizationId });
@@ -318,8 +350,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6) Validate we have template or body
-    if (!resolvedTemplateName && !body) {
+    // 6) Validate we have template, body or media
+    if (!resolvedTemplateName && !body && !hasMedia) {
       // Check if there's a PENDING mapping (template awaiting Meta approval)
       if (type && type !== "generic") {
         const { data: pendingMapping } = await supabase
@@ -362,7 +394,7 @@ Deno.serve(async (req) => {
 
     const sendRequest: SendMessageRequest = {
       to: normalizedTo,
-      type: resolvedTemplateName ? "template" : "text",
+      type: hasMedia ? "media" : (resolvedTemplateName ? "template" : "text"),
       templateName: resolvedTemplateName,
       templateLanguage,
       templateParams,
@@ -372,6 +404,7 @@ Deno.serve(async (req) => {
       appointmentId,
       patientId,
       doctorId,
+      ...(hasMedia ? { mediaId, mediaKind } : {}),
     };
 
     // 8) Send message
@@ -384,25 +417,76 @@ Deno.serve(async (req) => {
     });
 
     // 9) Log message
-    await logMessage(supabase, {
-      direction: "outbound",
-      toPhone: normalizedTo,
-      fromPhone: line.phone_number,
-      body: body ?? (resolvedTemplateName ? `template:${resolvedTemplateName}` : undefined),
-      templateName: resolvedTemplateName,
-      type,
-      status: result.status,
-      provider: result.provider,
-      providerMessageId: result.providerMessageId,
-      appointmentId,
-      patientId,
-      doctorId,
-      organizationId: line.organization_id ?? undefined,
-      whatsappLineId: line.id,
-      rawPayload: result,
-      errorCode: result.errorCode,
-      errorMessage: result.error,
-    });
+    // Sprint 1 Fase 2: si caller envio source+conversationId, persistimos con
+    // los campos del inbox (conversation_id, source, sent_by, message_type) y
+    // refrescamos last_message_at de la conversation. Si no, path legacy.
+    if (linkToConversation && conversationId && source) {
+      const orgIdForLog = organizationId || line.organization_id || undefined;
+      if (!orgIdForLog) {
+        console.warn("[messaging-gateway] linkToConversation sin organizationId — degradando a logMessage");
+        await logMessage(supabase, {
+          direction: "outbound",
+          toPhone: normalizedTo,
+          fromPhone: line.phone_number,
+          body: body ?? (resolvedTemplateName ? `template:${resolvedTemplateName}` : undefined),
+          templateName: resolvedTemplateName,
+          type,
+          status: result.status,
+          provider: result.provider,
+          providerMessageId: result.providerMessageId,
+          appointmentId,
+          patientId,
+          doctorId,
+          whatsappLineId: line.id,
+          rawPayload: result,
+          errorCode: result.errorCode,
+          errorMessage: result.error,
+        });
+      } else {
+        await persistOutboundMessage(supabase, {
+          conversationId,
+          organizationId: orgIdForLog,
+          whatsappLineId: line.id,
+          toPhone: normalizedTo,
+          fromPhone: line.phone_number,
+          body: body ?? (resolvedTemplateName ? `template:${resolvedTemplateName}` : null),
+          source, // ya validado por zod a "bot" | "assistant" | "template"
+          messageType: (messageType ?? "text") as MessageType,
+          sentBy: sentBy ?? null,
+          status: result.ok ? (result.status as "queued" | "sent" | "delivered" | "read" | "failed") : "failed",
+          providerMessageId: result.providerMessageId ?? null,
+          rawPayload: result,
+          // Sprint 2: para outbound multimedia, persistir path Storage + mime
+          mediaUrl: mediaUrl ?? null,
+          mediaMime: mediaMime ?? null,
+        });
+
+        if (result.ok) {
+          await updateConversationOnOutbound(supabase, conversationId);
+        }
+      }
+    } else {
+      // Path legacy: recordatorios, templates patient_*, handoff notifications, etc.
+      await logMessage(supabase, {
+        direction: "outbound",
+        toPhone: normalizedTo,
+        fromPhone: line.phone_number,
+        body: body ?? (resolvedTemplateName ? `template:${resolvedTemplateName}` : undefined),
+        templateName: resolvedTemplateName,
+        type,
+        status: result.status,
+        provider: result.provider,
+        providerMessageId: result.providerMessageId,
+        appointmentId,
+        patientId,
+        doctorId,
+        organizationId: line.organization_id ?? undefined,
+        whatsappLineId: line.id,
+        rawPayload: result,
+        errorCode: result.errorCode,
+        errorMessage: result.error,
+      });
+    }
 
     // 10) Return response
     if (result.ok) {

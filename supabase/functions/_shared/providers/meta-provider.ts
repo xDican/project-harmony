@@ -34,6 +34,8 @@ export class MetaProvider implements MessagingProvider {
 
     if (request.type === "template" && request.templateName) {
       payload = this.buildTemplatePayload(request);
+    } else if (request.type === "media" && request.mediaId && request.mediaKind) {
+      payload = this.buildMediaPayload(request);
     } else {
       payload = this.buildTextPayload(request);
     }
@@ -128,6 +130,29 @@ export class MetaProvider implements MessagingProvider {
       to: toMetaFormat(request.to),
       type: "text",
       text: { body: request.body || "" },
+    };
+  }
+
+  /**
+   * Sprint 2: payload para enviar multimedia precargada en Meta.
+   * Soporta image, audio, document. El body (si presente) se usa como caption
+   * para image/document. Para audio Meta no soporta caption.
+   */
+  private buildMediaPayload(
+    request: SendMessageRequest,
+  ): Record<string, unknown> {
+    const kind = request.mediaKind!;
+    const mediaObject: Record<string, unknown> = { id: request.mediaId };
+    if (request.body && kind !== "audio") {
+      mediaObject.caption = request.body;
+    }
+
+    return {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: toMetaFormat(request.to),
+      type: kind,
+      [kind]: mediaObject,
     };
   }
 }

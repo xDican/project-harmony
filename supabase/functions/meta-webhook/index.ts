@@ -18,6 +18,14 @@ import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { normalizeToE164 } from "../_shared/phone.ts";
 import { logMessage } from "../_shared/message-logger.ts";
 import { formatTimeForTemplate } from "../_shared/datetime.ts";
+import {
+  getOrCreateConversation,
+  updateConversationOnInbound,
+} from "../_shared/conversations.ts";
+import {
+  persistInboundMessage,
+  extractMediaFromMetaMessage,
+} from "../_shared/inbox-messages.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -66,6 +74,11 @@ interface MetaMessage {
     button_reply?: { id: string; title: string };
     list_reply?: { id: string; title: string; description?: string };
   };
+  // Multimedia (Sprint 1) — preservamos en message_logs.media_url/mime
+  image?: { id: string; mime_type?: string; caption?: string };
+  audio?: { id: string; mime_type?: string; voice?: boolean };
+  document?: { id: string; mime_type?: string; filename?: string; caption?: string };
+  video?: { id: string; mime_type?: string; caption?: string };
 }
 
 interface MetaStatus {
@@ -218,7 +231,11 @@ async function handleIncomingMessage(
     if (intent === "confirm" && appointmentIdFromPayload) {
       // Confirmar → fall through to legacy flow below
     } else {
-      // Everything else → bot (includes Reagendar with appointmentId, free text, etc.)
+      // Sprint 1: Conversation tracking + bot dual mode
+      // Detect multimedia (image/audio/document) — Sprint 2 hara transcripcion + storage download.
+      const media = extractMediaFromMetaMessage(message);
+      const effectiveBody = body || media.caption || null;
+
       let patientIdForLog: string | undefined;
       if (fromPhone) {
         const { data: p } = await supabase
@@ -230,24 +247,96 @@ async function handleIncomingMessage(
         patientIdForLog = p?.id;
       }
 
-      // Log inbound message
-      await logMessage(supabase, {
-        direction: "inbound",
-        toPhone,
-        fromPhone,
-        body: body || null,
-        type: "patient_reply",
-        status: "received",
-        provider: "meta",
-        providerMessageId: message.id,
-        patientId: patientIdForLog,
+      // Get/create conversation
+      const conversation = await getOrCreateConversation(supabase, {
+        whatsappLineId: lineId,
+        organizationId: lineOrgId,
+        patientPhone: fromPhone,
+        patientId: patientIdForLog ?? null,
+        patientName: contactName ?? null,
+      });
+
+      if (!conversation) {
+        // Fallback: helper fallo (DB error). Log con el path legacy y seguimos.
+        console.error("[meta-webhook] getOrCreateConversation returned null, falling back to legacy log");
+        await logMessage(supabase, {
+          direction: "inbound",
+          toPhone,
+          fromPhone,
+          body: effectiveBody,
+          type: "patient_reply",
+          status: "received",
+          provider: "meta",
+          providerMessageId: message.id,
+          patientId: patientIdForLog,
+          organizationId: lineOrgId,
+          whatsappLineId: lineId,
+          rawPayload: message,
+        });
+        await routeToBotHandler(fromPhone, effectiveBody || "", lineId, lineOrgId, patientIdForLog, appointmentIdFromPayload ?? undefined);
+        return;
+      }
+
+      // Persistir inbound con conversation_id + source + message_type
+      await persistInboundMessage(supabase, {
+        conversationId: conversation.id,
         organizationId: lineOrgId,
         whatsappLineId: lineId,
+        toPhone,
+        fromPhone,
+        body: effectiveBody,
+        providerMessageId: message.id,
+        messageType: media.messageType,
+        mediaUrl: media.mediaUrl,
+        mediaMime: media.mediaMime,
+        patientId: patientIdForLog,
         rawPayload: message,
       });
 
-      // Dispatch to bot-handler — pass appointmentId for direct reschedule
-      await routeToBotHandler(fromPhone, body, lineId, lineOrgId, patientIdForLog, appointmentIdFromPayload ?? undefined);
+      // Refresh activity (last_inbound_at, unread_count)
+      await updateConversationOnInbound(supabase, conversation.id);
+
+      // Sprint 2: si es multimedia, dispatch async para descargar + transcribir.
+      // Fire-and-forget: NO await, no bloqueamos el webhook que debe responder
+      // 200 a Meta en <5s.
+      if (media.messageType !== "text" && media.mediaUrl) {
+        dispatchProcessMediaAsync(supabase, {
+          providerMessageId: message.id,
+          mediaIdRaw: media.mediaUrl,
+          messageType: media.messageType,
+          organizationId: lineOrgId,
+          conversationId: conversation.id,
+          whatsappLineId: lineId,
+        }).catch((e) => console.error("[meta-webhook] dispatchProcessMediaAsync failed:", e));
+      }
+
+      // Bot dual mode: si la asistente tomo la conversacion, el bot calla
+      if (conversation.status === "human_active") {
+        console.log("[meta-webhook] Bot silenced — human_active. conv:", conversation.id, "phone:", fromPhone);
+        return;
+      }
+
+      // Filosofia bot-maximo-control: audios NO se procesan aqui — process-media-async
+      // espera la transcripcion de Whisper y entonces invoca el bot. El bot responde al
+      // paciente con texto basado en lo que dijo el audio. Asi el bot maneja audios sin
+      // intervencion humana.
+      // image/document con caption SI se procesan aqui (effectiveBody trae el caption).
+      // text se procesa siempre.
+      if (media.messageType === "audio") {
+        console.log("[meta-webhook] Audio inbound — bot reply deferred to process-media-async. conv:", conversation.id);
+        return;
+      }
+
+      // Bot activo → invoke bot-handler. conversationId se usa en Fase 2 para vincular outbound.
+      await routeToBotHandler(
+        fromPhone,
+        effectiveBody || "",
+        lineId,
+        lineOrgId,
+        patientIdForLog,
+        appointmentIdFromPayload ?? undefined,
+        conversation.id,
+      );
       return;
     }
   }
@@ -618,6 +707,7 @@ async function routeToBotHandler(
   orgId: string,
   patientId?: string,
   appointmentId?: string,
+  conversationId?: string,
 ): Promise<void> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -679,6 +769,8 @@ async function routeToBotHandler(
         type: "generic",
         organizationId: orgId,
         ...(patientId ? { patientId } : {}),
+        // Sprint 1 Fase 2: vincular respuesta del bot a la conversation
+        ...(conversationId ? { conversationId, source: "bot" } : {}),
       }),
     });
 
@@ -686,7 +778,7 @@ async function routeToBotHandler(
       const errText = await gwRes.text();
       console.error("[meta-webhook] messaging-gateway error:", gwRes.status, errText);
     } else {
-      console.log("[meta-webhook] Bot response sent to:", fromPhone);
+      console.log("[meta-webhook] Bot response sent to:", fromPhone, "conv:", conversationId ?? "(none)");
     }
   } catch (err) {
     console.error("[meta-webhook] routeToBotHandler unexpected error:", err);
@@ -704,6 +796,67 @@ const STATUS_RANK: Record<string, number> = {
   delivered: 2,
   read: 3,
 };
+
+// ---------------------------------------------------------------------------
+// Sprint 2: Async media processing dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Invoca process-media-async fire-and-forget tras persistir un mensaje inbound
+ * con multimedia. El webhook NO espera respuesta (no await del fetch).
+ *
+ * Requiere lookup del message_log.id por provider_message_id porque la
+ * persistencia ocurrio justo antes en otro statement.
+ */
+async function dispatchProcessMediaAsync(
+  supabase: ReturnType<typeof createClient>,
+  args: {
+    providerMessageId: string;
+    mediaIdRaw: string;
+    messageType: "audio" | "image" | "document" | "voice_call";
+    organizationId: string;
+    conversationId: string;
+    whatsappLineId: string;
+  },
+): Promise<void> {
+  // Lookup message_log.id (recien creado por persistInboundMessage)
+  const { data: msg, error } = await supabase
+    .from("message_logs")
+    .select("id")
+    .eq("provider_message_id", args.providerMessageId)
+    .maybeSingle();
+
+  if (error || !msg) {
+    console.error("[meta-webhook] dispatchProcessMediaAsync: msg not found by providerId:", args.providerMessageId, error?.message);
+    return;
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+  const targetUrl = `https://${projectRef}.supabase.co/functions/v1/process-media-async`;
+
+  // Fire-and-forget: NO await. Si la edge function no responde, ni modo.
+  fetch(targetUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-internal-secret": internalSecret,
+    },
+    body: JSON.stringify({
+      messageLogId: (msg as { id: string }).id,
+      mediaIdRaw: args.mediaIdRaw,
+      messageType: args.messageType,
+      organizationId: args.organizationId,
+      conversationId: args.conversationId,
+      whatsappLineId: args.whatsappLineId,
+    }),
+  }).catch((e) => {
+    console.error("[meta-webhook] dispatchProcessMediaAsync fetch error:", e);
+  });
+
+  console.log("[meta-webhook] dispatched process-media-async", { messageLogId: (msg as { id: string }).id, messageType: args.messageType });
+}
 
 async function handleStatusUpdate(
   supabase: ReturnType<typeof createClient>,
