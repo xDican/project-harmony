@@ -1,6 +1,488 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 11 May 2026 (canal asistente validado en campo, ICP individual eliminado, hito $1,500 paz mental, Sprint 1 ejecuta hoy)
+> Ultima actualizacion: 18 May 2026 PM (Sprints 0+1+2 backend completados en 1 sesion. Insight clave: tesis real es "bot maximizado", asistente como fallback. Feature candidata: llamadas perdidas → bot retoma.)
+
+## UPDATE 18 May PM — 3 sprints en 1 sesion + refinamiento de tesis
+
+### Avance tecnico (3 sprints completados en ~6.5h vs 62h estimadas)
+
+Sprints 0, 1 y 2 del MVP Centro de Atencion completados y validados en prod:
+
+- **Sprint 0** (schema) — 4 tablas + bucket Storage + RLS + 17 service_types migrados
+- **Sprint 1** (persistencia + bot dual mode) — 5 functions deployadas, conversation tracking funcional, dual mode validado
+- **Sprint 2** (multimedia + transcripcion) — Whisper en español funcionando, 2 audios reales transcritos en ~3 seg cada uno, $0.002 total
+
+**Backend del MVP esta funcionalmente completo.** Quedan Sprints 3-6 (frontend, responder, promos, llamadas) + 7-8 (dogfooding + Mendoza launch).
+
+### Insight estrategico — la tesis real
+
+Durante Sprint 2, Diego clarifico algo importante: **la transcripcion de audios NO es para que la asistente lea texto en vez de oir audio (eso es nice-to-have). El valor real es que el bot procese la transcripcion y responda automaticamente al paciente**.
+
+Esto refina la tesis del pivot:
+- **PITCH externo** (a Dulce/Mendoza/asistentes): "Asistente potenciada — nunca quedas ciega, lo ves todo, puedes tomar cuando quieras"
+- **VERDAD operativa**: "Bot maximizado — atiende el mayor numero posible de interacciones. Asistente es fallback excepcional, no protagonista"
+
+Las dos verdades coexisten — la asistente SIEMPRE tiene la opcion, el bot SIEMPRE intenta primero.
+
+Documentado en [[bot-maximo-control]] con criterios concretos: cada feature futura debe preguntarse "¿le da MAS control al bot o se lo quita?".
+
+### Implicaciones para el roadmap
+
+- **Sprint 4 (quick replies)** — ya no solo son atajos para la asistente. Las plantillas tambien las usa el bot.
+- **Sprint 5 (promociones)** — confirma su importancia: bot necesita data fresca para responder solo.
+- **Sprint 6 (llamadas)** — nueva feature candidata: si asistente NO contesta llamada WhatsApp, mensaje auto al paciente + bot retoma. Detalle en [[llamada-perdida-bot-retoma]].
+- **Filosofia general**: el frontend del inbox (Sprint 3) debe diseñarse para gestion EXCEPCIONAL, no rutinaria. Si la asistente pasa 4h/dia en el inbox, fracasamos. Si pasa 30 min revisando lo que el bot escalo, exitamos.
+
+### Por que la velocidad de Sprint 0-2 fue tan alta
+
+3 sprints en 1 sesion (estimado 62h, real ~6.5h, 90% mas rapido):
+
+1. Schema robusto de Sprint 0 — nada hubo que refactorizar despues
+2. Helpers desacoplados — Sprint 2 reuso Sprint 1 sin tocarlo
+3. Whisper API funciona out-of-the-box en español (forzado language='es')
+4. Fire-and-forget evito complejidad de manejo de timeouts
+
+**Cuidado interpretando este ratio:** Sprints 3 (UI frontend) y 6 (WebRTC + Calling API) son los riesgosos. UI tiene mas variables (UX, realtime edge cases) y WebRTC es nuevo. Mejor mantener target original 20 Jul Mendoza launch como red de seguridad, NO acelerar prematuramente.
+
+### Pricing pendiente (sin cambios desde update AM)
+
+- Tier 1 grandfathered $40-75 (clientes actuales)
+- Tier 2 base $60/mes (nuevos)
+- Tier 3 Pro $85/mes (multi-doctor)
+- Task #6 pendiente — diseno completo + materiales de venta
+
+### Comunicacion Dulce — sin cambios desde plan original
+
+- Llamada 28-29 May (10 dias antes del 30 que Dulce espera)
+- Mensaje: "Encontre que la solucion correcta es mas grande, vuelvo el 14-20 Jul con centro completo"
+- Task #4 pendiente
+
+### Decisiones tomadas hoy (PM)
+
+1. **Transcripcion audios** → output para el BOT, no para la asistente (decisión filosofia bot maximo control)
+2. **Llamadas perdidas → bot retoma** → feature candidata Sprint 6 (no scope creep, alineada con tesis)
+3. **Pausa breve** — Diego retoma "en un par de horas". Estados actualizados para retomar limpio.
+
+### Riesgos sin cambios
+
+1. CRITICO: capacidad Diego cae <3h/dia (sin cambios, hoy se mantiene)
+2. CRITICO: Dulce no espera 7 semanas → mitigado parcialmente por progreso tecnico (puedo mostrarle el centro completo en Jul)
+3. ALTO: pilot Medilaser revela bugs → buffer Sprint 8 sigue
+4. MEDIO: tarifa Honduras outbound — task #5 pendiente
+5. BAJO: outbound multimedia mas complejo de lo esperado — Sprint 2 lo cerro
+
+### Tareas activas
+
+- #4 Llamar Dulce 28-29 May
+- #5 Tarifa Honduras dashboard Meta
+- #6 Disenar pricing 3 tiers
+- #7 Investigar call permission templates
+- #8 Disenar feature "Promociones del mes"
+- #13 Validar inbox-send con JWT real (no bloqueante)
+- #14 Sprint 3 Frontend Inbox Basico
+
+---
+
+## UPDATE 18 May — PIVOT FUNDAMENTAL: de "bot" a "centro de atencion"
+
+### Que paso el sabado 16 May (Mendoza NO se instalo)
+
+Diego decidio en sitio NO instalar a Mendoza. Razon: el modelo "OrionCare toma el numero principal" deja a la asistente **ciega** del WhatsApp. Mendoza solo tiene 1 numero, ya probaron 2 numeros con humanos y los pacientes se confundieron, y las llamadas WhatsApp son criticas (Paredes lo confirmo pidiendo devolver SU numero por la misma razon dias antes).
+
+Dulce, la asistente champion de Torre Zafiro, se asusto cuando entendio el modelo. **Las asistentes no van a ceder su WhatsApp** — ES su trabajo, no algo que delegar.
+
+### Triangulacion del mercado (3 senales mismo dia)
+
+1. **Paredes:** numero devuelto a Medilaser, no podia perder llamadas WhatsApp
+2. **Mendoza:** rechazo modelo 2 numeros, rechazo perder llamadas
+3. **Dulce:** susto explicito por quedar ciega
+
+Esto invalida la tesis "auto-agenda 100%" para el ICP unico (edificio medico con asistente champion). No es bug del bot — es producto-mercado fit que no era el correcto.
+
+### Nuevo modelo: "Asistente potenciada"
+
+**Antes:** Bot toma el numero. Asistente queda ciega. Llamadas se pierden.
+**Ahora:** Asistente sigue dueña del numero. OrionCare es un **centro de atencion** donde ella ve mensajes + llamadas + agenda + promos en una pantalla. Bot atiende cuando ella delega (fuera de horario o mensaje especifico).
+
+### Habilitador tecnico: WhatsApp Business Calling API GA
+
+Investigacion 18 May confirmo:
+- Meta Cloud API directo soporta Calling API (NO necesitamos Twilio — feedback critico: [[meta-cloud-api-directo]])
+- Inbound (paciente llama) = **GRATIS**
+- Outbound (clinica devuelve llamada) = por minuto, 6 segundos increments
+- Honduras disponible (no en restringidos USA/Canada/Egipto/Vietnam/Nigeria)
+- Tarifa exacta pendiente confirmar en dashboard Meta. Estimacion: ~$0.01-0.05/min
+- Ventana 24h de mensajes NO aplica a llamadas, pero inbound calls REFRESCAN ventana de mensajes
+
+**Estimacion costo llamadas por clinica/mes: ~$1-3.** El aumento de precio es por VALOR, no por costo.
+
+### Insight nuevo de Mendoza: promociones rotativas mensual
+
+Mendoza hace publicidad estetica que cambia cada 30 dias. El bot debe responder con la promo activa del mes. **Feature nuevo descubierto:** panel "Promociones del mes" donde la asistente sube las promos, el bot las usa, expiran auto, notif para renovar. **Diferenciador unico vs competencia generica (Respond.io, WATI no tienen esto).**
+
+### MVP — 23 features clasificadas en 3 tiers
+
+**Tier 1 (11 MUST HAVE) para instalar Mendoza:**
+Inbox unificado, bot dual mode, llamadas WhatsApp, agenda integrada, notificaciones simples, plantillas respuesta rapida, promociones del mes, palomitas estado, adjuntar archivos, **transcripcion automatica de audios (Whisper)**, login backup asistente.
+
+**Tier 2 (6 SHOULD HAVE):** etiquetas+busqueda, modo fuera oficina, notas privadas, sugerencia respuesta AI, detector urgencia auto, historial paciente al abrir.
+
+**Tier 3 (POST-MVP):** broadcast, mensaje al doctor, reportes avanzados, multi-doctor avanzado, sync calendario externo, cobros, app movil, multi-canal.
+
+Plan tecnico completo: `.claude/plans/centro-atencion-mvp.md`
+
+### Cronograma 9 semanas (MVP en produccion 13 Jul, Mendoza 14-20 Jul)
+
+| Semana | Trabajo |
+|---|---|
+| 1 (19-25 May) | Diseno tecnico + mockups + schema migrations |
+| 2 (26 May-1 Jun) | Backend: webhook persiste TODO inbound, tablas conversations/messages |
+| 3 (2-8 Jun) | Backend: bot dual mode, handoffs, transcripcion audios |
+| 4 (9-15 Jun) | Frontend: inbox UI funcional |
+| 5 (16-22 Jun) | Frontend: quick replies + promociones + notificaciones |
+| 6 (23-29 Jun) | Calling API: webhooks, softphone WebRTC, permission templates |
+| 7 (30 Jun-6 Jul) | Dogfooding Wilmer (Diego + Warhol responden desde inbox) |
+| 8 (7-13 Jul) | Bug fixes + pilot Medilaser (Marleny entra al inbox) |
+| 9 (14-20 Jul) | **Instalacion Mendoza Torre Zafiro** |
+
+### Pricing nuevo (3 tiers)
+
+- **Grandfathered $40-75:** los 4 clientes actuales se mantienen (buena fe)
+- **Base $60/mes:** clientes nuevos desde Julio. Centro completo + ~50 llamadas outbound/mes incluidas.
+- **Pro $85/mes:** multi-doctor o alto volumen. Llamadas ilimitadas, dashboards.
+
+Math actualizada: 100 clientes × $60 = $6,000 (vs 175 × $40 originales). Hito paz mental ($1,500): ~25 clientes nuevos en lugar de 38. Mas alcanzable, mismo margen (~80%).
+
+### Validacion del modelo: Dulce confirma efecto edificio
+
+Dulce comento que **otro medico de Torre Zafiro espera ver resultados de Mendoza** antes de implementar. Significa: 1 instalacion buena = puerta a 5 medicos del edificio. Justifica el costo de calidad del MVP y refuerza que la instalacion del 14-20 Jul tiene que ser solida.
+
+### Comunicacion con stakeholders
+
+- **Dulce (Torre Zafiro):** llamada 28-29 May (10 dias antes del 30 que ella espera). Mensaje: "Encontre que la solucion correcta es mas grande, vuelvo el 14-20 Jul con centro completo, no parche."
+- **Paredes:** sin accion ahora. En Jul se le ofrece pilot interno antes que clientes nuevos.
+- **Resto pipeline (Hernandez, Escarleth, 6 demos pausadas):** NO contactar hasta tener MVP.
+- **Clientes existentes (Wilmer, Yeni, Medilaser, Ecoclinicas):** comunicacion proactiva semana 7-8 "estamos lanzando inbox + llamadas, sin costo adicional este ano para uds."
+
+### Decisiones implicitas tomadas hoy
+
+1. **Feature freeze ROTO conscientemente.** Era para no dispersarse, no para ignorar al mercado. El centro de atencion ES supervivencia.
+2. **Pipeline en PAUSA** hasta MVP. No mas demos.
+3. **Ads en PAUSA permanente del concepto AD-005/006/007.** El mensaje "tus pacientes se agendan solos" ASUSTA a las asistentes (nuestro ICP). Nuevo pitch + creativos pospone hasta post-MVP.
+4. **Multi-asistente concurrente NO entra al MVP.** Confirmado 1 + 1 backup pasivo.
+5. **NO mas validacion previa con asistentes.** 3 senales triangulan, validar mas es procrastinar.
+
+### Riesgos reordenados
+
+1. **CRITICO:** capacidad Diego cae <3h/dia mata el cronograma. Mitigacion: check-in viernes semanal. Si <20h reales, sacrificar Tier 2 primero.
+2. **CRITICO:** Mendoza/Dulce no espera 7 semanas. Mitigacion: llamada 28-29 May con mockups visuales.
+3. **ALTO:** pilot Medilaser revela bugs criticos retrasan Mendoza. Mitigacion: buffer semana 8.
+4. **MEDIO:** tarifa Honduras outbound mas alta de lo estimado. Mitigacion: confirmar dashboard semana 1, ajustar pricing si >$0.10/min.
+5. **MEDIO:** pacientes con WhatsApp viejo no reciben Business Calling. Mitigacion: investigar % adopcion semana 1.
+6. **BAJO:** call permission templates complicados de aprobar. Mitigacion: semana 1 prep.
+
+### Bot Sprint 2 — postponer
+
+El plan original era Sprint 2 finales de Mayo con data Mendoza. Como Mendoza no se instalo y el producto cambia, Sprint 2 queda **diferido**. Los items A-F del backlog del 15 May siguen validos pero entran como parte del bot dual mode dentro del MVP centro de atencion, no como sprint aparte.
+
+### Tareas activas
+
+- #4 Llamar Dulce 28-29 May reagendar Mendoza
+- #5 Confirmar tarifa Honduras dashboard Meta
+- #6 Disenar pricing 3 tiers
+- #7 Investigar call permission templates Honduras
+- #8 Disenar feature "Promociones del mes"
+- #9 Disenar arquitectura tecnica MVP (parcialmente completo en plan doc)
+
+### Proximos pasos esta semana (19-25 May)
+
+- [ ] Lun-Mar: Mockups UI inbox (Figma o papel) + diseno schema final
+- [ ] Mier: Confirmar tarifa Honduras outbound + investigar call permission templates
+- [ ] Jue: Schema migrations desplegadas en branch
+- [ ] Vie: Doc tecnico finalizado, arrancar backend semana 2
+
+---
+
+## UPDATE 15 May PM — Cierre dia: v62 deployado, handoffs analizados, Sprint 2 espera Mendoza
+
+### Deploys del dia
+
+- **bot-handler v62** deployado 15-May ~21:50 UTC con los 3 fixes pre-sabado (dedupe handoff 5min, SOFT_NO "confirmo", parser HH:MM). Validacion SQL: 0 nuevos handoffs duplicados post-deploy. Commits `d33a72c` (fix) + `544e557` (estado) en `origin/main`.
+
+### Analisis de salud bot post-Sprint 1 (12-15 May, pre-v62)
+
+Metricas por cliente (4 dias):
+
+| Cliente | Sesiones | % Exito | Handoffs | Msgs prom |
+|---|---:|---:|---:|---:|
+| Medilaser | 31 | 54.8% ✅ | 5 (16.1%) | 3.3 |
+| Wilmer | 5 | 80% ✅ | 0 | 1.3 (botones) |
+| Consultorio Familiar | 1 | 100% | 0 | 12.0 |
+| Ecoclinicas | 0 | — | — | — |
+
+### Analisis profundo de 5 handoffs Medilaser
+
+**Solo 2 de 5 fueron intencionales.** Los otros 3 fueron fallos UX que escalaron:
+
+| Sesion | Tipo | Bug raiz |
+|---|---|---|
+| Sury Madrid (3 handoffs) | 1 LEGÍTIMO + 2 BUG | Paciente NO registrada en BD intenta reagendar → bot escala inmediato en vez de pedirle nombre. v62 arregla dups, no la causa raiz. |
+| ...0402 ("Del consultorio") | BUG | Paciente pedia direccion. FAQ no tolera typo "direcccion" (3 c). Auto-handoff a 3 fallos lo escalo sin dar pista. |
+| ...2665 ("si me ayuda") | LEGÍTIMO causado por BUG | Flow reschedule via texto va a menu cancel_confirm. Paciente eligio "2" pensando reagendar pero era cancelar. Cita cancelada accidentalmente. Sprint 1 item 1.2 fixeo este flow solo para reschedule via BOTON, no para texto libre desde main_menu. |
+
+### Decision: NO ejecutar Sprint 2 antes de Mendoza
+
+Cumple [[no-data-inferida]]. Sprint 2 sale finales Mayo con ~7 dias de data real de Mendoza para informar sinonimos esteticos correctos sin inferencia.
+
+### Backlog refinado Sprint 2 (priorizado por handoffs reales)
+
+| # | Item | Casos reales |
+|---|---|---|
+| **A** | Paciente no registrado en reschedule → pedir nombre (NO escalar) | Sury Madrid |
+| **B** | Tolerancia typos en FAQ keywords (normalizar dobles/triples letras) | "direcccion" |
+| **C** | Reschedule via texto → directo a `booking_select_day` (extender item 1.2 Sprint 1) | ...2665 |
+| **D** | Auto-handoff 3 fallos → dar pista antes ("¿Busca ubicacion/horario/precio?") | ...0402 |
+| **E** (ya estaba) | Parser fechas naturales ("sera la otra semana") | Medilaser 6 abandonos en booking_select_day |
+| **F** (ya estaba) | Aliases en `bot_service_types` | Mendoza estetica (post-data) |
+
+### Pre-config Mendoza — sin email no bloquea
+
+Diego no tiene email de Mendoza. Workaround: llamar a Mendoza/Dulce viernes 15-20 min, pedir 5-7 FAQs basicas por voz/WhatsApp (ubicacion, horario, precios botox/depilacion/criofrecuencia, formas de pago, politica cancelacion). NO requiere email.
+
+### Riesgos — sin cambios desde update 15 May AM
+
+1. **CRITICO:** Sabado Mendoza = decision binaria Torre Zafiro
+2. **CRITICO:** Conversion doctor 25% (n=4)
+3. **CRITICO:** Capacidad Diego 60-70% probable cae a 1-2h/dia
+4. **ALTO MITIGADO:** Bot V2 baseline 28% → Sprint 1 50% Medilaser. Cancel_confirm 64.7% → 0%.
+5. **ALTO:** Edificio quemable
+6. **ALTO:** Canal finito ~50 asistentes Honduras
+
+### Proximos pasos
+
+- [ ] **Viernes AM (16 May):** QA Demo Bot — validar 3 fixes en demo real (~30 min)
+- [ ] **Viernes mediodia:** Llamada Mendoza/Dulce 15-20 min — capturar 5-7 FAQs basicas
+- [ ] **Viernes PM:** Pre-config Mendoza (servicios esteticos + FAQs capturadas)
+- [ ] **Sabado 9:30 AM:** Instalacion Mendoza en sitio
+- [ ] **Dias 1-7 post-instalacion:** Reporte diario WhatsApp a Dulce, acumular data uso real
+- [ ] **Finales Mayo (~24-31 May):** Sprint 2 con data Mendoza informando aliases
+
+---
+
+## UPDATE 15 May AM — Validacion Sprint 1 + reframe pitch medico + Dulce-Torre Zafiro
+
+### 1. Sprint 1 SUPERO metas (Medilaser, metrica oficial del plan)
+
+Medido con `bool_or(state_after = 'completed')` — la metrica original del plan de humanizacion. Comparacion baseline 14-28 Abr (15 dias) vs Sprint 1 12-15 May (4 dias).
+
+| Metrica | Baseline | Sprint 1 | Meta plan | Veredicto |
+|---|---:|---:|---:|---|
+| % Exito Medilaser | **30.9%** | **50.0%** | 45-50% post-S1 | ✅ HIT top del rango |
+| Sesiones entradas a cancel_confirm | 17 | 1 | — | -94% volumen |
+| % Abandono cancel_confirm | **64.7%** | **0.0%** | 30% post-S1 | ✅✅ OVER-DELIVER |
+
+Hallazgo critico: item 1.2 (`handleDirectReschedule` redirige a `booking_select_day` en vez de mostrar menu "Reagendar/Cancelar/Volver") **erradicó el bug de abandono masivo**. El paciente ya no se atora en el menu intermedio porque ya no existe.
+
+Wilmer: baseline 0% (5 sesiones) → Sprint 1 75% (4 sesiones). n bajo pero direccion clarisima.
+
+Yeni/CF + Ecoclinicas: sin actividad (0 sesiones nuevas en Sprint 1). Bajo volumen confirmado.
+
+**Sprint 1 funciona. Mendoza arranca el sabado con bot validado.**
+
+### 2. Dulce administra ~5 medicos en Torre Zafiro — reframe Mendoza
+
+Diego confirmo el dato. Implicacion: Mendoza NO es cierre individual de $40. Es **caso ancla del edificio entero**.
+
+Si la instalacion sale bien:
+- Dulce pasa a los otros 4 medicos del edificio (no es pitch frio — es referido interno validado)
+- Conversion doctor "via Dulce" probablemente ≥60% vs 25% en frio
+- LTV potencial Torre Zafiro: **$120-200/mes** (Mendoza + 2-4 de 4 doctores adicionales)
+
+Si la instalacion sale mediocre:
+- Perdemos credibilidad con Dulce
+- Por extension, perdemos Torre Zafiro entero
+- Conversion doctor del canal asistente se mantiene en 25% (riesgo critico del plan del 14 May)
+
+**Path critico absoluto**: sabado 16 May 9:30 AM no es "instalacion #5", es **decision binaria sobre Torre Zafiro**. Reporte diario a Dulce los primeros 7 dias = inversion en la gatekeeper, no solo en Mendoza.
+
+### 3. Pitch medico: enterrar "70% fuera horario", usar 3 datos reales
+
+El dato "70% interactua fuera de horario" del plan del 14 May NO se sostiene con SQL real. Medicion `message_logs.patient_reply` ultimas 4 semanas:
+
+| Cliente | % fuera horario 17+ | % 18-21h |
+|---|---:|---:|
+| Medilaser (ICP-A real) | **23%** | 17.7% |
+| Consultorio Familiar | 14% | 0% |
+| Wilmer (outlier sin asistente) | 77% | 15% |
+
+Wilmer 77% engaña — describe un mundo sin asistente. Doctor de Torre Zafiro tiene asistente. NO usar como argumento.
+
+**Datos reales para pitch medico (Medilaser, 28 dias, 98 recordatorios enviados):**
+
+| Numero | Significado vendible |
+|---|---|
+| **96.9% de recordatorios mueven la cita** | Confirma (40.8%) + auto-libera (47.9%) + cancela manual (11.2%). Solo 3.1% son artefactos de bug menor. |
+| **48% de citas se ajustan ANTES del dia** | 47 slots por mes vendibles a otro paciente (47 auto-cancel + 11 manual). Brutalmente real. |
+| **~18 mensajes por semana llegan despues de las 5pm** | Concreto, no inflado. Dulce confirmo el patron 7-9pm. |
+| **92% prediccion no-show via autocancelacion** | Validado por Marleny. EL ancla mas fuerte. Sin asteriscos. |
+
+Ranking de poder vendible: **#92% > #48% > #96.9% > #18 mensajes/sem**.
+
+### 4. Bot natural en Medilaser — happy paths descubiertos
+
+Sesion SQL revelo: **13 happy paths puros en 55 dias** (~7/mes) — pacientes nuevos que entraron por iniciativa propia, navegaron menu, agendaron cita nueva sin reagendar ni recordatorio.
+
+- 12 de 13 = **pacientes NUEVOS en BD** (el bot los creo durante la sesion)
+- 8 de 13 (62%) = **fuera de horario laboral** (5pm-11pm + madrugada)
+- 3 happy paths completaron en ≤3 minutos (pacientes decididos)
+- 1 ya existia antes (caso atipico, 2 min)
+
+**Implicacion ventas:** 62% de pacientes que se autoagendan lo hacen cuando la asistente cerro. Sin bot, esos se enfrian. Esto SI valida un pitch real: *"6 de cada 10 pacientes que se agendan solos lo hacen despues que su asistente se fue."*
+
+### 5. Bugs detectados post Sprint 1 — 3 fixeables antes del sabado
+
+Barrido de produccion 12-15 May detecto 3 bugs reales fixeables en ~55 min total. Plan en [[estado-dev]]:
+
+| # | Bug | Fix |
+|---|---|---|
+| 1 | Dedupe handoffs solo a 5s — Sury Madrid escalo 3 veces en 2 min | Ampliar ventana 5s → 5min |
+| 2 | "Yo le aviso" no clasifico como SOFT_NO — paciente loop en main_menu | Agregar variantes "yo le aviso" al detector |
+| 3 | Horas tipo "8:15" no aceptadas en booking_select_hour — paciente sufre 4 min | Regex HH:MM en handler |
+
+Fix #1 critico para Mendoza: Dulce/asistentes NO PUEDEN recibir notificaciones duplicadas — destruye confianza desde dia 1.
+
+Fix #3 critico para Mendoza: pacientes esteticos escriben horas literales ("9 am", "2:30"), no numeros del menu.
+
+### 6. Bugs de observabilidad descubiertos (backlog post-sabado)
+
+1. **`appointment_released` no se loguea siempre** — 13 de 47 auto-cancelaciones (27.7%) NO crean event en `message_logs`. Reportes basados en message_logs subestiman cancelaciones ~28%. Postponer.
+2. **Recordatorios huerfanos** — 3 de 98 (3%) sin `appointment_id`. Race condition probable.
+3. **`bot_conversation_logs` con duplicacion 4-6x** — 521 logs inbound vs 113 mensajes reales en `message_logs` (Medilaser, 28 dias). NO usar bot_conversation_logs para contar volumen — solo para flujo de estados.
+
+### 7. Limpieza memoria — Lovable
+
+Lovable fue cancelado hace tiempo. Quitar de "acciones pendientes" en cualquier UPDATE futuro. Ver [[suscripciones-ai]] (si existe — sino, ignorar).
+
+### Acciones hoy/manana
+
+- [ ] **Jueves PM (15 May):** Fix #1 (dedupe handoffs) + Fix #2 (SOFT_NO "yo le aviso") + deploy + tests (~50 min)
+- [ ] **Viernes AM (16 May):** Fix #3 (horas HH:MM) + deploy + QA demo bot (~75 min)
+- [ ] **Viernes PM (16 May):** Pre-config Mendoza — servicios esteticos + 5-7 FAQs pre-cargadas (ubicacion, horarios, precios botox/depilacion/criofrecuencia, formas de pago, politica cancelacion) (~1.5h)
+- [ ] **Sabado 16 May 9:30 AM:** Instalacion Mendoza en sitio (~2h) — obsesion en calidad
+- [ ] **Dias 1-7 Mendoza:** Reporte diario WhatsApp a Dulce (10-15 min/dia)
+
+### Riesgos reordenados (delta vs 14 May)
+
+1. **CRITICO: sabado Mendoza = decision binaria Torre Zafiro.** Mitigacion: 3 fixes pre-sabado + pre-config FAQs + reporte diario Dulce.
+2. **CRITICO: conversion doctor 25% (n=4)** — sin cambios desde 14 May. Tarjeta credibilidad + pitch corregido salen finales Mayo.
+3. **CRITICO: capacidad Diego 60-70% probable cae a 1-2h/dia** si entra trabajo en 4-6 sem.
+4. **ALTO: bot V2 28% baseline.** **MITIGADO PARCIAL** — Sprint 1 valido, Medilaser 50% exito, abandono cancel_confirm 0%. Falta Sprint 2 para que pacientes nuevos entiendan fechas/horas naturales.
+5. **ALTO: edificio quemable** (1 demo mala = perder 5-10 doctores). Reforzado por Dulce 5 medicos.
+6. **ALTO: canal finito** ~50 asistentes total Honduras.
+7. **MITIGADO**: ads pausadas, sesgo costo marginal documentado.
+
+## UPDATE 14 May — Debrief 6 demos + busqueda trabajo + replanteo cronograma
+
+### Marcador real de las 6 demos (12-14 May)
+
+| Demo | Doctor respondio | Outcome |
+|---|---|---|
+| Ingrid (Torre Zafiro) | No (medicos part-time entre hospitales) | Bloqueada estructural |
+| Sulay (Torre Zafiro) | Si, vago | Rechazo "no ven potencial" |
+| Maryori → Dr. Hernandez | Si | Rechazo educado (no quiso probar bot, muy ocupado) |
+| Dulce → **Dra. Mendoza** (estetica) | Si | **CIERRE $40 — instalacion sab 16 May 9:30 AM** |
+| Dunia (CMH) | Logistica similar a Ingrid | Sin abrir puerta |
+| Escarleth (Hospimed) | Si | Rechazo "no veo beneficio" — puerta abierta para volver |
+
+**Conversion doctor real: 1 / 4 = 25%** — por debajo del threshold 30% del plan del 11 May.
+
+### Insights operativos clave
+
+1. **Medicos NO necesitan probar el bot.** Mendoza cerro sin probar, Hernandez rechazo sin probar. Entienden concepto en 5s. El demo del producto no mueve la aguja.
+2. **Diferencia cierre vs rechazo:** tiempo del medico + dato especifico de comportamiento. Mendoza tuvo espacio, Diego pivoteo a "confirman 7-9pm" → ella valido con razon propia ("ya estan en casa") → cerro. Hernandez estaba ocupado en pasillo → rechazo.
+3. **"Reservar cita formal con medico" es contracultural** — medicos hondurenos tienen puertas cerradas a terceros que "generan gastos". Solo funciona ventana organica de 10 min entre pacientes. Cambio de pitch a asistente: *"aviseme cuando tenga 10 min libres y regreso"*, no *"agendeme cita"*.
+4. **Patron "no veo el beneficio" = dolor invisible para medico que no opera sistema** (confirmado de hallazgo 22 Abr). El dolor que SI siente: queja paciente "nunca me contestan en recepcion" + ~70% interactua fuera de horario. Ese es el pitch medico nuevo.
+
+### Mendoza — detalles del cierre
+
+- $40/mes precio base. **1 medica + 3 asistentes** (Dulce incluida).
+- **Ya paga $100/mes** por software de historial clinico con recordatorios manuales. Tu $40 NO es objecion de precio, es valor.
+- Empezo esceptica → Diego pivoteo a dato real (confirman 7-9pm) → ella valido → autoridad → cerro.
+- Solo 1 numero WhatsApp principal (secundario tirado sin uso meses).
+- **Instalacion sabado 16 May 9:30 AM** — path critico absoluto.
+
+### Instalacion Mendoza — decisiones
+
+- **Instalar en numero principal** (Mendoza autorizo). NO migrar al celular de Dulce — perderia 30 dias de cronograma para evitar 7 dias de incomodidad emocional.
+- **Vista de chats no existe en dashboard** (feature freeze Junio) → reportes diarios manuales Diego→Dulce primeros 7 dias, despues semanales.
+- Framing al cliente: *"soporte premium primeros 14 dias"* — convertido en valor, no en culpa.
+- Costo Diego: ~1.5h primera semana. Sostenible incluso si entra a trabajo.
+
+### Busqueda de trabajo Diego — variable critica
+
+Diego tiene 2 procesos activos:
+1. **Analista de Marca** — entrevista 14 May, probable etapa 2 proxima semana. Ya trabajo ahi antes con buenas referencias. Conoce persona interna que se quedo con buena impresion.
+2. **Customer Success & Implementation Specialist** — agencia colocando.
+
+**Probabilidad real: 60-70%** de conseguir uno en proximas 4-6 semanas.
+
+Implicaciones si entra a trabajo:
+- Tiempo OrionCare baja de 4-5h/dia a **1-2h/dia sostenible**.
+- Ingreso fijo $1,000-2,500/mes Honduras = **paz mental cubierta sin esperar $1,500 MRR**.
+- OrionCare pasa a "compound interest mode": defender clientes + crecimiento lento sin presion.
+- Customer Success es skill 100% transferible a OrionCare cuando vuelva al ritmo completo.
+
+**Esto NO es fracaso de OrionCare — es desacoplar seguridad economica de curva MRR.** Mejor decision a 3 anos. Reduce ansiedad → mejores decisiones de producto.
+
+### Cronograma realista actualizado
+
+| Periodo | Modo | Output |
+|---|---|---|
+| 14-31 May | Defensivo + Mendoza acumula data | 1 cierre confirmado (Mendoza). No agendar demos nuevas. |
+| Lun 19 May | Ultimo seguimiento Dunia + Ingrid informal | Si no abre ventana organica, cerrar ciclo. No insistir. |
+| 1-7 Jun | Tarjeta credibilidad + testimonial Mendoza listo | Material listo con caso Mendoza (perfil real ICP-A) |
+| 8-30 Jun | Cierres con tarjeta + pitch medico "queja paciente + 70% fuera horario" | 3-5 edificios SI conversion sube a 40%+ |
+| Jul | Ramp up canal asistente | 4-6 edificios |
+
+**Paz mental ($1,500 = 8-9 edificios): realista Ago-Sep 2026, NO Jun-Jul.** Ajuste vs plan del 11 May que asumia ritmo optimista.
+
+### Sprint del bot — decisiones
+
+- **Sprint 1 deployed 11 May** (commit 2fb53f4 hotfix). Pendiente validar metricas en produccion ANTES del sabado de Mendoza.
+- **Sprint 2 NO ejecutar antes del sabado.** Solo 3 dias desde Sprint 1, sin data; Mendoza es estetica (perfil nuevo), disenar sinonimos sin ver mensajes reales = inferir data de negocio (viola [[no-data-inferida]]).
+- **Sprint 2 sale finales Mayo** con data real de Mendoza informando sinonimos correctos para estetica.
+- **Sprint 3 (wizard onboarding) sale Junio**, ya en ritmo nuevo (con o sin trabajo).
+
+### Tarjeta de credibilidad — POSTERGADA hasta finales Mayo / principios Junio
+
+Decision correcta: esperar 2-4 semanas hasta data de Mendoza para que el testimonial valga 10x mas. Wilmer perfil ≠ perfil prospecto (general independiente vs especialista multi-staff). Mendoza es primer caso del perfil real.
+
+Mientras tanto: scouting solo de ASISTENTE (no doctor), pitch verbal con datos duros (% mensajes 18-21h, % cancelacion predicha 92%, etc.). NO forzar conversacion con medico sin material.
+
+### Sesgo de costo marginal de Diego — documentado
+
+Confrontado 14 May. Diego tiende a sub-valorar el precio y a tomar decisiones operativas que priorizan incomodidad de corto plazo sobre valor de mediano plazo, ambos por el mismo sesgo: confundir costo marginal propio con valor para el cliente. Anclajes documentados en [[pricing-costo-marginal]] para recordatorio en futuras conversaciones.
+
+### Riesgos reordenados
+
+1. **CRITICO: capacidad Diego cae 60-80%** si entra a trabajo. Mitigacion: modo defensivo desde ya, producto sin bugs antes de Junio, no agregar clientes que requieran handholding.
+2. **CRITICO: conversion doctor 25% (n=4)** por debajo del threshold. Si no sube con tarjeta + pitch nuevo, techo canal asistente baja a ~$1,000-1,300 MRR.
+3. **ALTO: edificio quemable** — 1 demo mala pierde 5-10 doctores. Calidad > velocidad. Aceptar rechazo sin insistir.
+4. **ALTO: canal finito** ~50 asistentes total Honduras.
+5. **MEDIO: bot V2 28% exito baseline** — Sprint 1 deployed, falta medir.
+6. **MITIGADO**: ads quemando capital (pausadas).
+7. **NUEVO/MITIGADO**: sesgo costo marginal de Diego → ver [[pricing-costo-marginal]]. Confrontado 14 May.
+
+### Acciones esta semana (~10-12h total)
+
+- [ ] Hoy/manana: SQL Sprint 1 ultimos 3 dias vs baseline 14-28 Abr (30 min) — validar antes de Mendoza
+- [ ] Hoy/manana: SQL "% mensajes entre 18-21h" ultimas 4 semanas para pitch medico (15 min)
+- [ ] Vie 15: pre-config Mendoza (servicios esteticos, horarios, FAQs basicos) — 1.5h
+- [ ] Sab 16 9:30 AM: instalacion Mendoza obsesiva en calidad — 2h
+- [ ] Dias 1-7 Mendoza: reporte diario WhatsApp a Dulce — 10-15 min/dia
+- [ ] Lun 19: ultimo seguimiento Dunia + Ingrid informal — 2-3h
+- [ ] Mie 20: seguimiento Maryori SOLO si ella escribe primero
+- [ ] Diario durante onboarding Mendoza: actualizar `diccionario-hondurenismos.md` con frases estetica
 
 ## UPDATE 11 May — Canal asistente validado + ICP final + reframe meta
 

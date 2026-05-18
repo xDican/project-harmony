@@ -1,10 +1,177 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 15 May 2026 (3 fixes pre-sabado Mendoza deployados — bot-handler v62)
+> Ultima actualizacion: 18 May 2026 18:06 UTC (Sprint 2 MVP Centro de Atencion completado — Whisper transcripcion funcionando end-to-end en prod)
 
 ## Fase actual
 
-Feature freeze (Mar-May 2026). Solo bugs, seguridad y polish.
+**Sprint 1-8 MVP Centro de Atencion** (19 May - 20 Jul). Feature freeze ROTO conscientemente — pivot a centro de atencion es supervivencia, no feature creep. Detalles en `.claude/plans/centro-atencion-mvp.md` y `.claude/plans/centro-atencion-sprints.md`.
+
+## ✅ SPRINT 2 COMPLETADO 18 May 18:06 UTC — Multimedia + Transcripcion
+
+### Edge functions deployadas a prod
+
+| Function | Version | Cambio |
+|---|---:|---|
+| `process-media-async` | v1 (NEW) | Fire-and-forget: descarga Meta media → Storage → Whisper (si audio) → UPDATE message_logs. Auth `x-internal-secret`. |
+| `meta-webhook` | v42 | Dispatch async tras persistInboundMessage cuando llega multimedia. Sin bloquear webhook (Meta espera <5s). |
+| `messaging-gateway` | v42 | Acepta `mediaId`, `mediaKind`, `mediaUrl`, `mediaMime`. Provider envia con type='media'. |
+| `inbox-send` | v2 | Descarga Storage → upload Meta → mediaId → llamar gateway con multimedia. |
+
+### Helpers nuevos / extendidos
+
+- `supabase/functions/_shared/meta-media.ts` (NEW) — resolveMetaMediaUrl, downloadMetaMediaBytes, uploadToStorage, downloadFromStorage, uploadMetaMedia, createSignedUrl, extFromMime, parseMediaIdFromPlaceholder
+- `supabase/functions/_shared/whisper.ts` (NEW) — transcribeAudio (OpenAI Whisper API, language='es')
+- `supabase/functions/_shared/messaging-types.ts` — `type` extendido a `template|text|media`, agregados `mediaId`, `mediaKind`
+- `supabase/functions/_shared/providers/meta-provider.ts` — nuevo `buildMediaPayload` para enviar image/audio/document con `id`
+
+### Validacion end-to-end con Diego (18 May 18:04-18:06 UTC)
+
+**2 audios reales del Demo Bot:**
+
+| Audio | Storage path | Transcripcion |
+|---|---|---|
+| 18:04:41 | `c8b1c83b.../1e714e37.../ed03359b-fad2-47c3-8eb2-fb8953f2f07f.ogg` (13KB) | *"Hola, buenos dias. Estoy interesado en agendar una cita con la doctora."* |
+| 18:06:25 | `c8b1c83b.../1e714e37.../e4a219af-473b-43ab-a7cd-61617f09bf4b.ogg` (14KB) | *"Hola, mucho gusto. Me llamo Diego. Estoy interesado en agendar una cita con el doctor."* |
+
+**Tiempo end-to-end medido:** ~3 segundos por audio (webhook → storage → whisper → UPDATE).
+
+**Costo real:** $0.002 total por los 2 audios (~$0.001 cada uno).
+
+### Decisiones tecnicas tomadas en Sprint 2
+
+1. **Async fire-and-forget** — webhook responde <5s a Meta, process-media-async corre en background. No retry loops; si falla, paciente reenvia.
+2. **OpenAI Whisper API** — language='es' forzado para Honduras. Costo ~$0.001/audio.
+3. **Storage path convention** — `{org_id}/{conv_id}/{message_log_id}.{ext}`. Trazable, msg_id unico.
+4. **Media outbound via Meta Media API** — asistente sube a Storage primero, inbox-send descarga, sube a Meta como mediaId, gateway envia con type='media'.
+5. **Sin pg_cron** — no implementado retry. Si vemos fallos en campo, agregar en Sprint 7.
+
+### ⚠️ INSIGHT FILOSOFICO (Diego 18 May PM)
+
+**Transcripcion no es para la asistente — es para que el BOT procese audios.**
+
+Detalle en [[bot-maximo-control]] memory. Esto refina como pensar Sprint 4-6:
+
+- **Audio inbound → bot debe procesar transcripcion automaticamente** — feature pendiente que NO esta en plan original. Modificar bot-handler para que, ademas de message_text, acepte una transcripcion de audio como mismo input y responda al paciente con flow normal. Implementacion: en meta-webhook, cuando llega audio, dispatch a process-media-async espera transcripcion + dispatch a bot-handler con `messageText=transcription`. **Estimado: 2-3h. Candidato Sprint 4 o post-Sprint 3.** Ver task #15.
+- **Quick replies (Sprint 4)** — no solo para asistente. Plantillas tambien usadas por el bot.
+- **Promociones (Sprint 5)** — confirma importancia: bot necesita data fresca.
+- **Llamadas perdidas → bot retoma (Sprint 6)** — nueva feature documentada en [[llamada-perdida-bot-retoma]]. Si asistente no contesta WhatsApp call, mensaje auto + bot toma. Ver task #16.
+
+**Frontend inbox (Sprint 3) sigue siendo necesario** pero diseñar para uso EXCEPCIONAL, no rutinario. La asistente NO debe pasar 4h/dia ahi. Si la metrica de uso del inbox >60% del tiempo de la asistente, el modelo de producto fracaso.
+
+### Pendiente (no bloqueante)
+
+- Fase 5 multi-user login validation — requiere crear user `secretary-backup` en auth.users + smoke test. Sprint 3 puede arrancar sin esto.
+- Validacion outbound multimedia via inbox-send con JWT real — task #13 actualizada.
+
+### Proximo: Sprint 3 (9-15 Jun → ejecucion adelantada)
+
+Sprint 3 (9-15 Jun originalmente): Frontend `/inbox` con lista + detalle, renderers por tipo (text, image, audio+transcripcion, document), Realtime con Supabase channels, botones tomar/devolver bot. 13 sub-tareas estimadas 25h. **Sera el primer trabajo de frontend del MVP** — UX visible para la asistente.
+
+---
+
+## ✅ SPRINT 1 COMPLETADO 18 May 17:02 UTC — Persistencia + Bot Dual Mode
+
+### Edge functions deployadas a prod
+
+| Function | Version | Cambio |
+|---|---:|---|
+| `messaging-gateway` | v41 | Acepta campos opcionales del inbox (conversationId, source, sentBy, messageType). Branch outbound: si source provisto → persistOutboundMessage + updateConversationOnOutbound. Sin cambio path legacy. |
+| `meta-webhook` | v41 | Imports nuevos. extractMediaFromMetaMessage para detectar audio/image/document. getOrCreateConversation antes del flow bot. persistInboundMessage con conv_id. **Bot dual mode**: si status='human_active', persist+return (no llamar bot-handler). routeToBotHandler pasa conversationId al gateway. |
+| `inbox-send` | v1 (NEW) | POST endpoint. Auth JWT. SELECT conversation (RLS). Auto-handoff si bot_active. Llama gateway con source=assistant + sentBy=auth.uid(). Marca unread_count=0. |
+| `inbox-handoff` | v1 (NEW) | POST endpoint. Auth JWT. UPDATE status=human_active + assigned_to=auth.uid(). |
+| `inbox-return-bot` | v1 (NEW) | POST endpoint. Auth JWT. UPDATE status=bot_active + assigned_to=NULL. |
+
+### Helpers shared nuevos
+
+- `supabase/functions/_shared/conversations.ts` — getOrCreateConversation (idempotente, race-safe via 23505 retry), getConversationStatus, updateConversationOnInbound (read-then-update unread_count), updateConversationOnOutbound, markConversationRead.
+- `supabase/functions/_shared/inbox-messages.ts` — persistInboundMessage (usa logMessage + UPDATE patch con conv_id/source/message_type/media_*), persistOutboundMessage (insert directo con todos los campos), extractMediaFromMetaMessage (detecta image/audio/document/video y retorna `meta-media:<id>` URL placeholder).
+
+### Validacion end-to-end con Diego (18 May 16:52-17:02 UTC)
+
+**Conversation 1e714e37-482d-49e5-8bc2-466f66ec790b (Demo Bot — "Dican"):**
+- 13 mensajes inbound source='patient' ✅
+- 10 mensajes outbound source='bot' ✅
+- Flow agendar cita completo (paso 1→5, cita confirmada con Dr. Diego Escalante) ✅
+- Bot dual mode: UPDATE status='human_active' → Diego mando 2 mensajes mas → bot NO respondio, mensajes persistidos con conv_id ✅
+- Return-to-bot: UPDATE status='bot_active' → bot respondio en 2s con saludo ✅
+- 0 regresiones en path legacy (recordatorios siguen sin conv_id)
+- Endpoints rechazan 401 sin JWT ✅
+
+### Decisiones tecnicas tomadas en Sprint 1
+
+1. **Bot calla por completo cuando human_active** — no acuse, no push. Mensaje queda en conv para que asistente lo vea.
+2. **Gateway centralizado con campos opcionales del inbox** — un solo path de envio. Callers que NO pasen source siguen funcionando.
+3. **Endpoints inbox-* con cliente Supabase usando JWT del user** — RLS aplica naturalmente. Service role solo para llamar al gateway desde inbox-send.
+4. **Auto-handoff en inbox-send** — si asistente responde en conv bot_active, status pasa a human_active automaticamente.
+5. **`message_type='text'` default en message_logs** — CHECK constraint preserva inserts legacy del bot.
+6. **billable=false para mensajes de conversacion** — evita el constraint `billable_requires_doctor`. Templates legacy siguen con billable=true cuando hay doctorId.
+
+### Pendiente (no bloqueante, task #13)
+
+- Validacion end-to-end del endpoint `inbox-send` con JWT real (auth.uid() de Diego). Estimado 10 min. JWT se obtiene de DevTools de la app web.
+
+### Proximo: Sprint 2 (26 May - 1 Jun → ya ejecutamos esta sesion el 18 May en lugar de la fecha planeada original 26 May)
+
+Sprint 2 (2-8 Jun originalmente): Whisper transcripcion + media download Meta → Storage `conversation-media` + multi-user login validation. 12 sub-tareas estimadas 22h. Detalles en `.claude/plans/centro-atencion-sprints.md`.
+
+---
+
+## ✅ SPRINT 0 COMPLETADO 18 May — Schema Foundation Centro de Atencion
+
+### Migrations aplicadas a main (Supabase `soxrlxvivuplezssgssq`)
+
+| # | Migration | Output |
+|---|---|---|
+| 1 | `centro_atencion_01_helper_set_updated_at` | Funcion generica `public.set_updated_at()` (replaza patron per-tabla) |
+| 2 | `centro_atencion_02_service_types` | Tabla `service_types` + 17 rows migrados desde JSONB whatsapp_lines |
+| 3 | `centro_atencion_03_conversations` | Tabla `conversations` con UNIQUE(line, phone), 5 indices |
+| 4 | `centro_atencion_04_promotions` | Tabla `promotions` con FK service_types, CHECK valid_to >= valid_from |
+| 5 | `centro_atencion_05_quick_replies` | Tabla `quick_replies` con FK service_types y 6 categorias |
+| 6 | `centro_atencion_06_message_logs_extend` | ALTER message_logs: 9 columnas nuevas nullable (conversation_id, source, message_type, transcription, media_url/mime, call_*, sent_by) + 3 indices parciales |
+| 7 | `centro_atencion_07_storage_bucket` | Bucket `conversation-media` (25MB, mime types audio+image+pdf) via execute_sql + 4 storage policies |
+
+### Verificacion post-apply
+
+- 4 tablas nuevas con RLS habilitada + 16 policies (4 por tabla)
+- 9 columnas en message_logs validadas con tipos y nullables correctos
+- 17 service_types migrados sin perdida (5 orgs, 16 con duration_minutes preservado)
+- 4 triggers updated_at activos
+- Storage bucket + 4 policies de storage.objects
+- TypeScript types regenerados en `src/integrations/supabase/types.ts` (59KB) — `tsc --noEmit` compila limpio
+- Test RLS isolation: rol `anon` ve 0 rows en las 4 tablas
+
+### Decisiones de arquitectura tomadas en Sprint 0
+
+1. **Extender `message_logs`** en lugar de crear `messages` nueva. Recordatorios y conversaciones conviven. Query inbox: `WHERE conversation_id IS NOT NULL`.
+2. **Normalizar `bot_service_types` JSONB a tabla `service_types`** con FK. JSONB queda intacto hasta que Sprint 1 actualice el bot-handler.
+3. **Aplicar a main directamente** (no branch). Migrations aditivas + nullable, sin riesgo. Ahorra ~$22 vs branch.
+4. **`set_updated_at()` generica** vs patron per-tabla. La existente `update_bot_faqs_updated_at()` queda en su lugar para no romper trigger actual.
+5. **Storage bucket via `execute_sql`** porque `apply_migration` no tiene ownership de `storage.objects`/`storage.buckets`.
+
+### Archivos generados
+
+- `supabase/migrations/20260518120001_centro_atencion_01_helper_set_updated_at.sql`
+- `supabase/migrations/20260518120002_centro_atencion_02_service_types.sql`
+- `supabase/migrations/20260518120003_centro_atencion_03_conversations.sql`
+- `supabase/migrations/20260518120004_centro_atencion_04_promotions.sql`
+- `supabase/migrations/20260518120005_centro_atencion_05_quick_replies.sql`
+- `supabase/migrations/20260518120006_centro_atencion_06_message_logs_extend.sql`
+- `supabase/migrations/20260518120007_centro_atencion_07_storage_bucket.sql`
+- `docs/centro-atencion-schema.md` (ERD ASCII + detalle por tabla + verificaciones)
+- `src/integrations/supabase/types.ts` (regenerado)
+
+### Proximo: Sprint 1 (26 May - 1 Jun, ~25h)
+
+- Extender `bot-handler/index.ts` para persistir TODOS los inbound en `message_logs` con `conversation_id`
+- Helper `_shared/conversations.ts`: `getOrCreateConversation`, `persistInboundMessage`, `persistOutboundMessage`
+- Bot dual mode: chequear `conversations.status='human_active'` antes de responder (bot calla)
+- Endpoints edge functions: `inbox-send`, `inbox-handoff`, `inbox-return-bot`
+- Webhook eventos delivery/read de Meta para actualizar `message_logs.status`
+- Smoke test con demo bot
+
+---
+
+## ✅ FIXES PRE-SABADO MENDOZA DEPLOYADOS 15 May ~21:50 UTC — bot-handler v62
 
 ## ✅ FIXES PRE-SABADO MENDOZA DEPLOYADOS 15 May ~21:50 UTC — bot-handler v62
 
