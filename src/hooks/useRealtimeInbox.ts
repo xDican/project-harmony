@@ -98,7 +98,6 @@ export function useRealtimeInbox(
             filter: `organization_id=eq.${organizationId}`,
           },
           (payload: { new: ConversationRowDb }) => {
-            console.log("[useRealtimeInbox] conv INSERT", payload.new.id);
             callbacksRef.current.onConversationInserted?.(payload.new);
           },
         )
@@ -112,7 +111,6 @@ export function useRealtimeInbox(
             filter: `organization_id=eq.${organizationId}`,
           },
           (payload: { new: ConversationRowDb }) => {
-            console.log("[useRealtimeInbox] conv UPDATE", payload.new.id);
             callbacksRef.current.onConversationUpdated?.(payload.new);
           },
         )
@@ -126,12 +124,6 @@ export function useRealtimeInbox(
             filter: `organization_id=eq.${organizationId}`,
           },
           (payload: { new: MessageRowDb }) => {
-            console.log(
-              "[useRealtimeInbox] msg INSERT",
-              payload.new.id,
-              payload.new.conversation_id,
-              payload.new.source,
-            );
             if (payload.new.conversation_id) {
               callbacksRef.current.onMessageInserted?.(payload.new);
             }
@@ -147,16 +139,13 @@ export function useRealtimeInbox(
             filter: `organization_id=eq.${organizationId}`,
           },
           (payload: { new: MessageRowDb }) => {
-            console.log("[useRealtimeInbox] msg UPDATE", payload.new.id);
             if (payload.new.conversation_id) {
               callbacksRef.current.onMessageUpdated?.(payload.new);
             }
           },
         )
         .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            console.log(`[useRealtimeInbox] subscribed to ${channelName}`);
-          } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          if (status === "CLOSED" || status === "CHANNEL_ERROR") {
             console.warn(`[useRealtimeInbox] channel status: ${status}`);
           }
         });

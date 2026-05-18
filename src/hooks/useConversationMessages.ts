@@ -126,12 +126,6 @@ export function useConversationMessages(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload: { new: MessageRow }) => {
-          console.log(
-            "[useConversationMessages] INSERT",
-            payload.new.id,
-            payload.new.source,
-            payload.new.direction,
-          );
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new];
@@ -148,20 +142,11 @@ export function useConversationMessages(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload: { new: MessageRow }) => {
-          console.log(
-            "[useConversationMessages] UPDATE",
-            payload.new.id,
-            payload.new.source,
-          );
           setMessages((prev) => {
             const idx = prev.findIndex((m) => m.id === payload.new.id);
             if (idx === -1) {
-              // El INSERT no llego (RLS bloqueo?), pero llego el UPDATE.
-              // Agregar el row para que se vea aunque haya llegado tarde.
-              console.warn(
-                "[useConversationMessages] UPDATE de msg que no estaba en state — agregando",
-                payload.new.id,
-              );
+              // Si el INSERT no llego (RLS timing del replica), agregar al
+              // recibir el UPDATE para que el msg quede visible.
               return [...prev, payload.new];
             }
             const next = [...prev];
@@ -170,12 +155,7 @@ export function useConversationMessages(conversationId: string | null) {
           });
         },
       )
-      .subscribe((status) => {
-        console.log(
-          `[useConversationMessages] channel messages:${conversationId} status:`,
-          status,
-        );
-      });
+      .subscribe();
 
     channelRef.current = channel;
 
