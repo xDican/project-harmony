@@ -1,10 +1,50 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 18 May 2026 18:06 UTC (Sprint 2 MVP Centro de Atencion completado — Whisper transcripcion funcionando end-to-end en prod)
+> Ultima actualizacion: 18 May 2026 23:30 UTC (Sprint 3 MVP Centro de Atencion completado — Frontend Inbox + centralizacion realtime via InboxContext)
 
 ## Fase actual
 
 **Sprint 1-8 MVP Centro de Atencion** (19 May - 20 Jul). Feature freeze ROTO conscientemente — pivot a centro de atencion es supervivencia, no feature creep. Detalles en `.claude/plans/centro-atencion-mvp.md` y `.claude/plans/centro-atencion-sprints.md`.
+
+## ✅ SPRINT 3 COMPLETADO 18 May ~23:30 UTC — Frontend Inbox
+
+### Fases 1-7 cerradas
+
+| Fase | Entregable | Commits clave |
+|---|---|---|
+| 1 | Layout responsive (desktop 2 cols, mobile single) | Sprint 3 fase 1-2 |
+| 2 | InboxList + filtros (all/unread/bot/human) + search | — |
+| 3 | ConversationDetail: timeline + audio player + transcription + composer | — |
+| 4 | Tomar / Devolver al bot (inbox-handoff, inbox-return-bot) | — |
+| 5 | Realtime Supabase channels — **bug raiz: `current_doctor_id()` VOLATILE rompia evaluacion de policies en Realtime; fix STABLE** | d69440d |
+| 6 | Badge unread global en sidebar (numerito al lado de "Bandeja") | fb954ee |
+| 7 | Polish: retry buttons, timeline skeleton, empty states contextuales, aria-labels, focus-visible | 15b127d |
+| extra | **InboxContext: una fuente de verdad** — un solo channel `clinic:{orgId}`, badge sidebar + lista derivan del mismo state. Eliminada hook duplicada `useInboxUnreadCount`. | fff4429 |
+
+### Bug raiz importante de Sprint 3 — Realtime + funciones VOLATILE
+
+Supabase Realtime evalua el OR de todas las RLS policies SELECT cuando llega un evento. Si CUALQUIERA usa una funcion VOLATILE, la evaluacion falla silenciosamente y el evento se descarta. `current_doctor_id()` estaba VOLATILE — la policy `v3_message_logs_select_doctor_own` la usaba, y aunque Diego no es doctor, Postgres la evalua igual como parte del OR y rompe todo.
+
+Fix: migration `20260518200001_fix_current_doctor_id_stable_for_realtime.sql` — `ALTER FUNCTION current_doctor_id() STABLE`.
+
+**Aprendizaje para el futuro:** verificar siempre que las funciones usadas en RLS policies de tablas con Realtime habilitado sean STABLE o IMMUTABLE.
+
+### Arquitectura final del Inbox
+
+- `App.tsx` monta `<InboxProvider>` dentro de `UserProvider`
+- `InboxProvider` (src/context/InboxContext.tsx):
+  - llama `useConversations(orgId)` → state local
+  - llama `useRealtimeInbox(orgId, callbacks)` → un solo channel `clinic:{orgId}` que muta el state via upsertConversation/applyMessageToConversation
+  - expone: conversations, unreadCount (derivado), refetch, etc.
+- `MainLayout` consume `useInbox().unreadCount` para el badge
+- `Inbox.tsx` consume `useInbox()` para la lista
+- `ConversationDetail.tsx` mantiene su propio `useConversationMessages(convId)` para el timeline (scope por-conv, no por-org)
+
+Para optimizar redes lentas (reconnect, debounce, batching) — un solo lugar a tocar: `InboxProvider`.
+
+### Listo para dogfooding
+
+Inbox funcional end-to-end con Warhol. Faltan fases 4-7 del plan (multimedia outbound desde composer, promociones del mes, Calling API, dogfooding y lanzamiento Mendoza).
 
 ## ✅ SPRINT 2 COMPLETADO 18 May 18:06 UTC — Multimedia + Transcripcion
 
