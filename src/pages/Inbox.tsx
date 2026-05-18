@@ -25,6 +25,10 @@ import {
   useConversations,
   type ConversationListRow,
 } from "@/hooks/useConversations";
+import {
+  useRealtimeInbox,
+  playNotificationBeep,
+} from "@/hooks/useRealtimeInbox";
 import { useCurrentUser } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +40,35 @@ export default function Inbox() {
   const organizationId = user?.organizationId;
 
   // Hook elevado a parent para compartir data con detalle (sin duplicar fetch)
-  const { conversations, isLoading, error, refetch } = useConversations(organizationId);
+  const {
+    conversations,
+    isLoading,
+    error,
+    refetch,
+    upsertConversation,
+    applyMessageToConversation,
+  } = useConversations(organizationId);
+
+  // Sprint 3 Fase 5: realtime para que la lista se actualice al instante.
+  // useConversationMessages tiene su propio subscribe para el timeline activo.
+  useRealtimeInbox(organizationId, {
+    onConversationInserted: (row) => {
+      upsertConversation(row);
+    },
+    onConversationUpdated: (row) => {
+      upsertConversation(row);
+    },
+    onMessageInserted: (row) => {
+      applyMessageToConversation(row);
+      if (row.source === "patient") {
+        playNotificationBeep();
+      }
+    },
+    onMessageUpdated: (row) => {
+      // Si llego transcripcion despues, refrescar preview
+      applyMessageToConversation(row);
+    },
+  });
 
   // Cuando se actualiza la lista, refrescar selectedConv con la version mas reciente
   const liveSelected = selectedConv

@@ -13,7 +13,8 @@
  * recibir respuesta del servidor).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface MessageRow {
@@ -108,17 +109,105 @@ export function useConversationMessages(conversationId: string | null) {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchMessages]);
 
+  // Realtime: subscribe a inserts/updates de mensajes de esta conv
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        // @ts-expect-error supabase-js postgres_changes types
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_logs",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload: { new: MessageRow }) => {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
+        },
+      )
+      .on(
+        // @ts-expect-error supabase-js postgres_changes types
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "message_logs",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload: { new: MessageRow }) => {
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === payload.new.id);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = payload.new;
+            return next;
+          });
+        },
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [conversationId]);
+
   /**
    * Agrega un mensaje optimisticamente al timeline. Despues del servidor,
    * el polling lo reemplaza con la data canonica.
    */
   const addOptimisticMessage = useCallback((message: MessageRow) => {
     setMessages((prev) => {
-      // Evitar duplicados por id
       if (prev.some((m) => m.id === message.id)) return prev;
       return [...prev, message];
     });
   }, []);
+
+  /**
+   * Insert de un mensaje recibido por Realtime. Idempotente: si ya esta por
+   * id, no duplica. Solo aplica si pertenece a esta conversation.
+   */
+  const insertRealtimeMessage = useCallback(
+    (message: MessageRow) => {
+      if (!conversationId) return;
+      if (message.conversation_id !== conversationId) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
+    },
+    [conversationId],
+  );
+
+  /**
+   * Update de un mensaje recibido por Realtime (status sent/delivered/read,
+   * transcripcion que llega despues, etc.).
+   */
+  const updateRealtimeMessage = useCallback(
+    (message: MessageRow) => {
+      if (!conversationId) return;
+      if (message.conversation_id !== conversationId) return;
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === message.id);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = message;
+        return next;
+      });
+    },
+    [conversationId],
+  );
 
   return {
     messages,
@@ -126,5 +215,7 @@ export function useConversationMessages(conversationId: string | null) {
     error,
     refetch: fetchMessages,
     addOptimisticMessage,
+    insertRealtimeMessage,
+    updateRealtimeMessage,
   };
 }

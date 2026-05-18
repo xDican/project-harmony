@@ -140,11 +140,103 @@ export function useConversations(organizationId: string | undefined) {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchConversations]);
 
+  /**
+   * Upsert local de una conversation row (de Realtime).
+   * Si existe por id, hace merge. Si no, agrega al top.
+   * No fetch — solo state update local.
+   */
+  const upsertConversation = useCallback(
+    (incoming: Partial<ConversationListRow> & { id: string }) => {
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === incoming.id);
+        if (idx === -1) {
+          // Nueva conversation — la insertamos arriba como placeholder
+          // (puede no tener last_message todavia; el siguiente refetch o
+          // un onMessageInserted la completa)
+          const placeholder: ConversationListRow = {
+            id: incoming.id,
+            organization_id: incoming.organization_id ?? "",
+            whatsapp_line_id: incoming.whatsapp_line_id ?? "",
+            patient_phone: incoming.patient_phone ?? "",
+            patient_id: incoming.patient_id ?? null,
+            patient_name: incoming.patient_name ?? null,
+            status: incoming.status ?? "bot_active",
+            assigned_to: incoming.assigned_to ?? null,
+            last_message_at: incoming.last_message_at ?? new Date().toISOString(),
+            last_inbound_at: incoming.last_inbound_at ?? null,
+            unread_count: incoming.unread_count ?? 0,
+            last_message: null,
+          };
+          return [placeholder, ...prev];
+        }
+        // Merge campos del incoming sobre el existente, preservar last_message
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...incoming };
+        // Re-ordenar por last_message_at desc
+        next.sort((a, b) => {
+          const da = new Date(a.last_message_at).getTime();
+          const db = new Date(b.last_message_at).getTime();
+          return db - da;
+        });
+        return next;
+      });
+    },
+    [],
+  );
+
+  /**
+   * Aplica un mensaje nuevo a su conversacion: refresca last_message,
+   * last_message_at; si es inbound (source=patient), incrementa unread_count.
+   */
+  const applyMessageToConversation = useCallback(
+    (message: {
+      conversation_id: string | null;
+      body: string | null;
+      transcription: string | null;
+      message_type: string;
+      source: string | null;
+      created_at: string;
+    }) => {
+      if (!message.conversation_id) return;
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === message.conversation_id);
+        if (idx === -1) return prev; // conv no esta en lista — fetch lo levantara
+        const conv = prev[idx];
+        const isInbound = message.source === "patient";
+        const updated: ConversationListRow = {
+          ...conv,
+          last_message_at: message.created_at,
+          last_inbound_at: isInbound ? message.created_at : conv.last_inbound_at,
+          unread_count: isInbound ? conv.unread_count + 1 : conv.unread_count,
+          last_message: {
+            body: message.body,
+            transcription: message.transcription,
+            message_type: message.message_type,
+            source: message.source,
+            created_at: message.created_at,
+          },
+        };
+        const next = [...prev];
+        next[idx] = updated;
+        // Mover al top (mas reciente)
+        next.sort((a, b) => {
+          const da = new Date(a.last_message_at).getTime();
+          const db = new Date(b.last_message_at).getTime();
+          return db - da;
+        });
+        return next;
+      });
+    },
+    [],
+  );
+
   return {
     conversations,
     isLoading,
     error,
     refetch: fetchConversations,
+    upsertConversation,
+    applyMessageToConversation,
   };
 }
 
