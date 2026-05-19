@@ -903,20 +903,32 @@ function scorePromo(
  * el scoring debe ignorar las keywords genericas de promo y retornar TODAS.
  */
 function isGenericPromoQuery(normMessage: string): boolean {
-  const PROMO_KEYWORDS_GENERICOS = [
+  // Palabras "ruido" que NO indican un servicio especifico — solo formulan la
+  // pregunta. Si las significativas restantes son cero, es generic.
+  const NOISE_WORDS = new Set([
+    // Promo keywords genericos
     'promocion', 'promociones', 'promo', 'promos',
     'oferta', 'ofertas',
-    'descuento', 'descuentos',
-    'tienen', 'tiene', 'hay',
-    'algo', 'alguna',
-    'este mes', 'del mes',
-  ];
-  // Si las palabras significativas son solo genericos de promo, es generic.
-  const words = normMessage.split(/\s+/).filter((w) => w.length >= 3);
+    'descuento', 'descuentos', 'rebaja', 'rebajas',
+    'paquete', 'paquetes', 'combo', 'combos',
+    // Question words / verbos auxiliares
+    'que', 'cual', 'cuales', 'cuando', 'donde',
+    'hay', 'tienen', 'tiene', 'tienes',
+    'ofrecen', 'mostrar', 'ver', 'dame', 'dime', 'dale',
+    'algo', 'alguna', 'alguno', 'algunos', 'algunas',
+    'hoy', 'ahora',
+    'este', 'esta', 'estos', 'estas', 'mes',
+    'por favor', 'porfa', 'pls',
+    // Saludos cortos
+    'hola', 'buenas', 'buen', 'dia', 'tardes', 'noches',
+    'gracias', 'mira', 'oye',
+    'puedes', 'pueden', 'puede',
+    'disponible', 'disponibles',
+    'actual', 'actuales',
+  ]);
+  const words = normMessage.split(/\s+/).filter((w) => w.length >= 2);
   if (words.length === 0) return true;
-  const significantWords = words.filter(
-    (w) => !PROMO_KEYWORDS_GENERICOS.some((g) => g.includes(w) || w.includes(g)),
-  );
+  const significantWords = words.filter((w) => !NOISE_WORDS.has(w));
   return significantWords.length === 0;
 }
 
@@ -961,6 +973,32 @@ function formatPromoCaption(p: PromoRow): string {
  * Retorna { multimediaSent: true } si ya envio la imagen directamente — en ese
  * caso el handler debe setear skipDefaultSend en su BotResponse.
  */
+/**
+ * Sprint 5.1 bug 3 fix: Detecta el MIME real del archivo via magic bytes,
+ * ignorando lo que diga el Content-Type/extension. Meta rechaza media con
+ * error async 131053 cuando el contenido real no coincide con lo que decia
+ * el upload (ej. WebP renombrado a .jpg). Validamos a priori para evitar
+ * el envio fallido.
+ */
+function detectMimeFromMagicBytes(bytes: Uint8Array): string | null {
+  if (bytes.length < 4) return null;
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  ) return 'image/png';
+  // WEBP: RIFF....WEBP
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) return 'image/webp';
+  // GIF: GIF87a o GIF89a
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
+  return null;
+}
+
 async function sendPromoMultimedia(
   promo: PromoRow,
   whatsappLineId: string,
@@ -992,7 +1030,28 @@ async function sendPromoMultimedia(
     console.warn('[sendPromoMultimedia] download failed from promo-images; fallback to text', { path: promo.image_url });
     return { multimediaSent: false, error: 'download_failed' };
   }
-  console.log('[sendPromoMultimedia] downloaded', { path: promo.image_url, mime: downloaded.mime, bytes: downloaded.bytes.length });
+
+  // 2b. Detectar MIME real (magic bytes) y validar que sea WhatsApp-compatible.
+  // Meta rechaza async (error 131053) si el contenido no es JPG/PNG real
+  // aunque la extension/MIME del Storage diga otra cosa.
+  const realMime = detectMimeFromMagicBytes(downloaded.bytes);
+  const allowedForWhatsapp = ['image/jpeg', 'image/png'];
+  if (!realMime || !allowedForWhatsapp.includes(realMime)) {
+    console.warn('[sendPromoMultimedia] file not WhatsApp-compatible; fallback to text', {
+      path: promo.image_url,
+      declaredMime: downloaded.mime,
+      realMime: realMime ?? 'unknown',
+      bytes: downloaded.bytes.length,
+    });
+    return { multimediaSent: false, error: `incompatible_mime:${realMime ?? 'unknown'}` };
+  }
+  console.log('[sendPromoMultimedia] downloaded + validated', {
+    path: promo.image_url,
+    realMime,
+    bytes: downloaded.bytes.length,
+  });
+  // Sobrescribir el mime con el real para upload a Meta
+  downloaded.mime = realMime;
 
   // 3. Upload a Meta → mediaId
   const uploaded = await uploadMetaMedia(
