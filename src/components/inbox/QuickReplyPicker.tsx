@@ -42,6 +42,23 @@ interface QuickReplyPickerProps {
   onPick: (content: string) => void;
 }
 
+/**
+ * Normaliza un string para busqueda: minusculas + sin acentos.
+ * Permite que "direccion" matchee "Dirección" y viceversa.
+ */
+function normalizeForSearch(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").trim();
+}
+
+/**
+ * Filter custom para cmdk: matching por substring contiguo, case-insensitive,
+ * insensible a acentos. Retorna 1 si match, 0 si no.
+ */
+function filterQuickReply(value: string, search: string): number {
+  if (!search) return 1;
+  return normalizeForSearch(value).includes(normalizeForSearch(search)) ? 1 : 0;
+}
+
 export function QuickReplyPicker({
   organizationId,
   disabled,
@@ -80,7 +97,7 @@ export function QuickReplyPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="p-0 w-80" sideOffset={4}>
-        <Command>
+        <Command filter={filterQuickReply}>
           <CommandInput placeholder="Buscar plantilla..." autoFocus />
           <CommandList>
             {isLoading ? (

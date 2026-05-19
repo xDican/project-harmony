@@ -50,6 +50,10 @@ export function useConversationMessages(conversationId: string | null) {
 
     setError(null);
     try {
+      // Traemos los 100 MAS RECIENTES (DESC + limit) y luego invertimos para
+      // mostrar en orden cronologico ascendente. Si traemos ASC + limit 100,
+      // en conversaciones con >100 msgs los recientes quedan fuera y el
+      // timeline parece "congelado".
       const { data, error } = await supabase
         .from("message_logs")
         .select(
@@ -59,7 +63,7 @@ export function useConversationMessages(conversationId: string | null) {
            created_at`,
         )
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(100);
 
       if (error) {
@@ -68,7 +72,9 @@ export function useConversationMessages(conversationId: string | null) {
         return;
       }
 
-      setMessages((data || []) as MessageRow[]);
+      // Reversa: el render espera ASC (mas viejo arriba, mas reciente abajo).
+      const sorted = ((data || []) as MessageRow[]).slice().reverse();
+      setMessages(sorted);
     } catch (e) {
       console.error("[useConversationMessages] exception:", e);
       setError(e instanceof Error ? e.message : "Error desconocido");
