@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 19 May 2026 PM (Sprint 4 codigo completo — quick replies + multimedia outbound. Pendiente QA in-vivo de Diego.)
+> Ultima actualizacion: 19 May 2026 PM (Sprint 4 ✅ cerrado — quick replies + multimedia outbound. QA aprobado, 2 bugs durante QA fixeados (timeline >100 msgs + busqueda acentos).)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 
 ---
@@ -19,7 +19,7 @@ Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sp
 | 1 — Persistencia + bot dual mode | ✅ 18 May | 5 functions deployadas, conversation tracking |
 | 2 — Multimedia + transcripcion | ✅ 18 May | Whisper español, audios ~3s, $0.002 total |
 | 3 — Frontend Inbox | ✅ 18 May 23:30 | InboxContext realtime una-fuente-verdad. Bug fix VOLATILE RLS |
-| **4 — Quick replies + multimedia outbound** | ✅ codigo 19 May | Pagina settings + picker en composer + upload archivos (image/pdf/audio). Pendiente QA in-vivo. |
+| **4 — Quick replies + multimedia outbound** | ✅ 19 May | Pagina settings + picker en composer + upload archivos. QA aprobado. Bugs fixeados: timeline en convs >100 msgs (preexistente Sprint 3) + busqueda quick replies normalizando acentos. |
 | 5 — Promociones del mes | proximo | Panel asistente + uso por bot + expiracion auto |
 | 6 — Calling API | en cola | Webhooks calls.* + UI inbox llamadas + softphone WebRTC |
 | 7-8 — Pilot + lanzamiento | revisar | Decision 19 May: inbox-only 1 sem en Torre Zafiro |
@@ -95,6 +95,34 @@ Fix aplicado: `ALTER FUNCTION current_doctor_id() STABLE` (migration `2026051820
 ### Diferido Junio 2026+
 - FAQ auto-poblado (3 capas: onboarding data + templates por especialidad + deteccion gaps)
 - Flujo "DEMO" en el bot (cuando reciba "DEMO" dar contexto guiado)
+
+### Storage media retention — implementar ~Jul 2026 (cuando lleguemos a 5-10 clientes)
+
+Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. A 1 cliente es ~150 MB/mes. A 100 clientes proyectado ~180 GB acumulados en 12 meses ($1.70/mes extras de storage Supabase Pro). Manejable pero crece sin parar.
+
+**Plan a implementar (1 sesion de ~3h cuando llegue el momento):**
+
+1. **Cron diario: retencion 90 dias para multimedia outbound + inbound.**
+   - Query `message_logs` WHERE `media_url IS NOT NULL AND created_at < NOW() - INTERVAL '90 days'`
+   - Borrar archivo del bucket `conversation-media`
+   - NULLear `media_url` en la row (preservar el `body` o `transcription` como rastro)
+   - Edge function nueva: `cleanup-old-media`, scheduled via pg_cron
+
+2. **Borrar audios inbound post-transcripcion a los 7 dias.**
+   - Sprint 2 ya transcribe audios con Whisper a `message_logs.transcription`
+   - A los 7 dias, borrar el audio del bucket (la transcripcion queda)
+   - La asistente sigue leyendo el texto — nadie oye audios de >7 dias en practica
+
+3. **Cron semanal: cleanup huerfanos.**
+   - Si upload OK pero `sendMessage` falla a mitad → archivo queda en bucket sin referencia
+   - Listar archivos en bucket que no tengan match en `message_logs.media_url` ni `messages.media_url`
+   - Borrarlos
+
+**NO implementar antes** porque a 1-3 clientes el costo es $0 y la complejidad introducida no se justifica.
+
+**Comunicacion a clientes** (incluir en onboarding cuando se implemente): "Los archivos del inbox se conservan 90 dias. Si necesitas guardar algo importante, descargalo."
+
+**Trigger para activar este trabajo:** cuando MRR > $300 o tengamos >5 clientes pagos usando inbox activamente.
 
 ## Pendiente operativo
 
