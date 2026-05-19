@@ -21,6 +21,7 @@ import {
   Archive,
   Trash2,
   RotateCcw,
+  Star,
 } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +147,16 @@ export function PromoCard({
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${variant.dot}`} />
           {PROMOTION_STATUS_LABELS[status]}
         </div>
+
+        {promotion.is_featured ? (
+          <div
+            className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+            title="El bot la menciona naturalmente al cierre de otros flujos"
+          >
+            <Star className="h-3 w-3 fill-current" />
+            Destacada
+          </div>
+        ) : null}
       </div>
 
       <CardContent className="pt-4 space-y-2">

@@ -1137,8 +1137,10 @@ export type Database = {
           description: string
           id: string
           image_url: string | null
+          is_featured: boolean
           keywords: string[]
           organization_id: string
+          related_faq_ids: string[]
           service_type_id: string | null
           status: string
           title: string
@@ -1154,8 +1156,10 @@ export type Database = {
           description: string
           id?: string
           image_url?: string | null
+          is_featured?: boolean
           keywords?: string[]
           organization_id: string
+          related_faq_ids?: string[]
           service_type_id?: string | null
           status?: string
           title: string
@@ -1171,8 +1175,10 @@ export type Database = {
           description?: string
           id?: string
           image_url?: string | null
+          is_featured?: boolean
           keywords?: string[]
           organization_id?: string
+          related_faq_ids?: string[]
           service_type_id?: string | null
           status?: string
           title?: string

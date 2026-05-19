@@ -813,35 +813,8 @@ function detectMenuIntent(input: string): 'booking' | 'reschedule' | 'faq' | 'ha
 }
 
 // ============================================================================
-// PROMO SEARCH (Sprint 5 — Promociones del mes)
+// PROMO SEARCH (Sprint 5 + 5.1 — Promociones del mes con matching escalonado)
 // ============================================================================
-
-/**
- * Detecta si el mensaje del paciente menciona un servicio especifico
- * (buscando en service_types.name + keywords de la promo).
- * Retorna service_type_id o null.
- */
-async function detectServiceTypeFromMessage(
-  message: string,
-  organizationId: string,
-  supabase: SupabaseClient,
-): Promise<string | null> {
-  if (!message || message.trim().length < 3) return null;
-  const { data: services } = await supabase
-    .from('service_types')
-    .select('id, name')
-    .eq('organization_id', organizationId);
-  if (!services || services.length === 0) return null;
-
-  const norm = message.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  for (const s of services) {
-    const sName = (s.name as string).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    if (norm.includes(sName) || sName.split(/\s+/).some((w: string) => w.length > 3 && norm.includes(w))) {
-      return s.id as string;
-    }
-  }
-  return null;
-}
 
 interface PromoRow {
   id: string;
@@ -852,6 +825,121 @@ interface PromoRow {
   valid_to: string;
   service_type_id: string | null;
   image_url: string | null;
+  keywords?: string[];
+  is_featured?: boolean;
+  related_faq_ids?: string[];
+}
+
+/** Normaliza para matching: lowercase + sin acentos + trim. */
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Sprint 5.1 - Matching escalonado con keywords.
+ *
+ * Asigna un score a la promo segun cuanto matchea con el mensaje del paciente.
+ *   - title (cada palabra >=4 chars que aparece en msg): 3 pts
+ *   - keywords (cada keyword que aparece): 2 pts
+ *   - service_type name (cada palabra que aparece): 2 pts
+ *   - description (palabras distintivas >=5 chars): 0.5 pts
+ *
+ * Retorna 0 si no hay match. Si paciente pidio genericamente ("promociones",
+ * "ofertas") sin nombrar servicio, todas las promos retornan 0 y la funcion
+ * caller debe devolver todas (no filtrar).
+ */
+function scorePromo(
+  promo: PromoRow,
+  normMessage: string,
+  serviceTypeName: string | null,
+): number {
+  if (!normMessage || normMessage.length < 3) return 0;
+
+  let score = 0;
+
+  // Title
+  const titleNorm = normalizeForMatch(promo.title);
+  const titleWords = titleNorm.split(/\s+/).filter((w) => w.length >= 4);
+  for (const w of titleWords) {
+    if (normMessage.includes(w)) score += 3;
+  }
+  // Tambien match del title completo si es corto
+  if (titleNorm.length >= 4 && normMessage.includes(titleNorm)) score += 2;
+
+  // Keywords
+  for (const kw of promo.keywords ?? []) {
+    const kwNorm = normalizeForMatch(kw);
+    if (kwNorm.length >= 3 && normMessage.includes(kwNorm)) score += 2;
+  }
+
+  // Service type name
+  if (serviceTypeName) {
+    const stNorm = normalizeForMatch(serviceTypeName);
+    const stWords = stNorm.split(/\s+/).filter((w) => w.length >= 4);
+    for (const w of stWords) {
+      if (normMessage.includes(w)) score += 2;
+    }
+  }
+
+  // Description (palabras distintivas)
+  const descNorm = normalizeForMatch(promo.description);
+  const descWords = descNorm.split(/\s+/).filter((w) => w.length >= 5);
+  for (const w of descWords) {
+    if (normMessage.includes(w)) score += 0.5;
+  }
+
+  return score;
+}
+
+/**
+ * Detecta si el mensaje es una pregunta GENERICA sobre promociones
+ * ("tienen promociones?", "hay ofertas?", "que descuentos hay"). En ese caso
+ * el scoring debe ignorar las keywords genericas de promo y retornar TODAS.
+ */
+function isGenericPromoQuery(normMessage: string): boolean {
+  const PROMO_KEYWORDS_GENERICOS = [
+    'promocion', 'promociones', 'promo', 'promos',
+    'oferta', 'ofertas',
+    'descuento', 'descuentos',
+    'tienen', 'tiene', 'hay',
+    'algo', 'alguna',
+    'este mes', 'del mes',
+  ];
+  // Si las palabras significativas son solo genericos de promo, es generic.
+  const words = normMessage.split(/\s+/).filter((w) => w.length >= 3);
+  if (words.length === 0) return true;
+  const significantWords = words.filter(
+    (w) => !PROMO_KEYWORDS_GENERICOS.some((g) => g.includes(w) || w.includes(g)),
+  );
+  return significantWords.length === 0;
+}
+
+/**
+ * Retorna el texto de mencion de la promo destacada del mes para agregar al
+ * cierre de otros flujos. Retorna '' si no hay featured activa.
+ */
+async function getFeaturedPromoCloser(
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('promotions')
+    .select('title')
+    .eq('organization_id', organizationId)
+    .eq('is_featured', true)
+    .eq('status', 'active')
+    .lte('valid_from', today)
+    .gte('valid_to', today)
+    .maybeSingle();
+  if (error || !data) return '';
+  return `\n\n${OPT_EMOJI.promociones} _Por cierto, este mes destacamos: *${data.title as string}*. Si le interesa, me dice "promociones"._`;
 }
 
 function formatPromoCaption(p: PromoRow): string {
@@ -946,10 +1034,13 @@ async function sendPromoMultimedia(
         source: 'bot',
       }),
     });
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('[sendPromoMultimedia] gateway failed:', res.status, errText);
-      return { multimediaSent: false, error: 'gateway_failed' };
+    const body = await res.json().catch(() => null) as { ok?: boolean; status?: string; error?: string } | null;
+    // Gateway puede retornar HTTP 200 con ok:false cuando el provider rechaza.
+    // Sin chequear body.ok teniamos un falso positivo y el bot mandaba solo
+    // el segundo mensaje sin la imagen+caption.
+    if (!res.ok || !body || body.ok === false || body.status === 'failed') {
+      console.error('[sendPromoMultimedia] gateway/provider failed:', res.status, body);
+      return { multimediaSent: false, error: 'gateway_or_provider_failed' };
     }
   } catch (e) {
     console.error('[sendPromoMultimedia] gateway exception:', e);
@@ -997,26 +1088,17 @@ async function handlePromoSearch(
 ): Promise<BotResponse> {
   const today = new Date().toISOString().slice(0, 10);
 
-  const serviceTypeId = await detectServiceTypeFromMessage(
-    messageText,
-    organizationId,
-    supabase,
-  );
-
-  let query = supabase
+  // 1. Fetch TODAS las promos activas (no filtramos por service_type aqui;
+  //    el scoring se encarga). Incluimos keywords + is_featured.
+  const { data: promosData, error } = await supabase
     .from('promotions')
-    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url')
+    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url, keywords, is_featured, related_faq_ids')
     .eq('organization_id', organizationId)
     .eq('status', 'active')
     .lte('valid_from', today)
     .gte('valid_to', today)
+    .order('is_featured', { ascending: false })
     .order('valid_to', { ascending: true });
-
-  if (serviceTypeId) {
-    query = query.or(`service_type_id.eq.${serviceTypeId},service_type_id.is.null`);
-  }
-
-  const { data: promosData, error } = await query;
 
   if (error) {
     console.error('[handlePromoSearch] query failed:', error.message);
@@ -1030,15 +1112,69 @@ async function handlePromoSearch(
   }
 
   const promos = (promosData ?? []) as PromoRow[];
-
   if (promos.length === 0) {
     return noPromosResponse(handoffLabels);
   }
 
-  // 1 sola promo: enviar directo
-  if (promos.length === 1) {
+  // 2. Cargar nombres de service_types para scoring
+  const stIds = Array.from(
+    new Set(promos.map((p) => p.service_type_id).filter((x): x is string => !!x)),
+  );
+  const serviceTypeNames: Record<string, string> = {};
+  if (stIds.length > 0) {
+    const { data: sts } = await supabase
+      .from('service_types')
+      .select('id, name')
+      .in('id', stIds);
+    for (const s of sts ?? []) {
+      serviceTypeNames[s.id as string] = s.name as string;
+    }
+  }
+
+  // 3. Decidir: pregunta generica o especifica
+  const normMsg = normalizeForMatch(messageText);
+  const isGeneric = isGenericPromoQuery(normMsg);
+
+  let visiblePromos: PromoRow[];
+  if (isGeneric) {
+    // "promociones?" / "ofertas?" → mostrar todas
+    visiblePromos = promos;
+  } else {
+    // Especifica: scorear y filtrar a las que matchean
+    const scored = promos
+      .map((p) => ({
+        promo: p,
+        score: scorePromo(p, normMsg, p.service_type_id ? serviceTypeNames[p.service_type_id] ?? null : null),
+      }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) {
+      // Paciente preguntó por algo especifico pero no hay match. Le decimos
+      // amablemente y derivamos.
+      return {
+        message:
+          `${OPT_EMOJI.promociones} Por ahora no tenemos una promoción específica de eso. ` +
+          `Le puedo agendar una consulta o mostrarle el resto de promociones del mes.`,
+        options: [
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          `${OPT_EMOJI.promociones} Ver todas las promociones`,
+          handoffLabels.menuOption,
+          `${OPT_EMOJI.menu} Menu principal`,
+        ],
+        requiresInput: true,
+        nextState: 'main_menu',
+        sessionComplete: false,
+      };
+    }
+    visiblePromos = scored.map((x) => x.promo);
+  }
+
+  // 4. 1 sola promo visible → enviar directo (caso comun cuando el paciente
+  //    pidio algo especifico que matchea solo una)
+  if (visiblePromos.length === 1) {
     return await sendSinglePromo(
-      promos[0],
+      visiblePromos[0],
       session,
       organizationId,
       supabase,
@@ -1046,23 +1182,52 @@ async function handlePromoSearch(
     );
   }
 
-  // N promos: menu breve numerado
-  session.context.promoIds = promos.map((p) => p.id);
-  const titlesList = promos
+  // 5. N promos: menu breve numerado con SOLO las que matchean
+  session.context.promoIds = visiblePromos.map((p) => p.id);
+  const titlesList = visiblePromos
     .map((p, idx) => `${idx + 1}. ${p.title}`)
     .join('\n');
 
+  const header = isGeneric
+    ? `${OPT_EMOJI.promociones} *Promociones del mes* (${visiblePromos.length})`
+    : `${OPT_EMOJI.promociones} Encontré ${visiblePromos.length} promociones que pueden interesarle`;
+
   return {
-    message:
-      `${OPT_EMOJI.promociones} *Promociones del mes* (${promos.length})\n\n` +
-      `${titlesList}\n\n` +
-      `Responda con el número de la que le interesa para ver el detalle.`,
+    message: `${header}\n\n${titlesList}\n\nResponda con el número de la que le interesa para ver el detalle.`,
     options: [`${OPT_EMOJI.menu} Menu principal`],
     showMenuHint: false,
     requiresInput: true,
     nextState: 'promo_browse',
     sessionComplete: false,
   };
+}
+
+/**
+ * Busca si alguna FAQ matchea una promo activa via related_faq_ids.
+ * Retorna la promo si encuentra match, o null. Usado en handleFAQSearch
+ * para hacer override: si la FAQ tiene promo vinculada, respondemos con
+ * la promo en lugar de la respuesta normal de la FAQ.
+ */
+async function findPromoOverridingFAQ(
+  faqId: string,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<PromoRow | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('promotions')
+    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url, keywords')
+    .eq('organization_id', organizationId)
+    .eq('status', 'active')
+    .lte('valid_from', today)
+    .gte('valid_to', today)
+    .contains('related_faq_ids', [faqId])
+    .order('is_featured', { ascending: false })
+    .order('valid_to', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as PromoRow;
 }
 
 /**
@@ -1443,8 +1608,25 @@ async function handleFAQSearch(
   if (faq) {
     session.context.lastFaqResult = 'found';
     session.context.faqNotFoundCount = 0;
+
+    // Sprint 5.1 — Idea 2: si la FAQ esta vinculada a una promo activa,
+    // override de la respuesta con la promo.
+    const overridingPromo = await findPromoOverridingFAQ(faq.id, organizationId, supabase);
+    if (overridingPromo) {
+      console.log('[handleFAQSearch] FAQ', faq.id, 'overrideada por promo', overridingPromo.id);
+      return await sendSinglePromo(
+        overridingPromo,
+        session,
+        organizationId,
+        supabase,
+        handoffLabels,
+      );
+    }
+
+    // Sprint 5.1 — Idea 3: agregar mencion de promo destacada al cierre
+    const featuredCloser = await getFeaturedPromoCloser(organizationId, supabase);
     return {
-      message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faq.question}*\n${faq.answer}`,
+      message: `${OPT_EMOJI.faq} *Respuesta*\n\n*${faq.question}*\n${faq.answer}${featuredCloser}`,
       options: [`${OPT_EMOJI.faq} Otra pregunta`, `${OPT_EMOJI.menu} Menu principal`],
       requiresInput: true,
       nextState: 'faq_search',
@@ -2372,8 +2554,11 @@ async function createAppointmentWithPatient(
 
   const serviceTypeLine = session.context.selectedServiceType ? `\n📋 ${session.context.selectedServiceType}` : '';
 
+  // Sprint 5.1 — Idea 3: cierre con promo destacada (si hay)
+  const featuredCloser = await getFeaturedPromoCloser(organizationId, supabase);
+
   return {
-    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.`,
+    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.${featuredCloser}`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,

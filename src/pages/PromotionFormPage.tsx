@@ -25,6 +25,8 @@ import {
   Image as ImageIcon,
   Loader2,
   Upload,
+  Star,
+  HelpCircle,
 } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
 import { useCurrentUser } from "@/context/UserContext";
@@ -66,6 +68,11 @@ interface ServiceType {
   name: string;
 }
 
+interface BotFaqLite {
+  id: string;
+  question: string;
+}
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -105,6 +112,12 @@ export default function PromotionFormPage() {
   // Service types
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
 
+  // Sprint 5.1: destacada del mes + FAQs vinculadas
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [relatedFaqIds, setRelatedFaqIds] = useState<string[]>([]);
+  const [botFaqs, setBotFaqs] = useState<BotFaqLite[]>([]);
+  const [existingFeaturedId, setExistingFeaturedId] = useState<string | null>(null);
+
   // Loading / saving
   const [loadingPromo, setLoadingPromo] = useState(isEditing);
   const [saving, setSaving] = useState(false);
@@ -123,6 +136,29 @@ export default function PromotionFormPage() {
           return;
         }
         setServiceTypes((data as ServiceType[]) ?? []);
+      });
+  }, [organizationId]);
+
+  // Cargar FAQs de la org (para vincular) + detectar si ya hay otra featured
+  useEffect(() => {
+    if (!organizationId) return;
+    supabase
+      .from("bot_faqs")
+      .select("id, question")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .order("question", { ascending: true })
+      .then(({ data }) => setBotFaqs((data as BotFaqLite[]) ?? []));
+
+    supabase
+      .from("promotions")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("is_featured", true)
+      .eq("status", "active")
+      .maybeSingle()
+      .then(({ data }) => {
+        setExistingFeaturedId((data?.id as string | null) ?? null);
       });
   }, [organizationId]);
 
@@ -158,6 +194,8 @@ export default function PromotionFormPage() {
         setKeywords(p.keywords ?? []);
         setIsActive(p.status !== "draft");
         setImagePath(p.image_url);
+        setIsFeatured(p.is_featured);
+        setRelatedFaqIds(p.related_faq_ids ?? []);
         setLoadingPromo(false);
       });
 
@@ -285,6 +323,8 @@ export default function PromotionFormPage() {
         keywords,
         image_url: imagePath,
         status: userPickedStatus,
+        is_featured: isFeatured,
+        related_faq_ids: relatedFaqIds,
       };
 
       if (isEditing && id) {
@@ -514,6 +554,92 @@ export default function PromotionFormPage() {
                     </p>
                   </div>
                   <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Sprint 5.1: Magia — destacada + FAQs vinculadas */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+                <Star className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Inteligencia del bot</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Featured */}
+                <div className="flex items-start justify-between rounded-lg border px-3 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <Label htmlFor="featured" className="text-sm font-medium flex items-center gap-1.5">
+                      <Star className={`h-4 w-4 ${isFeatured ? "fill-amber-400 text-amber-500" : "text-muted-foreground"}`} />
+                      Destacada del mes
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      El bot la menciona naturalmente al final de otros flujos
+                      (ej. tras agendar una cita). Solo puede haber una por mes.
+                    </p>
+                    {existingFeaturedId && existingFeaturedId !== id && isFeatured ? (
+                      <p className="text-xs text-amber-700 mt-1 flex items-start gap-1">
+                        ⚠️ Ya existe otra destacada activa. Esta la reemplazará al guardar.
+                      </p>
+                    ) : null}
+                  </div>
+                  <Switch
+                    id="featured"
+                    checked={isFeatured}
+                    onCheckedChange={setIsFeatured}
+                  />
+                </div>
+
+                {/* Related FAQs */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                    Vincular con preguntas frecuentes
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Cuando un paciente haga estas preguntas, el bot responderá
+                    con esta promoción en lugar de la respuesta normal.
+                  </p>
+                  {botFaqs.length === 0 ? (
+                    <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground text-center">
+                      Todavía no hay preguntas frecuentes activas.{" "}
+                      <Link to="/admin/bot-faqs" className="text-primary hover:underline">
+                        Crear FAQs
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-md border p-2">
+                      {botFaqs.map((f) => {
+                        const checked = relatedFaqIds.includes(f.id);
+                        return (
+                          <label
+                            key={f.id}
+                            className={`flex items-start gap-2 rounded px-2 py-1.5 cursor-pointer hover:bg-accent/50 transition-colors ${
+                              checked ? "bg-accent/30" : ""
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setRelatedFaqIds((prev) => [...prev, f.id]);
+                                } else {
+                                  setRelatedFaqIds((prev) => prev.filter((x) => x !== f.id));
+                                }
+                              }}
+                              className="mt-0.5 cursor-pointer"
+                            />
+                            <span className="text-sm leading-snug">{f.question}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {relatedFaqIds.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {relatedFaqIds.length} {relatedFaqIds.length === 1 ? "pregunta vinculada" : "preguntas vinculadas"}
+                    </p>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
