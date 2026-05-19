@@ -177,14 +177,15 @@ export async function uploadToStorage(
 export async function downloadFromStorage(
   supabase: SupabaseClient,
   path: string,
+  bucket: string = STORAGE_BUCKET,
 ): Promise<{ bytes: Uint8Array; mime: string } | null> {
   try {
     const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKET)
+      .from(bucket)
       .download(path);
 
     if (error || !data) {
-      console.error("[meta-media] downloadFromStorage failed:", error?.message);
+      console.error("[meta-media] downloadFromStorage failed:", error?.message, { bucket, path });
       return null;
     }
 

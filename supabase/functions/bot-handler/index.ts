@@ -894,12 +894,17 @@ async function sendPromoMultimedia(
     return { multimediaSent: false, error: 'no_meta_credentials' };
   }
 
-  // 2. Descargar de Storage promo-images
-  const downloaded = await downloadFromStorage(supabase as unknown as Parameters<typeof downloadFromStorage>[0], promo.image_url);
+  // 2. Descargar de Storage bucket promo-images (NO conversation-media)
+  const downloaded = await downloadFromStorage(
+    supabase as unknown as Parameters<typeof downloadFromStorage>[0],
+    promo.image_url,
+    'promo-images',
+  );
   if (!downloaded) {
-    console.warn('[sendPromoMultimedia] download failed; fallback to text');
+    console.warn('[sendPromoMultimedia] download failed from promo-images; fallback to text', { path: promo.image_url });
     return { multimediaSent: false, error: 'download_failed' };
   }
+  console.log('[sendPromoMultimedia] downloaded', { path: promo.image_url, mime: downloaded.mime, bytes: downloaded.bytes.length });
 
   // 3. Upload a Meta → mediaId
   const uploaded = await uploadMetaMedia(
