@@ -4,12 +4,13 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
 import OrgSwitcher from '@/components/OrgSwitcher';
 import { useInbox } from '@/context/InboxContext';
+import { usePromotionsExpiringSoon } from '@/hooks/usePromotionsExpiringSoon';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -27,7 +28,9 @@ const routeTitles: Record<string, string> = {
   '/admin/whatsapp-lines': 'WhatsApp Lines',
   '/admin/bot-faqs': 'Bot FAQs',
   '/admin/reports/appointments': 'Reporte de Citas',
-  '/inbox': 'Bandeja'
+  '/inbox': 'Bandeja',
+  '/configuracion/promociones': 'Promociones',
+  '/configuracion/quick-replies': 'Respuestas rápidas'
 };
 const getPageTitle = (pathname: string): string => {
   // Exact match first
@@ -70,11 +73,18 @@ export default function MainLayout({
     isAdminDoctor,
     adminView,
     setAdminView,
+    organizationId,
   } = useCurrentUser();
 
   // Badge global de Bandeja: derivado del InboxContext (misma fuente de
   // verdad que la lista del inbox — sin lag entre badge y burbuja).
   const { unreadCount: inboxUnread } = useInbox();
+
+  // Badge promociones expirando en proximos 3 dias (Sprint 5)
+  const { count: expiringPromos } = usePromotionsExpiringSoon(
+    organizationId ?? undefined,
+    { withinDays: 3, enabled: isAdminOrSecretary },
+  );
 
   // Keep admin menu open if current route is an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -118,6 +128,11 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
+      }, {
+        to: '/configuracion/promociones',
+        label: 'Promociones',
+        icon: Sparkles,
+        badge: expiringPromos
       });
     }
 
@@ -165,6 +180,11 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
+      }, {
+        to: '/configuracion/promociones',
+        label: 'Promociones',
+        icon: Sparkles,
+        badge: expiringPromos
       });
     }
 

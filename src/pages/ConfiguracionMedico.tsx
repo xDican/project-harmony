@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUser } from '@/context/UserContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, User, MessageSquare, MessageCircle, MessageSquareReply, ChevronRight } from 'lucide-react';
+import { Calendar, User, MessageSquare, MessageCircle, MessageSquareReply, Sparkles, ChevronRight } from 'lucide-react';
 
 /**
  * ConfiguracionMedico - Settings page for independent doctors (iOS style)
@@ -80,6 +80,19 @@ export default function ConfiguracionMedico() {
             <div className="flex-1 min-w-0">
               <p className="font-medium">Respuestas rápidas</p>
               <p className="text-sm text-muted-foreground">Plantillas para responder rápido en el inbox</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+          </button>
+
+          {/* Promociones del mes (Sprint 5 — centro de atencion) */}
+          <button
+            onClick={() => navigate('/configuracion/promociones')}
+            className="w-full flex items-center gap-3 p-4 hover:bg-accent/50 transition-colors text-left"
+          >
+            <Sparkles className="h-5 w-5 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">Promociones del mes</p>
+              <p className="text-sm text-muted-foreground">Ofertas y campañas que el bot puede ofrecer</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
           </button>

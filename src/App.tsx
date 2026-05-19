@@ -45,6 +45,8 @@ const WhatsAppLinesList = lazy(() => import("./pages/WhatsAppLinesList"));
 const BotFAQsPage = lazy(() => import("./pages/BotFAQsPage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const QuickRepliesPage = lazy(() => import("./pages/QuickRepliesPage"));
+const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
+const PromotionFormPage = lazy(() => import("./pages/PromotionFormPage"));
 const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
 const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
 const StepDoctor = lazy(() => import("./pages/onboarding/StepDoctor"));
@@ -235,6 +237,21 @@ const App = () => {
             <Route path="/configuracion/quick-replies" element={
               <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
                 <QuickRepliesPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/promociones" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
+                <PromotionsPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/promociones/nueva" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
+                <PromotionFormPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/promociones/:id/editar" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
+                <PromotionFormPage />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/whatsapp/plantillas/nueva" element={
