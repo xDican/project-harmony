@@ -534,12 +534,24 @@ export default function PromotionFormPage() {
                       onBlur={addKeyword}
                       placeholder={
                         keywords.length === 0
-                          ? "estética facial, juventud, arrugas"
+                          ? "ej: limpieza, dental, sonrisa, blanqueamiento"
                           : "Agregar..."
                       }
                       className="flex-1 min-w-[120px] bg-transparent outline-none text-sm"
                     />
                   </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Agregá <strong>sinónimos y palabras que el paciente usaría</strong>:
+                    el bot busca coincidencias con el título, descripción y estas palabras
+                    para mostrar la promo cuando alguien la consulta. Cuantas más variantes,
+                    mejor el match. Ejemplos:
+                    <br />
+                    • Cirugía láser → <em>lasik, miopía, vista, ojos, refractiva</em>
+                    <br />
+                    • Limpieza dental → <em>limpieza, dental, sonrisa, sarro, profilaxis</em>
+                    <br />
+                    • Botox → <em>arrugas, juventud, estética, neurotoxina, tox</em>
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg border px-3 py-3">

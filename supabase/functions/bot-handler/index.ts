@@ -1364,45 +1364,136 @@ async function handlePromoBrowse(
     ? session.context.promoIds
     : [];
 
-  // Permite "0" o "menu" para volver
-  const norm = input.trim().toLowerCase();
-  if (norm === '0' || norm === 'menu' || norm.includes('menu')) {
+  const raw = input.trim();
+  const norm = raw.toLowerCase();
+
+  // 1. Escape: volver al menú principal
+  if (norm === '0' || norm === 'menu' || norm.includes('menu') || norm.includes('volver') || norm === 'salir') {
     delete session.context.promoIds;
     return await handleMainMenu('', session, organizationId, supabase, handoffLabels);
   }
 
-  const num = parseInt(norm, 10);
-  if (!Number.isFinite(num) || num < 1 || num > promoIds.length) {
-    return {
-      message: `⚠️ Opción no válida. Responda con el número de la promoción (1-${promoIds.length}) o "menu" para volver.`,
-      requiresInput: true,
-      nextState: 'promo_browse',
-      sessionComplete: false,
-    };
+  // 2. Detectar intents distintos a "elegir promo" — el paciente puede pivotar
+  //    a otro flow sin quedar atrapado en el menú.
+  const hnIntent = detectIntent(raw);
+  if (hnIntent.intent === 'reschedule' || hnIntent.intent === 'cancel') {
+    delete session.context.promoIds;
+    return await startRescheduleFlow(session, organizationId, supabase);
+  }
+  if (hnIntent.intent === 'handoff' || hnIntent.intent === 'out_of_scope') {
+    delete session.context.promoIds;
+    return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
-  const selectedId = promoIds[num - 1];
-  const { data: promo, error } = await supabase
+  // 3. Número directo (1-N)
+  const num = parseInt(norm, 10);
+  if (Number.isFinite(num) && num >= 1 && num <= promoIds.length) {
+    const selectedId = promoIds[num - 1];
+    const promo = await fetchPromoById(selectedId, organizationId, supabase);
+    if (!promo) {
+      delete session.context.promoIds;
+      return noPromosResponse(handoffLabels);
+    }
+    delete session.context.promoIds;
+    return await sendSinglePromo(promo, session, organizationId, supabase, handoffLabels);
+  }
+
+  // 4. Matcheo natural — paciente escribió texto en lugar de número.
+  //    "Me interesa la de Botox" → busca match contra titles/keywords/service_type
+  //    de las promos en el menú actual. Reusa scorePromo (agnostico al rubro).
+  if (raw.length >= 3) {
+    const { data: promosData } = await supabase
+      .from('promotions')
+      .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url, keywords')
+      .in('id', promoIds);
+
+    const promos = (promosData ?? []) as PromoRow[];
+
+    if (promos.length > 0) {
+      // service_type names para scoring
+      const stIds = Array.from(
+        new Set(promos.map((p) => p.service_type_id).filter((x): x is string => !!x)),
+      );
+      const serviceTypeNames: Record<string, string> = {};
+      if (stIds.length > 0) {
+        const { data: sts } = await supabase
+          .from('service_types')
+          .select('id, name')
+          .in('id', stIds);
+        for (const s of sts ?? []) serviceTypeNames[s.id as string] = s.name as string;
+      }
+
+      const normMsg = normalizeForMatch(raw);
+      const scored = promos
+        .map((p) => ({
+          promo: p,
+          score: scorePromo(p, normMsg, p.service_type_id ? serviceTypeNames[p.service_type_id] ?? null : null),
+        }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      // 4a. Match unico → enviarla
+      if (scored.length === 1) {
+        delete session.context.promoIds;
+        return await sendSinglePromo(scored[0].promo, session, organizationId, supabase, handoffLabels);
+      }
+
+      // 4b. Match top con score significativamente mayor → enviar la mejor
+      if (scored.length >= 2 && scored[0].score >= scored[1].score * 2) {
+        delete session.context.promoIds;
+        return await sendSinglePromo(scored[0].promo, session, organizationId, supabase, handoffLabels);
+      }
+
+      // 4c. Multiples matches con scores similares → refinar el menú
+      if (scored.length >= 2) {
+        session.context.promoIds = scored.map((x) => x.promo.id);
+        const titlesList = scored
+          .map((x, idx) => `${idx + 1}. ${x.promo.title}`)
+          .join('\n');
+        return {
+          message:
+            `Encontré ${scored.length} que pueden interesarle:\n\n${titlesList}\n\n` +
+            `Responda con el número.`,
+          options: [`${OPT_EMOJI.menu} Menu principal`],
+          showMenuHint: false,
+          requiresInput: true,
+          nextState: 'promo_browse',
+          sessionComplete: false,
+        };
+      }
+    }
+  }
+
+  // 5. Ningún número, ningún match, ningún intent → recordatorio amable
+  return {
+    message:
+      `🤔 No identifiqué cuál promoción le interesa. ` +
+      `Puede responder con el número (1-${promoIds.length}) o escriba "menu" para volver.`,
+    requiresInput: true,
+    nextState: 'promo_browse',
+    sessionComplete: false,
+  };
+}
+
+/**
+ * Helper: busca una promo por id en la org. Centraliza el SELECT estandar.
+ */
+async function fetchPromoById(
+  id: string,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<PromoRow | null> {
+  const { data, error } = await supabase
     .from('promotions')
-    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url')
-    .eq('id', selectedId)
+    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url, keywords')
+    .eq('id', id)
     .eq('organization_id', organizationId)
     .single();
-
-  if (error || !promo) {
-    console.error('[handlePromoBrowse] promo not found:', error?.message);
-    delete session.context.promoIds;
-    return noPromosResponse(handoffLabels);
+  if (error || !data) {
+    console.error('[fetchPromoById] not found:', error?.message);
+    return null;
   }
-
-  delete session.context.promoIds; // limpiar para siguiente ciclo
-  return await sendSinglePromo(
-    promo as PromoRow,
-    session,
-    organizationId,
-    supabase,
-    handoffLabels,
-  );
+  return data as PromoRow;
 }
 
 async function handleMainMenu(
