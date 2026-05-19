@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useConversationMessages } from "@/hooks/useConversationMessages";
 import { takeConversation, returnToBot } from "@/lib/inboxActions";
+import { useCurrentUser } from "@/context/UserContext";
 import { MessageBubble } from "./MessageBubble";
 import { MessageComposer } from "./MessageComposer";
 import type { ConversationListRow } from "@/hooks/useConversations";
@@ -54,6 +55,7 @@ export function ConversationDetail({
   const { messages, isLoading, error, refetch } = useConversationMessages(
     conversation.id,
   );
+  const { organizationId } = useCurrentUser();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll al ultimo mensaje al cargar / cuando llega nuevo
@@ -164,6 +166,7 @@ export function ConversationDetail({
       <MessageComposer
         conversationId={conversation.id}
         conversationStatus={conversation.status}
+        organizationId={organizationId ?? undefined}
         onSent={() => {
           refetch();
           onConversationUpdated?.();

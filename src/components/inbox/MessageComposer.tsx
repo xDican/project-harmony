@@ -1,20 +1,23 @@
 /**
  * MessageComposer — input para enviar mensajes desde el inbox.
  *
- * Sprint 3 Fase 3.
+ * Sprint 3 Fase 3 + extensiones Sprint 4 (quick replies + multimedia outbound).
  *
- * Textarea expandible (1-5 filas), boton enviar (Send), boton adjuntar (Paperclip).
+ * Layout: [QuickReplyPicker] [Paperclip] [Textarea] [Send]
  *
- * Submit con Enter (Shift+Enter para nueva linea).
- * Hint debajo si conversation.status === 'bot_active': "Al escribir, tomaras
- * control del chat" — el backend hace auto-handoff cuando se envia.
+ * - Textarea expandible (1-5 filas), submit con Enter (Shift+Enter para nueva linea)
+ * - Quick reply picker (Sprint 4): popover con plantillas activas de la org,
+ *   inserta el contenido al final del body, editable antes de enviar.
+ * - Adjuntar (Sprint 4): dropdown con 3 opciones (Imagen / PDF / Audio) que
+ *   dispara un input file oculto. Al seleccionar archivo: sube a Storage
+ *   `conversation-media` y llama sendMessage con mediaUrl + messageType.
+ *   Caso especial audio+caption: Meta no acepta caption en audio, se envian
+ *   como 2 mensajes consecutivos.
+ * - Hint debajo si conversation.status === 'bot_active': "Al escribir, tomaras
+ *   control del chat" — el backend hace auto-handoff cuando se envia.
  *
- * Adjuntar archivos: solo UI en Sprint 3 (dropdown con opciones). Upload real
- * en Sprint 4. Por ahora muestra toast "Disponible pronto".
- *
- * Optimistic: al enviar, se llama sendMessage() y on success el polling de
- * useConversationMessages levanta el mensaje real. El hook tambien permite
- * agregar mensaje optimistically antes de respuesta del servidor.
+ * Optimistic: al enviar, se llama sendMessage() y on success el realtime de
+ * useConversationMessages / InboxContext levanta el mensaje real.
  */
 
 import { useRef, useState } from "react";
@@ -29,11 +32,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { sendMessage } from "@/lib/inboxActions";
+import {
+  FILE_ACCEPT,
+  MediaUploadError,
+  uploadConversationMedia,
+} from "@/lib/conversationMediaUpload";
 import { cn } from "@/lib/utils";
+import { QuickReplyPicker } from "./QuickReplyPicker";
 
 interface MessageComposerProps {
   conversationId: string;
   conversationStatus: "bot_active" | "human_active" | "closed" | "pending";
+  /** Org del usuario actual — necesaria para listar quick replies y subir media */
+  organizationId: string | undefined;
   /** Callback tras envio exitoso, para refrescar mensajes y conversation status */
   onSent?: () => void;
 }
@@ -41,11 +52,15 @@ interface MessageComposerProps {
 export function MessageComposer({
   conversationId,
   conversationStatus,
+  organizationId,
   onSent,
 }: MessageComposerProps) {
   const [body, setBody] = useState("");
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const trimmed = body.trim();
   const canSend = trimmed.length > 0 && !isSending;
@@ -82,9 +97,83 @@ export function MessageComposer({
     }
   };
 
-  const handleAttachmentClick = (type: string) => {
-    toast.info("Adjuntar archivos disponible en Sprint 4", {
-      description: `Tipo: ${type}`,
+  const handleFileSelected = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    // Reset el input para permitir reintentar el mismo archivo
+    event.target.value = "";
+    if (!file) return;
+
+    if (!organizationId) {
+      toast.error("Sin organización activa", {
+        description: "Volvé a iniciar sesión.",
+      });
+      return;
+    }
+
+    setIsSending(true);
+    const uploadToastId = toast.loading("Subiendo archivo...");
+    const caption = body.trim();
+
+    try {
+      const { path, kind } = await uploadConversationMedia({
+        orgId: organizationId,
+        conversationId,
+        file,
+      });
+
+      if (kind === "audio" && caption) {
+        // Meta no acepta caption en audio: enviar audio + caption como 2 mensajes
+        await sendMessage({
+          conversationId,
+          mediaUrl: path,
+          messageType: "audio",
+        });
+        await sendMessage({
+          conversationId,
+          body: caption,
+          messageType: "text",
+        });
+      } else {
+        await sendMessage({
+          conversationId,
+          body: caption || undefined,
+          mediaUrl: path,
+          messageType: kind,
+        });
+      }
+
+      setBody("");
+      toast.success("Archivo enviado", { id: uploadToastId });
+      onSent?.();
+    } catch (e) {
+      console.error("[MessageComposer] file send failed:", e);
+      const msg =
+        e instanceof MediaUploadError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Error desconocido";
+      toast.error("No se pudo enviar el archivo", {
+        id: uploadToastId,
+        description: msg,
+      });
+    } finally {
+      setIsSending(false);
+      textareaRef.current?.focus();
+    }
+  };
+
+  const handleQuickReplyPick = (content: string) => {
+    setBody((prev) => (prev ? `${prev}\n\n${content}` : content));
+    // Focus + caret al final (con timeout porque el popover cierra primero)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      const end = ta.value.length;
+      ta.setSelectionRange(end, end);
     });
   };
 
@@ -94,6 +183,13 @@ export function MessageComposer({
     <div className="border-t bg-card">
       <div className="px-3 py-3 space-y-2">
         <div className="flex items-end gap-2">
+          {/* Quick reply picker */}
+          <QuickReplyPicker
+            organizationId={organizationId}
+            disabled={isSending}
+            onPick={handleQuickReplyPick}
+          />
+
           {/* Adjuntar dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -108,17 +204,40 @@ export function MessageComposer({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => handleAttachmentClick("imagen")}>
+              <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
                 Imagen
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAttachmentClick("documento")}>
+              <DropdownMenuItem onClick={() => pdfInputRef.current?.click()}>
                 Documento (PDF)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAttachmentClick("audio")}>
+              <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
                 Audio
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Hidden file inputs disparados por el dropdown */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept={FILE_ACCEPT.image}
+            hidden
+            onChange={handleFileSelected}
+          />
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept={FILE_ACCEPT.document}
+            hidden
+            onChange={handleFileSelected}
+          />
+          <input
+            ref={audioInputRef}
+            type="file"
+            accept={FILE_ACCEPT.audio}
+            hidden
+            onChange={handleFileSelected}
+          />
 
           {/* Textarea */}
           <Textarea

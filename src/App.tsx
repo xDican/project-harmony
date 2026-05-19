@@ -44,6 +44,7 @@ const CalendarSchedulePage = lazy(() => import("./pages/CalendarSchedulePage"));
 const WhatsAppLinesList = lazy(() => import("./pages/WhatsAppLinesList"));
 const BotFAQsPage = lazy(() => import("./pages/BotFAQsPage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const QuickRepliesPage = lazy(() => import("./pages/QuickRepliesPage"));
 const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
 const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
 const StepDoctor = lazy(() => import("./pages/onboarding/StepDoctor"));
@@ -229,6 +230,11 @@ const App = () => {
             <Route path="/configuracion/whatsapp" element={
               <RoleBasedRoute allowedRoles={['doctor', 'admin']}>
                 <WhatsAppSettings />
+              </RoleBasedRoute>
+            } />
+            <Route path="/configuracion/quick-replies" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
+                <QuickRepliesPage />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/whatsapp/plantillas/nueva" element={
