@@ -1,85 +1,54 @@
 # Estado Contenido — OrionCare
 
-> Ultima actualizacion: 3 Mar 2026 (AD-005 imagen actualizada con elementos scroll-stopping + prompt Gemini)
+> Ultima actualizacion: 19 May 2026 (Contenido en PAUSA desde pivot 18 May. Pilares viejos retirados. Nuevos pilares por desarrollar post-MVP.)
+> Historico inventario AD-001-007 + scripts SC-001 en `estado-contenido-historial.md`
 
-## Pilares de contenido activos
+---
 
-1. **Dolor:** "Cuantos pacientes perdiste esta semana por no-shows?"
-2. **Solucion:** "Tus pacientes se agendan solos por WhatsApp con OrionCare"
-3. **Prueba social:** Resultados de clientes reales (cuando haya datos)
-4. **Facilidad:** "Se configura en 15 minutos, funciona solo"
-5. **Urgencia/FOMO:** "Mientras lees esto, un paciente esta buscando otro doctor porque no le contestaste"
+## Estado actual: PAUSA
 
-## Decisiones de ads que impactan contenido
+**Razon:** Los pilares viejos giran alrededor de "auto-agenda" — mensaje invalidado por el pivot 18 May. No reusar copy ni creativos historicos sin replanteo.
 
-- **Formato principal:** video corto (15-25 seg) + imagen estatica — avatar AI (HeyGen), comedia UGC (Veo 3.1), o imagen AI
-- **Herramientas:** HeyGen (avatar AI, trial gratis) + Veo 3.1 (comedia/UGC generativo)
-- **Audiencia:** solo medicos independientes (no medicos con secretaria)
-- **Mensaje core:** "Tus pacientes se agendan solos por WhatsApp" (ya no "agenda con recordatorios")
-- **Insight cultural:** hondurenos prefieren visual — video > imagen > texto largo
-- **Encuesta simplificada:** 5 preguntas (era 7)
+## Pilares retirados (NO reactivar)
 
-## Calendario Marzo 2026
+1. ~~"Cuantos pacientes perdiste por no-shows"~~ — dolor real, mensaje genera ansiedad pero NO conecta con asistente
+2. ~~"Tus pacientes se agendan solos por WhatsApp"~~ — INVALIDADO: asusta al ICP (asistente teme ser reemplazada)
+3. ~~"Se configura en 15 minutos, funciona solo"~~ — bot autonomo no es la promesa real
+4. ~~"FOMO: mientras lees esto un paciente se va"~~ — generaba urgencia artificial
 
-| Semana | Prioridad | Piezas |
-|--------|-----------|--------|
-| 1 (3-9 Mar) | **Lanzar campana AD-005** (imagen + 2 copy A/B + encuesta) | Paquete listo, falta subir a Meta |
-| 2 (10-16 Mar) | Revisar metricas AD-005, pausar variante peor. Video AD-003 si hay tiempo | Iteracion + video |
-| 3 (17-23 Mar) | Posts organicos + segundo script (seguimiento) | 4-6 piezas |
-| 4 (24-30 Mar) | Revision de metricas, ajustar copy segun datos, tercer script (cierre) | Iteracion |
+## Pilares nuevos por desarrollar (post-MVP)
 
-## Inventario de contenido
+Basados en triangulacion 16 May (Paredes + Mendoza + Dulce):
 
-### Ads
+1. **Control sin saturacion:** "No perdes el WhatsApp — lo manejas mejor"
+2. **Vision unificada:** "Mensajes + llamadas + agenda + promos en una pantalla"
+3. **Bot como asistente del asistente:** "El bot atiende lo rutinario, vos lo importante"
+4. **Promociones que se responden solas:** "Cargá la promo del mes una vez, el bot la usa el resto"
+5. **Caso de estudio asistente:** Dulce/Torre Zafiro cuando exista data (Jun-Jul 2026)
 
-| # | Pilar | Formato | Estado | Notas |
-|---|-------|---------|--------|-------|
-| AD-001 | Dolor + Solucion | Video 15-25s (guion) | Guion listo | Avatar AI, pendiente producir en HeyGen |
-| AD-002a | Dolor + Urgencia | Copy ad (variante A) | Listo | "Mientras usted contesta..." — dolor directo |
-| AD-002b | Dolor + Urgencia | Copy ad (variante B) | Listo | "Cuantas citas perdio..." — pregunta + solucion |
-| AD-003 | Dolor + Solucion | Video Veo 3.1 (2x8s = 16s) | Prompts listos | Comedia/chisme hondureno. Prompts en `docs/ad-creatives.md` |
-| AD-005 | Dolor + Solucion | Imagen estatica (2 copy A/B) | Imagen pendiente regenerar | Doctor de noche + overlays scroll-stopping (10:47 PM, burbujas WhatsApp, badge 47). Prompt Gemini listo. Copy, encuesta, config en `docs/ad-creatives.md` |
+## Reglas vigentes para contenido futuro
 
-**Categorias de tracking:**
-- Por formato: video / imagen estatica
-- Por pilar: dolor / solucion / facilidad / urgencia / prueba social
-- Entregables completos en: `docs/contenido-semana1.md`
-
-### Scripts de venta (WhatsApp)
-
-| # | Momento funnel | Estado | Notas |
-|---|---------------|--------|-------|
-| SC-001 | Primer contacto | Listo | Mensaje + variante corta, en `docs/contenido-semana1.md` |
-| — | Seguimiento | Pendiente | Para leads que no respondieron (semana 3) |
-| — | Cierre | Pendiente | Para leads interesados (semana 4) |
-
-### Posts organicos
-
-| # | Pilar | Formato | Estado | Notas |
-|---|-------|---------|--------|-------|
-| — | — | — | Vacio | No es prioridad hasta semana 3 |
-
-## Restricciones
-
-- Feature freeze: no prometer features que no existen
-- Meta salud: no prometer resultados medicos, enfocarse en beneficios operativos
 - **Visual > texto:** hondurenos no leen — priorizar video y grafica sobre copy largo
+- Mobile-first: atencion 1.7 segundos
+- Restricciones Meta salud: no prometer resultados, enfocarse en beneficios operativos
 - Tiempo: max 1-2 horas por sesion de contenido
-- La esposa maneja los scripts — deben ser claros y faciles de seguir
+- Mensajes cortos WhatsApp: max 3-4 lineas (regla cultural Honduras)
+- La esposa maneja los scripts — claros y faciles de seguir
 
-## Notas para proxima sesion
+## Scripts de venta — estado
 
-- **Sesion anterior (3 Mar):** AD-005 imagen actualizada con elementos scroll-stopping + prompt Gemini generado
-- **Cambio clave en imagen:** se anadieron overlays para comunicar dolor en <1 seg de scroll:
-  - "10:47 PM" (hora tardia), 3 burbujas WhatsApp con mensajes de pacientes, badge rojo "47", doctor agotado
-  - Objetivo: subir CTR de 0.54% a >1.5%
-- **Prompt Gemini:** listo para copiar/pegar — si texto no sale bien, generar foto base y agregar overlays en Canva/Figma
-- **Inventario completo en:** `docs/contenido-semana1.md`
-- **Creativos de ads en:** `docs/ad-creatives.md`
-- **Siguiente paso critico:** generar imagen en Gemini → exportar 4:5 + 9:16 → lanzar campana en Meta
-  - Crear campana Leads, lifetime budget $100 (~2 semanas)
-  - Configurar formulario 5 preguntas
-  - 2 ads con 2 variantes de copy (A/B)
-  - Revisar metricas al llegar a $50 gastados (~1 semana)
-- **En paralelo (prioridad baja):** AD-003 video Veo 3.1 — prompts listos, pendiente generar clips
-- Semana 3: scripts de seguimiento y cierre + posts organicos
+- SC-001 (primer contacto) — invalidado por pivot, reescribir cuando reabra pipeline
+- Seguimiento y cierre — nunca se escribieron, en pausa
+
+## Roadmap (post-MVP, no antes de Jul 2026)
+
+1. Caso de estudio Dulce/Torre Zafiro (esperar 4-6 semanas de uso real)
+2. Re-pensar pitch + pilares con asistente como protagonista
+3. Generar 3-4 creativos nuevos en 3 formatos cada uno
+4. Activar campañas con audiencia replanteada (no medicos independientes)
+
+## Tareas activas (contenido)
+
+- [ ] Capturar testimonios de Dulce/Marleny conforme MVP avanza (audio, video corto, screenshots)
+- [ ] Documentar el "antes/despues" del flujo asistente cuando este instalado
+- [ ] Replantear pilares post-MVP
