@@ -1,6 +1,6 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 19 May 2026 PM (Sesion larga: tier verification Meta, decision estrategica medico-6m-luego-diversificar, plan inbox-only 1 sem para Torre Zafiro con tier orgánico durante esa misma semana)
+> Ultima actualizacion: 19 May 2026 noche (Sprint 4 + 5 + 5.1 cerrados. Tier verification Meta, plan inbox-only Torre Zafiro 25 May, decision medico-6m-luego-diversificar, Stitch para mockups UX)
 > Updates historicos en `estado-estrategia-historial.md`
 
 ---
@@ -32,9 +32,9 @@
 | 1 — Persistencia + bot dual mode | ✅ 18 May | 5 functions deployadas, conversation tracking |
 | 2 — Multimedia + transcripcion | ✅ 18 May | Whisper español, audios ~3s, $0.002 total |
 | 3 — Frontend Inbox | ✅ 18 May 23:30 | Inbox + InboxContext realtime una-fuente-verdad |
-| 4 — Quick replies | proximo (hoy) | Templates compartidas bot + asistente |
-| 5 — Promociones del mes | en cola | Panel asistente + uso por bot + expiracion auto |
-| 6 — Calling API (simplificado) | en cola | Webhook events + UI inbox llamadas + softphone diferido |
+| 4 — Quick replies + multimedia outbound | ✅ 19 May | Picker composer + upload archivos. QA aprobado. |
+| 5 — Promociones del mes | ✅ 19 May PM | Panel admin con mockups Stitch + bot matching escalonado con keywords + FAQ override + destacada del mes + matcheo natural en menu comprimido + cron diario lifecycle. Magic bytes fix para imagenes. QA SQL aprobado. |
+| 6 — Calling API (simplificado) | proximo (mier 20) | Webhook events calls.* + UI inbox llamadas + softphone WebRTC |
 | 7-8 — Pilot + lanzamiento | revisar | Decision 19 May: inbox-only Torre Zafiro 25 May |
 
 ## Decisiones tomadas 19 May
@@ -138,11 +138,11 @@ Senal positiva existente: **Wilmer = 2 meses sin tocar, feliz** con calendario+n
 
 | Dia | Trabajo | Responsable |
 |---|---|---|
-| **Mar 19 (hoy)** | Arranque Sprint 4 (quick replies) | Claude / Diego QA |
-| Mie 20 | Sprint 4 finalizar | Claude / Diego QA |
-| Jue 21 - Vie 22 | Sprint 5 (promos del mes) + arranque Sprint 6 simplificado | Claude / Diego QA |
-| Sab 23 | QA full inbox sin bot. Configurar Torre Zafiro en DB. | Diego |
-| Dom 24 | Bug fixes finales | Claude / Diego |
+| Mar 19 (hoy) | ✅ Sprint 4 + 5 + 5.1 cerrados (quick replies + multimedia + promociones con magia) | Claude + Diego QA |
+| **Mie 20** | Sprint 6: Calling API simplificado (webhooks inbound + UI llamadas en inbox + softphone WebRTC) | Claude / Diego QA |
+| Jue 21 - Vie 22 | Sprint 6 finalizar + bug fixes Sprint 4-5 si aparecen | Claude / Diego QA |
+| Sab 23 | QA full. Configurar Torre Zafiro en DB. | Diego |
+| Dom 24 | Bug fixes finales. Briefing operativo. | Claude / Diego |
 | **Lun 25** | **INSTALACION Torre Zafiro — inbox-only, bot OFF, calling OFF** + recon plataforma actual | Diego presencial |
 
 ## Proximas 4 semanas (25 May - 21 Jun)

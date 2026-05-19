@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 19 May 2026 PM (Sprint 4 ✅ cerrado — quick replies + multimedia outbound. QA aprobado, 2 bugs durante QA fixeados (timeline >100 msgs + busqueda acentos).)
+> Ultima actualizacion: 19 May 2026 PM (Sprint 5 + 5.1 ✅ cerrados — Promociones del mes con matching escalonado, FAQ override, destacada del mes, matcheo natural. QA SQL aprobado por Diego.)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 
 ---
@@ -9,7 +9,7 @@
 
 **Sprints 4-8 MVP Centro de Atencion** (19 May - lanzamiento Torre Zafiro 25 May modo inbox-only, bot activacion gradual desde 8 Jun).
 
-Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sprints.md` + `.claude/plans/las-palomitas-ya-est-n-squishy-steele.md` (Sprint 4 detalle)
+Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sprints.md` + `.claude/plans/las-palomitas-ya-est-n-squishy-steele.md` (Sprint 4 + 5 detalle)
 
 ## Sprints MVP — estado
 
@@ -19,12 +19,12 @@ Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sp
 | 1 — Persistencia + bot dual mode | ✅ 18 May | 5 functions deployadas, conversation tracking |
 | 2 — Multimedia + transcripcion | ✅ 18 May | Whisper español, audios ~3s, $0.002 total |
 | 3 — Frontend Inbox | ✅ 18 May 23:30 | InboxContext realtime una-fuente-verdad. Bug fix VOLATILE RLS |
-| **4 — Quick replies + multimedia outbound** | ✅ 19 May | Pagina settings + picker en composer + upload archivos. QA aprobado. Bugs fixeados: timeline en convs >100 msgs (preexistente Sprint 3) + busqueda quick replies normalizando acentos. |
-| 5 — Promociones del mes | proximo | Panel asistente + uso por bot + expiracion auto |
-| 6 — Calling API | en cola | Webhooks calls.* + UI inbox llamadas + softphone WebRTC |
+| 4 — Quick replies + multimedia outbound | ✅ 19 May | Pagina settings + picker composer + upload archivos. Bugs fixeados: timeline en convs >100 msgs + busqueda con acentos. |
+| **5 — Promociones del mes** | ✅ 19 May | Panel admin + bot integration con scoring/keywords + FAQ override + destacada del mes. Cron diario lifecycle. Magic bytes validation para imagenes. Matcheo natural en promo_browse. |
+| 6 — Calling API | proximo | Webhooks calls.* + UI inbox llamadas + softphone WebRTC |
 | 7-8 — Pilot + lanzamiento | revisar | Decision 19 May: inbox-only 1 sem en Torre Zafiro |
 
-## Arquitectura clave (Sprint 3 + 4, vigente)
+## Arquitectura clave (Sprint 3 + 4 + 5, vigente)
 
 ### Realtime inbox (Sprint 3)
 - `App.tsx` monta `<InboxProvider>` dentro de `UserProvider`
@@ -51,13 +51,55 @@ Para optimizar redes lentas (reconnect, debounce, batching) — un solo lugar a 
 - Caso audio + caption: Meta no acepta caption en audio → enviar 2 mensajes consecutivos (audio primero, texto despues).
 - `inbox-send` valida `mediaUrl.startsWith(${organization_id}/)` (linea 137) — el path `outbound-{uuid}` cumple.
 
-## Regla critica aprendida (Sprint 3)
+### Promociones del mes (Sprint 5 + 5.1)
 
+**Tabla `promotions`** (Sprint 0 base + 5.1 columnas):
+- Base: title, description, conditions, image_url, keywords[], valid_from/to, status (draft/active/expired/archived), service_type_id
+- Sprint 5.1: `is_featured BOOLEAN` (unique partial idx: 1 featured por org activa) + `related_faq_ids UUID[]`
+
+**Frontend admin (Sprint 5):**
+- `src/lib/promotionsApi.ts` — CRUD tipado, computeInitialStatus, archive/reactivate/duplicate helpers.
+- `src/hooks/usePromotions.ts` — con filtro por estado. `usePromotionsExpiringSoon.ts` para badge.
+- `src/pages/PromotionsPage.tsx` — lista con tabs + banner expiring + FAB mobile.
+- `src/pages/PromotionFormPage.tsx` — form en pagina completa con 2 cols (data izq, imagen+preview WhatsApp der). Sprint 5.1: toggle "Destacada del mes" + multi-select FAQs vinculadas.
+- `src/components/promotions/PromoCard.tsx` — card con imagen + badge estado + ⭐ destacada + acciones.
+- `src/components/promotions/WhatsAppPreview.tsx` — preview chat estilo WhatsApp.
+- `src/lib/promoImageUpload.ts` — solo JPG/PNG (WebP rompe Meta async, ver bugs resueltos).
+- Bucket `promo-images` con RLS por org (Sprint 5.1: solo JPG/PNG en allowed_mime_types).
+
+**Bot integration (Sprint 5 + 5.1):**
+- `honduras-intents.ts` extendido con intent `promo_search` + 21 keywords.
+- `bot-handler/index.ts`:
+  - Estado `promo_browse` para menu comprimido cuando hay N promos
+  - `handlePromoSearch`: matching escalonado (Sprint 5.1) — `scorePromo` rankea por title (3pts/palabra), keywords (2pts), service_type name (2pts), description (0.5pts). `isGenericPromoQuery` detecta "promociones?" generico vs especifico ("promo de botox").
+  - `handlePromoBrowse`: matcheo natural (Sprint 5.1) — paciente puede escribir texto natural en lugar de numero. Reusa `scorePromo`. Pivot a otros flows (reschedule/handoff) sin quedar atrapado.
+  - `sendPromoMultimedia`: descarga del bucket `promo-images` (NO conversation-media), upload Meta, mensaje image+caption. **Magic bytes validation (Sprint 5.1):** detecta MIME real (`detectMimeFromMagicBytes`) ignorando Content-Type del Storage; rechaza si no es JPG/PNG real → fallback texto.
+  - `findPromoOverridingFAQ` (Sprint 5.1) en `handleFAQSearch`: si la FAQ esta en `related_faq_ids` de una promo activa, override de la respuesta con la promo.
+  - `getFeaturedPromoCloser` (Sprint 5.1): mencion sutil de la destacada al cierre de FAQ no override + booking exitoso.
+- Menu principal opcion 5 "Ver promociones del mes" + detectIntent en pre-check.
+
+**Cron lifecycle:**
+- Edge function `mark-promotions-expired` (auth Bearer anon o service_role o internal-secret).
+- 3 transiciones diarias: active→expired (valid_to<today), draft→active (valid_from<=today<=valid_to), draft→expired (valid_to<today).
+- pg_cron job `mark-promotions-lifecycle-daily` corre `0 12 * * *` UTC (6am Honduras).
+
+**Sidebar badge:** item "Promociones" en MainLayout con contador rojo de promos expirando en 3 dias (usa `usePromotionsExpiringSoon`).
+
+## Reglas criticas aprendidas
+
+### Sprint 3 — Realtime + VOLATILE
 **Supabase Realtime + funciones VOLATILE en RLS = silencio.** Cuando llega evento Realtime, Supabase evalua el OR de TODAS las policies SELECT. Si CUALQUIERA usa funcion VOLATILE, evaluacion falla silenciosamente y evento se descarta.
 
 **Verificar siempre** que las funciones usadas en RLS policies de tablas con Realtime habilitado sean STABLE o IMMUTABLE.
 
 Fix aplicado: `ALTER FUNCTION current_doctor_id() STABLE` (migration `20260518200001_*`).
+
+### Sprint 5.1 — Meta error 131053 async + magic bytes
+**Meta WhatsApp Cloud API valida media de forma ASINCRONA.** El POST a `/messages` con `image` + `mediaId` retorna 200 con `wamid` (queued) aunque el archivo no sea compatible. El error 131053 "Media upload error" llega DESPUES via webhook callback. El bot no puede detectarlo sincronicamente.
+
+**Solucion preventiva:** validar magic bytes del archivo ANTES de subir a Meta. `detectMimeFromMagicBytes` lee primeros bytes y determina MIME real (JPEG/PNG/WebP/GIF) ignorando Content-Type declarado. Si MIME real != image/jpeg && image/png → fallback a texto.
+
+Meta WhatsApp NO acepta WebP en mensajes `image` (solo en `sticker`). Para outbound multimedia: bucket `promo-images` con allowed_mime_types restringido a JPG/PNG + magic bytes check en bot-handler como defensa en profundidad.
 
 ## Bugs activos (no resueltos)
 
@@ -85,6 +127,8 @@ Fix aplicado: `ALTER FUNCTION current_doctor_id() STABLE` (migration `2026051820
 
 ### Limpieza
 - [ ] Remover `lovable-tagger` de devDependencies en package.json
+- [ ] Limpiar promos duplicadas en Demo Bot tras QA Sprint 5 (2 "Botox primera consulta -15%" y -45%)
+- [ ] Documentar para asistentes: agregar keywords al crear promo (incluir sinonimos por especialidad) → mejor matcheo del bot
 
 ### Soporte numeros internacionales (Junio+)
 - [ ] `normalizeToLocalHN()` en whatsapp-inbound-webhook — deja de asumir 8 digitos HN
@@ -95,10 +139,11 @@ Fix aplicado: `ALTER FUNCTION current_doctor_id() STABLE` (migration `2026051820
 ### Diferido Junio 2026+
 - FAQ auto-poblado (3 capas: onboarding data + templates por especialidad + deteccion gaps)
 - Flujo "DEMO" en el bot (cuando reciba "DEMO" dar contexto guiado)
+- Sinonimos universales para promos (embeddings/LLM) — actualmente la asistente debe agregar variantes manualmente. Aceptable para arranque.
 
 ### Storage media retention — implementar ~Jul 2026 (cuando lleguemos a 5-10 clientes)
 
-Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. A 1 cliente es ~150 MB/mes. A 100 clientes proyectado ~180 GB acumulados en 12 meses ($1.70/mes extras de storage Supabase Pro). Manejable pero crece sin parar.
+Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. Sprint 5 agrega `promo-images` pero crece mas lento (1-3 archivos por promo, promos rotan ~mensual).
 
 **Plan a implementar (1 sesion de ~3h cuando llegue el momento):**
 
@@ -111,18 +156,12 @@ Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. A
 2. **Borrar audios inbound post-transcripcion a los 7 dias.**
    - Sprint 2 ya transcribe audios con Whisper a `message_logs.transcription`
    - A los 7 dias, borrar el audio del bucket (la transcripcion queda)
-   - La asistente sigue leyendo el texto — nadie oye audios de >7 dias en practica
 
 3. **Cron semanal: cleanup huerfanos.**
-   - Si upload OK pero `sendMessage` falla a mitad → archivo queda en bucket sin referencia
-   - Listar archivos en bucket que no tengan match en `message_logs.media_url` ni `messages.media_url`
+   - Listar archivos en `conversation-media` + `promo-images` que no tengan match en columna correspondiente
    - Borrarlos
 
-**NO implementar antes** porque a 1-3 clientes el costo es $0 y la complejidad introducida no se justifica.
-
-**Comunicacion a clientes** (incluir en onboarding cuando se implemente): "Los archivos del inbox se conservan 90 dias. Si necesitas guardar algo importante, descargalo."
-
-**Trigger para activar este trabajo:** cuando MRR > $300 o tengamos >5 clientes pagos usando inbox activamente.
+**Trigger:** cuando MRR > $300 o tengamos >5 clientes pagos usando inbox activamente.
 
 ## Pendiente operativo
 
@@ -140,39 +179,50 @@ Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. A
 - **Templates via curl en Windows:** los emojis/acentos se corrompen. Usar Unicode escapes (\uXXXX) o reusar legacy.
 - **Landing CTAs:** apuntan a `wa.me/+50433899824`
 - **Onboarding wizard:** existe pero requiere activacion SuperAdmin (intencional).
+- **Cron jobs activos:** send-reminders (11am+7pm), send-reminder-followup (7:15pm), auto-cancel-unconfirmed (7am), mark-promotions-lifecycle-daily (6am Honduras = 12 UTC).
 
 ## Proximos pasos (alineado con estado-estrategia)
 
 | Dia | Trabajo |
 |---|---|
-| **Mar 19 (hoy)** | ✅ Sprint 4 codigo (quick replies + multimedia). Pendiente QA in-vivo con Demo Bot. |
-| Mie 20 | QA Sprint 4 + Sprint 5 (promos del mes) arranque |
-| Jue 21 - Vie 22 | Sprint 5 finalizar + Sprint 6 (Calling API) arranque |
-| Sab 23 | QA full. Configurar Torre Zafiro en DB. |
-| Lun 25 | Instalacion Torre Zafiro modo inbox-only |
+| Mar 19 (hoy) | ✅ Sprint 4 + Sprint 5 + Sprint 5.1 cerrados |
+| Mie 20 | Arrancar Sprint 6: Calling API (webhooks inbound + UI llamadas inbox + softphone WebRTC) |
+| Jue 21 - Vie 22 | Sprint 6 finalizar |
+| Sab 23 | QA full inbox-only. Configurar Torre Zafiro en DB. |
+| Dom 24 | Bug fixes finales. Briefing operativo. |
+| **Lun 25** | **INSTALACION Torre Zafiro — inbox-only, bot OFF, calling OFF** |
 | 25 May - 1 Jun | Solo bug fixes de lo que Dulce encuentre en uso real |
 
-## Sprint 4 — Archivos modificados/creados (19 May)
+## Sprint 5 — Archivos modificados/creados (19 May)
 
 ### Nuevos
-- `src/lib/quickRepliesApi.ts` — CRUD tipado quick_replies
-- `src/hooks/useQuickReplies.ts` — hook con `{ onlyActive }` opcional
-- `src/lib/conversationMediaUpload.ts` — upload archivos a bucket `conversation-media` con validacion cliente
-- `src/pages/QuickRepliesPage.tsx` — admin de plantillas
-- `src/components/inbox/QuickReplyPicker.tsx` — popover en composer
+- `supabase/migrations/20260519193931_centro_atencion_08_promo_images_bucket.sql` — bucket + RLS (idempotente con DROP IF EXISTS)
+- `supabase/migrations/20260519194500_promotions_lifecycle_cron.sql` — pg_cron job diario
+- `supabase/migrations/20260519210000_promotions_featured_and_linked_faqs.sql` — columnas Sprint 5.1
+- `supabase/functions/mark-promotions-expired/index.ts` — edge function cron
+- `src/lib/promotionsApi.ts`, `src/lib/promoImageUpload.ts`
+- `src/hooks/usePromotions.ts`, `src/hooks/usePromotionsExpiringSoon.ts`
+- `src/pages/PromotionsPage.tsx`, `src/pages/PromotionFormPage.tsx`
+- `src/components/promotions/PromoCard.tsx`, `src/components/promotions/WhatsAppPreview.tsx`
 
 ### Modificados
-- `src/App.tsx` — ruta `/configuracion/quick-replies` + lazy import
-- `src/pages/ConfiguracionMedico.tsx` — entry "Respuestas rápidas" en settings
-- `src/components/inbox/MessageComposer.tsx` — picker + 3 inputs file + handler upload (acepta prop `organizationId`)
-- `src/components/inbox/ConversationDetail.tsx` — pasa `organizationId` al composer via `useCurrentUser`
+- `src/App.tsx` — 3 rutas nuevas
+- `src/components/MainLayout.tsx` — item sidebar "Promociones" con badge
+- `src/pages/ConfiguracionMedico.tsx` — entry "Promociones del mes"
+- `src/integrations/supabase/types.ts` — columnas is_featured + related_faq_ids
+- `supabase/functions/bot-handler/index.ts` — estado `promo_browse`, handlePromoSearch + scoring + matcheo natural, handlePromoBrowse, sendPromoMultimedia + magic bytes, findPromoOverridingFAQ, getFeaturedPromoCloser, opcion 5 menu
+- `supabase/functions/_shared/honduras-intents.ts` — intent promo_search
+- `supabase/functions/_shared/bot-messages.ts` — OPT_EMOJI.promociones = ✨
+- `supabase/functions/_shared/meta-media.ts` — downloadFromStorage acepta bucket opcional
 
-### NO tocado (deliberado)
-- `MessageBubble.tsx` — palomitas siguen funcionando
-- `inbox-send` edge function — acepta el flujo tal cual desde Sprint 2
+### Plan referenciado
+- `.claude/plans/las-palomitas-ya-est-n-squishy-steele.md` (Sprint 4 + 5 detalle)
 
-### Validacion automatizada hecha
-- `npx tsc --noEmit` pasa sin errores (2 corridas: post Fase 2 + post Fase 5)
-
-### QA in-vivo pendiente (Diego)
-Ver checklist completo en `.claude/plans/las-palomitas-ya-est-n-squishy-steele.md` seccion "Verificación / QA".
+### QA Sprint 5 — aprobado por Diego 19 May PM
+- 6 promos creadas durante QA, lifecycle (draft→active→expired) verificado
+- Cron `mark-promotions-lifecycle-daily` activo
+- Matcheo natural validado con "Quiero ver el botox", "La primera", "Quiero saber del facial"
+- Pivot a booking flow funciono ("Quiero agendar cita" desde menu)
+- FAQ override funciono cuando FAQ correspondiente esta vinculada (probar mas FAQs)
+- Magic bytes fallback al texto cuando imagen no es JPG real
+- 2 bugs criticos durante QA — todos fixeados (filtro estricto + body.ok + magic bytes)
