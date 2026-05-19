@@ -16,10 +16,12 @@ import { supabase } from "@/integrations/supabase/client";
 const STORAGE_BUCKET = "promo-images";
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
+// Meta WhatsApp solo acepta JPG/PNG en mensajes image confiablemente.
+// WebP devuelve error 131053 "Media upload error" cuando el bot intenta
+// enviarla al paciente. Restringimos al subir para evitar el problema.
 const ALLOWED_MIMES: Record<string, { ext: string }> = {
   "image/jpeg": { ext: "jpg" },
   "image/png": { ext: "png" },
-  "image/webp": { ext: "webp" },
 };
 
 export interface UploadPromoImageArgs {
@@ -75,7 +77,7 @@ export async function uploadPromoImage(
   const def = ALLOWED_MIMES[mime];
   if (!def) {
     throw new PromoImageUploadError(
-      `Tipo de imagen no permitido (${mime || "desconocido"}). Solo JPG, PNG o WebP.`,
+      `Tipo de imagen no permitido (${mime || "desconocido"}). Solo JPG o PNG.`,
     );
   }
 

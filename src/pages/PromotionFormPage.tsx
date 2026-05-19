@@ -543,7 +543,7 @@ export default function PromotionFormPage() {
                       <p className="text-xs text-center px-4">
                         Click para subir
                         <br />
-                        (JPG, PNG, WebP — max 5 MB)
+                        (JPG o PNG — max 5 MB)
                       </p>
                     </div>
                   )}
@@ -556,7 +556,7 @@ export default function PromotionFormPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png"
                   hidden
                   onChange={handleImageSelect}
                 />
