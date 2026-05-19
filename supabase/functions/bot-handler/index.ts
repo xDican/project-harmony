@@ -860,9 +860,10 @@ async function handlePromoSearch(
 
   let query = supabase
     .from('promotions')
-    .select('id, title, description, conditions, valid_to, service_type_id, image_url')
+    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url')
     .eq('organization_id', organizationId)
     .eq('status', 'active')
+    .lte('valid_from', today)
     .gte('valid_to', today)
     .order('valid_to', { ascending: true });
 

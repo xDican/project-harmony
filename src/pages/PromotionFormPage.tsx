@@ -46,7 +46,6 @@ import {
 } from "@/components/ui/select";
 import {
   createPromotion,
-  computeInitialStatus,
   updatePromotion,
   type Promotion,
   type PromotionStatus,
@@ -262,9 +261,19 @@ export default function PromotionFormPage() {
 
     setSaving(true);
     try {
-      const userPickedStatus: PromotionStatus = isActive
-        ? computeInitialStatus(validFrom, validTo)
-        : "draft";
+      // El toggle del usuario manda: si marcó "Activa" guardamos active aun si
+      // valid_from es futuro — el bot filtra por (valid_from <= today AND
+      // valid_to >= today) asi que no se muestra antes de tiempo. Si marcó
+      // borrador guardamos draft (el cron lo activa cuando llegue valid_from).
+      const today = new Date().toISOString().slice(0, 10);
+      let userPickedStatus: PromotionStatus;
+      if (!isActive) {
+        userPickedStatus = "draft";
+      } else if (validTo < today) {
+        userPickedStatus = "expired";
+      } else {
+        userPickedStatus = "active";
+      }
 
       const payload = {
         title: t,
