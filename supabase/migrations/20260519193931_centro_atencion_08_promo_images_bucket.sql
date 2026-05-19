@@ -12,6 +12,13 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
+-- Drops idempotentes para que la migration se pueda re-aplicar sin error
+-- (algunas policies pudieron haber sido creadas via SQL directo antes).
+DROP POLICY IF EXISTS promo_images_select ON storage.objects;
+DROP POLICY IF EXISTS promo_images_insert ON storage.objects;
+DROP POLICY IF EXISTS promo_images_update ON storage.objects;
+DROP POLICY IF EXISTS promo_images_delete ON storage.objects;
+
 -- SELECT: usuarios de la org pueden ver imagenes de su org
 CREATE POLICY promo_images_select ON storage.objects FOR SELECT
   USING (
