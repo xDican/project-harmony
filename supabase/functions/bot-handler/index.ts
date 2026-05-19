@@ -17,6 +17,7 @@ import { formatTimeForTemplate } from '../_shared/datetime.ts';
 import { OPT_EMOJI, buildStepTitle } from '../_shared/bot-messages.ts';
 import { normalizeToE164 } from '../_shared/phone.ts';
 import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
+import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,6 +81,10 @@ interface BotResponse {
   requiresInput: boolean;
   nextState: BotState;
   sessionComplete: boolean;
+  // Sprint 5: si true, el webhook NO envia el `message` via send-whatsapp-message
+  // porque el bot ya envio directamente (ej. mensaje multimedia con caption).
+  // Igual se loggea la conversation transition.
+  skipDefaultSend?: boolean;
 }
 
 interface BotFAQ {
@@ -360,6 +365,10 @@ async function handleBotMessage(
 
     case 'faq_search':
       response = await handleFAQSearch(messageText, session, organizationId, supabase, handoffLabels);
+      break;
+
+    case 'promo_browse':
+      response = await handlePromoBrowse(messageText, session, organizationId, supabase, handoffLabels);
       break;
 
     case 'booking_select_doctor':
@@ -834,14 +843,145 @@ async function detectServiceTypeFromMessage(
   return null;
 }
 
+interface PromoRow {
+  id: string;
+  title: string;
+  description: string;
+  conditions: string | null;
+  valid_from: string;
+  valid_to: string;
+  service_type_id: string | null;
+  image_url: string | null;
+}
+
+function formatPromoCaption(p: PromoRow): string {
+  const validUntil = new Date(p.valid_to + 'T00:00:00').toLocaleDateString('es-HN', {
+    day: 'numeric',
+    month: 'short',
+  });
+  const conditionsLine = p.conditions ? `\n_⚠️ ${p.conditions}_` : '';
+  return `${OPT_EMOJI.promociones} *${p.title}*\n\n${p.description}${conditionsLine}\n\n_Vigente hasta el ${validUntil}_`;
+}
+
 /**
- * Lista las promociones activas de la org, opcionalmente filtradas por servicio.
- * Construye un mensaje texto formateado con titulos + descripciones + vigencia.
+ * Envia una promo al paciente.
+ *   - Si tiene image_url: descarga de Storage → upload Meta → mensaje multimedia
+ *     con la promo como caption. Una sola burbuja en WhatsApp.
+ *   - Si no tiene imagen: retorna el texto como BotResponse para que el webhook
+ *     lo envie normal.
  *
- * Si el paciente menciono un servicio especifico, filtra por ese service_type
- * (incluyendo las promos genericas con service_type_id IS NULL).
+ * Retorna { multimediaSent: true } si ya envio la imagen directamente — en ese
+ * caso el handler debe setear skipDefaultSend en su BotResponse.
+ */
+async function sendPromoMultimedia(
+  promo: PromoRow,
+  whatsappLineId: string,
+  patientPhone: string,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<{ multimediaSent: boolean; error?: string }> {
+  if (!promo.image_url) return { multimediaSent: false };
+
+  // 1. Cargar credenciales de la linea
+  const { data: line, error: lineErr } = await supabase
+    .from('whatsapp_lines')
+    .select('id, provider, meta_phone_number_id, meta_access_token')
+    .eq('id', whatsappLineId)
+    .single();
+
+  if (lineErr || !line || line.provider !== 'meta' || !line.meta_phone_number_id || !line.meta_access_token) {
+    console.warn('[sendPromoMultimedia] no Meta credentials for line; fallback to text');
+    return { multimediaSent: false, error: 'no_meta_credentials' };
+  }
+
+  // 2. Descargar de Storage promo-images
+  const downloaded = await downloadFromStorage(supabase as unknown as Parameters<typeof downloadFromStorage>[0], promo.image_url);
+  if (!downloaded) {
+    console.warn('[sendPromoMultimedia] download failed; fallback to text');
+    return { multimediaSent: false, error: 'download_failed' };
+  }
+
+  // 3. Upload a Meta → mediaId
+  const uploaded = await uploadMetaMedia(
+    downloaded.bytes,
+    downloaded.mime,
+    line.meta_phone_number_id as string,
+    line.meta_access_token as string,
+  );
+  if (!uploaded) {
+    console.warn('[sendPromoMultimedia] meta upload failed; fallback to text');
+    return { multimediaSent: false, error: 'meta_upload_failed' };
+  }
+
+  // 4. POST a messaging-gateway con type=media + mediaId + caption
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const internalSecret = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
+  const gatewayUrl = `${supabaseUrl}/functions/v1/messaging-gateway`;
+
+  try {
+    const res = await fetch(gatewayUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+        'x-internal-secret': internalSecret,
+      },
+      body: JSON.stringify({
+        to: patientPhone,
+        body: formatPromoCaption(promo),
+        type: 'generic',
+        messageType: 'image',
+        mediaId: uploaded.mediaId,
+        mediaKind: 'image',
+        mediaUrl: promo.image_url,
+        mediaMime: downloaded.mime,
+        whatsappLineId,
+        organizationId,
+        source: 'bot',
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('[sendPromoMultimedia] gateway failed:', res.status, errText);
+      return { multimediaSent: false, error: 'gateway_failed' };
+    }
+  } catch (e) {
+    console.error('[sendPromoMultimedia] gateway exception:', e);
+    return { multimediaSent: false, error: 'gateway_exception' };
+  }
+
+  return { multimediaSent: true };
+}
+
+function noPromosResponse(handoffLabels: { menuOption: string }): BotResponse {
+  return {
+    message:
+      `${OPT_EMOJI.promociones} *Promociones del mes*\n\n` +
+      `Por ahora no tenemos promociones activas. Le avisamos cuando lancemos algo nuevo.\n\n` +
+      `¿Le ayudo a agendar una consulta?`,
+    options: [
+      `${OPT_EMOJI.agendar} Agendar cita`,
+      handoffLabels.menuOption,
+      `${OPT_EMOJI.menu} Menu principal`,
+    ],
+    requiresInput: true,
+    nextState: 'main_menu',
+    sessionComplete: false,
+  };
+}
+
+/**
+ * Maneja la peticion "promociones" del paciente.
  *
- * Si no hay promos: deriva amablemente a agendar cita.
+ * Comportamiento:
+ *   - 0 promos: deriva a agendar cita
+ *   - 1 promo: envia la promo de una vez (con imagen si tiene)
+ *   - N promos: muestra menu breve con titulos numerados; guarda IDs en
+ *     session.context.promoIds para que handlePromoBrowse responda a la
+ *     seleccion del paciente
+ *
+ * Si el paciente menciono un servicio (botox, dental, etc.), filtra primero.
  */
 async function handlePromoSearch(
   messageText: string,
@@ -868,11 +1008,10 @@ async function handlePromoSearch(
     .order('valid_to', { ascending: true });
 
   if (serviceTypeId) {
-    // Filtrar por servicio O promos genericas
     query = query.or(`service_type_id.eq.${serviceTypeId},service_type_id.is.null`);
   }
 
-  const { data: promos, error } = await query;
+  const { data: promosData, error } = await query;
 
   if (error) {
     console.error('[handlePromoSearch] query failed:', error.message);
@@ -885,44 +1024,90 @@ async function handlePromoSearch(
     };
   }
 
-  // Sin promos
-  if (!promos || promos.length === 0) {
-    return {
-      message:
-        `${OPT_EMOJI.promociones} *Promociones del mes*\n\n` +
-        `Por ahora no tenemos promociones activas. Le avisamos cuando lancemos algo nuevo.\n\n` +
-        `¿Le ayudo a agendar una consulta?`,
-      options: [
-        `${OPT_EMOJI.agendar} Agendar cita`,
-        handoffLabels.menuOption,
-        `${OPT_EMOJI.menu} Menu principal`,
-      ],
-      requiresInput: true,
-      nextState: 'main_menu',
-      sessionComplete: false,
-    };
+  const promos = (promosData ?? []) as PromoRow[];
+
+  if (promos.length === 0) {
+    return noPromosResponse(handoffLabels);
   }
 
-  // Formatear lista de promos
-  const promoLines = promos.map((p, idx) => {
-    const validUntil = new Date(p.valid_to + 'T00:00:00').toLocaleDateString('es-HN', {
-      day: 'numeric',
-      month: 'short',
-    });
-    const conditionsLine = p.conditions ? `\n_⚠️ ${p.conditions}_` : '';
-    return `${idx + 1}. *${p.title}*\n${p.description}${conditionsLine}\n_Hasta el ${validUntil}_`;
-  });
+  // 1 sola promo: enviar directo
+  if (promos.length === 1) {
+    return await sendSinglePromo(
+      promos[0],
+      session,
+      organizationId,
+      supabase,
+      handoffLabels,
+    );
+  }
 
-  const headerEmoji = OPT_EMOJI.promociones;
-  const intro =
-    promos.length === 1
-      ? `${headerEmoji} *Promocion del mes*`
-      : `${headerEmoji} *Promociones del mes* (${promos.length})`;
-
-  const message = `${intro}\n\n${promoLines.join('\n\n')}\n\n¿Le interesa alguna? Le puedo agendar una cita o derivarlo a la asistente para mas detalles.`;
+  // N promos: menu breve numerado
+  session.context.promoIds = promos.map((p) => p.id);
+  const titlesList = promos
+    .map((p, idx) => `${idx + 1}. ${p.title}`)
+    .join('\n');
 
   return {
-    message,
+    message:
+      `${OPT_EMOJI.promociones} *Promociones del mes* (${promos.length})\n\n` +
+      `${titlesList}\n\n` +
+      `Responda con el número de la que le interesa para ver el detalle.`,
+    options: [`${OPT_EMOJI.menu} Menu principal`],
+    showMenuHint: false,
+    requiresInput: true,
+    nextState: 'promo_browse',
+    sessionComplete: false,
+  };
+}
+
+/**
+ * Envia 1 promo: si tiene imagen va por messaging-gateway directamente
+ * con caption; si no, retorna BotResponse de texto. En ambos casos cierra
+ * con opciones para seguir el flujo.
+ */
+async function sendSinglePromo(
+  promo: PromoRow,
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string; emoji: string },
+): Promise<BotResponse> {
+  const caption = formatPromoCaption(promo);
+
+  if (promo.image_url) {
+    const { multimediaSent } = await sendPromoMultimedia(
+      promo,
+      session.whatsapp_line_id,
+      session.patient_phone,
+      organizationId,
+      supabase,
+    );
+
+    if (multimediaSent) {
+      // Mensaje imagen+caption ya enviado. Mandar opciones de continuacion
+      // como SEGUNDO mensaje via flujo normal (sin skipDefaultSend) — el
+      // webhook envia el menu como texto, que es lo natural.
+      return {
+        message: `¿Qué le gustaría hacer?`,
+        options: [
+          `${OPT_EMOJI.agendar} Agendar cita`,
+          handoffLabels.menuOption,
+          `${OPT_EMOJI.menu} Menu principal`,
+        ],
+        requiresInput: true,
+        nextState: 'main_menu',
+        sessionComplete: false,
+      };
+    }
+    // Fallback: la imagen fallo (Meta error/Storage error) → enviar texto solo
+    console.warn('[sendSinglePromo] image send failed, falling back to text');
+  }
+
+  // Sin imagen o fallback: enviar la promo como texto completo
+  return {
+    message:
+      `${caption}\n\n` +
+      `¿Le interesa? Le puedo agendar una cita o derivarlo a la asistente para más detalles.`,
     options: [
       `${OPT_EMOJI.agendar} Agendar cita`,
       handoffLabels.menuOption,
@@ -932,6 +1117,63 @@ async function handlePromoSearch(
     nextState: 'main_menu',
     sessionComplete: false,
   };
+}
+
+/**
+ * Handler del estado promo_browse: paciente eligio un numero de la lista de
+ * promos. Buscamos la promo correspondiente en session.context.promoIds y
+ * la enviamos.
+ */
+async function handlePromoBrowse(
+  input: string,
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string; emoji: string },
+): Promise<BotResponse> {
+  const promoIds: string[] = Array.isArray(session.context.promoIds)
+    ? session.context.promoIds
+    : [];
+
+  // Permite "0" o "menu" para volver
+  const norm = input.trim().toLowerCase();
+  if (norm === '0' || norm === 'menu' || norm.includes('menu')) {
+    delete session.context.promoIds;
+    return await handleMainMenu('', session, organizationId, supabase, handoffLabels);
+  }
+
+  const num = parseInt(norm, 10);
+  if (!Number.isFinite(num) || num < 1 || num > promoIds.length) {
+    return {
+      message: `⚠️ Opción no válida. Responda con el número de la promoción (1-${promoIds.length}) o "menu" para volver.`,
+      requiresInput: true,
+      nextState: 'promo_browse',
+      sessionComplete: false,
+    };
+  }
+
+  const selectedId = promoIds[num - 1];
+  const { data: promo, error } = await supabase
+    .from('promotions')
+    .select('id, title, description, conditions, valid_from, valid_to, service_type_id, image_url')
+    .eq('id', selectedId)
+    .eq('organization_id', organizationId)
+    .single();
+
+  if (error || !promo) {
+    console.error('[handlePromoBrowse] promo not found:', error?.message);
+    delete session.context.promoIds;
+    return noPromosResponse(handoffLabels);
+  }
+
+  delete session.context.promoIds; // limpiar para siguiente ciclo
+  return await sendSinglePromo(
+    promo as PromoRow,
+    session,
+    organizationId,
+    supabase,
+    handoffLabels,
+  );
 }
 
 async function handleMainMenu(
