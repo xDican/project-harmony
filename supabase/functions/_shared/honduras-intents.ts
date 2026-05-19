@@ -14,6 +14,7 @@ export type Intent =
   | 'faq_schedule'
   | 'faq_services'
   | 'faq_my_appointment'
+  | 'promo_search'
   | 'handoff'
   | 'out_of_scope'
   | 'wrong_number'
@@ -225,6 +226,22 @@ const FAQ_MY_APPOINTMENT_PHRASES = [
   'me recuerda cuando', 'tengo cita', 'para que procedimiento tengo cita',
 ];
 
+// PROMO_SEARCH: paciente pregunta por ofertas/promociones del mes
+// Detectado tanto en texto libre como por boton del menu principal.
+const PROMO_PHRASES = [
+  'promo', 'promos', 'promocion', 'promociones',
+  'oferta', 'ofertas',
+  'descuento', 'descuentos', 'rebaja', 'rebajas',
+  'precio especial', 'precios especiales',
+  'este mes', 'del mes',
+  'hay algo nuevo', 'hay alguna oferta', 'hay alguna promo',
+  'que ofertas tienen', 'que promociones tienen', 'tienen alguna oferta',
+  'tienen promocion', 'tienen alguna promo', 'tienen alguna promocion',
+  'que tienen', 'que ofertan',
+  'paquete', 'paquetes', 'combo', 'combos',
+  '2x1', 'dos por uno',
+];
+
 // HANDOFF
 const HANDOFF_PHRASES = [
   'secretaria', 'hablar con secretaria', 'hablar con la secretaria',
@@ -393,6 +410,10 @@ export function detectIntent(text: string): DetectedIntent {
 
   const fq_mc = matchAny(norm, FAQ_MY_APPOINTMENT_PHRASES);
   if (fq_mc) return { intent: 'faq_my_appointment', confidence: 'high', matched: fq_mc };
+
+  // Promo search — antes de greeting (puede venir despues de saludo)
+  const pr = matchAny(norm, PROMO_PHRASES);
+  if (pr) return { intent: 'promo_search', confidence: 'high', matched: pr };
 
   // Greeting (al final — muchos saludos vienen acompanados de info real)
   const gr = matchAny(norm, GREETING_PHRASES);

@@ -22,6 +22,7 @@ export const OPT_EMOJI: Record<string, string> = {
   volver: '⬅️',
   menu: '🏠',
   horarios: '🕒',
+  promociones: '✨',
 };
 
 /**

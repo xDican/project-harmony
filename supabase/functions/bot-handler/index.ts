@@ -48,6 +48,7 @@ type BotState =
   | 'greeting'
   | 'main_menu'
   | 'faq_search'
+  | 'promo_browse'         // Lista de promociones activas — usuario puede pedir mas detalle o volver
   | 'booking_select_doctor'
   | 'booking_select_service'
   | 'booking_select_week'
@@ -308,6 +309,7 @@ async function handleBotMessage(
         `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
         `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
+        `${OPT_EMOJI.promociones} Ver promociones del mes`,
       ],
       showMenuHint: false,
       requiresInput: true,
@@ -801,6 +803,136 @@ function detectMenuIntent(input: string): 'booking' | 'reschedule' | 'faq' | 'ha
   return null;
 }
 
+// ============================================================================
+// PROMO SEARCH (Sprint 5 — Promociones del mes)
+// ============================================================================
+
+/**
+ * Detecta si el mensaje del paciente menciona un servicio especifico
+ * (buscando en service_types.name + keywords de la promo).
+ * Retorna service_type_id o null.
+ */
+async function detectServiceTypeFromMessage(
+  message: string,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<string | null> {
+  if (!message || message.trim().length < 3) return null;
+  const { data: services } = await supabase
+    .from('service_types')
+    .select('id, name')
+    .eq('organization_id', organizationId);
+  if (!services || services.length === 0) return null;
+
+  const norm = message.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  for (const s of services) {
+    const sName = (s.name as string).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (norm.includes(sName) || sName.split(/\s+/).some((w: string) => w.length > 3 && norm.includes(w))) {
+      return s.id as string;
+    }
+  }
+  return null;
+}
+
+/**
+ * Lista las promociones activas de la org, opcionalmente filtradas por servicio.
+ * Construye un mensaje texto formateado con titulos + descripciones + vigencia.
+ *
+ * Si el paciente menciono un servicio especifico, filtra por ese service_type
+ * (incluyendo las promos genericas con service_type_id IS NULL).
+ *
+ * Si no hay promos: deriva amablemente a agendar cita.
+ */
+async function handlePromoSearch(
+  messageText: string,
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient,
+  handoffLabels: { menuOption: string; connecting: string; emoji: string },
+): Promise<BotResponse> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const serviceTypeId = await detectServiceTypeFromMessage(
+    messageText,
+    organizationId,
+    supabase,
+  );
+
+  let query = supabase
+    .from('promotions')
+    .select('id, title, description, conditions, valid_to, service_type_id, image_url')
+    .eq('organization_id', organizationId)
+    .eq('status', 'active')
+    .gte('valid_to', today)
+    .order('valid_to', { ascending: true });
+
+  if (serviceTypeId) {
+    // Filtrar por servicio O promos genericas
+    query = query.or(`service_type_id.eq.${serviceTypeId},service_type_id.is.null`);
+  }
+
+  const { data: promos, error } = await query;
+
+  if (error) {
+    console.error('[handlePromoSearch] query failed:', error.message);
+    return {
+      message: 'Estamos teniendo un problema buscando las promociones. ¿Le derivo a la asistente?',
+      options: [handoffLabels.menuOption, `${OPT_EMOJI.menu} Menu principal`],
+      requiresInput: true,
+      nextState: 'main_menu',
+      sessionComplete: false,
+    };
+  }
+
+  // Sin promos
+  if (!promos || promos.length === 0) {
+    return {
+      message:
+        `${OPT_EMOJI.promociones} *Promociones del mes*\n\n` +
+        `Por ahora no tenemos promociones activas. Le avisamos cuando lancemos algo nuevo.\n\n` +
+        `¿Le ayudo a agendar una consulta?`,
+      options: [
+        `${OPT_EMOJI.agendar} Agendar cita`,
+        handoffLabels.menuOption,
+        `${OPT_EMOJI.menu} Menu principal`,
+      ],
+      requiresInput: true,
+      nextState: 'main_menu',
+      sessionComplete: false,
+    };
+  }
+
+  // Formatear lista de promos
+  const promoLines = promos.map((p, idx) => {
+    const validUntil = new Date(p.valid_to + 'T00:00:00').toLocaleDateString('es-HN', {
+      day: 'numeric',
+      month: 'short',
+    });
+    const conditionsLine = p.conditions ? `\n_⚠️ ${p.conditions}_` : '';
+    return `${idx + 1}. *${p.title}*\n${p.description}${conditionsLine}\n_Hasta el ${validUntil}_`;
+  });
+
+  const headerEmoji = OPT_EMOJI.promociones;
+  const intro =
+    promos.length === 1
+      ? `${headerEmoji} *Promocion del mes*`
+      : `${headerEmoji} *Promociones del mes* (${promos.length})`;
+
+  const message = `${intro}\n\n${promoLines.join('\n\n')}\n\n¿Le interesa alguna? Le puedo agendar una cita o derivarlo a la asistente para mas detalles.`;
+
+  return {
+    message,
+    options: [
+      `${OPT_EMOJI.agendar} Agendar cita`,
+      handoffLabels.menuOption,
+      `${OPT_EMOJI.menu} Menu principal`,
+    ],
+    requiresInput: true,
+    nextState: 'main_menu',
+    sessionComplete: false,
+  };
+}
+
 async function handleMainMenu(
   input: string,
   session: BotSession,
@@ -829,6 +961,10 @@ async function handleMainMenu(
         nextState: 'completed',
         sessionComplete: true,
       };
+    }
+    if (hnIntent.intent === 'promo_search') {
+      session.context.invalidAttempts = 0;
+      return await handlePromoSearch(input, session, organizationId, supabase, handoffLabels);
     }
     // confirm / faq_* / greeting / unknown → caer a la logica viejo (que ya cubre esos casos)
   }
@@ -859,6 +995,11 @@ async function handleMainMenu(
     return await handleHandoffToSecretary(session.whatsapp_line_id, session.patient_phone, organizationId, supabase, handoffLabels, session.context, session.id);
   }
 
+  if (normalizedInput === '5' || normalizedInput.includes('promocion') || normalizedInput.includes('promociones') || normalizedInput.includes('ofertas')) {
+    session.context.invalidAttempts = 0;
+    return await handlePromoSearch(input, session, organizationId, supabase, handoffLabels);
+  }
+
   // Recognize greetings — re-show menu friendly instead of "opcion no valida"
   const SALUDOS = ['hola', 'ola', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'buen dia', 'hey', 'wenas'];
   const isGreeting = SALUDOS.some(s => normalizedInput === s || normalizedInput.startsWith(s + ' ') || normalizedInput.startsWith(s + ','));
@@ -871,6 +1012,7 @@ async function handleMainMenu(
         `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
         `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
+        `${OPT_EMOJI.promociones} Ver promociones del mes`,
       ],
       showMenuHint: false,
       requiresInput: true,
@@ -1017,6 +1159,7 @@ async function handleFAQSearch(
         `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
         `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
+        `${OPT_EMOJI.promociones} Ver promociones del mes`,
       ],
       showMenuHint: false,
       requiresInput: true,
@@ -1833,6 +1976,7 @@ async function handleBookingConfirm(
         `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
         `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
+        `${OPT_EMOJI.promociones} Ver promociones del mes`,
       ],
       showMenuHint: false,
       requiresInput: true,
@@ -2338,6 +2482,7 @@ async function handleCancelConfirm(
         `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
         `${OPT_EMOJI.faq} Preguntas frecuentes`,
         handoffLabels.menuOption,
+        `${OPT_EMOJI.promociones} Ver promociones del mes`,
       ],
       showMenuHint: false,
       requiresInput: true,
