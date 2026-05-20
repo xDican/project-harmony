@@ -32,6 +32,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/context/UserContext";
+import { useInbox, type MessageLogEvent } from "@/context/InboxContext";
 import { toast } from "sonner";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -158,6 +159,7 @@ const Ctx = createContext<CallContextValue | null>(null);
 export function CallProvider({ children }: { children: ReactNode }) {
   const { user } = useCurrentUser();
   const organizationId = user?.organizationId ?? undefined;
+  const { subscribeToMessageLog } = useInbox();
 
   // callQueue[0] es la llamada activa. callQueue[1+] son entrantes en espera.
   // Cuando una llamada activa termina, shift y promovemos la siguiente.
@@ -690,11 +692,109 @@ export function CallProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [organizationId]);
 
-  // ---- Listener Realtime UNICO: voice_call + call_permissions ----
+  // ---- Subscribe a eventos de message_logs via InboxContext (EventBus) ----
+  // No creamos nuestro propio channel Realtime sobre message_logs — InboxContext
+  // ya lo escucha en clinic:{orgId} y nos despacha cada INSERT/UPDATE.
   useEffect(() => {
     if (!organizationId) return;
 
-    const channelName = `calls:${organizationId}`;
+    const handleMessageLogEvent = (event: MessageLogEvent) => {
+      const row = event.row as unknown as MessageLogRow;
+      if (row.message_type !== "voice_call") return;
+
+      if (event.type === "INSERT") {
+        if (row.call_status !== "ringing") return;
+        if (row.call_direction !== "inbound") return;
+        if (!row.call_id_meta || !row.conversation_id) return;
+
+        const sdpInfo = extractSdpFromPayload(row.raw_payload);
+        if (!sdpInfo || sdpInfo.sdp_type !== "offer") {
+          console.warn("[CallContext] inbound voice_call sin SDP offer:", row.id);
+          return;
+        }
+
+        // Resolver patient_name async + agregar al queue
+        (async () => {
+          const { data: conv } = await supabase
+            .from("conversations")
+            .select("patient_name, patient_phone")
+            .eq("id", row.conversation_id!)
+            .maybeSingle();
+
+          const newCall: ActiveCall = {
+            messageLogId: row.id,
+            callIdMeta: row.call_id_meta!,
+            conversationId: row.conversation_id!,
+            patientPhone: conv?.patient_phone ?? row.from_phone,
+            patientName: conv?.patient_name ?? null,
+            direction: "inbound",
+            sdpOffer: sdpInfo.sdp,
+            receivedAt: row.created_at,
+          };
+
+          setCallQueue((prev) => {
+            if (prev.some((c) => c.callIdMeta === newCall.callIdMeta)) return prev;
+            if (prev.length > 0) {
+              const name = newCall.patientName ?? newCall.patientPhone;
+              toast(`📞 Llamada en espera de ${name}`, {
+                description: "Se mostrara al terminar la actual",
+              });
+            }
+            return [...prev, newCall];
+          });
+        })();
+        return;
+      }
+
+      // UPDATE
+      if (!row.call_id_meta) return;
+
+      if (TERMINAL_STATUSES.includes(row.call_status ?? "")) {
+        setCallQueue((prev) => {
+          if (prev.length === 0) return prev;
+          const matchIdx = prev.findIndex((c) => {
+            const matchInbound = c.callIdMeta === row.call_id_meta;
+            const matchOutbound =
+              c.direction === "outbound" &&
+              c.conversationId === row.conversation_id;
+            return matchInbound || matchOutbound;
+          });
+          if (matchIdx === -1) return prev;
+          if (matchIdx === 0) {
+            queueMicrotask(() => endActiveCall());
+            return prev;
+          }
+          return [...prev.slice(0, matchIdx), ...prev.slice(matchIdx + 1)];
+        });
+        return;
+      }
+
+      // Outbound: SDP answer en raw_payload → setRemoteDescription
+      const sdpInfo = extractSdpFromPayload(row.raw_payload);
+      if (sdpInfo?.sdp_type === "answer" && row.call_direction === "outbound") {
+        setCallQueue((prev) => {
+          if (prev.length === 0) return prev;
+          const cur = prev[0];
+          if (cur.direction !== "outbound") return prev;
+          if (cur.conversationId !== row.conversation_id) return prev;
+          queueMicrotask(() => applyRemoteAnswer(sdpInfo.sdp));
+          const next = [...prev];
+          next[0] = { ...cur, callIdMeta: row.call_id_meta };
+          return next;
+        });
+      }
+    };
+
+    const unsub = subscribeToMessageLog(handleMessageLogEvent);
+    return unsub;
+  }, [organizationId, endActiveCall, applyRemoteAnswer, subscribeToMessageLog]);
+
+  // ---- Channel Realtime SOLO para call_permissions ----
+  // (message_logs ahora se consume via InboxContext, ver useEffect arriba)
+  useEffect(() => {
+    if (!organizationId) return;
+
+    const channelName = `call-perms:${organizationId}`;
     let channel: RealtimeChannel | null = null;
     let cancelled = false;
 
@@ -707,121 +807,6 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
       channel = supabase
         .channel(channelName)
-        // ---- INSERT voice_call inbound ringing → setear activeCall inbound ----
-        .on(
-          // @ts-expect-error supabase-js postgres_changes types
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "message_logs",
-            filter: `organization_id=eq.${organizationId}`,
-          },
-          (payload: { new: MessageLogRow }) => {
-            const row = payload.new;
-            if (row.message_type !== "voice_call") return;
-            if (row.call_status !== "ringing") return;
-            if (row.call_direction !== "inbound") return;
-            if (!row.call_id_meta || !row.conversation_id) return;
-
-            const sdpInfo = extractSdpFromPayload(row.raw_payload);
-            if (!sdpInfo || sdpInfo.sdp_type !== "offer") {
-              console.warn("[CallContext] inbound voice_call sin SDP offer:", row.id);
-              return;
-            }
-
-            // Resolver patient_name async + agregar al queue
-            (async () => {
-              const { data: conv } = await supabase
-                .from("conversations")
-                .select("patient_name, patient_phone")
-                .eq("id", row.conversation_id!)
-                .maybeSingle();
-
-              const newCall: ActiveCall = {
-                messageLogId: row.id,
-                callIdMeta: row.call_id_meta!,
-                conversationId: row.conversation_id!,
-                patientPhone: conv?.patient_phone ?? row.from_phone,
-                patientName: conv?.patient_name ?? null,
-                direction: "inbound",
-                sdpOffer: sdpInfo.sdp,
-                receivedAt: row.created_at,
-              };
-
-              setCallQueue((prev) => {
-                // Dedupe: si ya esta por callIdMeta, no agregar
-                if (prev.some((c) => c.callIdMeta === newCall.callIdMeta)) return prev;
-                // Si ya hay activa, avisar con toast que esta entra en cola
-                if (prev.length > 0) {
-                  const name = newCall.patientName ?? newCall.patientPhone;
-                  toast(`📞 Llamada en espera de ${name}`, {
-                    description: "Se mostrara al terminar la actual",
-                  });
-                }
-                return [...prev, newCall];
-              });
-            })();
-          },
-        )
-        // ---- UPDATE voice_call → SDP answer (outbound) o terminal status ----
-        .on(
-          // @ts-expect-error supabase-js postgres_changes types
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "message_logs",
-            filter: `organization_id=eq.${organizationId}`,
-          },
-          (payload: { new: MessageLogRow }) => {
-            const row = payload.new;
-            if (row.message_type !== "voice_call") return;
-            if (!row.call_id_meta) return;
-
-            // Cerrar overlay si llega terminal status (paciente colgo remoto, etc.)
-            // Si era la activa, endActiveCall + shift queue. Si estaba en cola,
-            // remover del queue (sin afectar la activa).
-            if (TERMINAL_STATUSES.includes(row.call_status ?? "")) {
-              setCallQueue((prev) => {
-                if (prev.length === 0) return prev;
-                const matchIdx = prev.findIndex((c) => {
-                  const matchInbound = c.callIdMeta === row.call_id_meta;
-                  const matchOutbound =
-                    c.direction === "outbound" &&
-                    c.conversationId === row.conversation_id;
-                  return matchInbound || matchOutbound;
-                });
-                if (matchIdx === -1) return prev;
-                if (matchIdx === 0) {
-                  // Es la activa → endActiveCall maneja shift + cleanup
-                  queueMicrotask(() => endActiveCall());
-                  return prev;  // endActiveCall hara el shift
-                }
-                // Estaba en cola, no era la activa — solo remover
-                return [...prev.slice(0, matchIdx), ...prev.slice(matchIdx + 1)];
-              });
-              return;
-            }
-
-            // Outbound: SDP answer en raw_payload → setRemoteDescription
-            // Match: la fila tiene call_id_meta recien seteado (webhook connect) y direction outbound
-            const sdpInfo = extractSdpFromPayload(row.raw_payload);
-            if (sdpInfo?.sdp_type === "answer" && row.call_direction === "outbound") {
-              setCallQueue((prev) => {
-                if (prev.length === 0) return prev;
-                const cur = prev[0];
-                if (cur.direction !== "outbound") return prev;
-                if (cur.conversationId !== row.conversation_id) return prev;
-                queueMicrotask(() => applyRemoteAnswer(sdpInfo.sdp));
-                const next = [...prev];
-                next[0] = { ...cur, callIdMeta: row.call_id_meta };
-                return next;
-              });
-            }
-          },
-        )
-        // ---- INSERT call_permissions → upsert en map ----
         .on(
           // @ts-expect-error supabase-js postgres_changes types
           "postgres_changes",
@@ -851,7 +836,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [organizationId, endActiveCall, applyRemoteAnswer]);
+  }, [organizationId]);
 
   // ---- Cleanup en unmount del provider (defensa) ----
   useEffect(() => {

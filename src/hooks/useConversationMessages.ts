@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { sendMessage } from "@/lib/inboxActions";
 
 export interface MessageRow {
   id: string;
@@ -281,6 +282,62 @@ export function useConversationMessages(conversationId: string | null) {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
+  /**
+   * Envia un mensaje de texto con UI optimistic encapsulada.
+   *
+   * Flow:
+   *   1. Construye un MessageRow temporal con status='sending' y id='temp-{uuid}'
+   *   2. Lo agrega al timeline (visible inmediato)
+   *   3. POST a /inbox-send en background (no bloquea el composer)
+   *   4. Si OK → status='sent'. El realtime traera la version canonica y
+   *      insertRealtimeMessage dedupea por body matching reemplazando el temp.
+   *   5. Si falla → status='failed' (badge ⚠ Fallido en bubble) y throw.
+   *
+   * Diseño: composer NO necesita conocer el shape de MessageRow ni el flow
+   * temp→real. Solo llama esto.
+   */
+  const sendOptimisticText = useCallback(
+    async (args: { body: string; userId: string | null; patientPhoneTo: string }) => {
+      if (!conversationId) throw new Error("sendOptimisticText: no conversationId");
+
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const optimistic: MessageRow = {
+        id: tempId,
+        conversation_id: conversationId,
+        direction: "outbound",
+        source: "assistant",
+        message_type: "text",
+        body: args.body,
+        transcription: null,
+        media_url: null,
+        media_mime: null,
+        status: "sending",
+        sent_by: args.userId,
+        to_phone: args.patientPhoneTo,
+        from_phone: "",
+        call_duration_seconds: null,
+        call_direction: null,
+        call_status: null,
+        call_id_meta: null,
+        created_at: new Date().toISOString(),
+      };
+      addOptimisticMessage(optimistic);
+
+      try {
+        await sendMessage({
+          conversationId,
+          body: args.body,
+          messageType: "text",
+        });
+        updateOptimisticMessage(tempId, { status: "sent" });
+      } catch (e) {
+        updateOptimisticMessage(tempId, { status: "failed" });
+        throw e;
+      }
+    },
+    [conversationId, addOptimisticMessage, updateOptimisticMessage],
+  );
+
   return {
     messages,
     isLoading,
@@ -289,6 +346,7 @@ export function useConversationMessages(conversationId: string | null) {
     addOptimisticMessage,
     updateOptimisticMessage,
     removeMessage,
+    sendOptimisticText,
     insertRealtimeMessage,
     updateRealtimeMessage,
   };

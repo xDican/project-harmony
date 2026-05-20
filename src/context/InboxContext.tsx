@@ -21,7 +21,7 @@
  * separado porque su scope es por-conversation, no por-org.
  */
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from "react";
 import { useCurrentUser } from "@/context/UserContext";
 import {
   useConversations,
@@ -31,6 +31,13 @@ import {
   useRealtimeInbox,
   playNotificationBeep,
 } from "@/hooks/useRealtimeInbox";
+import type { MessageRow } from "@/hooks/useConversationMessages";
+
+/** Evento de message_logs propagado a subscribers externos (CallContext, etc.). */
+export interface MessageLogEvent {
+  type: "INSERT" | "UPDATE";
+  row: MessageRow;
+}
 
 interface InboxContextValue {
   conversations: ConversationListRow[];
@@ -43,6 +50,14 @@ interface InboxContextValue {
   upsertConversation: (
     incoming: Partial<ConversationListRow> & { id: string },
   ) => void;
+  /**
+   * EventBus de message_logs. Otros providers (CallContext) se suscriben para
+   * reaccionar a tipos especificos (voice_call) sin tener su propio listener
+   * Realtime sobre la misma tabla. Retorna unsubscribe.
+   */
+  subscribeToMessageLog: (
+    handler: (event: MessageLogEvent) => void,
+  ) => () => void;
 }
 
 const InboxContext = createContext<InboxContextValue | null>(null);
@@ -60,6 +75,30 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     applyMessageToConversation,
   } = useConversations(organizationId);
 
+  // EventBus de message_logs — subscribers externos (CallContext) reaccionan
+  // sin crear su propio listener Realtime sobre la misma tabla.
+  const messageLogHandlersRef = useRef<Set<(e: MessageLogEvent) => void>>(new Set());
+
+  const subscribeToMessageLog = useCallback(
+    (handler: (event: MessageLogEvent) => void) => {
+      messageLogHandlersRef.current.add(handler);
+      return () => {
+        messageLogHandlersRef.current.delete(handler);
+      };
+    },
+    [],
+  );
+
+  const emitMessageLog = useCallback((event: MessageLogEvent) => {
+    for (const h of messageLogHandlersRef.current) {
+      try {
+        h(event);
+      } catch (err) {
+        console.error("[InboxContext] message_log handler error:", err);
+      }
+    }
+  }, []);
+
   // Channel unico a nivel org. Las callbacks mutan el state local.
   // El badge y la lista derivan del mismo state, asi que se actualizan a la vez.
   useRealtimeInbox(organizationId, {
@@ -70,9 +109,11 @@ export function InboxProvider({ children }: { children: ReactNode }) {
       if (row.source === "patient") {
         playNotificationBeep();
       }
+      emitMessageLog({ type: "INSERT", row: row as MessageRow });
     },
     onMessageUpdated: (row) => {
       applyMessageToConversation(row);
+      emitMessageLog({ type: "UPDATE", row: row as MessageRow });
     },
   });
 
@@ -88,6 +129,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
     refetch,
     unreadCount,
     upsertConversation,
+    subscribeToMessageLog,
   };
 
   return <InboxContext.Provider value={value}>{children}</InboxContext.Provider>;
@@ -110,6 +152,7 @@ export function useInbox(): InboxContextValue {
       refetch: () => undefined,
       unreadCount: 0,
       upsertConversation: () => undefined,
+      subscribeToMessageLog: () => () => undefined,
     };
   }
   return ctx;
