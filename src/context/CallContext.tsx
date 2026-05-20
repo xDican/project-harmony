@@ -183,11 +183,14 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   // ---- Cleanup peer connection (centralizado) ----
   const cleanupPeer = useCallback(() => {
-    // Abortar init outbound en vuelo (si hay)
     try {
       outboundAbortRef.current?.abort();
     } catch (_) { /* ignore */ }
     outboundAbortRef.current = null;
+    if (audioWatcherRef.current) {
+      clearInterval(audioWatcherRef.current);
+      audioWatcherRef.current = null;
+    }
     try {
       peerRef.current?.close();
     } catch (_) { /* ignore */ }
@@ -267,14 +270,22 @@ export function CallProvider({ children }: { children: ReactNode }) {
       const s = pc.connectionState;
       console.log("[CallContext] peer connection state:", s);
       if (s === "connected") {
-        setCallPhase("connected");
-        if (!acceptedAtRef.current) acceptedAtRef.current = Date.now();
+        // Para INBOUND: el "atender" fue manual de la asistente, asi que apenas
+        // WebRTC conecta = audio fluyendo de ambos lados = "connected" real.
+        // Para OUTBOUND: WebRTC conecta apenas Meta entrega el SDP answer (el
+        // paciente todavia no ha tocado atender). NO transicionar a connected
+        // hasta detectar audio real con getStats().bytesReceived.
+        const dir = callQueueRef.current[0]?.direction;
+        if (dir === "inbound") {
+          setCallPhase("connected");
+          if (!acceptedAtRef.current) acceptedAtRef.current = Date.now();
+        } else if (dir === "outbound") {
+          startOutboundAudioWatcher(pc);
+        }
       } else if (s === "failed") {
         setError("Conexion fallida");
         endActiveCall();
       } else if (s === "closed" || s === "disconnected") {
-        // El endActiveCall externo o el handleTerminate del webhook ya manejan
-        // el cleanup. Aqui solo aseguramos que no quedemos en limbo.
         if (callPhaseRef.current === "connected") {
           endActiveCall();
         }
@@ -283,6 +294,51 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
     return pc;
   }, [endActiveCall]);
+
+  // Ref para leer callQueue dentro de callbacks sin re-crearlos
+  const callQueueRef = useRef<ActiveCall[]>([]);
+  useEffect(() => {
+    callQueueRef.current = callQueue;
+  }, [callQueue]);
+
+  // ---- Audio activity watcher (outbound) ----
+  // Llama bytesReceived periodicamente; cuando supera un threshold = paciente
+  // atendio = transicionar a 'connected'. Hasta entonces queda 'dialing-outbound'.
+  const audioWatcherRef = useRef<number | null>(null);
+  const startOutboundAudioWatcher = useCallback((pc: RTCPeerConnection) => {
+    if (audioWatcherRef.current) return;
+    let lastBytes = 0;
+    const id = window.setInterval(async () => {
+      if (callPhaseRef.current === "connected") {
+        if (audioWatcherRef.current) {
+          clearInterval(audioWatcherRef.current);
+          audioWatcherRef.current = null;
+        }
+        return;
+      }
+      try {
+        const stats = await pc.getStats();
+        let received = 0;
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && typeof report.bytesReceived === "number") {
+            received = Math.max(received, report.bytesReceived);
+          }
+        });
+        // Threshold: >2KB total Y delta sostenido (>50 bytes en 300ms). Eso
+        // discrimina audio real de comfort noise/keepalive del peer ringing.
+        if (received > 2000 && received - lastBytes > 50) {
+          setCallPhase("connected");
+          if (!acceptedAtRef.current) acceptedAtRef.current = Date.now();
+          if (audioWatcherRef.current) {
+            clearInterval(audioWatcherRef.current);
+            audioWatcherRef.current = null;
+          }
+        }
+        lastBytes = received;
+      } catch (_) { /* ignore */ }
+    }, 300);
+    audioWatcherRef.current = id;
+  }, []);
 
   // Ref para leer callPhase actual dentro de callbacks sin re-crearlos
   const callPhaseRef = useRef<CallPhase>(callPhase);

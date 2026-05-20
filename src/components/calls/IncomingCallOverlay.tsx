@@ -20,42 +20,85 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // ---------------------------------------------------------------------------
-// Ringtone procedural via WebAudio (dual tone 480Hz+620Hz, US style)
+// Generador de tonos telefonicos via WebAudio.
+//
+// Inbound ringtone (lo que la asistente escucha cuando paciente llama):
+//   - Patron tipo USA: 2 segundos ON, 4 segundos OFF (Bell System)
+//   - Dual frequency 440Hz + 480Hz (estandar precise PRECISE TONE)
+//   - Envelope realista con attack/decay suave para no sonar metalico
+//
+// Outbound ringback (lo que la asistente escucha mientras espera que paciente
+// atienda):
+//   - Mismo patron 2s/4s
+//   - Mismas frecuencias pero volumen un poco menor (es feedback, no alerta)
 // ---------------------------------------------------------------------------
-function createRingtone(): { start: () => void; stop: () => void } {
+type TonePattern = {
+  /** Volumen del peak [0..1] */
+  volume: number;
+  /** Duracion del ring ON en segundos */
+  onSeconds: number;
+  /** Pausa entre rings en segundos */
+  offSeconds: number;
+};
+
+function createPhoneTone(opts: TonePattern): { start: () => void; stop: () => void } {
   let ctx: AudioContext | null = null;
-  let interval: number | null = null;
+  let timeout: number | null = null;
+  let stopped = false;
 
   function playBurst() {
-    if (!ctx) return;
+    if (!ctx || stopped) return;
+
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
 
-    osc1.frequency.value = 480;
-    osc2.frequency.value = 620;
+    // Frecuencias estandar US ringtone (Precise Tone Plan)
+    osc1.frequency.value = 440;
+    osc2.frequency.value = 480;
     osc1.type = "sine";
     osc2.type = "sine";
 
-    const t = ctx.currentTime;
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.18, t + 0.05);
-    gain.gain.setValueAtTime(0.18, t + 0.95);
-    gain.gain.linearRampToValueAtTime(0, t + 1.0);
+    // Filtro low-pass para suavizar el sonido (sacar el "edge metalico")
+    filter.type = "lowpass";
+    filter.frequency.value = 800;
+    filter.Q.value = 1;
 
-    osc1.connect(gain);
-    osc2.connect(gain);
+    const t = ctx.currentTime;
+    const peak = opts.volume;
+    const dur = opts.onSeconds;
+
+    // Envelope ADSR-style:
+    //   Attack: 50ms ramp up
+    //   Sustain: peak hasta dur-100ms
+    //   Release: 100ms decay
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.05);
+    gain.gain.setValueAtTime(peak, t + dur - 0.1);
+    gain.gain.linearRampToValueAtTime(0, t + dur);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
 
     osc1.start(t);
     osc2.start(t);
-    osc1.stop(t + 1.0);
-    osc2.stop(t + 1.0);
+    osc1.stop(t + dur);
+    osc2.stop(t + dur);
+  }
+
+  function scheduleNext() {
+    if (stopped) return;
+    playBurst();
+    timeout = window.setTimeout(scheduleNext, (opts.onSeconds + opts.offSeconds) * 1000);
   }
 
   return {
     start: () => {
       if (ctx) return;
+      stopped = false;
       try {
         const AudioCtx =
           window.AudioContext ||
@@ -63,16 +106,16 @@ function createRingtone(): { start: () => void; stop: () => void } {
             .webkitAudioContext;
         if (!AudioCtx) return;
         ctx = new AudioCtx();
-        playBurst();
-        interval = window.setInterval(playBurst, 2000);
+        scheduleNext();
       } catch (e) {
-        console.warn("[ringtone] failed:", (e as Error).message);
+        console.warn("[phoneTone] failed:", (e as Error).message);
       }
     },
     stop: () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
+      stopped = true;
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
       }
       if (ctx) {
         ctx.close().catch(() => undefined);
@@ -80,6 +123,16 @@ function createRingtone(): { start: () => void; stop: () => void } {
       }
     },
   };
+}
+
+function createRingtone() {
+  // Inbound: prominente, llama atencion
+  return createPhoneTone({ volume: 0.22, onSeconds: 2, offSeconds: 4 });
+}
+
+function createRingback() {
+  // Outbound: feedback, mas suave
+  return createPhoneTone({ volume: 0.14, onSeconds: 2, offSeconds: 4 });
 }
 
 function formatDuration(secs: number): string {
@@ -107,7 +160,10 @@ export function IncomingCallOverlay() {
     remoteAudioRef,
   } = useCallContext();
 
-  // Ringtone manager: arranca/para segun phase
+  // Ringtone manager segun phase:
+  //   - ringing-inbound: ringtone (mas fuerte, llama la atencion)
+  //   - dialing-outbound: ringback (mas suave, feedback de espera)
+  //   - cualquier otro: silencio
   const ringtoneRef = useRef<ReturnType<typeof createRingtone> | null>(null);
   useEffect(() => {
     if (callPhase === "ringing-inbound") {
@@ -117,10 +173,17 @@ export function IncomingCallOverlay() {
         ringtoneRef.current?.stop();
         ringtoneRef.current = null;
       };
-    } else {
-      ringtoneRef.current?.stop();
-      ringtoneRef.current = null;
     }
+    if (callPhase === "dialing-outbound") {
+      ringtoneRef.current = createRingback();
+      ringtoneRef.current.start();
+      return () => {
+        ringtoneRef.current?.stop();
+        ringtoneRef.current = null;
+      };
+    }
+    ringtoneRef.current?.stop();
+    ringtoneRef.current = null;
   }, [callPhase]);
 
   if (!activeCall) return null;
