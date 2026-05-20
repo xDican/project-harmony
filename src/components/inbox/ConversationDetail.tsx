@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CallPatientButton } from "@/components/calls/CallPatientButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,6 +108,12 @@ export function ConversationDetail({
             {conversation.patient_phone}
           </div>
         </div>
+
+        <CallPatientButton
+          conversationId={conversation.id}
+          patientPhone={conversation.patient_phone}
+          patientName={conversation.patient_name}
+        />
 
         <HandoffControls
           conversation={conversation}

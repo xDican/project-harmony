@@ -89,23 +89,33 @@ async function findPatientByPhone(
 
 /**
  * connect event — llamada inicia.
- * INSERT una nueva fila voice_call con status='ringing' y guarda el SDP offer.
- * El frontend (via Realtime) detecta el INSERT y dispara ringtone + overlay.
+ *
+ * Inbound (USER_INITIATED):
+ *   - INSERT nueva fila voice_call status='ringing', SDP offer en raw_payload
+ *   - Frontend via Realtime detecta INSERT → muestra overlay con ringtone
+ *
+ * Outbound (BUSINESS_INITIATED):
+ *   - El frontend ya creo la fila via inbox-call-patient (sin call_id_meta).
+ *   - UPDATE la fila existente (match por conversation_id + outbound + ringing)
+ *     con call_id_meta + sdp answer en raw_payload.
+ *   - Si no encuentra fila previa (edge case), INSERT como fallback.
  */
 async function handleConnect(args: ProcessCallEventArgs): Promise<void> {
   const { supabase, call, contacts, organizationId, whatsappLineId } = args;
 
   const patientPhoneE164 = waIdToE164(call.from);
   const businessPhoneE164 = waIdToE164(call.to);
+  const isInbound = call.direction === "USER_INITIATED";
+
+  const callTimestampMs = Number(call.timestamp) * 1000;
+  const callStartedAt = isNaN(callTimestampMs) ? new Date() : new Date(callTimestampMs);
 
   // Mete profile name de contacts si esta disponible
   const contact = contacts?.find((c) => c.wa_id === call.from);
   const patientName = contact?.profile?.name ?? null;
 
-  // Resolve patient (puede ser null si nunca escribio)
   const patient = await findPatientByPhone(supabase, organizationId, patientPhoneE164);
 
-  // getOrCreateConversation maneja race conditions
   const conv = await getOrCreateConversation(supabase, {
     whatsappLineId,
     organizationId,
@@ -118,9 +128,37 @@ async function handleConnect(args: ProcessCallEventArgs): Promise<void> {
     throw new Error("handleConnect: getOrCreateConversation returned null");
   }
 
-  const isInbound = call.direction === "USER_INITIATED";
-  const callTimestampMs = Number(call.timestamp) * 1000;
-  const callStartedAt = isNaN(callTimestampMs) ? new Date() : new Date(callTimestampMs);
+  // Outbound: buscar fila pre-creada por inbox-call-patient y UPDATE.
+  if (!isInbound) {
+    const { data: pendingRow } = await supabase
+      .from("message_logs")
+      .select("id")
+      .eq("conversation_id", conv.id)
+      .eq("message_type", "voice_call")
+      .eq("call_direction", "outbound")
+      .eq("call_status", "ringing")
+      .is("call_id_meta", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingRow) {
+      const { error: updErr } = await supabase
+        .from("message_logs")
+        .update({
+          call_id_meta: call.id,
+          call_started_at: callStartedAt.toISOString(),
+          raw_payload: call,
+        })
+        .eq("id", pendingRow.id);
+      if (updErr) {
+        throw new Error(`outbound connect UPDATE failed: ${updErr.message}`);
+      }
+      console.log("[calls] outbound connect linked to existing row:", pendingRow.id, "call_id:", call.id);
+      return;
+    }
+    // Fallback: no encontro fila previa, hacer INSERT.
+  }
 
   const { error: insErr } = await supabase.from("message_logs").insert({
     organization_id: organizationId,
@@ -141,8 +179,6 @@ async function handleConnect(args: ProcessCallEventArgs): Promise<void> {
     body: isInbound ? "Llamada entrante" : "Llamada saliente",
     raw_payload: call,
     status: "received",
-    // Calls van a la organizacion (no a un doctor especifico) → bypass del CHECK
-    // constraint message_logs_billable_requires_doctor.
     billable: false,
   });
 
@@ -150,7 +186,6 @@ async function handleConnect(args: ProcessCallEventArgs): Promise<void> {
     throw new Error(`message_logs INSERT failed: ${insErr.message} (code=${(insErr as any).code ?? "?"} details=${(insErr as any).details ?? "-"})`);
   }
 
-  // Inbound bumps unread + last_inbound_at (igual que mensaje normal)
   if (isInbound) {
     await updateConversationOnInbound(supabase, conv.id);
   }

@@ -146,12 +146,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Meta responde con call_id. SDP answer (si viene) tambien podria estar aqui;
-    // si no, llega via webhook event 'connect' direction=BUSINESS_INITIATED.
-    const callIdMeta = metaData?.messages?.[0]?.id ?? metaData?.call_id ?? null;
+    // Meta responde con call_id. Lo guardamos solo para auditoria — la asociacion
+    // real entre el row y el call_id se hace cuando llega el webhook event 'connect'
+    // direction=BUSINESS_INITIATED, que tambien trae el SDP answer (o el offer
+    // confirmado, segun la doc).
+    //
+    // Si Meta retornara el SDP answer inline en la response, lo guardamos en
+    // raw_payload para que el frontend pueda usarlo sin esperar el webhook.
+    const metaCallId = metaData?.messages?.[0]?.id ?? metaData?.call_id ?? null;
     const sdpAnswerInline = metaData?.session?.sdp ?? null;
 
-    // INSERT voice_call outbound row
+    // INSERT voice_call outbound row SIN call_id_meta — handleConnect del webhook
+    // lo populara cuando llegue. Asi la fila se asocia con el evento connect.
     const startedAt = new Date().toISOString();
     const { data: inserted, error: insErr } = await serviceClient
       .from("message_logs")
@@ -165,14 +171,14 @@ Deno.serve(async (req) => {
         source: "assistant",
         sent_by: user.id,
         message_type: "voice_call",
-        call_id_meta: callIdMeta,
+        call_id_meta: null,  // se popula al llegar webhook connect
         call_status: "ringing",
         call_direction: "outbound",
         call_started_at: startedAt,
         from_phone: "",
         to_phone: conv.patient_phone,
         body: "Llamada saliente",
-        raw_payload: { sent: metaBody, response: metaData },
+        raw_payload: { sent: metaBody, response: metaData, metaCallIdInitial: metaCallId },
         status: "sent",
         billable: false,
       })
@@ -185,12 +191,12 @@ Deno.serve(async (req) => {
 
     return jsonResponse(200, {
       ok: true,
-      callId: inserted?.id ?? null,
-      callIdMeta,
-      sdpAnswer: sdpAnswerInline,  // si viene inline, browser ya puede setRemoteDescription
+      messageLogId: inserted?.id ?? null,
+      metaCallId,
+      sdpAnswer: sdpAnswerInline,  // si viene inline, browser puede setRemoteDescription ya
       message: sdpAnswerInline
-        ? "Llamada iniciada"
-        : "Llamada iniciada — esperando SDP answer via webhook",
+        ? "Llamada iniciada con SDP answer inline"
+        : "Llamada iniciada — esperando SDP answer via webhook connect",
     });
   } catch (err) {
     const msg = (err as Error).message;

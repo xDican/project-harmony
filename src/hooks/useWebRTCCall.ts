@@ -18,7 +18,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type CallState =
   | "idle"
   | "preparing"     // getUserMedia, arming peer
-  | "answering"    // waiting for backend to accept
+  | "answering"    // waiting for backend to accept (inbound)
+  | "dialing"      // outbound: SDP offer enviado, esperando answer
   | "connected"    // media flowing
   | "ended"
   | "failed";
@@ -37,6 +38,14 @@ export interface UseWebRTCCallApi {
    * Resuelve con el SDP answer (vanilla ICE — incluye todos los candidates).
    */
   acceptIncoming: (sdpOffer: string) => Promise<string>;
+  /**
+   * Inicia llamada outbound. Arma peer + getUserMedia, genera SDP offer.
+   * Resuelve con el SDP offer (vanilla ICE — incluye todos los candidates).
+   * Despues hay que llamar setRemoteAnswer() cuando llegue el answer via webhook.
+   */
+  startOutgoing: () => Promise<string>;
+  /** Aplica el SDP answer remoto a una llamada outbound. */
+  setRemoteAnswer: (sdpAnswer: string) => Promise<void>;
   /** Cierra el peer y libera el mic. */
   hangup: () => void;
   /** Mute/unmute del mic local. */
@@ -149,6 +158,91 @@ export function useWebRTCCall(opts: UseWebRTCCallOpts): UseWebRTCCallApi {
     [opts.remoteAudioRef],
   );
 
+  const startOutgoing = useCallback(async (): Promise<string> => {
+    setError(null);
+    setCallState("preparing");
+
+    try {
+      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStreamRef.current = localStream;
+
+      const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+      pcRef.current = pc;
+
+      pc.ontrack = (event) => {
+        const [remoteStream] = event.streams;
+        if (opts.remoteAudioRef.current && remoteStream) {
+          opts.remoteAudioRef.current.srcObject = remoteStream;
+          opts.remoteAudioRef.current.play().catch((e) => {
+            console.warn("[useWebRTCCall] remote audio play failed:", e.message);
+          });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        const s = pc.connectionState;
+        console.log("[useWebRTCCall] outbound connection state:", s);
+        if (s === "connected") setCallState("connected");
+        if (s === "failed" || s === "closed" || s === "disconnected") {
+          setCallState(s === "failed" ? "failed" : "ended");
+        }
+      };
+
+      localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Esperar ICE gathering completo (vanilla ICE)
+      const finalSdp = await new Promise<string>((resolve) => {
+        if (pc.iceGatheringState === "complete") {
+          resolve(pc.localDescription!.sdp);
+          return;
+        }
+        const checkState = () => {
+          if (pc.iceGatheringState === "complete") {
+            pc.removeEventListener("icegatheringstatechange", checkState);
+            resolve(pc.localDescription!.sdp);
+          }
+        };
+        pc.addEventListener("icegatheringstatechange", checkState);
+        setTimeout(() => {
+          pc.removeEventListener("icegatheringstatechange", checkState);
+          if (pc.localDescription) resolve(pc.localDescription.sdp);
+        }, 3000);
+      });
+
+      setCallState("dialing");
+      return finalSdp;
+    } catch (err) {
+      const msg = (err as Error).message;
+      console.error("[useWebRTCCall] startOutgoing failed:", msg);
+      setError(msg);
+      setCallState("failed");
+      try {
+        pcRef.current?.close();
+        localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      } catch (_) { /* ignore */ }
+      throw err;
+    }
+  }, [opts.remoteAudioRef]);
+
+  const setRemoteAnswer = useCallback(async (sdpAnswer: string): Promise<void> => {
+    if (!pcRef.current) {
+      throw new Error("setRemoteAnswer: no active peer connection");
+    }
+    try {
+      await pcRef.current.setRemoteDescription({ type: "answer", sdp: sdpAnswer });
+      console.log("[useWebRTCCall] remote answer applied");
+    } catch (err) {
+      const msg = (err as Error).message;
+      console.error("[useWebRTCCall] setRemoteAnswer failed:", msg);
+      setError(msg);
+      setCallState("failed");
+      throw err;
+    }
+  }, []);
+
   const hangup = useCallback(() => {
     try {
       pcRef.current?.close();
@@ -166,5 +260,14 @@ export function useWebRTCCall(opts: UseWebRTCCallOpts): UseWebRTCCallApi {
     setIsMicMuted(muted);
   }, []);
 
-  return { callState, error, acceptIncoming, hangup, setMicMuted, isMicMuted };
+  return {
+    callState,
+    error,
+    acceptIncoming,
+    startOutgoing,
+    setRemoteAnswer,
+    hangup,
+    setMicMuted,
+    isMicMuted,
+  };
 }

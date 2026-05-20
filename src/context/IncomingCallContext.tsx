@@ -24,10 +24,12 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export interface IncomingCallData {
   messageLogId: string;
+  /** Inbound: real call_id Meta. Outbound: temporal 'outgoing-{convId}' hasta que llegue el real. */
   callIdMeta: string;
   conversationId: string;
   patientPhone: string;
   patientName: string | null;
+  direction: "inbound" | "outbound";
   /** SDP offer del webhook connect (solo presente cuando direction=inbound). */
   sdpOffer: string | null;
   receivedAt: string;
@@ -38,6 +40,15 @@ interface IncomingCallContextValue {
   activeCall: IncomingCallData | null;
   /** Limpia el state — usado despues de hangup/reject/terminate. */
   dismiss: () => void;
+  /**
+   * Inicia un outbound call. Setea activeCall en modo outbound;
+   * el overlay arma WebRTC + POST a inbox-call-patient.
+   */
+  initiateOutgoingCall: (args: {
+    conversationId: string;
+    patientPhone: string;
+    patientName: string | null;
+  }) => void;
 }
 
 const Ctx = createContext<IncomingCallContextValue | null>(null);
@@ -71,6 +82,22 @@ export function IncomingCallProvider({ children }: { children: ReactNode }) {
   const [activeCall, setActiveCall] = useState<IncomingCallData | null>(null);
 
   const dismiss = useCallback(() => setActiveCall(null), []);
+
+  const initiateOutgoingCall = useCallback(
+    (args: { conversationId: string; patientPhone: string; patientName: string | null }) => {
+      setActiveCall({
+        messageLogId: "",
+        callIdMeta: `outgoing-${args.conversationId}-${Date.now()}`,
+        conversationId: args.conversationId,
+        patientPhone: args.patientPhone,
+        patientName: args.patientName,
+        direction: "outbound",
+        sdpOffer: null,
+        receivedAt: new Date().toISOString(),
+      });
+    },
+    [],
+  );
 
   // Listener Realtime para voice_call ringing inbound
   useEffect(() => {
@@ -125,6 +152,7 @@ export function IncomingCallProvider({ children }: { children: ReactNode }) {
                 conversationId: row.conversation_id!,
                 patientPhone: conv?.patient_phone ?? row.from_phone,
                 patientName: conv?.patient_name ?? null,
+                direction: "inbound",
                 sdpOffer,
                 receivedAt: row.created_at,
               });
@@ -164,14 +192,20 @@ export function IncomingCallProvider({ children }: { children: ReactNode }) {
   }, [organizationId]);
 
   return (
-    <Ctx.Provider value={{ activeCall, dismiss }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ activeCall, dismiss, initiateOutgoingCall }}>
+      {children}
+    </Ctx.Provider>
   );
 }
 
 export function useIncomingCall(): IncomingCallContextValue {
   const ctx = useContext(Ctx);
   if (!ctx) {
-    return { activeCall: null, dismiss: () => undefined };
+    return {
+      activeCall: null,
+      dismiss: () => undefined,
+      initiateOutgoingCall: () => undefined,
+    };
   }
   return ctx;
 }
