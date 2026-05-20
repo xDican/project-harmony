@@ -103,15 +103,21 @@ async function findPatientByPhone(
 async function handleConnect(args: ProcessCallEventArgs): Promise<void> {
   const { supabase, call, contacts, organizationId, whatsappLineId } = args;
 
-  const patientPhoneE164 = waIdToE164(call.from);
-  const businessPhoneE164 = waIdToE164(call.to);
   const isInbound = call.direction === "USER_INITIATED";
+
+  // CRITICO: from/to dependen de la direccion.
+  // - inbound (USER_INITIATED):     call.from = paciente, call.to = business
+  // - outbound (BUSINESS_INITIATED): call.from = business, call.to = paciente
+  const patientWaId = isInbound ? call.from : call.to;
+  const businessWaId = isInbound ? call.to : call.from;
+  const patientPhoneE164 = waIdToE164(patientWaId);
+  const businessPhoneE164 = waIdToE164(businessWaId);
 
   const callTimestampMs = Number(call.timestamp) * 1000;
   const callStartedAt = isNaN(callTimestampMs) ? new Date() : new Date(callTimestampMs);
 
-  // Mete profile name de contacts si esta disponible
-  const contact = contacts?.find((c) => c.wa_id === call.from);
+  // Contact profile (siempre indexado por wa_id del paciente)
+  const contact = contacts?.find((c) => c.wa_id === patientWaId);
   const patientName = contact?.profile?.name ?? null;
 
   const patient = await findPatientByPhone(supabase, organizationId, patientPhoneE164);
@@ -241,10 +247,10 @@ async function handleTerminate(args: ProcessCallEventArgs): Promise<void> {
   const callTimestampMs = Number(call.timestamp) * 1000;
   const callEndedAt = isNaN(callTimestampMs) ? new Date() : new Date(callTimestampMs);
 
-  // Calcular duracion si tenemos started_at
+  // Calcular duracion si tenemos started_at + traer raw_payload anterior para merge
   const { data: rowFull } = await supabase
     .from("message_logs")
-    .select("call_started_at")
+    .select("call_started_at, raw_payload")
     .eq("id", existing.id)
     .maybeSingle();
 
@@ -254,15 +260,19 @@ async function handleTerminate(args: ProcessCallEventArgs): Promise<void> {
     durationSeconds = Math.max(0, Math.round((callEndedAt.getTime() - startMs) / 1000));
   }
 
+  const prevPayload = (rowFull as { raw_payload?: Record<string, unknown> } | null)?.raw_payload;
+  const mergedPayload = {
+    ...(prevPayload ?? {}),
+    terminate: call,
+  };
+
   const { error: updErr } = await supabase
     .from("message_logs")
     .update({
       call_status: nextStatus,
       call_ended_at: callEndedAt.toISOString(),
       call_duration_seconds: durationSeconds,
-      // Append el terminate event al raw_payload (no overwrite del connect SDP).
-      // Postgres jsonb concat con ||.
-      raw_payload: { terminate: call, ...(rowFull as any)?.raw_payload },
+      raw_payload: mergedPayload,
     })
     .eq("id", existing.id);
 
