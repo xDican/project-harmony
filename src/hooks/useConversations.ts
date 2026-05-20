@@ -39,6 +39,8 @@ export interface ConversationListRow {
     message_type: string;
     source: string | null;
     created_at: string;
+    call_status: string | null;
+    call_direction: "inbound" | "outbound" | null;
   } | null;
 }
 
@@ -84,7 +86,9 @@ export function useConversations(organizationId: string | undefined) {
             transcription,
             message_type,
             source,
-            created_at
+            created_at,
+            call_status,
+            call_direction
           )
           `,
         )
@@ -196,6 +200,8 @@ export function useConversations(organizationId: string | undefined) {
       message_type: string;
       source: string | null;
       created_at: string;
+      call_status?: string | null;
+      call_direction?: "inbound" | "outbound" | null;
     }) => {
       if (!message.conversation_id) return;
       setConversations((prev) => {
@@ -214,6 +220,8 @@ export function useConversations(organizationId: string | undefined) {
             message_type: message.message_type,
             source: message.source,
             created_at: message.created_at,
+            call_status: message.call_status ?? null,
+            call_direction: message.call_direction ?? null,
           },
         };
         const next = [...prev];

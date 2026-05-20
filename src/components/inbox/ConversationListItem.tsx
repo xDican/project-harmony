@@ -19,7 +19,7 @@
 
 import { formatDistanceToNow, isToday, isYesterday, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { Mic, Image as ImageIcon, FileText, Phone } from "lucide-react";
+import { Mic, Image as ImageIcon, FileText, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { ConversationListRow } from "@/hooks/useConversations";
@@ -165,10 +165,32 @@ function MessagePreview({
   }
 
   if (type === "voice_call") {
+    const callStatus = message.call_status;
+    const callDirection = message.call_direction;
+    const isMissed = callStatus === "missed";
+
+    const IconComp = isMissed
+      ? PhoneMissed
+      : callDirection === "outbound"
+        ? PhoneOutgoing
+        : PhoneIncoming;
+
+    let label = "Llamada";
+    if (isMissed) label = "Llamada perdida";
+    else if (callStatus === "rejected") label = "Llamada rechazada";
+    else if (callDirection === "outbound") label = "Llamada saliente";
+    else label = "Llamada entrante";
+
     return (
-      <span className={cn("text-xs text-muted-foreground truncate flex items-center gap-1", className)}>
-        <Phone className="h-3 w-3 flex-shrink-0" />
-        <span className="truncate">Llamada</span>
+      <span
+        className={cn(
+          "text-xs truncate flex items-center gap-1",
+          isMissed ? "text-destructive font-medium" : "text-muted-foreground",
+          className,
+        )}
+      >
+        <IconComp className="h-3 w-3 flex-shrink-0" />
+        <span className="truncate">{label}</span>
       </span>
     );
   }

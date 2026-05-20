@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Bot, FileText, Phone, Check, CheckCheck, ImageIcon } from "lucide-react";
+import { Bot, FileText, PhoneIncoming, PhoneOutgoing, PhoneMissed, Check, CheckCheck, ImageIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -94,7 +94,7 @@ function MessageContent({
   message: MessageRow;
   isOutbound: boolean;
 }) {
-  const { message_type, body, media_url, transcription, call_duration_seconds } = message;
+  const { message_type, body, media_url, transcription } = message;
 
   if (message_type === "audio") {
     // Estado "procesando": placeholder meta-media:* sin transcripcion todavia
@@ -119,14 +119,7 @@ function MessageContent({
   }
 
   if (message_type === "voice_call") {
-    return (
-      <div className="flex items-center gap-2">
-        <Phone className="h-4 w-4" />
-        <span className="text-sm">
-          Llamada {call_duration_seconds ? `(${formatDuration(call_duration_seconds)})` : ""}
-        </span>
-      </div>
-    );
+    return <VoiceCallBubbleContent message={message} isOutbound={isOutbound} />;
   }
 
   // text (default)
@@ -279,6 +272,86 @@ function DocumentBubbleContent({
       <FileText className="h-4 w-4 flex-shrink-0" />
       <span className="text-sm truncate">{filename}</span>
     </a>
+  );
+}
+
+/**
+ * Card para mensaje voice_call. Muestra direccion, estado, duracion.
+ * Sprint 6 — Calling API.
+ */
+function VoiceCallBubbleContent({
+  message,
+  isOutbound,
+}: {
+  message: MessageRow;
+  isOutbound: boolean;
+}) {
+  const { call_status, call_direction, call_duration_seconds } = message;
+
+  // Estado visible al usuario
+  const isMissed = call_status === "missed";
+  const isRejected = call_status === "rejected";
+  const isFailed = call_status === "failed";
+  const isCompleted = call_status === "ended" || call_status === "accepted" || call_status === "connected";
+
+  // Icono direccional
+  const IconComp = isMissed
+    ? PhoneMissed
+    : call_direction === "outbound"
+      ? PhoneOutgoing
+      : PhoneIncoming;
+
+  const iconColorClass = isMissed
+    ? "text-destructive"
+    : isRejected || isFailed
+      ? cn(isOutbound && "text-primary-foreground/70", !isOutbound && "text-muted-foreground")
+      : cn(isOutbound && "text-primary-foreground", !isOutbound && "text-primary");
+
+  // Titulo
+  let title: string;
+  if (call_direction === "outbound") {
+    title = isMissed ? "Llamada saliente sin respuesta" : "Llamada saliente";
+  } else {
+    title = isMissed ? "Llamada perdida" : "Llamada entrante";
+  }
+
+  // Subtitulo
+  let subtitle: string;
+  if (isCompleted && call_duration_seconds && call_duration_seconds > 0) {
+    subtitle = `Duración ${formatDuration(call_duration_seconds)}`;
+  } else if (isRejected) {
+    subtitle = "Rechazada";
+  } else if (isFailed) {
+    subtitle = "Falló";
+  } else if (isMissed) {
+    subtitle = "No respondida";
+  } else if (call_status === "ringing") {
+    subtitle = "Sonando…";
+  } else {
+    subtitle = "";
+  }
+
+  return (
+    <div className="flex items-center gap-3 min-w-[180px]">
+      <div className={cn("rounded-full p-2 bg-background/50", iconColorClass)}>
+        <IconComp className="h-4 w-4" />
+      </div>
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">{title}</span>
+        {subtitle && (
+          <span
+            className={cn(
+              "text-xs",
+              isMissed && "text-destructive",
+              !isMissed && isOutbound && "text-primary-foreground/70",
+              !isMissed && !isOutbound && "text-muted-foreground",
+            )}
+          >
+            {subtitle}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -33,6 +33,8 @@ export interface MessageRow {
   from_phone: string;
   call_duration_seconds: number | null;
   call_direction: "inbound" | "outbound" | null;
+  call_status: string | null;
+  call_id_meta: string | null;
   created_at: string;
 }
 
@@ -60,7 +62,7 @@ export function useConversationMessages(conversationId: string | null) {
           `id, conversation_id, direction, source, message_type, body,
            transcription, media_url, media_mime, status, sent_by,
            to_phone, from_phone, call_duration_seconds, call_direction,
-           created_at`,
+           call_status, call_id_meta, created_at`,
         )
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
