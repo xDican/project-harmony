@@ -32,6 +32,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/context/UserContext";
+import { toast } from "sonner";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 const SUPABASE_FUNCTIONS_BASE =
@@ -187,17 +188,31 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ---- Transition a "ended" + grace 800ms para mostrar UI antes de clear ----
-  const endActiveCall = useCallback(() => {
+  // ---- Transition a "ended" + clear ----
+  // grace=true: muestra "Llamada finalizada" 800ms antes de desmontar.
+  //   Usado para terminates remotos (paciente colgo) para que el usuario
+  //   entienda que paso.
+  // grace=false: clear inmediato. Usado en hangup manual donde el usuario
+  //   ya sabe que apreto colgar.
+  const endActiveCall = useCallback((opts?: { grace?: boolean }) => {
     cleanupPeer();
-    setCallPhase("ended");
-    setTimeout(() => {
+    const useGrace = opts?.grace !== false;
+    if (useGrace) {
+      setCallPhase("ended");
+      setTimeout(() => {
+        setActiveCall(null);
+        setCallPhase("idle");
+        setDurationSeconds(0);
+        setIsMicMutedState(false);
+        setError(null);
+      }, 800);
+    } else {
       setActiveCall(null);
       setCallPhase("idle");
       setDurationSeconds(0);
       setIsMicMutedState(false);
       setError(null);
-    }, 800);
+    }
   }, [cleanupPeer]);
 
   // ---- Crear peer connection con handlers genericos ----
@@ -342,23 +357,28 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const rejectIncoming = useCallback(async () => {
     if (!activeCall || activeCall.direction !== "inbound" || !activeCall.callIdMeta) {
-      endActiveCall();
+      endActiveCall({ grace: false });
       return;
     }
-    try {
-      const headers = await authHeaders();
-      await fetch(`${SUPABASE_FUNCTIONS_BASE}/inbox-terminate-call`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          callIdMeta: activeCall.callIdMeta,
-          action: "reject",
-        }),
-      });
-    } catch (e) {
-      console.error("[CallContext] rejectIncoming error:", (e as Error).message);
-    }
-    endActiveCall();
+
+    const callIdMeta = activeCall.callIdMeta;
+
+    // Optimista: cerrar overlay ya.
+    endActiveCall({ grace: false });
+
+    // POST reject en background.
+    void (async () => {
+      try {
+        const headers = await authHeaders();
+        await fetch(`${SUPABASE_FUNCTIONS_BASE}/inbox-terminate-call`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ callIdMeta, action: "reject" }),
+        });
+      } catch (e) {
+        console.error("[CallContext] rejectIncoming background error:", (e as Error).message);
+      }
+    })();
   }, [activeCall, endActiveCall]);
 
   const initiateOutgoing = useCallback(async (args: {
@@ -433,22 +453,32 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const hangup = useCallback(async () => {
     if (!activeCall) {
-      endActiveCall();
+      endActiveCall({ grace: false });
       return;
     }
-    // Resolver call_id_meta real (en outbound, viene del webhook connect)
-    let callIdToTerminate = activeCall.callIdMeta;
-    if (!callIdToTerminate && activeCall.messageLogId) {
-      const { data } = await supabase
-        .from("message_logs")
-        .select("call_id_meta")
-        .eq("id", activeCall.messageLogId)
-        .maybeSingle();
-      callIdToTerminate = data?.call_id_meta ?? null;
-    }
 
-    if (callIdToTerminate) {
+    // Snapshot del activeCall ANTES de cerrar el overlay (porque el clear
+    // va a setear activeCall = null inmediato).
+    const snapshot = activeCall;
+
+    // 1) UI optimista: cerrar overlay ya. El user no necesita esperar a Meta.
+    endActiveCall({ grace: false });
+
+    // 2) POST terminate en background (fire-and-forget). Resolver call_id_meta
+    //    real si era outbound y aun no lo teniamos en activeCall.
+    void (async () => {
       try {
+        let callIdToTerminate = snapshot.callIdMeta;
+        if (!callIdToTerminate && snapshot.messageLogId) {
+          const { data } = await supabase
+            .from("message_logs")
+            .select("call_id_meta")
+            .eq("id", snapshot.messageLogId)
+            .maybeSingle();
+          callIdToTerminate = data?.call_id_meta ?? null;
+        }
+        if (!callIdToTerminate) return;
+
         const headers = await authHeaders();
         await fetch(`${SUPABASE_FUNCTIONS_BASE}/inbox-terminate-call`, {
           method: "POST",
@@ -459,10 +489,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
           }),
         });
       } catch (e) {
-        console.error("[CallContext] hangup terminate failed:", (e as Error).message);
+        console.error("[CallContext] hangup background terminate failed:", (e as Error).message);
       }
-    }
-    endActiveCall();
+    })();
   }, [activeCall, endActiveCall]);
 
   const setMicMuted = useCallback((muted: boolean) => {
@@ -562,32 +591,52 @@ export function CallProvider({ children }: { children: ReactNode }) {
             if (row.call_direction !== "inbound") return;
             if (!row.call_id_meta || !row.conversation_id) return;
 
-            const sdpInfo = extractSdpFromPayload(row.raw_payload);
-            if (!sdpInfo || sdpInfo.sdp_type !== "offer") {
-              console.warn("[CallContext] inbound voice_call sin SDP offer:", row.id);
-              return;
-            }
+            // Si ya hay llamada activa, NO sobreescribir. La nueva llamada
+            // queda sin atender → Meta la marcara missed automaticamente.
+            // Avisamos al usuario con un toast para que sepa.
+            setActiveCall((cur) => {
+              if (cur) {
+                const conn = (async () => {
+                  const { data: conv } = await supabase
+                    .from("conversations")
+                    .select("patient_name")
+                    .eq("id", row.conversation_id!)
+                    .maybeSingle();
+                  const name = conv?.patient_name ?? row.from_phone;
+                  toast.warning(`Llamada perdida de ${name} (durante otra llamada activa)`);
+                })();
+                void conn;
+                return cur;
+              }
 
-            // Resolver patient_name desde conversation
-            (async () => {
-              const { data: conv } = await supabase
-                .from("conversations")
-                .select("patient_name, patient_phone")
-                .eq("id", row.conversation_id!)
-                .maybeSingle();
+              const sdpInfo = extractSdpFromPayload(row.raw_payload);
+              if (!sdpInfo || sdpInfo.sdp_type !== "offer") {
+                console.warn("[CallContext] inbound voice_call sin SDP offer:", row.id);
+                return cur;
+              }
 
-              setActiveCall({
-                messageLogId: row.id,
-                callIdMeta: row.call_id_meta!,
-                conversationId: row.conversation_id!,
-                patientPhone: conv?.patient_phone ?? row.from_phone,
-                patientName: conv?.patient_name ?? null,
-                direction: "inbound",
-                sdpOffer: sdpInfo.sdp,
-                receivedAt: row.created_at,
-              });
-              setCallPhase("ringing-inbound");
-            })();
+              // Resolver patient_name async (no podemos await aqui)
+              (async () => {
+                const { data: conv } = await supabase
+                  .from("conversations")
+                  .select("patient_name, patient_phone")
+                  .eq("id", row.conversation_id!)
+                  .maybeSingle();
+
+                setActiveCall({
+                  messageLogId: row.id,
+                  callIdMeta: row.call_id_meta!,
+                  conversationId: row.conversation_id!,
+                  patientPhone: conv?.patient_phone ?? row.from_phone,
+                  patientName: conv?.patient_name ?? null,
+                  direction: "inbound",
+                  sdpOffer: sdpInfo.sdp,
+                  receivedAt: row.created_at,
+                });
+                setCallPhase("ringing-inbound");
+              })();
+              return cur;
+            });
           },
         )
         // ---- UPDATE voice_call → SDP answer (outbound) o terminal status ----
