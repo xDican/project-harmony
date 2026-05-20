@@ -7,7 +7,7 @@ const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ defaul
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
 import { InboxProvider } from "./context/InboxContext";
-import { IncomingCallProvider } from "./context/IncomingCallContext";
+import { CallProvider } from "./context/CallContext";
 import { IncomingCallOverlay } from "./components/calls/IncomingCallOverlay";
 import { UserRole } from "./types/user";
 const MainLayout = lazy(() => import("./components/MainLayout"));
@@ -164,7 +164,7 @@ const App = () => {
   <QueryClientProvider client={queryClient}>
     <UserProvider>
       <InboxProvider>
-        <IncomingCallProvider>
+        <CallProvider>
         <Suspense fallback={null}><Toaster /></Suspense>
         <Sonner />
         <IncomingCallOverlay />
@@ -393,7 +393,7 @@ const App = () => {
           </Routes>
           </Suspense>
         </BrowserRouter>
-        </IncomingCallProvider>
+        </CallProvider>
       </InboxProvider>
     </UserProvider>
   </QueryClientProvider>
