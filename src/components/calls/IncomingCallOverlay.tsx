@@ -134,6 +134,7 @@ function CallOverlayInner({ call: activeCall, dismiss }: InnerProps) {
   const acceptedAtRef = useRef<number | null>(null);
   const [outgoingMessageLogId, setOutgoingMessageLogId] = useState<string | null>(null);
   const initRanRef = useRef(false);
+  const remoteAnswerAppliedRef = useRef(false);
 
   // ---- INBOUND: Ringtone mientras esta ringing ----
   useEffect(() => {
@@ -177,8 +178,9 @@ function CallOverlayInner({ call: activeCall, dismiss }: InnerProps) {
         if (data.messageLogId) {
           setOutgoingMessageLogId(data.messageLogId as string);
         }
-        if (data.sdpAnswer) {
+        if (data.sdpAnswer && !remoteAnswerAppliedRef.current) {
           // Meta retorno answer inline — aplicar inmediato
+          remoteAnswerAppliedRef.current = true;
           await setRemoteAnswer(data.sdpAnswer as string);
         }
       } catch (e) {
@@ -203,17 +205,21 @@ function CallOverlayInner({ call: activeCall, dismiss }: InnerProps) {
           table: "message_logs",
           filter: `id=eq.${outgoingMessageLogId}`,
         },
-        (payload: { new: { call_id_meta: string | null; raw_payload: unknown } }) => {
+        (payload: { new: { call_id_meta: string | null; call_status: string | null; raw_payload: unknown } }) => {
           const row = payload.new;
           if (!row.call_id_meta) return;
+          // Si ya aplicamos el answer o la call termino, ignorar UPDATEs posteriores.
+          if (remoteAnswerAppliedRef.current) return;
+          if (row.call_status && ["ended", "missed", "rejected", "failed"].includes(row.call_status)) {
+            return;
+          }
           const session = (row.raw_payload as { session?: { sdp?: string; sdp_type?: string } })?.session;
           if (session?.sdp_type === "answer" && session.sdp) {
+            remoteAnswerAppliedRef.current = true;
             setRemoteAnswer(session.sdp).catch((e) =>
               console.error("[outbound] setRemoteAnswer failed:", e.message),
             );
           } else if (session?.sdp_type === "offer" && session.sdp) {
-            // Meta a veces hace echo del offer en outbound. Si recibimos un offer
-            // significa que el answer no llego — esperamos otro UPDATE.
             console.log("[outbound] received echo of offer, waiting for answer");
           }
         },
