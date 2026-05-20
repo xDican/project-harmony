@@ -149,10 +149,14 @@ async function handleConnect(args: ProcessCallEventArgs): Promise<void> {
       .maybeSingle();
 
     if (pendingRow) {
+      // call_status='accepted' indica que el paciente atendio (la llegada del
+      // connect event con SDP answer es la confirmacion). Sin esto, handleTerminate
+      // veria 'ringing' y marcaria 'missed' aun para llamadas exitosas.
       const { error: updErr } = await supabase
         .from("message_logs")
         .update({
           call_id_meta: call.id,
+          call_status: "accepted",
           call_started_at: callStartedAt.toISOString(),
           raw_payload: call,
         })
