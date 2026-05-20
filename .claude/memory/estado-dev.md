@@ -1,15 +1,15 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 20 May 2026 (3 bombas de tiempo neutralizadas — `appointment_at` UTC-6, citas huerfanas, `confirmation_message_sent`. 761 filas saneadas + NOT NULL constraint activado.)
+> Ultima actualizacion: 20 May 2026 (Sprint 6 Calling API completo end-to-end en 1 dia — inbound + outbound + queue + permission flow + refactor CallContext + ~12 fixes UX. Plus 3 bombas appointments resueltas en la mañana.)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 
 ---
 
 ## Fase actual
 
-**Sprints 4-8 MVP Centro de Atencion** (19 May - lanzamiento Torre Zafiro 25 May modo inbox-only, bot activacion gradual desde 8 Jun).
+**Sprints 4-8 MVP Centro de Atencion** — Sprint 6 cerrado el 20 May (5 semanas antes del plan original 30 Jun). Foco ahora: setup Torre Zafiro para lanzamiento Lun 25 May modo inbox-only.
 
-Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sprints.md` + `.claude/plans/las-palomitas-ya-est-n-squishy-steele.md` (Sprint 4 + 5 detalle)
+Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sprints.md`
 
 ## Sprints MVP — estado
 
@@ -19,10 +19,10 @@ Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sp
 | 1 — Persistencia + bot dual mode | ✅ 18 May | 5 functions deployadas, conversation tracking |
 | 2 — Multimedia + transcripcion | ✅ 18 May | Whisper español, audios ~3s, $0.002 total |
 | 3 — Frontend Inbox | ✅ 18 May 23:30 | InboxContext realtime una-fuente-verdad. Bug fix VOLATILE RLS |
-| 4 — Quick replies + multimedia outbound | ✅ 19 May | Pagina settings + picker composer + upload archivos. Bugs fixeados: timeline en convs >100 msgs + busqueda con acentos. |
-| **5 — Promociones del mes** | ✅ 19 May | Panel admin + bot integration con scoring/keywords + FAQ override + destacada del mes. Cron diario lifecycle. Magic bytes validation para imagenes. Matcheo natural en promo_browse. |
-| 6 — Calling API | proximo | Webhooks calls.* + UI inbox llamadas + softphone WebRTC |
-| 7-8 — Pilot + lanzamiento | revisar | Decision 19 May: inbox-only 1 sem en Torre Zafiro |
+| 4 — Quick replies + multimedia outbound | ✅ 19 May | Pagina settings + picker composer + upload archivos |
+| 5 — Promociones del mes | ✅ 19 May | Panel admin + bot scoring/keywords + FAQ override + destacada + matcheo natural. Magic bytes validation. |
+| **6 — Calling API** | ✅ 20 May | Schema calls + 5 edge functions + webhook handler + softphone WebRTC inbound/outbound validados en vivo. UI historial timeline. Permission flow. Refactor CallContext unificado. EventBus en InboxContext. |
+| 7-8 — Pilot + lanzamiento | en curso | Lun 25 May: Torre Zafiro inbox-only, bot OFF, calling OFF |
 
 ## Arquitectura clave (Sprint 3 + 4 + 5, vigente)
 
@@ -100,6 +100,52 @@ Fix aplicado: `ALTER FUNCTION current_doctor_id() STABLE` (migration `2026051820
 **Solucion preventiva:** validar magic bytes del archivo ANTES de subir a Meta. `detectMimeFromMagicBytes` lee primeros bytes y determina MIME real (JPEG/PNG/WebP/GIF) ignorando Content-Type declarado. Si MIME real != image/jpeg && image/png → fallback a texto.
 
 Meta WhatsApp NO acepta WebP en mensajes `image` (solo en `sticker`). Para outbound multimedia: bucket `promo-images` con allowed_mime_types restringido a JPG/PNG + magic bytes check en bot-handler como defensa en profundidad.
+
+### Sprint 6 — Calling API (20 May)
+
+**Activacion via Graph API, NO via Meta Business Manager UI.** El toggle "Permitir llamadas" en WhatsApp Manager solo funciona si previamente la app esta suscrita al webhook field `calls`. Para activarlo programaticamente:
+- `POST /{phone_number_id}/settings` con `{"calling":{"status":"ENABLED"}}`
+- Edge function reusable: `meta-enable-calling` (recibe `lineId`, lee creds de `whatsapp_lines`, hace POST + verifica suscripcion).
+
+**Estructura webhook calls** (capturada via sniffer temporal en `_debug_calls_payloads`):
+- INSERT en `value.calls[]` con `field='calls'`. Distinto de `value.messages[]`.
+- Eventos: `connect` (con `session.sdp` + `sdp_type='offer'`), `terminate` (con `errors[]` si hubo problema).
+- `direction`: `USER_INITIATED` (inbound, paciente llama) o `BUSINESS_INITIATED` (outbound, asistente llama).
+- Para BUSINESS_INITIATED: `call.from = business`, `call.to = paciente` (al reves que inbound). Mi handleConnect tuvo que distinguir.
+- `call_permission_reply` NO viene en `value.calls[]` — viene como mensaje interactive en `value.messages[]`. Estructura: `{ type: 'interactive', interactive: { type: 'call_permission_reply', call_permission_reply: { response: 'accept', is_permanent: true } } }`. Hay que detectarlo en `handleIncomingMessage` antes del flujo bot.
+
+**SDP exchange:**
+- Vanilla ICE (Meta envia todos los candidates en el SDP inicial, no trickle).
+- Codec OPUS @ 48kHz.
+- Inbound flow: webhook connect trae SDP offer → browser arma answer + ICE gathering → POST `/calls action=pre_accept` + `action=accept` (orden critico, accept antes que pre_accept falla).
+- Outbound flow: browser arma offer + ICE → POST `/calls action=connect` con offer → Meta envia webhook connect con SDP answer cuando el paciente recibe la notificacion (no cuando atiende). El audio fluye recien cuando paciente atiende = detectar via `pc.getStats().bytesReceived` > threshold.
+
+**call_status semantica:**
+- `ringing` = en marcha, esperando atender (inbound) o esperando answer (outbound).
+- `accepted` = paciente atendio o asistente apreto atender. handleConnect outbound setea esto al recibir webhook.
+- `connected` = WebRTC handshake terminado, audio fluyendo.
+- `ended` = terminate normal con duration > 0.
+- `missed` = terminate antes de cualquier handshake (call_status era ringing).
+- `rejected` = asistente apreto rechazar (inbound) o paciente rechazo (outbound).
+- `failed` = error de Meta o WebRTC.
+
+**Limites Meta produccion:** 1 call_permission_request/dia por user, 5 calls/dia por user, permission dura 7 dias o `is_permanent=true` (sin expiry).
+
+### Patron EventBus para single source of truth en Realtime (20 May refactor)
+
+**Problema:** dos providers (`InboxContext`, `CallContext`) escuchaban la misma tabla `message_logs` en canales Realtime separados (`clinic:{orgId}` + `calls:{orgId}`). Duplicacion.
+
+**Solucion:** `InboxContext` expone `subscribeToMessageLog(handler) → unsubscribe`. Internamente mantiene un `Set<handler>` en `useRef`. Cuando `useRealtimeInbox` emite INSERT/UPDATE de `message_logs`, primero hace su trabajo (`applyMessageToConversation`, `playNotificationBeep`) y luego despacha a todos los handlers externos.
+
+`CallContext` consume `useInbox().subscribeToMessageLog()` en lugar de tener su propio listener para `message_logs`. Su channel propio (`call-perms:{orgId}`) queda solo para `call_permissions`.
+
+**Net:** 1 listener sobre `message_logs` para toda la app. Patron replicable para otras tablas con multiples consumers.
+
+### Optimistic UI encapsulado en hook (20 May refactor)
+
+**Antes:** `MessageComposer` construia el `temp-${uuid}`, conocia el shape de `MessageRow`, disparaba `addOptimisticMessage` + POST + `updateOptimisticMessage`. Logica de dominio en componente UI.
+
+**Despues:** `useConversationMessages.sendOptimisticText({ body, userId, patientPhoneTo })` encapsula todo. Composer solo llama el metodo, no sabe nada del flow temp→real. Dedupe del INSERT real con el optimistic por body matching vive en el listener Realtime del hook (no en helper huerfano).
 
 ## Bugs activos (no resueltos)
 
@@ -186,12 +232,66 @@ Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. S
 | Dia | Trabajo |
 |---|---|
 | Mar 19 | ✅ Sprint 4 + Sprint 5 + Sprint 5.1 cerrados |
-| Mie 20 (hoy) | ✅ 3 bombas de tiempo de `appointments` neutralizadas (AM + PM). Pendiente: arrancar Sprint 6 Calling API |
-| Jue 21 - Vie 22 | Sprint 6 finalizar |
-| Sab 23 | QA full inbox-only. Configurar Torre Zafiro en DB. |
-| Dom 24 | Bug fixes finales. Briefing operativo. |
+| Mie 20 | ✅ 3 bombas appointments + Sprint 6 Calling API completo (5 semanas antes del plan) + refactor CallContext + ~12 fixes UX |
+| Jue 21 | Visita/llamada Dulce para feedback en vivo. Llamada Dra. Mendoza confirmar precio + agendar Domingo. Actualizar memorias. |
+| Vie 22 | Buffer para bugs encontrados con Dulce. Polish opcional. |
+| Sab 23 | Setup org Torre Zafiro en DB (whatsapp_line + users + Dulce admin + Mendoza doctor). Briefing operativo. |
+| Dom 24 | Onboarding presencial: Diego + Dulce + Dra. Mendoza. Cargar pacientes, configurar horarios, citas de prueba. |
 | **Lun 25** | **INSTALACION Torre Zafiro — inbox-only, bot OFF, calling OFF** |
-| 25 May - 1 Jun | Solo bug fixes de lo que Dulce encuentre en uso real |
+| 25 May - 1 Jun | Solo bug fixes de lo que Dulce encuentre en uso real. Calling se activa cuando Dulce este comoda con el inbox. |
+
+## Sprint 6 — Archivos creados/modificados (20 May)
+
+### Migraciones nuevas
+- `20260520120000_fix_appointment_at_timezone_backfill.sql` — 616 filas backfilled offset -06:00
+- `20260520140000_appointments_appointment_at_backfill_and_not_null.sql` — 144 huerfanas backfill + NOT NULL constraint
+- `20260520160000_centro_atencion_10_calls.sql` — message_logs +call_id_meta/status/started_at/ended_at + tabla `call_permissions` + RLS org-scoped + realtime habilitado
+
+### Edge functions nuevas
+- `supabase/functions/meta-enable-calling/index.ts` — activa Calling via Graph API. Reusable en onboarding.
+- `supabase/functions/inbox-request-call-permission/index.ts` — envia mensaje interactive type=call_permission_request
+- `supabase/functions/inbox-accept-call/index.ts` — POST /calls action=pre_accept + accept con SDP answer (inbound)
+- `supabase/functions/inbox-call-patient/index.ts` — POST /calls action=connect con SDP offer (outbound)
+- `supabase/functions/inbox-terminate-call/index.ts` — POST /calls action=terminate/reject
+
+### Edge functions modificadas
+- `supabase/functions/_shared/calls.ts` — NUEVO. processCallEvent dispatcher (connect/terminate/permission_update) + waIdToE164 + handlers especializados.
+- `supabase/functions/meta-webhook/index.ts` — extiende MetaChangeValue con calls[]; dispatcha a processCallEvent; agrega handleCallPermissionReply para interactive message.
+- `supabase/functions/bot-handler/index.ts` — INSERT con appointment_at + normalizar HH:mm → HH:mm:ss
+- `supabase/functions/create-appointment/index.ts` — offset -06:00 + UPDATE confirmation_message_sent post-envio
+- `supabase/functions/update-appointment/index.ts` — offset -06:00
+
+### Frontend nuevo
+- `src/context/CallContext.tsx` — provider unico para llamadas (single source of truth). callQueue + callPhase + permissions + WebRTC peer + audio refs + actions + listener via InboxContext subscribe.
+- `src/components/calls/IncomingCallOverlay.tsx` — overlay flotante que consume CallContext. Ringtone WebAudio dual-tone 440+480Hz.
+- `src/components/calls/CallPatientButton.tsx` — boton Llamar/Solicitar permiso en ConversationDetail header.
+
+### Frontend modificado
+- `src/context/InboxContext.tsx` — agrega `subscribeToMessageLog(handler)` EventBus.
+- `src/components/inbox/MessageBubble.tsx` — voice_call card con icono direccional + status + duracion + badge "⚠ Fallido" para mensajes con status=failed.
+- `src/components/inbox/ConversationListItem.tsx` — preview voice_call distingue perdida/atendida/saliente.
+- `src/components/inbox/MessageComposer.tsx` — usa sendOptimisticText del hook. Sin logica optimistic local.
+- `src/components/inbox/ConversationDetail.tsx` — boton CallPatientButton en header. No refetch en onSent (evita flicker).
+- `src/hooks/useConversationMessages.ts` — sendOptimisticText encapsulado. Dedupe por body matching en listener INLINE (no en helper). Auto-mark-read en mensaje inbound.
+- `src/hooks/useConversations.ts` — last_message embed incluye call_status + call_direction.
+- `src/App.tsx` — monta `<CallProvider>` dentro de `<InboxProvider>` + `<IncomingCallOverlay />` global.
+
+### Archivos eliminados (en el refactor)
+- `src/context/IncomingCallContext.tsx` — absorbido en CallContext
+- `src/hooks/useWebRTCCall.ts` — WebRTC vive ahora en el provider
+
+### Bugs UX cazados y resueltos en walkthroughs
+1. Re-mount overlay por callIdMeta entre llamadas consecutivas.
+2. Hangup optimista (no espera Meta).
+3. Multi-llamadas: queue en vez de sobreescribir, con indicador "+N en espera".
+4. Race outbound: AbortController si user cuelga durante setup.
+5. Auto-mark-read en conv abierta con mensaje inbound.
+6. Outbound "connected" solo cuando hay audio real (pc.getStats bytesReceived > 2KB).
+7. Ringtone telefonico realista (440+480Hz, 2s/4s patron, ADSR, lowpass).
+8. Ringback durante connecting (no solo dialing-outbound).
+9. Toast llamada en espera position top-right (no chocar con overlay bottom-right).
+10. No refetch en onSent (evita flicker).
+11. Dedupe optimistic por body matching en listener INLINE (no helper huerfano).
 
 ## Sprint 5 — Archivos modificados/creados (19 May)
 
