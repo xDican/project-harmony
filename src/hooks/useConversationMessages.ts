@@ -135,10 +135,47 @@ export function useConversationMessages(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload: { new: MessageRow }) => {
+          const message = payload.new;
           setMessages((prev) => {
-            if (prev.some((m) => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
+            // Idempotencia por id
+            if (prev.some((m) => m.id === message.id)) return prev;
+
+            // Dedupe optimistic: si llega outbound real con body matching un
+            // temp outbound (id 'temp-...'), REEMPLAZAR en lugar de duplicar.
+            // Aplica a mensajes de texto del composer.
+            if (
+              message.direction === "outbound" &&
+              message.body &&
+              message.message_type === "text"
+            ) {
+              const tempIdx = prev.findIndex(
+                (m) =>
+                  m.id.startsWith("temp-") &&
+                  m.direction === "outbound" &&
+                  m.body === message.body &&
+                  m.message_type === "text",
+              );
+              if (tempIdx >= 0) {
+                const next = [...prev];
+                next[tempIdx] = message;
+                return next;
+              }
+            }
+
+            return [...prev, message];
           });
+
+          // Auto-mark-as-read: si el mensaje es inbound del paciente y la conv
+          // esta abierta (este hook activo), reset unread_count=0 en background.
+          if (message.direction === "inbound" && message.source === "patient") {
+            void supabase
+              .from("conversations")
+              .update({ unread_count: 0 })
+              .eq("id", conversationId)
+              .then(({ error }) => {
+                if (error) console.warn("[useConversationMessages] auto-mark-read failed:", error.message);
+              });
+          }
         },
       )
       .on(
