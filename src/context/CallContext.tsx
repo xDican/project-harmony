@@ -177,9 +177,17 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteAnswerAppliedRef = useRef(false);
   const acceptedAtRef = useRef<number | null>(null);
+  // Token de cancelacion para outbound init en vuelo. Si el usuario cuelga
+  // antes de que el flow termine (getUserMedia + ICE + POST), abortamos.
+  const outboundAbortRef = useRef<AbortController | null>(null);
 
   // ---- Cleanup peer connection (centralizado) ----
   const cleanupPeer = useCallback(() => {
+    // Abortar init outbound en vuelo (si hay)
+    try {
+      outboundAbortRef.current?.abort();
+    } catch (_) { /* ignore */ }
+    outboundAbortRef.current = null;
     try {
       peerRef.current?.close();
     } catch (_) { /* ignore */ }
@@ -430,8 +438,19 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }]);
     setCallPhase("preparing-outbound");
 
+    // AbortController para que hangup() pueda cancelar el fetch en vuelo.
+    // El check `aborted` despues de cada await detiene el flow si el usuario
+    // colgo antes de que el POST se enviara.
+    const abortCtl = new AbortController();
+    outboundAbortRef.current = abortCtl;
+    const isAborted = () => abortCtl.signal.aborted;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (isAborted()) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       localStreamRef.current = stream;
 
       const pc = createPeerConnection();
@@ -439,8 +458,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
       const offer = await pc.createOffer();
+      if (isAborted()) return;
       await pc.setLocalDescription(offer);
+      if (isAborted()) return;
       const finalSdp = await waitIceComplete(pc);
+      if (isAborted()) return;
 
       setCallPhase("dialing-outbound");
 
@@ -452,11 +474,30 @@ export function CallProvider({ children }: { children: ReactNode }) {
           conversationId: args.conversationId,
           sdpOffer: finalSdp,
         }),
+        signal: abortCtl.signal,
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error ?? "inbox-call-patient failed");
+      }
+
+      // Si el usuario colgo despues del POST exitoso, terminate de Meta para
+      // no dejar la llamada flotando del lado del paciente.
+      if (isAborted()) {
+        if (data.metaCallId) {
+          void (async () => {
+            try {
+              const h = await authHeaders();
+              await fetch(`${SUPABASE_FUNCTIONS_BASE}/inbox-terminate-call`, {
+                method: "POST",
+                headers: h,
+                body: JSON.stringify({ callIdMeta: data.metaCallId, action: "terminate" }),
+              });
+            } catch (_) { /* ignore */ }
+          })();
+        }
+        return;
       }
 
       // Guardar messageLogId en el activo del queue
@@ -475,6 +516,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
       }
       // Si no, esperamos el webhook connect que dispara applyRemoteAnswer via listener
     } catch (err) {
+      // AbortError no es un fallo real — el usuario cancelo
+      if ((err as Error).name === "AbortError" || isAborted()) {
+        console.log("[CallContext] initiateOutgoing aborted by user");
+        return;
+      }
       const msg = (err as Error).message;
       console.error("[CallContext] initiateOutgoing failed:", msg);
       setError(msg);

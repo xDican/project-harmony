@@ -190,6 +190,10 @@ export function useConversationMessages(conversationId: string | null) {
    * Insert de un mensaje recibido por Realtime. Idempotente: si ya esta por
    * id, no duplica. Si llega un outbound real con body matching un mensaje
    * optimistic (id startsWith 'temp-'), lo REEMPLAZA en lugar de duplicar.
+   *
+   * Auto-mark-as-read: si la conv esta abierta (este hook activo) y llega
+   * un mensaje inbound del paciente, reseteamos unread_count=0 en background.
+   * Sin esto el badge de la conv sigue contando aunque el usuario lo este viendo.
    */
   const insertRealtimeMessage = useCallback(
     (message: MessageRow) => {
@@ -218,6 +222,18 @@ export function useConversationMessages(conversationId: string | null) {
 
         return [...prev, message];
       });
+
+      // Auto-mark-as-read si el mensaje es inbound del paciente y la conv
+      // esta abierta. Fire-and-forget.
+      if (message.direction === "inbound" && message.source === "patient") {
+        void supabase
+          .from("conversations")
+          .update({ unread_count: 0 })
+          .eq("id", conversationId)
+          .then(({ error }) => {
+            if (error) console.warn("[useConversationMessages] auto-mark-read failed:", error.message);
+          });
+      }
     },
     [conversationId],
   );
