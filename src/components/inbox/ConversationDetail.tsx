@@ -179,7 +179,9 @@ export function ConversationDetail({
         conversationStatus={conversation.status}
         organizationId={organizationId ?? undefined}
         onSent={() => {
-          refetch();
+          // No llamamos refetch() — el optimistic + realtime ya tienen el state.
+          // Un refetch fuerza recarga del timeline completo y causa flicker
+          // visible del mensaje que ya estaba en el array.
           onConversationUpdated?.();
         }}
         sendOptimisticText={sendOptimisticText}

@@ -161,8 +161,11 @@ export function IncomingCallOverlay() {
   } = useCallContext();
 
   // Ringtone manager segun phase:
-  //   - ringing-inbound: ringtone (mas fuerte, llama la atencion)
-  //   - dialing-outbound: ringback (mas suave, feedback de espera)
+  //   - ringing-inbound: ringtone (fuerte, llama atencion del que recibe)
+  //   - dialing-outbound + connecting: ringback (suave, feedback de espera).
+  //     Ambos phases son "esperando que el paciente atienda" — applyRemoteAnswer
+  //     mueve a 'connecting' rapido (~1s) pero el paciente todavia no atendio.
+  //     El watcher de audio activity es quien transiciona a 'connected' real.
   //   - cualquier otro: silencio
   const ringtoneRef = useRef<ReturnType<typeof createRingtone> | null>(null);
   useEffect(() => {
@@ -174,7 +177,7 @@ export function IncomingCallOverlay() {
         ringtoneRef.current = null;
       };
     }
-    if (callPhase === "dialing-outbound") {
+    if (callPhase === "dialing-outbound" || callPhase === "connecting") {
       ringtoneRef.current = createRingback();
       ringtoneRef.current.start();
       return () => {

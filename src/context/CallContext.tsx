@@ -738,6 +738,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
               const name = newCall.patientName ?? newCall.patientPhone;
               toast(`📞 Llamada en espera de ${name}`, {
                 description: "Se mostrara al terminar la actual",
+                // Top-right para no chocar con el overlay flotante (bottom-right)
+                position: "top-right",
               });
             }
             return [...prev, newCall];
