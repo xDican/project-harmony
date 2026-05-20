@@ -7,6 +7,8 @@ const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ defaul
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
 import { InboxProvider } from "./context/InboxContext";
+import { IncomingCallProvider } from "./context/IncomingCallContext";
+import { IncomingCallOverlay } from "./components/calls/IncomingCallOverlay";
 import { UserRole } from "./types/user";
 const MainLayout = lazy(() => import("./components/MainLayout"));
 import SuperAdminRoute from "./components/SuperAdminRoute";
@@ -162,8 +164,10 @@ const App = () => {
   <QueryClientProvider client={queryClient}>
     <UserProvider>
       <InboxProvider>
+        <IncomingCallProvider>
         <Suspense fallback={null}><Toaster /></Suspense>
         <Sonner />
+        <IncomingCallOverlay />
         <BrowserRouter>
           <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center">
@@ -389,6 +393,7 @@ const App = () => {
           </Routes>
           </Suspense>
         </BrowserRouter>
+        </IncomingCallProvider>
       </InboxProvider>
     </UserProvider>
   </QueryClientProvider>

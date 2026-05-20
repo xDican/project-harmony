@@ -26,6 +26,7 @@ import {
   persistInboundMessage,
   extractMediaFromMetaMessage,
 } from "../_shared/inbox-messages.ts";
+import { processCallEvent, type MetaCallEvent } from "../_shared/calls.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -55,6 +56,7 @@ interface MetaChangeValue {
   contacts?: MetaContact[];
   messages?: MetaMessage[];
   statuses?: MetaStatus[];
+  calls?: MetaCallEvent[];
 }
 
 interface MetaContact {
@@ -1001,7 +1003,7 @@ Deno.serve(async (req) => {
       console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled);
     }
 
-    // 4) Process all entries — messages and statuses run in parallel per change
+    // 4) Process all entries — messages, statuses, and calls run in parallel per change
     for (const entry of payload.entry || []) {
       for (const change of entry.changes || []) {
         const value = change.value;
@@ -1016,6 +1018,19 @@ Deno.serve(async (req) => {
         if (value.statuses) {
           for (const status of value.statuses) {
             tasks.push(handleStatusUpdate(supabase, status));
+          }
+        }
+
+        // Sprint 6 — Calling API events
+        if (value.calls && activeLineId && activeLineOrgId) {
+          for (const call of value.calls) {
+            tasks.push(processCallEvent({
+              supabase,
+              call,
+              contacts: value.contacts,
+              organizationId: activeLineOrgId,
+              whatsappLineId: activeLineId,
+            }));
           }
         }
 

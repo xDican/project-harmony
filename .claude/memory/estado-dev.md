@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 19 May 2026 PM (Sprint 5 + 5.1 ✅ cerrados — Promociones del mes con matching escalonado, FAQ override, destacada del mes, matcheo natural. QA SQL aprobado por Diego.)
+> Ultima actualizacion: 20 May 2026 (3 bombas de tiempo neutralizadas — `appointment_at` UTC-6, citas huerfanas, `confirmation_message_sent`. 761 filas saneadas + NOT NULL constraint activado.)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 
 ---
@@ -104,11 +104,11 @@ Meta WhatsApp NO acepta WebP en mensajes `image` (solo en `sticker`). Para outbo
 ## Bugs activos (no resueltos)
 
 ### Criticidad alta — bombas de tiempo
-- [ ] **`appointment_at` desfasada 6h (Honduras UTC-6)** — severidad BAJA hoy (ningun flujo productivo lo usa), ALTA si algo nuevo lo empieza a usar. `create-appointment/index.ts:217` y `update-appointment/index.ts:151` construyen ISO string sin offset. Postgres timestamptz asume UTC. **Fix minimo:** agregar `-06:00` o usar Luxon con `zone: 'America/Tegucigalpa'`. Migracion datos opcional.
-- [ ] **`confirmation_message_sent` nunca se marca true** — en `create-appointment/index.ts` linea ~410, falta `UPDATE appointments SET confirmation_message_sent = true` despues de `gatewayResult.success`. Mensajes SI se envian.
+- [x] ~~**`appointment_at` desfasada 6h (Honduras UTC-6)**~~ — ✅ **Resuelto 20 May AM.** `create-appointment:217` y `update-appointment:151` ahora construyen ISO con offset `-06:00` explicito. Migracion `20260520120000_fix_appointment_at_timezone_backfill.sql` corrigio 616 filas historicas (1 ya correcta no se toco). Verificado: 617/617 ok, ejemplo cita 9:30 HN guarda 15:30 UTC.
+- [x] ~~**`confirmation_message_sent` nunca se marca true**~~ — ✅ **Resuelto 20 May PM.** UPDATE sincrono post-envio agregado en `create-appointment/index.ts` dentro del `if (gatewayResult.success)` (patron de `send-reminders:259-265`: log si falla, no rompe response). Bug era 100% pasivo (nadie leia la columna), pero el dato ahora refleja la realidad.
+- [x] ~~**Cita huerfana sin `appointment_at`**~~ — ✅ **Resuelto 20 May PM.** `bot-handler` linea 2671 (funcion `createAppointment` de `processBookingConfirm`) omitia `appointment_at` en el INSERT. 144 filas huerfanas confirmadas en produccion (desde 17 Feb), todas con notes "Agendada/Reagendada via WhatsApp Bot". Fix: agregar `appointment_at` al payload + normalizar `selectedTime` (HH:mm → HH:mm:ss). Migracion `20260520140000_appointments_appointment_at_backfill_and_not_null.sql` backfilleo las 144 + `ALTER COLUMN ... SET NOT NULL`. Verificado: 0 huerfanas, 761/761 alineadas con `(date+time)-06:00`. Defensa profunda: cualquier INSERT futuro que omita la columna fallara con 23502.
 
 ### Criticidad media
-- [ ] **Cita huerfana sin `appointment_at`** — bot crashea. Caso Kensi Nicol Carcamo (Consultorio Familiar, 24 Mar). Hay rama del bot-handler que crea citas sin timestamp. Localizar y arreglar.
 - [ ] **Estado `reagendar` huerfano en DB** — no esta en types pero existe en tabla. Decidir: agregar al type o normalizar.
 - [ ] **Paciente +50433899824 en booking_select_hour hace 1 semana** — verificar timeout de sesiones.
 
@@ -185,8 +185,8 @@ Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. S
 
 | Dia | Trabajo |
 |---|---|
-| Mar 19 (hoy) | ✅ Sprint 4 + Sprint 5 + Sprint 5.1 cerrados |
-| Mie 20 | Arrancar Sprint 6: Calling API (webhooks inbound + UI llamadas inbox + softphone WebRTC) |
+| Mar 19 | ✅ Sprint 4 + Sprint 5 + Sprint 5.1 cerrados |
+| Mie 20 (hoy) | ✅ 3 bombas de tiempo de `appointments` neutralizadas (AM + PM). Pendiente: arrancar Sprint 6 Calling API |
 | Jue 21 - Vie 22 | Sprint 6 finalizar |
 | Sab 23 | QA full inbox-only. Configurar Torre Zafiro en DB. |
 | Dom 24 | Bug fixes finales. Briefing operativo. |
