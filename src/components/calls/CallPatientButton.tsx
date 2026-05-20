@@ -67,10 +67,10 @@ export function CallPatientButton({ conversationId, patientPhone, patientName }:
 
     if (data.status === "rejected") {
       setPermState("rejected");
-    } else if (data.status === "granted" && data.expires_at && data.expires_at > new Date().toISOString()) {
-      setPermState("granted");
     } else if (data.status === "granted") {
-      setPermState("expired");
+      // expires_at NULL = permanente (is_permanent del accept del paciente)
+      const isVigente = !data.expires_at || data.expires_at > new Date().toISOString();
+      setPermState(isVigente ? "granted" : "expired");
     } else {
       setPermState("missing");
     }
@@ -79,6 +79,31 @@ export function CallPatientButton({ conversationId, patientPhone, patientName }:
   useEffect(() => {
     refreshPermission();
   }, [refreshPermission]);
+
+  // Listener Realtime: cuando llega INSERT/UPDATE en call_permissions para
+  // esta conversation, refresh inmediato (no esperar el siguiente click).
+  useEffect(() => {
+    const channel = supabase
+      .channel(`call-perms:${conversationId}`)
+      .on(
+        // @ts-expect-error supabase-js postgres_changes types
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "call_permissions",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => {
+          refreshPermission();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, refreshPermission]);
 
   const handleClick = useCallback(() => {
     if (permState === "granted") {

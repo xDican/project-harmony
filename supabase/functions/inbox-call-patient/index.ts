@@ -91,8 +91,7 @@ Deno.serve(async (req) => {
     const nowIso = new Date().toISOString();
     const hasPermission =
       perm?.status === "granted" &&
-      perm.expires_at &&
-      perm.expires_at > nowIso;
+      (!perm.expires_at /* permanente */ || perm.expires_at > nowIso);
 
     if (!hasPermission) {
       return jsonResponse(403, {

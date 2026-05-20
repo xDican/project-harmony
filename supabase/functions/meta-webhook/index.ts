@@ -192,6 +192,108 @@ function extractAppointmentIdFromPayload(msg: MetaMessage): string | null {
 // Message handling
 // ---------------------------------------------------------------------------
 
+/**
+ * Sprint 6 — Procesa el accept/reject del paciente a una solicitud de
+ * call_permission_request. Meta lo envia como interactive message:
+ *   interactive.type = 'call_permission_reply'
+ *   interactive.call_permission_reply = { response: 'accept'|'reject', is_permanent: bool, response_source: string }
+ *
+ * Inserta una fila en call_permissions y NO pasa al bot (es un evento del sistema,
+ * no un mensaje de chat).
+ */
+async function handleCallPermissionReply(
+  supabase: ReturnType<typeof createClient>,
+  message: MetaMessage,
+  fromPhone: string,
+  contactName: string | undefined,
+  lineId: string,
+  lineOrgId: string,
+): Promise<void> {
+  const reply = (message.interactive as any)?.call_permission_reply;
+  if (!reply) {
+    console.warn("[meta-webhook] call_permission_reply payload missing");
+    return;
+  }
+
+  const isAccept = reply.response === "accept";
+  const isPermanent = reply.is_permanent === true;
+  const status = isAccept ? "granted" : "rejected";
+
+  // Para is_permanent dejamos expires_at NULL → el check del frontend
+  // interpreta "sin expiry" como vigente. Si Meta enviara expiration_timestamp
+  // futuro lo usaremos, sino +7 dias como guard (limite Meta default).
+  let expiresAt: string | null = null;
+  if (isAccept) {
+    if (isPermanent) {
+      expiresAt = null;
+    } else if (reply.expiration_timestamp) {
+      expiresAt = new Date(Number(reply.expiration_timestamp) * 1000).toISOString();
+    } else {
+      // Default Meta: 7 dias desde el accept
+      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    }
+  }
+
+  // Resolver conversation (debe existir, paciente nos escribio previamente
+  // al menos para que mandemos la solicitud)
+  const conversation = await getOrCreateConversation(supabase, {
+    whatsappLineId: lineId,
+    organizationId: lineOrgId,
+    patientPhone: fromPhone,
+    patientName: contactName ?? null,
+  });
+
+  if (!conversation) {
+    console.error("[meta-webhook] call_permission_reply: cannot resolve conversation");
+    return;
+  }
+
+  // Persistir el mensaje en message_logs como tipo system (para audit, no se
+  // muestra al bot), con body descriptivo + raw_payload completo.
+  await supabase.from("message_logs").insert({
+    organization_id: lineOrgId,
+    whatsapp_line_id: lineId,
+    conversation_id: conversation.id,
+    direction: "inbound",
+    channel: "whatsapp",
+    provider: "meta",
+    source: "system",
+    message_type: "system",
+    from_phone: fromPhone,
+    to_phone: "",
+    body: isAccept
+      ? `Paciente aceptó permiso de llamadas (${isPermanent ? "permanente" : "temporal"})`
+      : "Paciente rechazó permiso de llamadas",
+    provider_message_id: message.id,
+    raw_payload: message,
+    status: "received",
+    billable: false,
+  });
+
+  // Insertar en call_permissions
+  const { error: permErr } = await supabase.from("call_permissions").insert({
+    organization_id: lineOrgId,
+    conversation_id: conversation.id,
+    status,
+    granted_at: isAccept ? new Date().toISOString() : null,
+    expires_at: expiresAt,
+    source: "call_permission_request",
+    raw_event: reply,
+  });
+
+  if (permErr) {
+    console.error("[meta-webhook] call_permissions insert failed:", permErr.message);
+    return;
+  }
+
+  console.log(
+    "[meta-webhook] call_permission_reply persisted. conv:",
+    conversation.id,
+    "status:", status,
+    "permanent:", isPermanent,
+  );
+}
+
 async function handleIncomingMessage(
   supabase: ReturnType<typeof createClient>,
   metadata: MetaChangeValue["metadata"],
@@ -221,6 +323,19 @@ async function handleIncomingMessage(
 
   if (existingLog) {
     console.log("[meta-webhook] Duplicate message skipped:", message.id);
+    return;
+  }
+
+  // Sprint 6: Call permission reply — Meta envia el accept/reject del paciente
+  // como mensaje interactivo type='call_permission_reply' (NO en value.calls[]).
+  // Lo procesamos aqui y NO lo pasamos al bot (sino el bot responderia confundido
+  // a un "mensaje vacio").
+  if (
+    message.type === "interactive" &&
+    (message.interactive as any)?.type === "call_permission_reply" &&
+    lineId && lineOrgId
+  ) {
+    await handleCallPermissionReply(supabase, message, fromPhone, contactName, lineId, lineOrgId);
     return;
   }
 
