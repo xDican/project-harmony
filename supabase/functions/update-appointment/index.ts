@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       let normalizedTime = time;
       if (/^\d{2}:\d{2}$/.test(time)) normalizedTime = `${time}:00`;
 
-      const appointmentAt = `${date}T${normalizedTime}`;
+      const appointmentAt = `${date}T${normalizedTime}-06:00`;
 
       // Si tu regla sigue siendo slot exacto, esto está bien.
       // (y el unique index doctor_id+date+time te protege de carreras)

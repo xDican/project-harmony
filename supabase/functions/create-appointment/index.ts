@@ -213,8 +213,8 @@ Deno.serve(async (req) => {
       normalizedTime = `${time}:00`;
     }
 
-    // 9) Build appointment_at timestamp
-    const appointmentAt = `${date}T${normalizedTime}`;
+    // 9) Build appointment_at timestamp (Honduras = UTC-6, sin DST)
+    const appointmentAt = `${date}T${normalizedTime}-06:00`;
 
     // 10) Fetch doctor's organization_id
     const { data: doctorOrg, error: doctorOrgError } = await supabase
@@ -408,6 +408,17 @@ Deno.serve(async (req) => {
 
     // 18) Return response
     if (gatewayResult.success) {
+      // Marcar confirmation_message_sent = true. Si el UPDATE falla, log y seguir:
+      // el mensaje ya se envio al paciente, no romper el response por una columna interna.
+      const { error: confirmFlagError } = await supabase
+        .from("appointments")
+        .update({ confirmation_message_sent: true })
+        .eq("id", appointment.id);
+
+      if (confirmFlagError) {
+        console.error("[create-appointment] Failed to mark confirmation_message_sent:", confirmFlagError);
+      }
+
       return jsonResponse(200, {
         ok: true,
         appointment,

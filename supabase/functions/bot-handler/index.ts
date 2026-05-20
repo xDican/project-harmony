@@ -2668,13 +2668,22 @@ async function createAppointmentWithPatient(
     ? `Reagendada via WhatsApp Bot (cita anterior: ${session.context.rescheduleAppointmentDate} ${session.context.rescheduleAppointmentTime})`
     : 'Agendada via WhatsApp Bot';
 
+  // selectedTime llega como 'HH:mm' (ver getAvailableSlotsForDate). Normalizar a
+  // 'HH:MM:SS' y agregar offset Honduras (-06:00, sin DST) al construir appointment_at
+  // — Postgres timestamptz asume UTC si el string no trae offset.
+  const normalizedTime = /^\d{2}:\d{2}$/.test(session.context.selectedTime)
+    ? `${session.context.selectedTime}:00`
+    : session.context.selectedTime;
+  const appointmentAt = `${session.context.selectedDate}T${normalizedTime}-06:00`;
+
   const { data: appointment, error: aptError } = await supabase
     .from('appointments')
     .insert({
       doctor_id: session.context.doctorId,
       patient_id: patient.id,
       date: session.context.selectedDate,
-      time: session.context.selectedTime,
+      time: normalizedTime,
+      appointment_at: appointmentAt,
       duration_minutes: session.context.durationMinutes || 60,
       status: 'agendada',
       organization_id: organizationId,
