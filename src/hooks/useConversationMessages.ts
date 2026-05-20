@@ -188,14 +188,34 @@ export function useConversationMessages(conversationId: string | null) {
 
   /**
    * Insert de un mensaje recibido por Realtime. Idempotente: si ya esta por
-   * id, no duplica. Solo aplica si pertenece a esta conversation.
+   * id, no duplica. Si llega un outbound real con body matching un mensaje
+   * optimistic (id startsWith 'temp-'), lo REEMPLAZA en lugar de duplicar.
    */
   const insertRealtimeMessage = useCallback(
     (message: MessageRow) => {
       if (!conversationId) return;
       if (message.conversation_id !== conversationId) return;
       setMessages((prev) => {
+        // Idempotencia por id
         if (prev.some((m) => m.id === message.id)) return prev;
+
+        // Dedupe optimistic: si llega outbound real con body matching un temp
+        // outbound, reemplazarlo (no duplicar). Solo aplica a mensajes de texto.
+        if (message.direction === "outbound" && message.body && message.message_type === "text") {
+          const tempIdx = prev.findIndex(
+            (m) =>
+              m.id.startsWith("temp-") &&
+              m.direction === "outbound" &&
+              m.body === message.body &&
+              m.message_type === "text",
+          );
+          if (tempIdx >= 0) {
+            const next = [...prev];
+            next[tempIdx] = message;
+            return next;
+          }
+        }
+
         return [...prev, message];
       });
     },
@@ -221,12 +241,38 @@ export function useConversationMessages(conversationId: string | null) {
     [conversationId],
   );
 
+  /**
+   * Actualiza un mensaje optimistic por id (para marcar como 'failed', 'sent',
+   * o reemplazar id temporal por el real al confirmar el envio).
+   */
+  const updateOptimisticMessage = useCallback(
+    (id: string, patch: Partial<MessageRow>) => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === id);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...patch };
+        return next;
+      });
+    },
+    [],
+  );
+
+  /**
+   * Remueve un mensaje optimistic (e.g. usuario decide descartar un fallido).
+   */
+  const removeMessage = useCallback((id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
   return {
     messages,
     isLoading,
     error,
     refetch: fetchMessages,
     addOptimisticMessage,
+    updateOptimisticMessage,
+    removeMessage,
     insertRealtimeMessage,
     updateRealtimeMessage,
   };

@@ -95,6 +95,7 @@ function formatDuration(secs: number): string {
 export function IncomingCallOverlay() {
   const {
     activeCall,
+    queuedCalls,
     callPhase,
     isMicMuted,
     durationSeconds,
@@ -163,6 +164,11 @@ export function IncomingCallOverlay() {
             >
               {subtitle}
             </p>
+            {queuedCalls.length > 0 && (
+              <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-400 font-medium">
+                📞 +{queuedCalls.length} en espera
+              </p>
+            )}
           </div>
         </div>
 

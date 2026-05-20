@@ -365,14 +365,34 @@ function StatusTicks({
   const tintClass = isAssistant ? "text-primary-foreground/70" : "text-muted-foreground";
   const readClass = "text-sky-400";
 
-  if (!status || status === "queued" || status === "sending") {
+  if (status === "sending") {
+    // Spinner pequeño en lugar de check opaco — feedback de "en vuelo"
+    return (
+      <span
+        className={cn(
+          "inline-block h-2.5 w-2.5 rounded-full border-2 border-current border-t-transparent animate-spin",
+          tintClass,
+        )}
+        aria-label="Enviando"
+      />
+    );
+  }
+  if (!status || status === "queued") {
     return <Check className={cn("h-3 w-3 opacity-60", tintClass)} />;
   }
   if (status === "sent") return <Check className={cn("h-3 w-3", tintClass)} />;
   if (status === "delivered") return <CheckCheck className={cn("h-3 w-3", tintClass)} />;
   if (status === "read") return <CheckCheck className={cn("h-3 w-3", readClass)} />;
-  if (status === "failed")
-    return <span className="text-destructive text-[10px]">✗</span>;
+  if (status === "failed") {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 text-destructive text-[10px] font-medium"
+        title="No se pudo enviar"
+      >
+        ⚠ Fallido
+      </span>
+    );
+  }
   return null;
 }
 

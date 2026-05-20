@@ -53,9 +53,15 @@ export function ConversationDetail({
   onBack,
   onConversationUpdated,
 }: ConversationDetailProps) {
-  const { messages, isLoading, error, refetch } = useConversationMessages(
-    conversation.id,
-  );
+  const {
+    messages,
+    isLoading,
+    error,
+    refetch,
+    addOptimisticMessage,
+    updateOptimisticMessage,
+    removeMessage,
+  } = useConversationMessages(conversation.id);
   const { organizationId } = useCurrentUser();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -178,6 +184,9 @@ export function ConversationDetail({
           refetch();
           onConversationUpdated?.();
         }}
+        addOptimisticMessage={addOptimisticMessage}
+        updateOptimisticMessage={updateOptimisticMessage}
+        removeMessage={removeMessage}
       />
     </>
   );

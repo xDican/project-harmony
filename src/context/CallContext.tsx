@@ -78,6 +78,8 @@ export interface CallPermission {
 
 interface CallContextValue {
   activeCall: ActiveCall | null;
+  /** Llamadas adicionales en cola (entrantes que llegaron mientras una activa). */
+  queuedCalls: ActiveCall[];
   callPhase: CallPhase;
   isMicMuted: boolean;
   durationSeconds: number;
@@ -157,7 +159,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const { user } = useCurrentUser();
   const organizationId = user?.organizationId ?? undefined;
 
-  const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
+  // callQueue[0] es la llamada activa. callQueue[1+] son entrantes en espera.
+  // Cuando una llamada activa termina, shift y promovemos la siguiente.
+  const [callQueue, setCallQueue] = useState<ActiveCall[]>([]);
+  const activeCall = callQueue[0] ?? null;
+  const queuedCalls = useMemo(() => callQueue.slice(1), [callQueue]);
+
   const [callPhase, setCallPhase] = useState<CallPhase>("idle");
   const [isMicMuted, setIsMicMutedState] = useState(false);
   const [durationSeconds, setDurationSeconds] = useState(0);
@@ -188,32 +195,51 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ---- Transition a "ended" + clear ----
-  // grace=true: muestra "Llamada finalizada" 800ms antes de desmontar.
+  // ---- Transition: termina la llamada activa, promueve la siguiente del queue ----
+  // grace=true: muestra "Llamada finalizada" 800ms antes de promover/clear.
   //   Usado para terminates remotos (paciente colgo) para que el usuario
   //   entienda que paso.
-  // grace=false: clear inmediato. Usado en hangup manual donde el usuario
-  //   ya sabe que apreto colgar.
+  // grace=false: clear inmediato. Usado en hangup manual.
   const endActiveCall = useCallback((opts?: { grace?: boolean }) => {
     cleanupPeer();
     const useGrace = opts?.grace !== false;
-    if (useGrace) {
-      setCallPhase("ended");
-      setTimeout(() => {
-        setActiveCall(null);
-        setCallPhase("idle");
-        setDurationSeconds(0);
-        setIsMicMutedState(false);
-        setError(null);
-      }, 800);
-    } else {
-      setActiveCall(null);
-      setCallPhase("idle");
+
+    const finalize = () => {
       setDurationSeconds(0);
       setIsMicMutedState(false);
       setError(null);
+      setCallQueue((prev) => {
+        const next = prev.slice(1);  // shift la primera (la que termino)
+        return next;
+      });
+      // Si hay siguiente, el listener UI lo detectara automaticamente.
+      // El phase vuelve a 'idle' si no hay siguiente; si hay, queda en
+      // 'ringing-inbound' (porque la siguiente del queue es siempre inbound
+      // ringing — los outbound nunca se encolan, se rechazan en initiateOutgoing).
+      setCallPhase("idle");
+    };
+
+    if (useGrace) {
+      setCallPhase("ended");
+      setTimeout(finalize, 800);
+    } else {
+      finalize();
     }
   }, [cleanupPeer]);
+
+  // ---- Cuando hay nueva activa post-shift, transicionar el phase ----
+  // Si callQueue[0] cambia (nueva llamada promovida del queue), setear phase
+  // a ringing-inbound (las que se encolan son siempre inbound ringing).
+  const previousActiveIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currentId = activeCall?.messageLogId ?? activeCall?.callIdMeta ?? null;
+    if (currentId !== previousActiveIdRef.current) {
+      previousActiveIdRef.current = currentId;
+      if (activeCall && activeCall.direction === "inbound" && callPhase === "idle") {
+        setCallPhase("ringing-inbound");
+      }
+    }
+  }, [activeCall, callPhase]);
 
   // ---- Crear peer connection con handlers genericos ----
   const createPeerConnection = useCallback((): RTCPeerConnection => {
@@ -392,7 +418,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
 
     setError(null);
-    setActiveCall({
+    setCallQueue([{
       messageLogId: null,
       callIdMeta: null,
       conversationId: args.conversationId,
@@ -401,7 +427,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       direction: "outbound",
       sdpOffer: null,
       receivedAt: new Date().toISOString(),
-    });
+    }]);
     setCallPhase("preparing-outbound");
 
     try {
@@ -433,9 +459,14 @@ export function CallProvider({ children }: { children: ReactNode }) {
         throw new Error(data?.error ?? "inbox-call-patient failed");
       }
 
-      // Guardar messageLogId — necesario para identificar UPDATEs futuros
+      // Guardar messageLogId en el activo del queue
       if (data.messageLogId) {
-        setActiveCall((cur) => cur ? { ...cur, messageLogId: data.messageLogId } : cur);
+        setCallQueue((prev) => {
+          if (prev.length === 0) return prev;
+          const next = [...prev];
+          next[0] = { ...next[0], messageLogId: data.messageLogId };
+          return next;
+        });
       }
 
       // Si Meta retorno answer inline, aplicarlo
@@ -591,52 +622,44 @@ export function CallProvider({ children }: { children: ReactNode }) {
             if (row.call_direction !== "inbound") return;
             if (!row.call_id_meta || !row.conversation_id) return;
 
-            // Si ya hay llamada activa, NO sobreescribir. La nueva llamada
-            // queda sin atender → Meta la marcara missed automaticamente.
-            // Avisamos al usuario con un toast para que sepa.
-            setActiveCall((cur) => {
-              if (cur) {
-                const conn = (async () => {
-                  const { data: conv } = await supabase
-                    .from("conversations")
-                    .select("patient_name")
-                    .eq("id", row.conversation_id!)
-                    .maybeSingle();
-                  const name = conv?.patient_name ?? row.from_phone;
-                  toast.warning(`Llamada perdida de ${name} (durante otra llamada activa)`);
-                })();
-                void conn;
-                return cur;
-              }
+            const sdpInfo = extractSdpFromPayload(row.raw_payload);
+            if (!sdpInfo || sdpInfo.sdp_type !== "offer") {
+              console.warn("[CallContext] inbound voice_call sin SDP offer:", row.id);
+              return;
+            }
 
-              const sdpInfo = extractSdpFromPayload(row.raw_payload);
-              if (!sdpInfo || sdpInfo.sdp_type !== "offer") {
-                console.warn("[CallContext] inbound voice_call sin SDP offer:", row.id);
-                return cur;
-              }
+            // Resolver patient_name async + agregar al queue
+            (async () => {
+              const { data: conv } = await supabase
+                .from("conversations")
+                .select("patient_name, patient_phone")
+                .eq("id", row.conversation_id!)
+                .maybeSingle();
 
-              // Resolver patient_name async (no podemos await aqui)
-              (async () => {
-                const { data: conv } = await supabase
-                  .from("conversations")
-                  .select("patient_name, patient_phone")
-                  .eq("id", row.conversation_id!)
-                  .maybeSingle();
+              const newCall: ActiveCall = {
+                messageLogId: row.id,
+                callIdMeta: row.call_id_meta!,
+                conversationId: row.conversation_id!,
+                patientPhone: conv?.patient_phone ?? row.from_phone,
+                patientName: conv?.patient_name ?? null,
+                direction: "inbound",
+                sdpOffer: sdpInfo.sdp,
+                receivedAt: row.created_at,
+              };
 
-                setActiveCall({
-                  messageLogId: row.id,
-                  callIdMeta: row.call_id_meta!,
-                  conversationId: row.conversation_id!,
-                  patientPhone: conv?.patient_phone ?? row.from_phone,
-                  patientName: conv?.patient_name ?? null,
-                  direction: "inbound",
-                  sdpOffer: sdpInfo.sdp,
-                  receivedAt: row.created_at,
-                });
-                setCallPhase("ringing-inbound");
-              })();
-              return cur;
-            });
+              setCallQueue((prev) => {
+                // Dedupe: si ya esta por callIdMeta, no agregar
+                if (prev.some((c) => c.callIdMeta === newCall.callIdMeta)) return prev;
+                // Si ya hay activa, avisar con toast que esta entra en cola
+                if (prev.length > 0) {
+                  const name = newCall.patientName ?? newCall.patientPhone;
+                  toast(`📞 Llamada en espera de ${name}`, {
+                    description: "Se mostrara al terminar la actual",
+                  });
+                }
+                return [...prev, newCall];
+              });
+            })();
           },
         )
         // ---- UPDATE voice_call → SDP answer (outbound) o terminal status ----
@@ -655,19 +678,26 @@ export function CallProvider({ children }: { children: ReactNode }) {
             if (!row.call_id_meta) return;
 
             // Cerrar overlay si llega terminal status (paciente colgo remoto, etc.)
+            // Si era la activa, endActiveCall + shift queue. Si estaba en cola,
+            // remover del queue (sin afectar la activa).
             if (TERMINAL_STATUSES.includes(row.call_status ?? "")) {
-              setActiveCall((cur) => {
-                if (!cur) return cur;
-                const matchInbound = cur.callIdMeta === row.call_id_meta;
-                const matchOutbound =
-                  cur.direction === "outbound" &&
-                  cur.conversationId === row.conversation_id;
-                if (matchInbound || matchOutbound) {
-                  // Trigger cleanup async (no podemos hacerlo dentro del setter)
+              setCallQueue((prev) => {
+                if (prev.length === 0) return prev;
+                const matchIdx = prev.findIndex((c) => {
+                  const matchInbound = c.callIdMeta === row.call_id_meta;
+                  const matchOutbound =
+                    c.direction === "outbound" &&
+                    c.conversationId === row.conversation_id;
+                  return matchInbound || matchOutbound;
+                });
+                if (matchIdx === -1) return prev;
+                if (matchIdx === 0) {
+                  // Es la activa → endActiveCall maneja shift + cleanup
                   queueMicrotask(() => endActiveCall());
-                  return cur;
+                  return prev;  // endActiveCall hara el shift
                 }
-                return cur;
+                // Estaba en cola, no era la activa — solo remover
+                return [...prev.slice(0, matchIdx), ...prev.slice(matchIdx + 1)];
               });
               return;
             }
@@ -676,13 +706,15 @@ export function CallProvider({ children }: { children: ReactNode }) {
             // Match: la fila tiene call_id_meta recien seteado (webhook connect) y direction outbound
             const sdpInfo = extractSdpFromPayload(row.raw_payload);
             if (sdpInfo?.sdp_type === "answer" && row.call_direction === "outbound") {
-              setActiveCall((cur) => {
-                if (!cur) return cur;
-                if (cur.direction !== "outbound") return cur;
-                if (cur.conversationId !== row.conversation_id) return cur;
-                // Update callIdMeta real + trigger applyRemoteAnswer
+              setCallQueue((prev) => {
+                if (prev.length === 0) return prev;
+                const cur = prev[0];
+                if (cur.direction !== "outbound") return prev;
+                if (cur.conversationId !== row.conversation_id) return prev;
                 queueMicrotask(() => applyRemoteAnswer(sdpInfo.sdp));
-                return { ...cur, callIdMeta: row.call_id_meta };
+                const next = [...prev];
+                next[0] = { ...cur, callIdMeta: row.call_id_meta };
+                return next;
               });
             }
           },
@@ -728,6 +760,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CallContextValue>(() => ({
     activeCall,
+    queuedCalls,
     callPhase,
     isMicMuted,
     durationSeconds,
@@ -742,6 +775,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     remoteAudioRef,
   }), [
     activeCall,
+    queuedCalls,
     callPhase,
     isMicMuted,
     durationSeconds,

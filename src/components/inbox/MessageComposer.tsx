@@ -23,6 +23,8 @@
 import { useRef, useState } from "react";
 import { Paperclip, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useCurrentUser } from "@/context/UserContext";
+import type { MessageRow } from "@/hooks/useConversationMessages";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -47,6 +49,40 @@ interface MessageComposerProps {
   organizationId: string | undefined;
   /** Callback tras envio exitoso, para refrescar mensajes y conversation status */
   onSent?: () => void;
+  /** Para optimistic UI — agregar el mensaje al timeline antes del POST */
+  addOptimisticMessage?: (message: MessageRow) => void;
+  /** Actualizar status del mensaje optimistic (sent / failed) */
+  updateOptimisticMessage?: (id: string, patch: Partial<MessageRow>) => void;
+  /** Remover un mensaje optimistic (no usado todavia, util para retry) */
+  removeMessage?: (id: string) => void;
+}
+
+function makeOptimisticTextMessage(args: {
+  conversationId: string;
+  body: string;
+  userId: string | null;
+  patientPhoneTo: string;
+}): MessageRow {
+  return {
+    id: `temp-${crypto.randomUUID()}`,
+    conversation_id: args.conversationId,
+    direction: "outbound",
+    source: "assistant",
+    message_type: "text",
+    body: args.body,
+    transcription: null,
+    media_url: null,
+    media_mime: null,
+    status: "sending",
+    sent_by: args.userId,
+    to_phone: args.patientPhoneTo,
+    from_phone: "",
+    call_duration_seconds: null,
+    call_direction: null,
+    call_status: null,
+    call_id_meta: null,
+    created_at: new Date().toISOString(),
+  };
 }
 
 export function MessageComposer({
@@ -54,8 +90,13 @@ export function MessageComposer({
   conversationStatus,
   organizationId,
   onSent,
+  addOptimisticMessage,
+  updateOptimisticMessage,
 }: MessageComposerProps) {
+  const { user } = useCurrentUser();
   const [body, setBody] = useState("");
+  // isSending solo limita acciones que requieren el servidor (file upload).
+  // Para envio de texto usamos optimistic UI, NO bloqueamos el composer.
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -63,31 +104,43 @@ export function MessageComposer({
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const trimmed = body.trim();
-  const canSend = trimmed.length > 0 && !isSending;
+  const canSend = trimmed.length > 0;
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!canSend) return;
-    setIsSending(true);
     const payload = trimmed;
-    setBody(""); // clear immediately for snappy UX
+    setBody(""); // clear inmediato
+    textareaRef.current?.focus(); // refocus inmediato para escribir el proximo
 
-    try {
-      await sendMessage({
-        conversationId,
-        body: payload,
-        messageType: "text",
-      });
-      onSent?.();
-    } catch (e) {
-      console.error("[MessageComposer] send failed:", e);
-      const msg = e instanceof Error ? e.message : "Error desconocido";
-      toast.error("No se pudo enviar el mensaje", { description: msg });
-      // Restaurar texto para que el usuario no lo pierda
-      setBody(payload);
-    } finally {
-      setIsSending(false);
-      textareaRef.current?.focus();
-    }
+    // Optimistic: agregar al timeline ya con status='sending'
+    const optimistic = makeOptimisticTextMessage({
+      conversationId,
+      body: payload,
+      userId: user?.id ?? null,
+      patientPhoneTo: "",  // se llena cuando llega el real via realtime
+    });
+    addOptimisticMessage?.(optimistic);
+
+    // Fire-and-forget POST. La UI no espera.
+    void (async () => {
+      try {
+        await sendMessage({
+          conversationId,
+          body: payload,
+          messageType: "text",
+        });
+        // Marcar como enviado. El realtime traera la version canonica con
+        // id real y eventualmente status delivered/read. El insertRealtimeMessage
+        // dedupea por body matching y reemplaza al optimistic.
+        updateOptimisticMessage?.(optimistic.id, { status: "sent" });
+        onSent?.();
+      } catch (e) {
+        console.error("[MessageComposer] send failed:", e);
+        const msg = e instanceof Error ? e.message : "Error desconocido";
+        updateOptimisticMessage?.(optimistic.id, { status: "failed" });
+        toast.error("No se pudo enviar el mensaje", { description: msg });
+      }
+    })();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
