@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useIncomingCall } from "@/context/IncomingCallContext";
+import { useIncomingCall, type IncomingCallData } from "@/context/IncomingCallContext";
 import { useWebRTCCall } from "@/hooks/useWebRTCCall";
 import { supabase } from "@/integrations/supabase/client";
 import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
@@ -93,8 +93,24 @@ function formatDuration(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/**
+ * Mount wrapper — fuerza re-mount del overlay por callIdMeta. Cada llamada
+ * nueva arranca con state limpio (no arrastra estado del WebRTC peer anterior).
+ * Tambien se desmonta cuando activeCall pasa a null (paciente cuelga o
+ * terminate via webhook), lo que libera mic + peer connection.
+ */
 export function IncomingCallOverlay() {
   const { activeCall, dismiss } = useIncomingCall();
+  if (!activeCall) return null;
+  return <IncomingCallOverlayInner key={activeCall.callIdMeta} call={activeCall} dismiss={dismiss} />;
+}
+
+interface InnerProps {
+  call: IncomingCallData;
+  dismiss: () => void;
+}
+
+function IncomingCallOverlayInner({ call: activeCall, dismiss }: InnerProps) {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const { callState, error, acceptIncoming, hangup, setMicMuted, isMicMuted } =
     useWebRTCCall({ remoteAudioRef });
@@ -223,8 +239,6 @@ export function IncomingCallOverlay() {
     }
     hangup();
   }, [activeCall, hangup, dismiss]);
-
-  if (!activeCall) return null;
 
   const isRinging = callState === "idle" || callState === "preparing";
   const isActive = callState === "connected" || callState === "answering";
