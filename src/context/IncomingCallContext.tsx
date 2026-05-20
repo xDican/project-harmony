@@ -175,11 +175,23 @@ export function IncomingCallProvider({ children }: { children: ReactNode }) {
             if (row.message_type !== "voice_call") return;
             if (!row.call_id_meta) return;
             const terminalStatuses = ["ended", "missed", "rejected", "failed"];
-            if (terminalStatuses.includes(row.call_status ?? "")) {
-              setActiveCall((cur) =>
-                cur?.callIdMeta === row.call_id_meta ? null : cur,
-              );
-            }
+            if (!terminalStatuses.includes(row.call_status ?? "")) return;
+
+            setActiveCall((cur) => {
+              if (!cur) return cur;
+              // Inbound: match exacto por callIdMeta.
+              if (cur.callIdMeta === row.call_id_meta) return null;
+              // Outbound: cur.callIdMeta es placeholder (outgoing-{conv}-{ts}) hasta
+              // que llega el webhook connect que setea el real. Matchear por conv_id
+              // + direction outbound asegura que detectamos el terminate.
+              if (
+                cur.direction === "outbound" &&
+                cur.conversationId === row.conversation_id
+              ) {
+                return null;
+              }
+              return cur;
+            });
           },
         )
         .subscribe();
