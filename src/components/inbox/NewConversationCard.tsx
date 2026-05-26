@@ -45,7 +45,7 @@ export function NewConversationCard({
   const parsed = detection.type === "wa_link" ? detection.parsed : null;
 
   const [patientName, setPatientName] = useState(parsed?.patientName ?? "");
-  const [doctor, setDoctor] = useState(parsed?.doctor ?? "Dra. Mendoza");
+  const [doctor, setDoctor] = useState(parsed?.doctor ?? "Skin Medic");
   const [date, setDate] = useState(parsed?.date ?? "");
   const [time, setTime] = useState(parsed?.time ?? "");
   const [templateType, setTemplateType] = useState<TemplateType>(
