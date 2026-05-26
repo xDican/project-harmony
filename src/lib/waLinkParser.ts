@@ -47,13 +47,49 @@ export function parseWaLink(input: string): WaLinkData | null {
   }
 }
 
+const DAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+const APPOINTMENT_REGEX =
+  /program[oó]\s+una\s+cita.*?horario:\s*\*?(\d{2}-\d{2}-\d{4})\s+(\d{1,2}:\d{2}\s*[AP]M)\*?/i;
+
 export function parseAppointmentText(
-  _text: string,
+  text: string,
 ): ParsedAppointmentData | null {
-  // Stub — se implementa mañana cuando Diego traiga el link real
-  // de la otra plataforma. El regex específico extraerá nombre,
-  // doctor, fecha, hora y tipo de notificación.
-  return null;
+  const match = text.match(APPOINTMENT_REGEX);
+  if (!match) return null;
+
+  const [, rawDate, rawTime] = match;
+  const time = rawTime.trim();
+
+  const [dd, mm, yyyy] = rawDate.split("-").map(Number);
+  const apptDate = new Date(yyyy, mm - 1, dd);
+  if (isNaN(apptDate.getTime())) return null;
+
+  const dateFormatted = `${DAYS[apptDate.getDay()]} ${dd} de ${MONTHS[mm - 1]}`;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  apptDate.setHours(0, 0, 0, 0);
+
+  let templateType: ParsedAppointmentData["templateType"];
+  if (apptDate.getTime() === today.getTime()) {
+    templateType = "reminder_3d";
+  } else if (apptDate.getTime() === tomorrow.getTime()) {
+    templateType = "reminder_24h";
+  } else {
+    templateType = "confirmation";
+  }
+
+  return {
+    patientName: null,
+    doctor: null,
+    date: dateFormatted,
+    time,
+    templateType,
+  };
 }
 
 const PHONE_REGEX = /^\+?\d[\d\s\-]{6,14}$/;
