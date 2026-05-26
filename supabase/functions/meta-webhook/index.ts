@@ -339,10 +339,11 @@ async function handleIncomingMessage(
     return;
   }
 
-  // BOT FLOW: route to bot-handler when bot is enabled.
+  // CONVERSATION FLOW: always create/track conversations when we have a line.
+  // Bot invocation is gated separately by botEnabled (below).
   // Exception: "Confirmar" button with appointmentId stays in legacy flow
   // (updates status + sends patient_confirmed ack).
-  if (botEnabled && lineId && lineOrgId) {
+  if (lineId && lineOrgId) {
     const intent = detectIntent(body);
 
     if (intent === "confirm" && appointmentIdFromPayload) {
@@ -371,6 +372,7 @@ async function handleIncomingMessage(
         patientPhone: fromPhone,
         patientId: patientIdForLog ?? null,
         patientName: contactName ?? null,
+        initialStatus: botEnabled ? "bot_active" : "human_active",
       });
 
       if (!conversation) {
@@ -430,6 +432,12 @@ async function handleIncomingMessage(
       // Bot dual mode: si la asistente tomo la conversacion, el bot calla
       if (conversation.status === "human_active") {
         console.log("[meta-webhook] Bot silenced — human_active. conv:", conversation.id, "phone:", fromPhone);
+        return;
+      }
+
+      // Bot disabled at line level — message stored in inbox, bot not invoked
+      if (!botEnabled) {
+        console.log("[meta-webhook] Bot disabled for line — message stored, no bot. conv:", conversation.id, "phone:", fromPhone);
         return;
       }
 

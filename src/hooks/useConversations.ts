@@ -32,6 +32,7 @@ export interface ConversationListRow {
   last_message_at: string;
   last_inbound_at: string | null;
   unread_count: number;
+  bot_enabled: boolean;
   // Ultimo mensaje (puede ser null si la conversacion no tiene mensajes)
   last_message: {
     body: string | null;
@@ -81,6 +82,7 @@ export function useConversations(organizationId: string | undefined) {
           last_message_at,
           last_inbound_at,
           unread_count,
+          whatsapp_lines!inner(bot_enabled),
           last_message:message_logs (
             body,
             transcription,
@@ -105,13 +107,17 @@ export function useConversations(organizationId: string | undefined) {
       }
 
       // last_message viene como array [obj] o []. Aplanar a obj o null.
+      // whatsapp_lines viene como { bot_enabled: boolean }. Extraer a campo plano.
       const normalized: ConversationListRow[] = (data || []).map((row) => {
         const rawMessages = (row as Record<string, unknown>).last_message;
         const lastMsgArray = Array.isArray(rawMessages) ? rawMessages : [];
         const lastMsg = lastMsgArray[0] ?? null;
+        const rawLine = (row as Record<string, unknown>).whatsapp_lines as { bot_enabled?: boolean } | null;
+        const botEnabled = rawLine?.bot_enabled ?? true;
         return {
-          ...(row as Omit<ConversationListRow, "last_message">),
+          ...(row as Omit<ConversationListRow, "last_message" | "bot_enabled" | "whatsapp_lines">),
           last_message: lastMsg,
+          bot_enabled: botEnabled,
         };
       });
 
@@ -169,6 +175,7 @@ export function useConversations(organizationId: string | undefined) {
             last_message_at: incoming.last_message_at ?? new Date().toISOString(),
             last_inbound_at: incoming.last_inbound_at ?? null,
             unread_count: incoming.unread_count ?? 0,
+            bot_enabled: incoming.bot_enabled ?? true,
             last_message: null,
           };
           return [placeholder, ...prev];

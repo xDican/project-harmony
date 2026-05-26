@@ -1,13 +1,13 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 20 May 2026 (Sprint 6 Calling API completo end-to-end en 1 dia — inbound + outbound + queue + permission flow + refactor CallContext + ~12 fixes UX. Plus 3 bombas appointments resueltas en la mañana.)
+> Ultima actualizacion: 26 May 2026 (Bug fix critico: desacoplar recepcion de mensajes del estado del bot. 4 edge functions + frontend. Skin Medic operando inbox-only.)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 
 ---
 
 ## Fase actual
 
-**Sprints 4-8 MVP Centro de Atencion** — Sprint 6 cerrado el 20 May (5 semanas antes del plan original 30 Jun). Foco ahora: setup Torre Zafiro para lanzamiento Lun 25 May modo inbox-only.
+**Sprints 4-8 MVP Centro de Atencion** — Sprint 6 cerrado el 20 May (5 semanas antes del plan original 30 Jun). Skin Medic instalada 25 May, operando inbox-only con bot ON (Dulce usando Tomar/Devolver). Bug fix 26 May permite modo inbox-only con bot OFF.
 
 Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sprints.md`
 
@@ -150,6 +150,7 @@ Meta WhatsApp NO acepta WebP en mensajes `image` (solo en `sticker`). Para outbo
 ## Bugs activos (no resueltos)
 
 ### Criticidad alta — bombas de tiempo
+- [x] ~~**Inbox no recibe mensajes con bot OFF**~~ — ✅ **Resuelto 26 May.** `meta-webhook` L345 condicionaba toda la creacion de conversaciones + persistencia de mensajes dentro de `if (botEnabled)`. Mensajes iban al path legacy sin `conversation_id`. Fix: desacoplar gate (siempre crear conv cuando hay lineId+orgId), condicionar solo invocacion del bot. Tambien: `process-media-async` ahora verifica `bot_enabled` antes de invocar bot para audio transcrito; `getOrCreateConversation` acepta `initialStatus` (conv nuevas con bot OFF inician `human_active`); `inbox-return-bot` valida `bot_enabled` antes de devolver al bot; `inbox-send` asigna `assigned_to` en primera respuesta de conv sin asignar; frontend oculta "Devolver al bot" cuando `bot_enabled=false`. 4 edge functions deployadas + frontend.
 - [x] ~~**`appointment_at` desfasada 6h (Honduras UTC-6)**~~ — ✅ **Resuelto 20 May AM.** `create-appointment:217` y `update-appointment:151` ahora construyen ISO con offset `-06:00` explicito. Migracion `20260520120000_fix_appointment_at_timezone_backfill.sql` corrigio 616 filas historicas (1 ya correcta no se toco). Verificado: 617/617 ok, ejemplo cita 9:30 HN guarda 15:30 UTC.
 - [x] ~~**`confirmation_message_sent` nunca se marca true**~~ — ✅ **Resuelto 20 May PM.** UPDATE sincrono post-envio agregado en `create-appointment/index.ts` dentro del `if (gatewayResult.success)` (patron de `send-reminders:259-265`: log si falla, no rompe response). Bug era 100% pasivo (nadie leia la columna), pero el dato ahora refleja la realidad.
 - [x] ~~**Cita huerfana sin `appointment_at`**~~ — ✅ **Resuelto 20 May PM.** `bot-handler` linea 2671 (funcion `createAppointment` de `processBookingConfirm`) omitia `appointment_at` en el INSERT. 144 filas huerfanas confirmadas en produccion (desde 17 Feb), todas con notes "Agendada/Reagendada via WhatsApp Bot". Fix: agregar `appointment_at` al payload + normalizar `selectedTime` (HH:mm → HH:mm:ss). Migracion `20260520140000_appointments_appointment_at_backfill_and_not_null.sql` backfilleo las 144 + `ALTER COLUMN ... SET NOT NULL`. Verificado: 0 huerfanas, 761/761 alineadas con `(date+time)-06:00`. Defensa profunda: cualquier INSERT futuro que omita la columna fallara con 23502.
@@ -234,12 +235,9 @@ Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. S
 |---|---|
 | Mar 19 | ✅ Sprint 4 + Sprint 5 + Sprint 5.1 cerrados |
 | Mie 20 | ✅ 3 bombas appointments + Sprint 6 Calling API completo (5 semanas antes del plan) + refactor CallContext + ~12 fixes UX |
-| Jue 21 | Visita/llamada Dulce para feedback en vivo. Llamada Dra. Mendoza confirmar precio + agendar Domingo. Actualizar memorias. |
-| Vie 22 | Buffer para bugs encontrados con Dulce. Polish opcional. |
-| Sab 23 | Setup org Torre Zafiro en DB (whatsapp_line + users + Dulce admin + Mendoza doctor). Briefing operativo. |
-| Dom 24 | Onboarding presencial: Diego + Dulce + Dra. Mendoza. Cargar pacientes, configurar horarios, citas de prueba. |
-| **Lun 25** | **INSTALACION Torre Zafiro — inbox-only, bot OFF, calling OFF** |
-| 25 May - 1 Jun | Solo bug fixes de lo que Dulce encuentre en uso real. Calling se activa cuando Dulce este comoda con el inbox. |
+| Dom 25 | ✅ Instalacion Skin Medic — inbox-only, bot ON, Dulce operando |
+| **Lun 26** | ✅ **Bug fix critico:** inbox no recibia mensajes con bot OFF. Desacoplado gate en meta-webhook + UX fixes (6 archivos, 4 deploys). |
+| 26 May - 1 Jun | Bug fixes de lo que Dulce encuentre. Cuando Dulce domine inbox → activar bot. Calling se activa despues. |
 
 ## Sprint 6 — Archivos creados/modificados (20 May)
 

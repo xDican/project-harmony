@@ -252,6 +252,8 @@ function HandoffControls({
   }
 
   if (conversation.status === "human_active") {
+    if (!conversation.bot_enabled) return null;
+
     return (
       <>
         <Button

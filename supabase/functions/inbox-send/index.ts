@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     // SELECT conversation — RLS asegura ownership; si no es de su org → 404
     const { data: conversation, error: convErr } = await supabase
       .from("conversations")
-      .select("id, organization_id, whatsapp_line_id, patient_phone, status")
+      .select("id, organization_id, whatsapp_line_id, patient_phone, status, assigned_to")
       .eq("id", conversationId)
       .maybeSingle();
 
@@ -174,6 +174,19 @@ Deno.serve(async (req) => {
         console.warn("[inbox-send] auto-handoff failed:", handoffErr.message);
       } else {
         console.log("[inbox-send] auto-handoff conv", conversationId, "to user", user.id);
+      }
+    }
+
+    // Asignar encargada si human_active sin assigned_to (conv creada con bot OFF)
+    if (conversation.status === "human_active" && !conversation.assigned_to) {
+      const { error: assignErr } = await supabase
+        .from("conversations")
+        .update({ assigned_to: user.id })
+        .eq("id", conversationId);
+      if (assignErr) {
+        console.warn("[inbox-send] assign-on-send failed:", assignErr.message);
+      } else {
+        console.log("[inbox-send] assigned conv", conversationId, "to user", user.id, "(first responder)");
       }
     }
 

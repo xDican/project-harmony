@@ -228,6 +228,17 @@ async function invokeBotForTranscribedAudio(
     return;
   }
 
+  const { data: wline } = await supabase
+    .from("whatsapp_lines")
+    .select("bot_enabled")
+    .eq("id", conv.whatsapp_line_id)
+    .maybeSingle();
+
+  if (!wline?.bot_enabled) {
+    console.log("[process-media-async] skipping bot reply, bot disabled for line:", conv.whatsapp_line_id);
+    return;
+  }
+
   const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const projectRef = new URL(args.supabaseUrl).hostname.split(".")[0];

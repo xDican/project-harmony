@@ -58,6 +58,22 @@ Deno.serve(async (req) => {
       return jsonResponse(400, { ok: false, error: "conversationId requerido" });
     }
 
+    // Verificar que el bot esta habilitado en la linea antes de devolver
+    const { data: conv, error: convErr } = await supabase
+      .from("conversations")
+      .select("id, whatsapp_line_id, whatsapp_lines!inner(bot_enabled)")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (convErr || !conv) {
+      return jsonResponse(404, { ok: false, error: "Conversacion no encontrada o sin acceso" });
+    }
+
+    const botEnabled = (conv as Record<string, unknown>).whatsapp_lines as { bot_enabled: boolean } | null;
+    if (!botEnabled?.bot_enabled) {
+      return jsonResponse(400, { ok: false, error: "Bot desactivado para esta línea" });
+    }
+
     const { data, error } = await supabase
       .from("conversations")
       .update({ status: "bot_active", assigned_to: null })
@@ -66,8 +82,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (error || !data) {
-      // RLS bloqueo o id inexistente — no revelamos diferencia (security)
-      return jsonResponse(404, { ok: false, error: "Conversacion no encontrada o sin acceso" });
+      return jsonResponse(404, { ok: false, error: "No se pudo actualizar la conversacion" });
     }
 
     console.log("[inbox-return-bot] user", user.id, "returned conv", conversationId, "to bot");

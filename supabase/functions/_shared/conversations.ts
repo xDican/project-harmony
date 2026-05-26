@@ -34,8 +34,12 @@ export interface Conversation {
 }
 
 /**
- * Devuelve la conversacion existente o crea una nueva con `bot_active`.
+ * Devuelve la conversacion existente o crea una nueva.
  * Idempotente. Si el INSERT pierde una carrera, hace SELECT fallback.
+ *
+ * `initialStatus` controla el status de conversaciones NUEVAS (default: bot_active).
+ * Cuando bot_enabled=false en la linea, pasar "human_active" para que el inbox
+ * muestre el badge correcto desde el primer mensaje.
  *
  * No actualiza `last_message_at` ni `unread_count`. Para eso usar
  * `updateConversationOnInbound`/`updateConversationOnOutbound` despues.
@@ -48,6 +52,7 @@ export async function getOrCreateConversation(
     patientPhone: string;
     patientId?: string | null;
     patientName?: string | null;
+    initialStatus?: ConversationStatus;
   },
 ): Promise<Conversation | null> {
   const { data: existing, error: selErr } = await supabase
@@ -90,7 +95,7 @@ export async function getOrCreateConversation(
       patient_phone: args.patientPhone,
       patient_id: args.patientId ?? null,
       patient_name: args.patientName ?? null,
-      status: "bot_active",
+      status: args.initialStatus ?? "bot_active",
     })
     .select(
       "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count",
