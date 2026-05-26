@@ -94,7 +94,8 @@
       "Bash(wc *)",
       "Bash(npm run *)",
       "Bash(awk '{print $5, $9}')",
-      "Bash(awk '{print $5}')"
+      "Bash(awk '{print $5}')",
+      "mcp__plugin_supabase_supabase__execute_sql"
     ]
   }
 }

@@ -157,6 +157,7 @@ Meta WhatsApp NO acepta WebP en mensajes `image` (solo en `sticker`). Para outbo
 ### Criticidad media
 - [ ] **Estado `reagendar` huerfano en DB** — no esta en types pero existe en tabla. Decidir: agregar al type o normalizar.
 - [ ] **Paciente +50433899824 en booking_select_hour hace 1 semana** — verificar timeout de sesiones.
+- [ ] **SuperAdminRoute requiere DOS filas (public.users + user_roles)** — Bug descubierto 23 May al crear `admin@orioncare.app`. `SuperAdminRoute.tsx` usa `useCurrentUser().user` que viene de `getCurrentUserWithRole()` (api.supabase.ts:917-920). Si el user NO esta en `public.users`, retorna null sin siquiera mirar el fallback de `user_roles` (linea 920 corta antes). Resultado: SuperAdminRoute queda en "Cargando..." infinito porque la RPC `is_superadmin` solo se llama si hay `user`. **Workaround aplicado para admin@orioncare.app:** INSERT en `public.users` (id, email) + INSERT en `user_roles` (user_id, role='admin') + INSERT en `superadmin_whitelist`. Las 3 son necesarias. **Fix correcto:** SuperAdminRoute deberia usar `supabase.auth.getUser()` directo, sin depender de UserContext. Cambio chico (~10 lineas) pero diferido post-Skin Medic. **Para crear nuevos super-admins** seguir el mismo protocolo de 3 inserts hasta que el bug se arregle.
 
 ### Criticidad baja — deuda + adopcion
 - [ ] **Estados `completada`/`no_asistio` sin uso real** — problema de ADOPCION, no automatizacion. UI existe, backend no transiciona. **Regla Diego:** NO cron de inferencia ([[no-data-inferida]]). Educacion + UX.
