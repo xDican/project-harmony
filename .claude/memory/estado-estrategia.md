@@ -1,6 +1,6 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 23 May 2026 (Super-admin admin@orioncare.app creado y operativo. Org Torre Zafiro - Piso 3 shell creada. Plan WhatsApp definido pendiente datos visita Dulce. T-2 dias a instalacion.)
+> Ultima actualizacion: 25 May 2026 (Instalacion Skin Medic ejecutada. Meta restringio cuenta por falta de sitio web en portfolio — landing creada, revision enviada, esperando 24h. Numero migrado OK. Feature "iniciar conversacion desde link wa.me" construido y deployado. Bug busqueda por nombre corregido.)
 > Updates historicos en `estado-estrategia-historial.md`
 
 ---
@@ -387,3 +387,65 @@ Decisiones del fin de semana que SIGUEN abiertas (Diego aun no las cerro):
 - Org id: `7dc5c5db-6476-4a31-b9b3-ceba4e7ffb64`
 - Super-admin user_id: `6d1dfa3b-b6aa-4235-afd4-e20df1b09158`
 - Org slug: `torre-zafiro-piso-3`
+
+---
+
+## Sesion 25 May 2026 — Instalacion Skin Medic + feature wa.me link
+
+**Contexto:** Dia de instalacion Torre Zafiro / Skin Medic.
+
+### Que paso en la instalacion
+
+1. **Numero migrado correctamente** — Diego logro enviar 1 mensaje de ambos extremos antes de la restriccion.
+2. **Meta restringio la cuenta** — El Business Portfolio no tenia sitio web asociado. Diego creo landing page en Lovable, la publico como sitio web del portfolio, y envio revision. Meta dio plazo de 24h.
+3. **Restriccion = no enviar NI recibir** — Dulce completamente offline en la plataforma hasta que Meta apruebe.
+4. **Dulce tiene numero alterno** para urgencias durante la restriccion.
+5. **Mendoza y Dulce se incomodaron** — conscientes de la situacion, esperaran las 24h.
+6. **Templates ya creados en Meta** — pendientes de aprobacion post-restriccion.
+
+### Gap critico descubierto
+
+La otra plataforma de Dulce genera links `wa.me` para enviar recordatorios. Con el numero migrado al Cloud API, esos links ya no funcionan (WhatsApp app no tiene el numero). Dulce perdio su herramienta de recordatorios manuales.
+
+Ademas, la plataforma OrionCare no tenia forma de iniciar conversaciones con pacientes que no han escrito primero.
+
+### Feature construido: iniciar conversacion desde link wa.me
+
+**Flujo:** Dulce pega link wa.me en barra de busqueda → sistema detecta, parsea telefono y texto → muestra tarjeta de preview → Dulce llena campos (nombre, doctor, fecha, hora) → click enviar → template sale por Cloud API → conversacion aparece en inbox.
+
+**3 tipos de notificacion** de la otra plataforma (cada uno genera link distinto):
+- Creacion de cita → template `confirmacion_cita`
+- Recordatorio 24h → template `recordatorio_cita_24h`
+- Recordatorio del dia → template `recordatorio_3d` (texto generico sirve para cualquier dia)
+
+**Commits (5):**
+1. `ce81e43` — feat: parser wa.me + NewConversationCard + RPC initiate_conversation + inboxActions
+2. `5c7ba62` — fix: texto legible del template en timeline (no nombre interno)
+3. `659bcfe` — fix: crear paciente en tabla patients al iniciar conversacion
+4. `b09ff89` — fix: card siempre visible cuando se detecta link wa.me
+5. `cef11b3` — fix: busqueda por nombre (bug pre-existente `phone.includes("")`)
+
+**Archivos creados:** `src/lib/waLinkParser.ts`, `src/components/inbox/NewConversationCard.tsx`, `supabase/migrations/20260525120000_add_initiate_conversation_rpc.sql`
+
+**Archivos modificados:** `src/lib/inboxActions.ts`, `src/components/inbox/InboxList.tsx`, `src/hooks/useConversations.ts`
+
+**RPC `initiate_conversation` deployado en produccion.** Incluye `find_or_create_patient` para auto-crear paciente.
+
+### Pendiente manana (modo-dev, ~15 min)
+
+1. Diego trae link real de la otra plataforma
+2. Implementar `parseAppointmentText()` con regex del formato exacto
+3. Implementar `detectTemplateType()` para auto-seleccionar tipo
+4. Verificar que Meta levanto la restriccion
+
+### Riesgos activos (actualizado 25 May)
+
+1. **ALTO:** Meta no levanta restriccion en 24h → Dulce sigue offline, confianza erosiona. Mitigacion: landing ya subida, revision enviada.
+2. **ALTO:** Templates no aprobados post-restriccion → Dulce puede recibir pero no enviar proactivamente. Mitigacion: templates ya creados, aprobacion suele ser rapida.
+3. **ALTO:** Bug critico semana 1 quema oportunidad ($150 cliente top). Mitigacion: feature wa.me link construido y testeado, bug busqueda corregido.
+4. **MEDIO:** Dulce no adopta el inbox como reemplazo → fricciona y Mendoza cuestiona. Mitigacion: flujo wa.me link replica su workflow anterior.
+5. **BAJO:** Onboarding fallido genera desconfianza inicial. Parcialmente materializado (incomodidad por restriccion). Mitigable si manana todo funciona.
+
+### Leccion operativa
+
+**Checklist onboarding pre-migracion (agregar):** Verificar que el Business Portfolio tiene sitio web ANTES de migrar el numero. Si no tiene, crear landing + agregar sitio + esperar aprobacion ANTES de la migracion.
