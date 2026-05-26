@@ -15,8 +15,10 @@ import {
 } from "@/hooks/useConversations";
 import { ConversationListItem } from "./ConversationListItem";
 import { InboxFilters } from "./InboxFilters";
+import { NewConversationCard } from "./NewConversationCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { detectInputType } from "@/lib/waLinkParser";
 
 interface InboxListProps {
   conversations: ConversationListRow[];
@@ -42,6 +44,14 @@ export function InboxList({
     () => filterConversations(conversations, filter, searchQuery),
     [conversations, filter, searchQuery],
   );
+
+  const detection = useMemo(
+    () => detectInputType(searchQuery),
+    [searchQuery],
+  );
+
+  const showNewConvCard =
+    detection.type === "wa_link" || detection.type === "phone";
 
   return (
     <>
@@ -76,10 +86,20 @@ export function InboxList({
         )}
 
         {!isLoading && !error && filtered.length === 0 && (
-          <EmptyState
-            hasConversations={conversations.length > 0}
-            isFiltered={filter !== "all" || searchQuery.length > 0}
-          />
+          showNewConvCard ? (
+            <NewConversationCard
+              detection={detection as Extract<typeof detection, { type: "wa_link" | "phone" }>}
+              onConversationCreated={(conv) => {
+                setSearchQuery("");
+                onSelect(conv);
+              }}
+            />
+          ) : (
+            <EmptyState
+              hasConversations={conversations.length > 0}
+              isFiltered={filter !== "all" || searchQuery.length > 0}
+            />
+          )
         )}
 
         {filtered.length > 0 && (

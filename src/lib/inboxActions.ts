@@ -64,3 +64,54 @@ export async function returnToBot(conversationId: string): Promise<ReturnToBotRe
   if (!data?.ok) throw new Error(data?.error || "Error desconocido en return-bot");
   return data as ReturnToBotResult;
 }
+
+// --- Iniciar conversación desde link wa.me ---
+
+export interface InitiateConversationResult {
+  id: string;
+  organization_id: string;
+  whatsapp_line_id: string;
+  patient_phone: string;
+  patient_name: string | null;
+  status: string;
+  last_message_at: string;
+}
+
+export async function initiateConversation(input: {
+  organizationId: string;
+  patientPhone: string;
+  patientName?: string;
+}): Promise<InitiateConversationResult> {
+  const { data, error } = await supabase.rpc("initiate_conversation", {
+    p_organization_id: input.organizationId,
+    p_patient_phone: input.patientPhone,
+    p_patient_name: input.patientName ?? null,
+  });
+  if (error) throw new Error(error.message || "Error iniciando conversacion");
+  return data as InitiateConversationResult;
+}
+
+export type TemplateType = "confirmation" | "reminder_24h" | "reminder_3d";
+
+export async function sendTemplateMessage(input: {
+  conversationId: string;
+  organizationId: string;
+  templateType: TemplateType;
+  templateParams: Record<string, string>;
+  patientPhone: string;
+}): Promise<SendMessageResult> {
+  const { data, error } = await supabase.functions.invoke("messaging-gateway", {
+    body: {
+      to: input.patientPhone,
+      type: input.templateType,
+      templateParams: input.templateParams,
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+      source: "template",
+      messageType: "text",
+    },
+  });
+  if (error) throw new Error(error.message || "Error enviando plantilla");
+  if (!data?.ok) throw new Error(data?.error || "Error desconocido enviando plantilla");
+  return data as SendMessageResult;
+}
