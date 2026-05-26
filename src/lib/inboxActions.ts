@@ -93,6 +93,19 @@ export async function initiateConversation(input: {
 
 export type TemplateType = "confirmation" | "reminder_24h" | "reminder_3d";
 
+export function templateBodyText(type: TemplateType, params: Record<string, string>): string {
+  return TEMPLATE_BODIES[type](params);
+}
+
+const TEMPLATE_BODIES: Record<TemplateType, (p: Record<string, string>) => string> = {
+  confirmation: (p) =>
+    `Hola ${p["1"]}, su cita con ${p["2"]} ha sido agendada para el ${p["3"]} a las ${p["4"]}. ✅ Por favor confirme su asistencia.`,
+  reminder_24h: (p) =>
+    `Hola ${p["1"]}, ${p["2"]} le espera mañana ${p["3"]} a las ${p["4"]}. ⚠️ Confirme antes de las 7AM o se libera su espacio.`,
+  reminder_3d: (p) =>
+    `Hola ${p["1"]}, le recordamos que tiene cita con ${p["2"]} el ${p["3"]} a las ${p["4"]}. ✅ Por favor confirme su asistencia.`,
+};
+
 export async function sendTemplateMessage(input: {
   conversationId: string;
   organizationId: string;
@@ -100,11 +113,14 @@ export async function sendTemplateMessage(input: {
   templateParams: Record<string, string>;
   patientPhone: string;
 }): Promise<SendMessageResult> {
+  const bodyText = TEMPLATE_BODIES[input.templateType](input.templateParams);
+
   const { data, error } = await supabase.functions.invoke("messaging-gateway", {
     body: {
       to: input.patientPhone,
       type: input.templateType,
       templateParams: input.templateParams,
+      body: bodyText,
       organizationId: input.organizationId,
       conversationId: input.conversationId,
       source: "template",

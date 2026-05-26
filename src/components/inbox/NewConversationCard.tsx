@@ -16,6 +16,7 @@ import { useInbox } from "@/context/InboxContext";
 import {
   initiateConversation,
   sendTemplateMessage,
+  templateBodyText,
   type TemplateType,
 } from "@/lib/inboxActions";
 import type { InputDetection } from "@/lib/waLinkParser";
@@ -102,7 +103,7 @@ export function NewConversationCard({
         last_inbound_at: null,
         unread_count: 0,
         last_message: {
-          body: `template:${templateType}`,
+          body: templateBodyText(templateType, templateParams),
           transcription: null,
           message_type: "text",
           source: "template",
