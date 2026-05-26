@@ -280,10 +280,11 @@ export function filterConversations(
   const q = normalizeSearch(searchQuery);
   if (!q) return { filtered: byFilter, counts };
 
+  const qDigits = q.replace(/\D/g, "");
   const bySearch = byFilter.filter((c) => {
     const name = normalizeSearch(c.patient_name || "");
     const phone = c.patient_phone.replace(/\D/g, "");
-    return name.includes(q) || phone.includes(q.replace(/\D/g, ""));
+    return name.includes(q) || (qDigits.length > 0 && phone.includes(qDigits));
   });
 
   return { filtered: bySearch, counts };
