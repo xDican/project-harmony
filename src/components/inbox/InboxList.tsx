@@ -85,21 +85,21 @@ export function InboxList({
           </div>
         )}
 
-        {!isLoading && !error && filtered.length === 0 && (
-          showNewConvCard ? (
-            <NewConversationCard
-              detection={detection as Extract<typeof detection, { type: "wa_link" | "phone" }>}
-              onConversationCreated={(conv) => {
-                setSearchQuery("");
-                onSelect(conv);
-              }}
-            />
-          ) : (
-            <EmptyState
-              hasConversations={conversations.length > 0}
-              isFiltered={filter !== "all" || searchQuery.length > 0}
-            />
-          )
+        {!isLoading && !error && showNewConvCard && (
+          <NewConversationCard
+            detection={detection as Extract<typeof detection, { type: "wa_link" | "phone" }>}
+            onConversationCreated={(conv) => {
+              setSearchQuery("");
+              onSelect(conv);
+            }}
+          />
+        )}
+
+        {!isLoading && !error && filtered.length === 0 && !showNewConvCard && (
+          <EmptyState
+            hasConversations={conversations.length > 0}
+            isFiltered={filter !== "all" || searchQuery.length > 0}
+          />
         )}
 
         {filtered.length > 0 && (
