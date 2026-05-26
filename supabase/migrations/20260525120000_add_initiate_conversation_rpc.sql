@@ -13,6 +13,8 @@ DECLARE
   v_phone TEXT;
   v_conv RECORD;
   v_user_orgs UUID[];
+  v_patient_json JSON;
+  v_patient_id UUID;
 BEGIN
   -- 1) Validar pertenencia del caller a la org
   SELECT array_agg(org_id) INTO v_user_orgs
@@ -43,12 +45,23 @@ BEGIN
   END IF;
   v_phone := '+' || v_phone;
 
-  -- 4) Upsert conversation
+  -- 4) Crear o encontrar paciente en tabla patients
+  IF p_patient_name IS NOT NULL AND p_patient_name <> '' THEN
+    v_patient_json := find_or_create_patient(
+      p_name := p_patient_name,
+      p_phone := v_phone,
+      p_organization_id := p_organization_id
+    );
+    v_patient_id := (v_patient_json->>'id')::UUID;
+  END IF;
+
+  -- 5) Upsert conversation
   INSERT INTO conversations (
     organization_id,
     whatsapp_line_id,
     patient_phone,
     patient_name,
+    patient_id,
     status,
     last_message_at
   ) VALUES (
@@ -56,12 +69,14 @@ BEGIN
     v_line_id,
     v_phone,
     p_patient_name,
+    v_patient_id,
     'bot_active',
     now()
   )
   ON CONFLICT (whatsapp_line_id, patient_phone)
   DO UPDATE SET
     patient_name = COALESCE(EXCLUDED.patient_name, conversations.patient_name),
+    patient_id = COALESCE(EXCLUDED.patient_id, conversations.patient_id),
     updated_at = now()
   RETURNING * INTO v_conv;
 
@@ -71,6 +86,7 @@ BEGIN
     'whatsapp_line_id', v_conv.whatsapp_line_id,
     'patient_phone', v_conv.patient_phone,
     'patient_name', v_conv.patient_name,
+    'patient_id', v_conv.patient_id,
     'status', v_conv.status,
     'last_message_at', v_conv.last_message_at
   );
