@@ -59,7 +59,6 @@ export function NewConversationCard({
 
   const canSend =
     !!organizationId &&
-    !!patientName.trim() &&
     !!doctor.trim() &&
     !!date.trim() &&
     !!time.trim();
@@ -69,14 +68,15 @@ export function NewConversationCard({
     setIsSending(true);
 
     try {
+      const name = patientName.trim() || undefined;
       const conv = await initiateConversation({
         organizationId,
         patientPhone: phone,
-        patientName: patientName.trim(),
+        patientName: name,
       });
 
       const templateParams: Record<string, string> = {
-        "1": patientName.trim(),
+        "1": name ?? "Estimado paciente",
         "2": doctor.trim(),
         "3": date.trim(),
         "4": time.trim(),
