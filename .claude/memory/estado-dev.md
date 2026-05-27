@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 26 May 2026 (Bug fix critico: desacoplar recepcion de mensajes del estado del bot. 4 edge functions + frontend. Skin Medic operando inbox-only.)
+> Ultima actualizacion: 26 May 2026 PM (Parser wa.me implementado + nombre opcional en templates. Skin Medic operando inbox-only.)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 
 ---
@@ -236,8 +236,36 @@ Sprint 4 abre la puerta a que el bucket `conversation-media` crezca sin freno. S
 | Mar 19 | ✅ Sprint 4 + Sprint 5 + Sprint 5.1 cerrados |
 | Mie 20 | ✅ 3 bombas appointments + Sprint 6 Calling API completo (5 semanas antes del plan) + refactor CallContext + ~12 fixes UX |
 | Dom 25 | ✅ Instalacion Skin Medic — inbox-only, bot ON, Dulce operando |
-| **Lun 26** | ✅ **Bug fix critico:** inbox no recibia mensajes con bot OFF. Desacoplado gate en meta-webhook + UX fixes (6 archivos, 4 deploys). |
+| **Lun 26 AM** | ✅ **Bug fix critico:** inbox no recibia mensajes con bot OFF. Desacoplado gate en meta-webhook + UX fixes (6 archivos, 4 deploys). |
+| **Lun 26 PM** | ✅ **Parser wa.me:** Dulce pega link del sistema anterior → auto-extrae fecha/hora/template. Nombre paciente ahora opcional (fallback "Estimado paciente"). Default doctor → "Skin Medic". |
 | 26 May - 1 Jun | Bug fixes de lo que Dulce encuentre. Cuando Dulce domine inbox → activar bot. Calling se activa despues. |
+
+## Feature wa.me parser + iniciar conversacion (25-26 May)
+
+### Flujo
+Dulce pega un link `wa.me` o `api.whatsapp.com/send` del sistema anterior de Skin Medic en el buscador del inbox. El parser extrae telefono, fecha, hora y tipo de template automaticamente. Dulce solo llena nombre (opcional) y envia. Si no pone nombre, el mensaje dice "Estimado paciente".
+
+### Formato del link externo (sistema anterior Skin Medic)
+```
+https://api.whatsapp.com/send?phone=+504XXXXXXXX&text=Estimado%20paciente,...programó%20una%20cita...horario:%20*DD-MM-YYYY%20HH:MM%20AM/PM*,%20en:%20*Skin%20Medic*...
+```
+Parser extrae: fecha DD-MM-YYYY → "martes 26 de mayo", hora "06:15 PM", template tipo (hoy→reminder_3d, mañana→reminder_24h, otro→confirmation).
+
+### Archivos creados
+- `src/lib/waLinkParser.ts` — `parseWaLink()`, `parseAppointmentText()`, `detectPhoneNumber()`, `detectInputType()`. Soporta `wa.me` y `api.whatsapp.com/send`.
+- `src/components/inbox/NewConversationCard.tsx` — card verde con campos editables (nombre opcional, doctor default "Skin Medic", fecha, hora, template type). Crea conversacion via RPC + envia template via `messaging-gateway`.
+- `src/lib/inboxActions.ts` — `initiateConversation()` (RPC wrapper) + `sendTemplateMessage()` (edge function wrapper) + `templateBodyText()` (3 templates: confirmation, reminder_24h, reminder_3d).
+- `supabase/migrations/20260525120000_add_initiate_conversation_rpc.sql` — RPC `initiate_conversation`: valida org membership, normaliza telefono, upsert conversation, opcionalmente crea paciente.
+
+### Archivos modificados
+- `src/components/inbox/InboxList.tsx` — integra `detectInputType()` en buscador, muestra `NewConversationCard` cuando detecta link/telefono.
+- `src/components/inbox/ConversationDetail.tsx` — recibe conversacion seleccionada desde card.
+- `src/hooks/useConversations.ts` — expone `upsertConversation()` para placeholder optimistic.
+
+### Decisiones
+- **Nombre opcional:** no se crea paciente en `patients` si no hay nombre. RPC maneja `p_patient_name = NULL` (skip find_or_create_patient).
+- **`parseAppointmentText` stub → implementado 26 May PM** con regex para el formato especifico de Skin Medic.
+- **Default doctor "Skin Medic"** (no "Dra. Mendoza") — ajustado 26 May PM.
 
 ## Sprint 6 — Archivos creados/modificados (20 May)
 
