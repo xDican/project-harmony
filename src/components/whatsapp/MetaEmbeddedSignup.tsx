@@ -203,8 +203,16 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
         config_id: META_CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
+        // Coexistence mode (Embedded Signup v4): el número queda vivo en AMBOS lados
+        // (Cloud API + WA Business App del celular), evitando la migración destructiva
+        // que deslogueaba la app del cliente. Este objeto extras es IDÉNTICO al que
+        // genera el launcher v4 del Meta App Dashboard para nuestro config_id.
+        // `version: 'v4'` es OBLIGATORIO: sin él Meta ignora el featureType (lo trata
+        // como sintaxis v3) y cae al flujo estándar de "agregar número nuevo".
         extras: {
-          sessionInfoVersion: 2,
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3', // STRING
+          version: 'v4',
         },
       },
     );
@@ -217,6 +225,10 @@ export default function MetaEmbeddedSignup({ onSuccess, onError }: Props) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+      <p className="text-xs text-muted-foreground">
+        Tu número seguirá funcionando en tu WhatsApp Business App del celular. Al terminar,
+        deberás escanear un código QR desde la app para vincularlo (Configuración → Dispositivos vinculados).
+      </p>
       <Button
         onClick={handleConnectClick}
         disabled={!sdkLoaded || loading}

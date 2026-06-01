@@ -537,49 +537,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 10) Register phone with Meta Cloud API
-    // Reuse existing PIN from DB if available (reconnect case — Meta requires the SAME
-    // 2FA PIN that was set on the first /register call; deregister does NOT clear it).
-    let metaRegistered = false;
-    let registrationError: string | null = null;
+    // 10) Coexistence mode — NO se llama POST /{phone_number_id}/register.
+    // Ese paso (con PIN 2FA) es una MIGRACIÓN DESTRUCTIVA que deslogueaba la WhatsApp
+    // Business App del celular del cliente (causa de la pérdida de Skin Medic 27 May).
+    // En coexistence el número se vincula vía QR scan y queda vivo en AMBOS lados; el
+    // registro lo maneja Meta en ese flujo. La línea queda funcional una vez suscrita al
+    // webhook (paso de subscribed_apps, arriba). Marcamos meta_registered = true para que
+    // la UI no ofrezca el botón "Activar" (que re-dispararía el /register destructivo).
+    const metaRegistered = true;
 
-    const existingPin = existingLine?.meta_registration_pin
-      ?? phoneConflict?.meta_registration_pin
-      ?? null;
-    const pin = existingPin
-      || String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
-
-    console.log("[meta-embedded-signup] Step 10: Registering phone", phone_number_id,
-      "| existingPin:", !!existingPin, "| pinLength:", pin.length);
-
-    try {
-      const registerBody = { messaging_product: "whatsapp", pin };
-      const registerRes = await fetch(`${GRAPH_BASE}/${phone_number_id}/register`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(registerBody),
-      });
-      const registerData = await registerRes.json().catch(() => ({}));
-
-      console.log("[meta-embedded-signup] /register response:", registerRes.status, JSON.stringify(registerData));
-
-      if (registerRes.ok) {
-        metaRegistered = true;
-        await supabaseAdmin
-          .from("whatsapp_lines")
-          .update({ meta_registered: true, meta_registration_pin: pin })
-          .eq("id", lineId);
-        console.log("[meta-embedded-signup] Phone registered (2FA PIN set)");
-      } else {
-        registrationError = `${registerRes.status}: ${registerData?.error?.message ?? JSON.stringify(registerData)}`;
-        console.error("[meta-embedded-signup] Registration FAILED:", registrationError);
-      }
-    } catch (regErr) {
-      registrationError = regErr instanceof Error ? regErr.message : String(regErr);
-      console.error("[meta-embedded-signup] Registration exception:", registrationError);
+    const { error: regMarkError } = await supabaseAdmin
+      .from("whatsapp_lines")
+      .update({ meta_registered: true })
+      .eq("id", lineId);
+    if (regMarkError) {
+      console.error("[meta-embedded-signup] Error marcando meta_registered:", regMarkError);
+    } else {
+      console.log("[meta-embedded-signup] Coexistence line lista (meta_registered=true, sin /register):", lineId);
     }
 
     // 11) Responder con éxito
@@ -589,7 +563,7 @@ Deno.serve(async (req) => {
       phone_number: displayPhoneNumber,
       verified_name: verifiedName,
       meta_registered: metaRegistered,
-      registration_error: registrationError,
+      registration_error: null,
       build: BUILD,
     });
   } catch (err) {

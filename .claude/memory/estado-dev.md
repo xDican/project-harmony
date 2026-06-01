@@ -1,13 +1,134 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 26 May 2026 PM (Parser wa.me implementado + nombre opcional en templates. Skin Medic operando inbox-only.)
+> Ultima actualizacion: 1 Jun 2026 (Sprint Coexistence FASE A codeada. Plan revisado contra codigo — corregido hueco critico del item 2. Es la PRIORIDAD #1 del proyecto.)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
+> Plan revisado + fases: `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
 
 ---
 
-## Fase actual
+## PRIORIDAD #1 — Sprint Coexistence (1-4 Jun 2026)
 
-**Sprints 4-8 MVP Centro de Atencion** — Sprint 6 cerrado el 20 May (5 semanas antes del plan original 30 Jun). Skin Medic instalada 25 May, operando inbox-only con bot ON (Dulce usando Tomar/Devolver). Bug fix 26 May permite modo inbox-only con bot OFF.
+### Estado de ejecucion (1 Jun)
+
+Plan original revisado contra el codigo real. **2 decisiones tomadas con Diego:**
+1. **Eliminar `/register` del todo** (no flag, no deteccion) — coexistence es EL unico modo de onboarding. El hueco del plan original (item 2 "detectar coexistence en la respuesta") era falso: **no existe ningun campo** de Meta/DB que distinga migracion de coexistence; el bloque `/register` corria a ciegas siempre.
+2. **Ejecucion por fases** — Fase A (QR testeable) antes de invertir en historicos/echoes.
+
+**FASE A — CODEADA (pendiente gate test manual):**
+- [x] A1: `FB.login` switch a coexistence — `MetaEmbeddedSignup.tsx`. **BUG ENCONTRADO Y RESUELTO 1 Jun:** el Embedded Signup de OrionCare ya esta en **v4**. En v4 el feature type NO va como string suelto v3; el `extras` DEBE incluir `version: 'v4'` o Meta lo ignora y cae al flujo estandar destructivo. Sintaxis correcta confirmada copiando la URL del launcher v4 del propio dashboard (Casos de uso → WhatsApp → Administrador de registro insertado → Tipo de funcion = "Registro de app de WhatsApp Business"):
+  ```js
+  extras: { featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3', version: 'v4' }
+  ```
+  (Quitado el `setup: {}` para igualar exacto al launcher de Meta.) Las 2 primeras pruebas (sin `version: 'v4'`) mostraban el flujo viejo de crear WABA + verificar numero por SMS.
+- [x] A2: bloque `/register` eliminado (`meta-embedded-signup/index.ts`); ahora marca `meta_registered=true` sin PIN ni fetch destructivo. Frontend ya no ofrece boton "Activar" (era el re-trigger destructivo).
+- [x] A3: instrucciones QR scan — nota persistente en `MetaEmbeddedSignup.tsx` + panel post-conexion en `WhatsAppSettings.tsx`. Cubre ambos entry points (Settings + LinesList dialog).
+- [x] Typecheck `tsc --noEmit` OK.
+- [ ] **PENDIENTE Diego (manual, bloquea gate):** verificar en Meta App Dashboard que `config_id 2778116585871186` tenga la feature **"WhatsApp Business App Onboarding"**. Si no, ajustar config primero.
+- [ ] **PENDIENTE gate test:** deploy `meta-embedded-signup` + probar QR scan con Demo Bot (+50433899824) + celular Diego. Confirmar que la WA Business App NO se desloguea.
+
+**FASE B (NO arrancar hasta pasar gate A):** migration sync_in_progress, filtro `isHistoricalMessage`, handlers `smb_message_echoes`/`smb_app_state_sync`, watchdog cron, badge UI. Detalle en el plan.
+
+### Contexto en una linea
+
+Skin Medic se perdio el 27 May porque el flujo actual de Embedded Signup llama `POST /{phone_number_id}/register` con PIN 2FA = migracion destructiva que desloguea la WhatsApp Business App del cliente. La asistente perdio acceso a "reenviar archivo" y demas features nativas, no pudo trabajar, el cliente cancelo. **Coexistence (modo oficial de Meta GA desde mediados 2025) resuelve esto: el numero queda EN AMBOS lados — Cloud API + WA Business App vinculados via QR scan.**
+
+### Plan tecnico (10 items, ~14-17h trabajo)
+
+| # | Cambio | Archivo + linea | Estimacion |
+|---|---|---|---|
+| 1 | `featureType: 'whatsapp_business_app_onboarding'` + `sessionInfoVersion: '3'` (string, no numero) | `src/components/whatsapp/MetaEmbeddedSignup.tsx:206-208` | 30 min |
+| 2 | Detectar Coexistence en respuesta y **skipear el bloque `/register`** | `supabase/functions/meta-embedded-signup/index.ts:540-583` | 2h |
+| 3 | UI: instrucciones "Abre WhatsApp Business App → Configuracion → Dispositivos vinculados → Escanea QR" | nuevo componente o ajuste a `MetaEmbeddedSignup.tsx` | 1h |
+| 4 | Migration: `ALTER TABLE whatsapp_lines ADD COLUMN sync_in_progress BOOLEAN DEFAULT FALSE, ADD COLUMN last_historical_webhook_at TIMESTAMPTZ` | nueva migration `20260601_*_coexistence_sync_state.sql` | 15 min |
+| 5 | `isHistoricalMessage(timestamp)` — si > 5min en el pasado, skipear bot routing + media transcription dispatch + intent notification, solo persistir + crear conversacion silenciosa | `supabase/functions/meta-webhook/index.ts:~310` (handleIncomingMessage start) | 2h |
+| 6 | Handler nuevo: `smb_message_echoes` — mensajes que la asistente envia desde su celular llegan como echo via webhook. Persistir como outbound en `message_logs` para que aparezcan en inbox OrionCare | `supabase/functions/meta-webhook/index.ts` (nuevo field handler) | 2h |
+| 7 | Handler nuevo: `smb_app_state_sync` — sincronizar cambios de contactos hechos en el celular | `supabase/functions/meta-webhook/index.ts` | 1.5h |
+| 8 | Worker cron 1-min: revisa lineas con `sync_in_progress=true`. Si `NOW() - last_historical_webhook_at > 5 min`, marca `sync_in_progress=false` | nuevo edge function `coexistence-sync-watchdog` + pg_cron | 1.5h |
+| 9 | UI inbox: badge "Sincronizando historial" en header cuando `sync_in_progress=true` | header de inbox | 1h |
+| 10 | Testing E2E con Demo Bot verified (+50433899824) + numero personal Diego | manual QA | 3-4h |
+
+### Verificacion previa (NO codigo, hacer antes de arrancar)
+
+- Confirmar Tech Provider status: ya confirmado ✅
+- Suscribirse a webhooks `smb_message_echoes` + `smb_app_state_sync` en Meta App Dashboard: ya hecho ✅
+- WhatsApp Business App del cliente requiere version 2.24.17+ (validar antes de cada onboarding)
+
+### Que NO se hace en este sprint
+
+- ❌ Tocar los 3 clientes actuales (Yeni Ramos, David Diaz/Ecoclinicas, Paredes/Medilaser). Ya estan en modo migracion destructivo. Gemini confirmo que NO hay downgrade path sin downtime. Se dejan churnear organicamente. Silencio total — no comunicacion proactiva del cambio.
+- ❌ Construir paridad de features con WhatsApp Business App (reenviar archivo, etiquetas, mensajes fijados, etc.). Coexistence preserva la app movil del cliente — esas features siguen vivas en su celular. No necesitamos replicarlas.
+- ❌ Crear config_id nuevo en Meta App. El config_id existente soporta ambos modos (migracion + coexistence). El switch se hace via parametros del FB.login.
+
+### Sintaxis FB.login Coexistence — VERIFICADA con doc oficial Meta 1 Jun
+
+Verificacion realizada 1 Jun 2026 contra 3 fuentes independientes:
+1. **Doc oficial Meta:** `https://developers.facebook.com/docs/whatsapp/embedded-signup/custom-flows/onboarding-business-app-users/` (pagina titulada "Onboarding WhatsApp Business app users (aka 'Coexistence')")
+2. **Repo GitHub publico:** `github.com/iragazzisrl/whatsapp-api-cloud-coexistence`
+3. **WebSearch resultados convergentes** (Alibaba Cloud, Teknasyon Engineering)
+
+**Sintaxis EXACTA confirmada para `MetaEmbeddedSignup.tsx:202-209`:**
+
+```javascript
+FB.login(fbLoginCallback, {
+  config_id: META_CONFIG_ID,
+  response_type: 'code',
+  override_default_response_type: true,
+  extras: {
+    setup: {},
+    featureType: 'whatsapp_business_app_onboarding',
+    sessionInfoVersion: '3'
+  }
+});
+```
+
+**Cambios respecto al codigo actual:**
+- AGREGAR `setup: {}` (objeto vacio funciona — si en el futuro asociamos Solution ID de Tech Provider, va como `setup: { solutionID: '<ID>' }`)
+- AGREGAR `featureType: 'whatsapp_business_app_onboarding'`
+- CAMBIAR `sessionInfoVersion: 2` (numero) → `sessionInfoVersion: '3'` (STRING)
+
+**Notas de la verificacion:**
+- `featureType: 'only_waba_sharing'` existe como otro flavor (skipea pasos del Embedded Signup, NO es Coexistence). No usar para nuestro caso.
+- No hay menciones de `POST /register` en flujo Coexistence. Confirmado que se omite.
+- Gemini acerto en todos los detalles tecnicos.
+
+### Hallazgos tecnicos clave (validados con Gemini 1 Jun)
+
+1. **Inyeccion del historial post-QR-scan:** 5-15 minutos de flood intenso. Cliente decide al escanear si comparte historial.
+2. **No hay flag `is_historical: true` en payload.** Filtrar por timestamp Unix Epoch comparado vs `Date.now() - 5min`.
+3. **Multimedia historica:** Meta solo sincroniza archivos < 14 dias. Audios mas viejos no llegan al webhook, ahorrando costo Whisper. Pero los de los ultimos 14 dias SI vienen con `audio.id` valido — filtrar explicitamente o Whisper transcribira 14 dias de notas de voz inutilmente.
+4. **No hay evento `history_sync_completed`.** Debounce: actualizar `last_historical_webhook_at` con cada mensaje historico recibido. Worker secundario revisa: si pasaron 5 min sin updates, asumir sync terminado y marcar `sync_in_progress=false`.
+5. **Idempotencia ya existe:** `meta-webhook/index.ts:318-327` skipea por `provider_message_id`. Si Meta reinyecta el mismo mensaje, no duplica. Eso ya esta resuelto.
+6. **Sintaxis exacta del FB.login para Coexistence:**
+
+```typescript
+window.FB.login(callback, {
+  config_id: META_CONFIG_ID,
+  response_type: 'code',
+  override_default_response_type: true,
+  extras: {
+    featureType: 'whatsapp_business_app_onboarding',
+    sessionInfoVersion: '3',
+    setup: {}
+  }
+});
+```
+
+### Plan de pruebas antes de cliente real
+
+1. **OrionCare Demo Bot verified (+50433899824)** y un numero personal de Diego (con WhatsApp Business App instalada) como contraparte
+2. Ejecutar el flujo Coexistence completo — QR scan, vinculacion, recibir mensajes en ambos lados, ver `smb_message_echoes` cuando Diego envie desde su celular
+3. Verificar que `isHistoricalMessage` filtra correctamente sin perder mensajes nuevos
+4. Verificar debounce: el `sync_in_progress` se apaga correctamente a los 5 min de inactividad
+
+### Bloqueador resuelto (que pense que era bloqueador)
+
+Embedded Signup ya esta 100% implementado (build `meta-embedded-signup@2026-02-25_v16`, 15 iteraciones de produccion). Solo falta el switch del flavor. **NO hay que construir Embedded Signup desde cero** — eso me confundi al principio del analisis.
+
+---
+
+## Fase actual (post-Sprint Coexistence)
+
+**Sprints 4-8 MVP Centro de Atencion** — Sprint 6 cerrado el 20 May (5 semanas antes del plan original 30 Jun). Skin Medic perdido 27 May. Sprint Coexistence resuelve el dealbreaker. Los 3 clientes activos (Guevara, Yeni, David) + Medilaser desconectado quedan como estan — churn organico esperado.
 
 Plan: `.claude/plans/centro-atencion-mvp.md` + `.claude/plans/centro-atencion-sprints.md`
 

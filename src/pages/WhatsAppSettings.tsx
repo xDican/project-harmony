@@ -161,6 +161,19 @@ export default function WhatsAppSettings() {
                     </Button>
                   </div>
                 )}
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-1.5">
+                  <p className="text-sm font-medium text-emerald-900">
+                    Último paso: vincula tu WhatsApp Business App
+                  </p>
+                  <p className="text-xs text-emerald-800">
+                    Tu número queda funcionando en ambos lados. Para sincronizarlo, en el celular:
+                  </p>
+                  <ol className="text-xs text-emerald-800 list-decimal list-inside space-y-0.5">
+                    <li>Abre <span className="font-medium">WhatsApp Business App</span></li>
+                    <li>Ve a <span className="font-medium">Configuración → Dispositivos vinculados</span></li>
+                    <li>Toca <span className="font-medium">Vincular un dispositivo</span> y escanea el código QR</li>
+                  </ol>
+                </div>
                 <Button variant="outline" size="sm" onClick={() => setConnectedLine(null)}>
                   {t('mes.reconnect')}
                 </Button>
