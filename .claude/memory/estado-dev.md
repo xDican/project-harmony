@@ -31,7 +31,7 @@ Plan original revisado contra el codigo real. **2 decisiones tomadas con Diego:*
 - [x] **B2** ✅ (1 Jun, desplegado) — `meta-webhook`: `isHistoricalMessage()` (timestamp Unix >5min). **Gate combinado `sync_in_progress && histórico`** (no solo timestamp → fuera de sync, mensaje atrasado recibe proceso normal). Histórico → persiste + crea conversación, pero NO bot/transcripción/intent; refresca `last_historical_webhook_at`. Botones históricos (confirmar/permiso llamada) protegidos. **ORDEN DE DEPLOY CRÍTICO:** migration antes del webhook (el select referencia la columna; sin ella se rompe la recepción).
 - [ ] **B3** — handler `smb_message_echoes` (mensajes que la asistente manda desde su celular → outbound en inbox). **Resuelve la duda de Diego: visibilidad app→OrionCare.**
 - [ ] **B4** — handler `smb_app_state_sync` (sync de contactos del celular).
-- [ ] **B5** — watchdog cron 1-min: apaga `sync_in_progress` tras 5 min sin históricos.
+- [x] **B5** ✅ (1 Jun, jobid 12) — watchdog pg_cron `coexistence-sync-watchdog`, **SQL puro cada 2 min** (no edge function — la logica es 1 UPDATE; SQL puro evita cold start/HTTP/auth y es mas confiable). Apaga `sync_in_progress` en lineas con >5 min sin mensajes historicos. Frecuencia */2 (no */1) por higiene de `cron.job_run_details`; el query es no-op casi siempre (tabla diminuta). Migration `20260601140000_coexistence_sync_watchdog.sql`. **Cierra el ciclo de B2: la bandera de sync ya se apaga sola.**
 - [ ] **B6** — badge UI "Sincronizando historial" cuando `sync_in_progress=true`.
 
 ### Feature derivada: selector de linea en el inbox (1 Jun) — ✅ codeada
