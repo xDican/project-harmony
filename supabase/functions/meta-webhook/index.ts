@@ -21,9 +21,11 @@ import { formatTimeForTemplate } from "../_shared/datetime.ts";
 import {
   getOrCreateConversation,
   updateConversationOnInbound,
+  updateConversationOnOutbound,
 } from "../_shared/conversations.ts";
 import {
   persistInboundMessage,
+  persistOutboundMessage,
   extractMediaFromMetaMessage,
 } from "../_shared/inbox-messages.ts";
 import { processCallEvent, type MetaCallEvent } from "../_shared/calls.ts";
@@ -57,6 +59,10 @@ interface MetaChangeValue {
   messages?: MetaMessage[];
   statuses?: MetaStatus[];
   calls?: MetaCallEvent[];
+  // Coexistence: mensajes que el negocio envia desde la WhatsApp Business App del
+  // celular llegan aqui como "echoes" (field='smb_message_echoes'). Misma forma que
+  // MetaMessage pero con `to` (el paciente) y `from` = el negocio.
+  message_echoes?: MetaMessage[];
 }
 
 interface MetaContact {
@@ -67,6 +73,8 @@ interface MetaContact {
 interface MetaMessage {
   id: string;
   from: string;
+  /** Solo presente en echoes (smb_message_echoes): el paciente destinatario. */
+  to?: string;
   timestamp: string;
   type: string;
   text?: { body: string };
@@ -325,6 +333,102 @@ async function touchHistoricalSync(
   if (error) console.warn("[meta-webhook] touchHistoricalSync failed:", error);
 }
 
+/**
+ * Coexistence (B3): persiste un "echo" — un mensaje que el negocio envio desde la
+ * WhatsApp Business App del celular — como outbound en el inbox de OrionCare, para
+ * que la asistente vea sus propias respuestas del celular dentro de la plataforma.
+ *
+ * - Idempotente por provider_message_id: si OrionCare ya envio este mensaje via
+ *   Cloud API (inbox-send), el log ya existe y NO se duplica.
+ * - source='assistant': lo envio un humano desde el celular (no el bot).
+ * - Historico (durante el sync): se persiste pero NO se actualiza last_message_at
+ *   (no reordena el inbox con cientos de mensajes viejos) y refresca el debounce.
+ * - Media: por ahora se guarda la referencia (meta-media:<id>) sin descargar el
+ *   archivo. El texto/caption — el caso dominante — se ve perfecto. (Descargar el
+ *   archivo de echos multimedia queda como mejora futura.)
+ */
+async function handleMessageEcho(
+  supabase: ReturnType<typeof createClient>,
+  echo: MetaMessage,
+  lineId?: string,
+  lineOrgId?: string,
+  syncInProgress?: boolean,
+): Promise<void> {
+  if (!lineId || !lineOrgId) {
+    console.warn("[meta-webhook] Echo sin lineId/orgId — skip:", echo.id);
+    return;
+  }
+
+  const patientPhone = normalizeToE164(echo.to ?? "");
+  const businessPhone = normalizeToE164(echo.from);
+  if (!patientPhone) {
+    console.warn("[meta-webhook] Echo sin destinatario (to) — skip:", echo.id);
+    return;
+  }
+
+  // Idempotencia: echo re-entregado, o mensaje que OrionCare ya envio via API.
+  const { data: existingLog } = await supabase
+    .from("message_logs")
+    .select("id")
+    .eq("provider_message_id", echo.id)
+    .maybeSingle();
+  if (existingLog) {
+    console.log("[meta-webhook] Echo ya registrado, skip:", echo.id);
+    return;
+  }
+
+  const media = extractMediaFromMetaMessage(echo);
+  const body = extractMessageText(echo) || media.caption || null;
+
+  let patientId: string | undefined;
+  const { data: p } = await supabase
+    .from("patients")
+    .select("id")
+    .eq("phone", patientPhone)
+    .limit(1)
+    .maybeSingle();
+  patientId = p?.id;
+
+  // Conversacion nueva (la asistente inicio desde el celular) → human_active.
+  // Si ya existe, conserva su status.
+  const conversation = await getOrCreateConversation(supabase, {
+    whatsappLineId: lineId,
+    organizationId: lineOrgId,
+    patientPhone,
+    patientId: patientId ?? null,
+    initialStatus: "human_active",
+  });
+  if (!conversation) {
+    console.error("[meta-webhook] Echo: getOrCreateConversation null, skip:", echo.id);
+    return;
+  }
+
+  await persistOutboundMessage(supabase, {
+    conversationId: conversation.id,
+    organizationId: lineOrgId,
+    whatsappLineId: lineId,
+    toPhone: patientPhone,
+    fromPhone: businessPhone,
+    body,
+    source: "assistant",
+    messageType: media.messageType,
+    mediaUrl: media.mediaUrl,
+    mediaMime: media.mediaMime,
+    status: "sent",
+    providerMessageId: echo.id,
+    rawPayload: echo,
+  });
+
+  if (!!syncInProgress && isHistoricalMessage(echo)) {
+    await touchHistoricalSync(supabase, lineId);
+    console.log("[meta-webhook] Historical echo — persisted silently. conv:", conversation.id, "msg:", echo.id);
+    return;
+  }
+
+  await updateConversationOnOutbound(supabase, conversation.id);
+  console.log("[meta-webhook] Echo (asistente desde celular) persisted. conv:", conversation.id, "msg:", echo.id);
+}
+
 async function handleIncomingMessage(
   supabase: ReturnType<typeof createClient>,
   metadata: MetaChangeValue["metadata"],
@@ -457,19 +561,19 @@ async function handleIncomingMessage(
         rawPayload: message,
       });
 
-      // Refresh activity (last_inbound_at, unread_count)
-      await updateConversationOnInbound(supabase, conversation.id);
-
       // Coexistence: mensaje historico → ya quedo persistido + conversacion creada.
-      // Refrescamos el debounce del sync y cortamos: NO transcripcion de media, NO
-      // bot, NO notificaciones de intent. (La multimedia historica < 14 dias que Meta
-      // sincroniza NO se descarga ni se manda a Whisper — ahorra costo; queda el
-      // caption/texto como rastro en el inbox.)
+      // Refrescamos el debounce del sync y cortamos ANTES de updateConversationOnInbound
+      // (para NO inflar unread_count ni saltar la conversacion al tope con cada uno de
+      // los cientos de mensajes del flood — quedan "silenciosos" en el inbox). Tampoco
+      // se transcribe media (ahorra Whisper sobre 14 dias de historial) ni se invoca bot.
       if (isHistorical) {
         await touchHistoricalSync(supabase, lineId);
-        console.log("[meta-webhook] Historical message (coexistence sync) — persisted, bot/media/intent skipped. conv:", conversation.id, "msg:", message.id);
+        console.log("[meta-webhook] Historical message (coexistence sync) — persisted, activity/bot/media/intent skipped. conv:", conversation.id, "msg:", message.id);
         return;
       }
+
+      // Refresh activity (last_inbound_at, unread_count)
+      await updateConversationOnInbound(supabase, conversation.id);
 
       // Sprint 2: si es multimedia, dispatch async para descargar + transcribir.
       // Fire-and-forget: NO await, no bloqueamos el webhook que debe responder
@@ -1193,6 +1297,14 @@ Deno.serve(async (req) => {
         if (value.messages) {
           for (const message of value.messages) {
             tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled, activeLineSyncInProgress));
+          }
+        }
+
+        // Coexistence (B3): echoes — mensajes que la asistente envia desde la WhatsApp
+        // Business App del celular. field='smb_message_echoes', payload en message_echoes[].
+        if (value.message_echoes && activeLineId && activeLineOrgId) {
+          for (const echo of value.message_echoes) {
+            tasks.push(handleMessageEcho(supabase, echo, activeLineId, activeLineOrgId, activeLineSyncInProgress));
           }
         }
 
