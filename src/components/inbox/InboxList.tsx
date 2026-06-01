@@ -72,6 +72,12 @@ export function InboxList({
     [lines],
   );
 
+  // Coexistence (B6): badge "Sincronizando historial". Si hay una linea seleccionada,
+  // refleja esa; si es "Todas", refleja cualquiera que este sincronizando.
+  const syncingHistory = selectedLineId
+    ? lines.some((l) => l.id === selectedLineId && l.syncInProgress)
+    : lines.some((l) => l.syncInProgress);
+
   const { filtered, counts } = useMemo(
     () => filterConversations(conversations, filter, searchQuery, selectedLineId),
     [conversations, filter, searchQuery, selectedLineId],
@@ -97,6 +103,7 @@ export function InboxList({
         selectedLineId={selectedLineId}
         onLineChange={handleLineChange}
         showLineSelector={showLineSelector}
+        syncingHistory={syncingHistory}
       />
 
       <div className="flex-1 overflow-auto relative">

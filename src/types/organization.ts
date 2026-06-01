@@ -57,6 +57,8 @@ export interface WhatsAppLine {
   defaultDurationMinutes?: number;
   isActive: boolean;
   createdAt: string;
+  // Coexistence: TRUE mientras la linea recibe el flood de historial post-QR-scan.
+  syncInProgress?: boolean;
   // Populated via join:
   clinicName?: string;
 }

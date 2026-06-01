@@ -7,7 +7,7 @@
  * Buscador: cliente-side por nombre o telefono.
  */
 
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -32,6 +32,7 @@ interface InboxFiltersProps {
   selectedLineId: string | null;
   onLineChange: (lineId: string | null) => void;
   showLineSelector: boolean;
+  syncingHistory?: boolean;
 }
 
 export function InboxFilters({
@@ -44,9 +45,17 @@ export function InboxFilters({
   selectedLineId,
   onLineChange,
   showLineSelector,
+  syncingHistory,
 }: InboxFiltersProps) {
   return (
     <div className="px-3 py-3 border-b space-y-3 bg-card">
+      {/* Coexistence (B6): aviso mientras llega el flood de historial tras vincular */}
+      {syncingHistory && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" />
+          <span>Sincronizando historial de WhatsApp… los mensajes recientes seguirán llegando normal.</span>
+        </div>
+      )}
       {/* Selector de linea (solo con >1 linea) */}
       {showLineSelector && (
         <Select

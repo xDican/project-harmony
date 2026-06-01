@@ -1736,6 +1736,7 @@ export async function getWhatsAppLinesByOrganization(): Promise<WhatsAppLine[]> 
     defaultDurationMinutes: row.default_duration_minutes ?? undefined,
     isActive: row.is_active,
     createdAt: row.created_at,
+    syncInProgress: row.sync_in_progress ?? false,
     clinicName: row.clinic?.name ?? undefined,
   }));
 }
