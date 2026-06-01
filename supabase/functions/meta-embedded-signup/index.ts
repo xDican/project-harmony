@@ -546,9 +546,18 @@ Deno.serve(async (req) => {
     // la UI no ofrezca el botón "Activar" (que re-dispararía el /register destructivo).
     const metaRegistered = true;
 
+    // Marca inicio de la ventana de sincronizacion de historial (coexistence).
+    // Si el cliente comparte historial al escanear el QR, el flood llega en los
+    // proximos 5-15 min; cada mensaje historico refresca last_historical_webhook_at
+    // y el watchdog apaga sync_in_progress tras 5 min sin actividad. Si NO comparte
+    // historial, no llegan mensajes y el watchdog lo apaga a los 5 min de este baseline.
     const { error: regMarkError } = await supabaseAdmin
       .from("whatsapp_lines")
-      .update({ meta_registered: true })
+      .update({
+        meta_registered: true,
+        sync_in_progress: true,
+        last_historical_webhook_at: new Date().toISOString(),
+      })
       .eq("id", lineId);
     if (regMarkError) {
       console.error("[meta-embedded-signup] Error marcando meta_registered:", regMarkError);

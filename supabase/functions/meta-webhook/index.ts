@@ -294,6 +294,37 @@ async function handleCallPermissionReply(
   );
 }
 
+/** Ventana para considerar un mensaje como "historico" durante el sync de coexistence. */
+const HISTORICAL_THRESHOLD_MS = 5 * 60 * 1000;
+
+/**
+ * Coexistence: detecta mensajes del flood de historial inyectado tras el QR scan.
+ * Meta NO envia un flag is_historical; el payload trae `timestamp` (Unix epoch en
+ * SEGUNDOS, string). Si el mensaje es >5 min mas viejo que ahora, es historico.
+ */
+function isHistoricalMessage(message: MetaMessage): boolean {
+  const tsSec = Number(message.timestamp);
+  if (!Number.isFinite(tsSec) || tsSec <= 0) return false;
+  return Date.now() - tsSec * 1000 > HISTORICAL_THRESHOLD_MS;
+}
+
+/**
+ * Refresca el debounce del watchdog: cada mensaje historico recibido extiende la
+ * ventana de sync. Cuando dejan de llegar por >5 min, el watchdog (cron) apaga
+ * sync_in_progress.
+ */
+async function touchHistoricalSync(
+  supabase: ReturnType<typeof createClient>,
+  lineId?: string,
+): Promise<void> {
+  if (!lineId) return;
+  const { error } = await supabase
+    .from("whatsapp_lines")
+    .update({ last_historical_webhook_at: new Date().toISOString() })
+    .eq("id", lineId);
+  if (error) console.warn("[meta-webhook] touchHistoricalSync failed:", error);
+}
+
 async function handleIncomingMessage(
   supabase: ReturnType<typeof createClient>,
   metadata: MetaChangeValue["metadata"],
@@ -302,6 +333,7 @@ async function handleIncomingMessage(
   lineId?: string,
   lineOrgId?: string,
   botEnabled?: boolean,
+  syncInProgress?: boolean,
 ): Promise<void> {
   const fromPhone = normalizeToE164(message.from);
   const toPhone = metadata?.display_phone_number
@@ -326,14 +358,23 @@ async function handleIncomingMessage(
     return;
   }
 
+  // Coexistence: durante la ventana de sync (sync_in_progress), los mensajes
+  // viejos son el flood de historial inyectado por Meta. Se persisten para que
+  // aparezcan en el inbox, pero NO disparan bot / transcripcion / notificaciones
+  // / acciones de botones (confirmar cita, permiso de llamada). El gate combina
+  // sync_in_progress (de la linea) + edad del mensaje, para que fuera de un sync
+  // un mensaje legitimamente atrasado SIEMPRE reciba procesamiento normal.
+  const isHistorical = !!syncInProgress && isHistoricalMessage(message);
+
   // Sprint 6: Call permission reply — Meta envia el accept/reject del paciente
   // como mensaje interactivo type='call_permission_reply' (NO en value.calls[]).
   // Lo procesamos aqui y NO lo pasamos al bot (sino el bot responderia confundido
-  // a un "mensaje vacio").
+  // a un "mensaje vacio"). Un permiso historico re-inyectado se ignora.
   if (
     message.type === "interactive" &&
     (message.interactive as any)?.type === "call_permission_reply" &&
-    lineId && lineOrgId
+    lineId && lineOrgId &&
+    !isHistorical
   ) {
     await handleCallPermissionReply(supabase, message, fromPhone, contactName, lineId, lineOrgId);
     return;
@@ -346,8 +387,10 @@ async function handleIncomingMessage(
   if (lineId && lineOrgId) {
     const intent = detectIntent(body);
 
-    if (intent === "confirm" && appointmentIdFromPayload) {
+    if (intent === "confirm" && appointmentIdFromPayload && !isHistorical) {
       // Confirmar → fall through to legacy flow below
+      // (un "Confirmar" historico re-inyectado NO debe mutar la cita: cae al
+      //  tracking de conversacion y se persiste silenciosamente)
     } else {
       // Sprint 1: Conversation tracking + bot dual mode
       // Detect multimedia (image/audio/document) — Sprint 2 hara transcripcion + storage download.
@@ -392,7 +435,9 @@ async function handleIncomingMessage(
           whatsappLineId: lineId,
           rawPayload: message,
         });
-        await routeToBotHandler(fromPhone, effectiveBody || "", lineId, lineOrgId, patientIdForLog, appointmentIdFromPayload ?? undefined);
+        if (!isHistorical) {
+          await routeToBotHandler(fromPhone, effectiveBody || "", lineId, lineOrgId, patientIdForLog, appointmentIdFromPayload ?? undefined);
+        }
         return;
       }
 
@@ -414,6 +459,17 @@ async function handleIncomingMessage(
 
       // Refresh activity (last_inbound_at, unread_count)
       await updateConversationOnInbound(supabase, conversation.id);
+
+      // Coexistence: mensaje historico → ya quedo persistido + conversacion creada.
+      // Refrescamos el debounce del sync y cortamos: NO transcripcion de media, NO
+      // bot, NO notificaciones de intent. (La multimedia historica < 14 dias que Meta
+      // sincroniza NO se descarga ni se manda a Whisper — ahorra costo; queda el
+      // caption/texto como rastro en el inbox.)
+      if (isHistorical) {
+        await touchHistoricalSync(supabase, lineId);
+        console.log("[meta-webhook] Historical message (coexistence sync) — persisted, bot/media/intent skipped. conv:", conversation.id, "msg:", message.id);
+        return;
+      }
 
       // Sprint 2: si es multimedia, dispatch async para descargar + transcribir.
       // Fire-and-forget: NO await, no bloqueamos el webhook que debe responder
@@ -1110,11 +1166,12 @@ Deno.serve(async (req) => {
     let activeLineId: string | undefined;
     let activeLineOrgId: string | undefined;
     let activeLineBotEnabled = false;
+    let activeLineSyncInProgress = false;
     const phoneNumberId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     if (phoneNumberId) {
       const { data: wline } = await supabase
         .from("whatsapp_lines")
-        .select("id, organization_id, bot_enabled")
+        .select("id, organization_id, bot_enabled, sync_in_progress")
         .eq("meta_phone_number_id", phoneNumberId)
         .eq("is_active", true)
         .order("created_at", { ascending: true })
@@ -1123,7 +1180,8 @@ Deno.serve(async (req) => {
       activeLineId = wline?.id;
       activeLineOrgId = wline?.organization_id ?? undefined;
       activeLineBotEnabled = wline?.bot_enabled ?? false;
-      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled);
+      activeLineSyncInProgress = wline?.sync_in_progress ?? false;
+      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled, "syncInProgress:", activeLineSyncInProgress);
     }
 
     // 4) Process all entries — messages, statuses, and calls run in parallel per change
@@ -1134,7 +1192,7 @@ Deno.serve(async (req) => {
 
         if (value.messages) {
           for (const message of value.messages) {
-            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled));
+            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled, activeLineSyncInProgress));
           }
         }
 

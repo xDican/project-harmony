@@ -23,10 +23,16 @@ Plan original revisado contra el codigo real. **2 decisiones tomadas con Diego:*
 - [x] A2: bloque `/register` eliminado (`meta-embedded-signup/index.ts`); ahora marca `meta_registered=true` sin PIN ni fetch destructivo. Frontend ya no ofrece boton "Activar" (era el re-trigger destructivo).
 - [x] A3: instrucciones QR scan — nota persistente en `MetaEmbeddedSignup.tsx` + panel post-conexion en `WhatsAppSettings.tsx`. Cubre ambos entry points (Settings + LinesList dialog).
 - [x] Typecheck `tsc --noEmit` OK.
-- [ ] **PENDIENTE Diego (manual, bloquea gate):** verificar en Meta App Dashboard que `config_id 2778116585871186` tenga la feature **"WhatsApp Business App Onboarding"**. Si no, ajustar config primero.
-- [ ] **PENDIENTE gate test:** deploy `meta-embedded-signup` + probar QR scan con Demo Bot (+50433899824) + celular Diego. Confirmar que la WA Business App NO se desloguea.
+- [x] **Config dashboard verificado** ✅ — Tech Provider verificado, permisos correctos, feature "Registro de app de WhatsApp Business" disponible en v4.
+- [x] **GATE FASE A PASADO 1 Jun** ✅ — Diego confirmo: interaccion simultanea via API + WA Business App (coexistence real, app NO se desloguea). Plantillas de la cuenta nueva verificadas y funcionando. El dealbreaker de Skin Medic queda resuelto.
 
-**FASE B (NO arrancar hasta pasar gate A):** migration sync_in_progress, filtro `isHistoricalMessage`, handlers `smb_message_echoes`/`smb_app_state_sync`, watchdog cron, badge UI. Detalle en el plan.
+**FASE B — en curso:**
+- [x] **B1** ✅ (1 Jun, desplegado) — migration `20260601130000_coexistence_sync_state.sql` (`sync_in_progress` BOOL + `last_historical_webhook_at` TIMESTAMPTZ en `whatsapp_lines`). SQL aplicada manual via dashboard (proyecto no enlazado en entorno dev; migration es idempotente). `meta-embedded-signup` marca `sync_in_progress=true` + baseline al vincular.
+- [x] **B2** ✅ (1 Jun, desplegado) — `meta-webhook`: `isHistoricalMessage()` (timestamp Unix >5min). **Gate combinado `sync_in_progress && histórico`** (no solo timestamp → fuera de sync, mensaje atrasado recibe proceso normal). Histórico → persiste + crea conversación, pero NO bot/transcripción/intent; refresca `last_historical_webhook_at`. Botones históricos (confirmar/permiso llamada) protegidos. **ORDEN DE DEPLOY CRÍTICO:** migration antes del webhook (el select referencia la columna; sin ella se rompe la recepción).
+- [ ] **B3** — handler `smb_message_echoes` (mensajes que la asistente manda desde su celular → outbound en inbox). **Resuelve la duda de Diego: visibilidad app→OrionCare.**
+- [ ] **B4** — handler `smb_app_state_sync` (sync de contactos del celular).
+- [ ] **B5** — watchdog cron 1-min: apaga `sync_in_progress` tras 5 min sin históricos.
+- [ ] **B6** — badge UI "Sincronizando historial" cuando `sync_in_progress=true`.
 
 ### Feature derivada: selector de linea en el inbox (1 Jun) — ✅ codeada
 
