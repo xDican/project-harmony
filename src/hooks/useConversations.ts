@@ -263,15 +263,21 @@ export function filterConversations(
   all: ConversationListRow[],
   filter: InboxFilter,
   searchQuery: string,
+  lineId?: string | null,
 ): { filtered: ConversationListRow[]; counts: InboxCounts } {
+  // Filtro de linea primero: los counts de los tabs reflejan la linea seleccionada.
+  const scoped = lineId
+    ? all.filter((c) => c.whatsapp_line_id === lineId)
+    : all;
+
   const counts: InboxCounts = {
-    all: all.length,
-    unread: all.filter((c) => c.unread_count > 0).length,
-    bot: all.filter((c) => c.status === "bot_active").length,
-    human: all.filter((c) => c.status === "human_active").length,
+    all: scoped.length,
+    unread: scoped.filter((c) => c.unread_count > 0).length,
+    bot: scoped.filter((c) => c.status === "bot_active").length,
+    human: scoped.filter((c) => c.status === "human_active").length,
   };
 
-  const byFilter = all.filter((c) => {
+  const byFilter = scoped.filter((c) => {
     switch (filter) {
       case "unread":
         return c.unread_count > 0;

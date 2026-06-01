@@ -6,19 +6,23 @@
  * ConversationDetail sin duplicar fetch.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Inbox as InboxIcon, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import {
   filterConversations,
   type ConversationListRow,
   type InboxFilter,
 } from "@/hooks/useConversations";
+import { useWhatsAppLines } from "@/hooks/useWhatsAppLines";
+import { useCurrentUser } from "@/context/UserContext";
 import { ConversationListItem } from "./ConversationListItem";
 import { InboxFilters } from "./InboxFilters";
 import { NewConversationCard } from "./NewConversationCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { detectInputType } from "@/lib/waLinkParser";
+
+const SELECTED_LINE_STORAGE_KEY = "inbox:selectedLineId";
 
 interface InboxListProps {
   conversations: ConversationListRow[];
@@ -40,9 +44,37 @@ export function InboxList({
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const { user } = useCurrentUser();
+  const { lines } = useWhatsAppLines(user?.organizationId ?? undefined);
+
+  // Linea seleccionada (null = todas). Persistida en localStorage.
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(
+    () => localStorage.getItem(SELECTED_LINE_STORAGE_KEY) || null,
+  );
+
+  // Si la linea guardada ya no existe (ej. se elimino), volver a "Todas".
+  useEffect(() => {
+    if (selectedLineId && lines.length > 0 && !lines.some((l) => l.id === selectedLineId)) {
+      setSelectedLineId(null);
+      localStorage.removeItem(SELECTED_LINE_STORAGE_KEY);
+    }
+  }, [lines, selectedLineId]);
+
+  const handleLineChange = (lineId: string | null) => {
+    setSelectedLineId(lineId);
+    if (lineId) localStorage.setItem(SELECTED_LINE_STORAGE_KEY, lineId);
+    else localStorage.removeItem(SELECTED_LINE_STORAGE_KEY);
+  };
+
+  const showLineSelector = lines.length > 1;
+  const linesById = useMemo(
+    () => new Map(lines.map((l) => [l.id, l.label])),
+    [lines],
+  );
+
   const { filtered, counts } = useMemo(
-    () => filterConversations(conversations, filter, searchQuery),
-    [conversations, filter, searchQuery],
+    () => filterConversations(conversations, filter, searchQuery, selectedLineId),
+    [conversations, filter, searchQuery, selectedLineId],
   );
 
   const detection = useMemo(
@@ -61,6 +93,10 @@ export function InboxList({
         counts={counts}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        lines={lines}
+        selectedLineId={selectedLineId}
+        onLineChange={handleLineChange}
+        showLineSelector={showLineSelector}
       />
 
       <div className="flex-1 overflow-auto relative">
@@ -110,6 +146,8 @@ export function InboxList({
                   conversation={conv}
                   isSelected={selectedConvId === conv.id}
                   onClick={() => onSelect(conv)}
+                  lineLabel={linesById.get(conv.whatsapp_line_id)}
+                  showLineBadge={showLineSelector}
                 />
               </li>
             ))}

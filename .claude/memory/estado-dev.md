@@ -28,6 +28,10 @@ Plan original revisado contra el codigo real. **2 decisiones tomadas con Diego:*
 
 **FASE B (NO arrancar hasta pasar gate A):** migration sync_in_progress, filtro `isHistoricalMessage`, handlers `smb_message_echoes`/`smb_app_state_sync`, watchdog cron, badge UI. Detalle en el plan.
 
+### Feature derivada: selector de linea en el inbox (1 Jun) — ✅ codeada
+
+Coexistence habilita N lineas por org → el inbox mezclaba todo. Agregado selector de linea (dropdown, visible solo con >1 linea). **Filtro 100% client-side** (cada conversation ya trae `whatsapp_line_id`) — sin tocar query Supabase, Realtime ni DB. Default "Todas las lineas" + etiqueta de linea por conversation. Seleccion persiste en localStorage (`inbox:selectedLineId`), se auto-resetea si la linea desaparece. Badge global sigue org-wide. Caveat: `useConversations` limita a 50 convs mas recientes org-wide; con varias lineas de alto volumen una linea silenciosa puede sub-representarse — si escala, mover a server-side. Archivos: `useWhatsAppLines.ts` (nuevo), `useConversations.ts` (filterConversations +lineId), `InboxList.tsx`, `InboxFilters.tsx`, `ConversationListItem.tsx`.
+
 ### Contexto en una linea
 
 Skin Medic se perdio el 27 May porque el flujo actual de Embedded Signup llama `POST /{phone_number_id}/register` con PIN 2FA = migracion destructiva que desloguea la WhatsApp Business App del cliente. La asistente perdio acceso a "reenviar archivo" y demas features nativas, no pudo trabajar, el cliente cancelo. **Coexistence (modo oficial de Meta GA desde mediados 2025) resuelve esto: el numero queda EN AMBOS lados — Cloud API + WA Business App vinculados via QR scan.**

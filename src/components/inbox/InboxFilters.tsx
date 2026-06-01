@@ -10,7 +10,17 @@
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { InboxFilter, InboxCounts } from "@/hooks/useConversations";
+import type { WhatsAppLine } from "@/types/organization";
+
+const ALL_LINES = "__all__";
 
 interface InboxFiltersProps {
   filter: InboxFilter;
@@ -18,6 +28,10 @@ interface InboxFiltersProps {
   counts: InboxCounts;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  lines: WhatsAppLine[];
+  selectedLineId: string | null;
+  onLineChange: (lineId: string | null) => void;
+  showLineSelector: boolean;
 }
 
 export function InboxFilters({
@@ -26,9 +40,33 @@ export function InboxFilters({
   counts,
   searchQuery,
   onSearchChange,
+  lines,
+  selectedLineId,
+  onLineChange,
+  showLineSelector,
 }: InboxFiltersProps) {
   return (
     <div className="px-3 py-3 border-b space-y-3 bg-card">
+      {/* Selector de linea (solo con >1 linea) */}
+      {showLineSelector && (
+        <Select
+          value={selectedLineId ?? ALL_LINES}
+          onValueChange={(v) => onLineChange(v === ALL_LINES ? null : v)}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_LINES}>Todas las líneas</SelectItem>
+            {lines.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.label} · {l.phoneNumber}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       {/* Buscador */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

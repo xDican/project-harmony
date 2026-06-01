@@ -28,12 +28,18 @@ interface ConversationListItemProps {
   conversation: ConversationListRow;
   isSelected: boolean;
   onClick: () => void;
+  /** Nombre de la linea de WhatsApp a la que pertenece (para distinguir multi-linea). */
+  lineLabel?: string;
+  /** Mostrar el badge de linea (true cuando la org tiene >1 linea). */
+  showLineBadge?: boolean;
 }
 
 export function ConversationListItem({
   conversation,
   isSelected,
   onClick,
+  lineLabel,
+  showLineBadge,
 }: ConversationListItemProps) {
   const {
     patient_name,
@@ -98,8 +104,15 @@ export function ConversationListItem({
           </span>
         </div>
 
-        <div className="text-xs text-muted-foreground truncate mt-0.5">
-          {patient_phone}
+        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+          <span className="text-xs text-muted-foreground truncate">
+            {patient_phone}
+          </span>
+          {showLineBadge && lineLabel && (
+            <span className="flex-shrink-0 text-[10px] leading-none px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate max-w-[45%]">
+              {lineLabel}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 mt-1">
