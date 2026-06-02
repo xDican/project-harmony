@@ -1,6 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
+import { enumerateSlots } from "../_shared/availability.ts";
 
 const BUILD = "get-available-days-v1.2.0";
 const DEFAULT_TIMEZONE = "America/Tegucigalpa";
@@ -48,11 +49,6 @@ interface AppointmentRow {
   status: string;
 }
 
-interface Interval {
-  startMs: number;
-  endMs: number;
-}
-
 /**
  * Helper para respuestas JSON con CORS
  */
@@ -61,89 +57,6 @@ function json(status: number, payload: unknown): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-/**
- * Parsea time string "HH:MM" o "HH:MM:SS" a minutos desde medianoche
- */
-function timeToMinutes(time: string): number {
-  const [h, m] = time.substring(0, 5).split(":").map(Number);
-  return h * 60 + m;
-}
-
-/**
- * Merge overlapping intervals (already sorted by startMs)
- */
-function mergeIntervals(intervals: Interval[]): Interval[] {
-  if (intervals.length === 0) return [];
-
-  const sorted = [...intervals].sort((a, b) => a.startMs - b.startMs);
-  const merged: Interval[] = [sorted[0]];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const last = merged[merged.length - 1];
-    const curr = sorted[i];
-
-    if (curr.startMs <= last.endMs) {
-      // Overlap or adjacent, merge
-      last.endMs = Math.max(last.endMs, curr.endMs);
-    } else {
-      merged.push(curr);
-    }
-  }
-
-  return merged;
-}
-
-/**
- * Calcula los gaps (huecos libres) entre intervalos ocupados dentro de un rango de trabajo
- * @returns Array de gaps con duración en minutos
- */
-function calculateGaps(
-  workStartMs: number,
-  workEndMs: number,
-  occupiedIntervals: Interval[]
-): { startMs: number; endMs: number; durationMinutes: number }[] {
-  const gaps: { startMs: number; endMs: number; durationMinutes: number }[] =
-    [];
-
-  // Recortar intervalos al rango de trabajo
-  const clipped: Interval[] = occupiedIntervals
-    .map((interval) => ({
-      startMs: Math.max(interval.startMs, workStartMs),
-      endMs: Math.min(interval.endMs, workEndMs),
-    }))
-    .filter((interval) => interval.startMs < interval.endMs);
-
-  // Merge overlaps
-  const merged = mergeIntervals(clipped);
-
-  // Calcular gaps
-  let cursor = workStartMs;
-
-  for (const interval of merged) {
-    if (cursor < interval.startMs) {
-      const gapDuration = (interval.startMs - cursor) / 60000; // ms to minutes
-      gaps.push({
-        startMs: cursor,
-        endMs: interval.startMs,
-        durationMinutes: gapDuration,
-      });
-    }
-    cursor = Math.max(cursor, interval.endMs);
-  }
-
-  // Gap final después del último intervalo ocupado
-  if (cursor < workEndMs) {
-    const gapDuration = (workEndMs - cursor) / 60000;
-    gaps.push({
-      startMs: cursor,
-      endMs: workEndMs,
-      durationMinutes: gapDuration,
-    });
-  }
-
-  return gaps;
 }
 
 /**
@@ -436,84 +349,47 @@ Deno.serve(async (req) => {
       appointmentsByDate.get(dateKey)!.push(apt as AppointmentRow);
     }
 
-    // 9) Procesar cada día del mes
-    const now = DateTime.now().setZone(timezone);
-    const todayStr = now.toISODate();
+    // 9) Procesar cada día del mes — canFit via el motor unico (enumerateSlots).
+    // Mata la divergencia: "hay dia disponible" = "hay un slot ofrecible" (mismo
+    // algoritmo que el hour-view), no el viejo gap-based. Datos ya batcheados →
+    // enumeracion en memoria por dia, sin queries extra.
+    const slotGranularity = Math.min(durationMinutes, 30);
     const daysInMonth = getDaysInMonth(year, monthNum, timezone);
     const results: DayResult[] = [];
 
-    for (const { date, dow, dt } of daysInMonth) {
+    for (const { date, dow } of daysInMonth) {
       const daySchedules = scheduleMap.get(dow);
 
-      // Verify it's a working day
       if (!daySchedules || daySchedules.length === 0) {
         results.push({ date, dow, working: false, canFit: false });
-        if (debug) {
-          console.log(`[get-available-days] ${date} (dow=${dow}): No schedule`);
-        }
+        if (debug) console.log(`[get-available-days] ${date} (dow=${dow}): No schedule`);
         continue;
       }
 
-      const working = true;
-      let canFit = false;
-
-      // Get appointments for this day (shared across all schedule windows)
+      // Intervalos ocupados NAIVE (sin zona) para ser consistente con enumerateSlots.
       const dayAppointments = appointmentsByDate.get(date) || [];
-      const occupiedIntervals: Interval[] = dayAppointments.map((apt) => {
-        const normalizedTime = apt.time.substring(0, 5);
-        const aptStart = DateTime.fromISO(`${apt.date}T${normalizedTime}:00`, {
-          zone: timezone,
-        });
+      const occupiedIntervals = dayAppointments.map((apt) => {
+        const aptStart = DateTime.fromISO(`${apt.date}T${apt.time.substring(0, 5)}:00`);
         const aptEnd = aptStart.plus({ minutes: apt.duration_minutes ?? 60 });
-        return {
-          startMs: aptStart.toMillis(),
-          endMs: aptEnd.toMillis(),
-        };
+        return { startMs: aptStart.toMillis(), endMs: aptEnd.toMillis() };
       });
 
-      // Check each schedule window (may come from different calendars)
-      for (const schedule of daySchedules) {
-        const startMinutes = timeToMinutes(schedule.start_time);
-        const endMinutes = timeToMinutes(schedule.end_time);
+      const slots = enumerateSlots(
+        date,
+        daySchedules.map((s) => ({ start_time: s.start_time, end_time: s.end_time })),
+        occupiedIntervals,
+        durationMinutes,
+        slotGranularity,
+      );
+      const canFit = slots.length > 0;
 
-        if (startMinutes >= endMinutes) continue;
-
-        const workStart = dt.set({
-          hour: Math.floor(startMinutes / 60),
-          minute: startMinutes % 60,
-          second: 0,
-          millisecond: 0,
-        });
-        const workEnd = dt.set({
-          hour: Math.floor(endMinutes / 60),
-          minute: endMinutes % 60,
-          second: 0,
-          millisecond: 0,
-        });
-
-        // Clamp workStart to current time for today (past hours are not available)
-        let effectiveWorkStartMs = workStart.toMillis();
-        if (date === todayStr && effectiveWorkStartMs < now.toMillis()) {
-          effectiveWorkStartMs = now.toMillis();
-        }
-        if (effectiveWorkStartMs >= workEnd.toMillis()) continue;
-
-        const gaps = calculateGaps(effectiveWorkStartMs, workEnd.toMillis(), occupiedIntervals);
-        if (gaps.some((gap) => gap.durationMinutes >= durationMinutes)) {
-          canFit = true;
-          break;
-        }
-      }
-
-      results.push({ date, dow, working, canFit });
+      results.push({ date, dow, working: true, canFit });
 
       if (debug) {
         const schedSummary = daySchedules.map((s) => `${s.start_time}-${s.end_time}`).join(", ");
         console.log(
-          `[get-available-days] ${date} (dow=${dow}): ` +
-            `schedules=[${schedSummary}], ` +
-            `appointments=${dayAppointments.length}, ` +
-            `canFit=${canFit}`
+          `[get-available-days] ${date} (dow=${dow}): schedules=[${schedSummary}], ` +
+            `appointments=${dayAppointments.length}, slots=${slots.length}, canFit=${canFit}`
         );
       }
     }

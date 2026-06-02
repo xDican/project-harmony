@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 2 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + FASE 1 ENTREGADAS Y VERIFICADAS** (Fase 1: service_types consolidada como fuente unica ORG-LEVEL, bot-handler desplegado en prod, backfill 52 citas, **verificado con Demo Bot: cita con service_type_id poblado + FK resuelve OK**). **PROXIMA SESION: FASE 2** (motor disponibilidad `_shared/availability.ts` + skill/recurso aware). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 2 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + 1 + 2 ENTREGADAS Y VERIFICADAS EN PROD.** Fase 1: service_types fuente unica org-level + service_type_id. Fase 2: `_shared/availability.ts` motor unico de slots, resource-aware (capacidad+buffer) con degradacion, get-available-days unificado. **PROXIMA SESION: FASE 3** (UI config interna de recursos/recetas/skills — habilita que el resource-aware del motor sea usable). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -28,8 +28,8 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 | Fase | Que | Horas | Estado |
 |---|---|---|---|
 | 0 | Schema (resources, service_resources, professional_services + cols + trigger capacidad) | 3-4h | ✅ **APLICADO+VERIFICADO 2 Jun** (prod via MCP) |
-| 1 | Consolidar service_types como fuente unica (bot lee tabla + escribe service_type_id + UI edita tabla + backfill) | 4-6h | ✅ **ENTREGADA 2 Jun** (deploy prod, falta verif Demo Bot) |
-| 2 | Motor disponibilidad `_shared/availability.ts` + skill/recurso aware | 6-8h | pendiente |
+| 1 | Consolidar service_types como fuente unica (bot lee tabla + escribe service_type_id + UI edita tabla + backfill) | 4-6h | ✅ **ENTREGADA+VERIFICADA 2 Jun** |
+| 2 | Motor disponibilidad `_shared/availability.ts` (2A unificar + 2B resource-aware + 2C unificar days). Skill diferido a Fase 6 | 6-8h | ✅ **ENTREGADA+VERIFICADA 2 Jun** (prod, A/B + QA sintetica) |
 | 3 | UI config interna (recursos/recetas/skills) | 5-7h | pendiente |
 | 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | pendiente |
 | 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | pendiente |
@@ -69,6 +69,17 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 - Si vuelve el modelo **edificio multi-linea** (org con N lineas, menus distintos por linea — diferido Jun-Jul con doctor_subscriptions), agregar un M2M `line_service_types`. Hoy el ICP es clinica multi-recurso = 1 linea/org, asi que org-global es correcto.
 - `display_order` se seteo por-linea; en un org multi-linea podrian colisionar al leer org-level (cosmetico, solo afecta orden). Real clients no afectados.
 - Columna JSONB `whatsapp_lines.bot_service_types` quedo muerta → dropear en limpieza.
+
+### Fase 2 — ENTREGADA 2 Jun (motor de disponibilidad unico + resource-aware)
+**NUEVO** `supabase/functions/_shared/availability.ts` = fuente unica del algoritmo de slots. Antes habia 2-3 copias divergentes (bot-handler getAvailableSlotsForDate, get-available-slots EF, get-available-days EF con un algoritmo gap-based DISTINTO = divergencia latente).
+
+- **2A — extraccion pura:** `getAvailableSlotsForDate(supabase, query)` con la logica canonica (superset de get-available-slots: agrega calendar_schedules de los calendarios del doctor, fallback doctor_schedules; co-working por calendar_doctors; overlap en ms; filtro de pasados). `bot-handler` (wrapper posicional) y `get-available-slots` delegan. Versiones supabase-js alineadas a 2.39.0. **Verificado A/B en prod:** output identico antes/despues (3 fechas + granularidad). Seguro para el bot porque TODOS los line-doctors tienen calendar_id (el delta del camino sin-calendarId nunca se dispara).
+- **2B — resource-aware:** si se pasa `serviceTypeId` + `organizationId`, el motor excluye slots sin capacidad de recurso (receta `service_resources`) y aplica `buffer_minutes` al footprint (profesional + recurso), replicando la logica del trigger Fase 0. Consumo derivado en query-time, org-wide. **Degradacion garantizada:** receta vacia + buffer 0 → identico a 2A (todos los clientes hoy). Threading de `serviceTypeId`/`organizationId` por la cadena del bot (week→day→hour→slots + ambos reschedule + createAppointment); `session.context.organizationId` seteado por mensaje. `get-available-slots` acepta `serviceTypeId` opcional (deriva org). **QA sintetica en prod (transaccional, limpiada):** cabina cap=1 consumida por 2do doctor fuera del calendario → slot 11:00 libre para el profesional pero EXCLUIDO por capacidad de cabina. 0 filas residuales.
+- **2C — unificar get-available-days:** `canFit` ahora usa `enumerateSlots` (funcion pura extraida, loop unico con predicado opcional de recursos) en vez del gap-based. Datos del mes ya batcheados → enumeracion en memoria por dia, **sin queries extra** (perf preservada). Intervalos NAIVE para consistencia con el motor. Removidos `mergeIntervals`/`calculateGaps`/`timeToMinutes`. **Verificado:** canFit NEW == OLD (sin regresion) + cross-check canFit == (get-available-slots no vacio) en 3 dias. Day-view y hour-view ahora 100% consistentes.
+
+**Skill-aware (professional_services) DIFERIDO a Fase 6** (booking service-first): hoy el booking es professional-first, skill-matching seria prematuro.
+
+**Pendiente operativo Fase 2:** ningun cliente tiene recursos configurados aun (0 resources/recetas) → el resource-aware es no-op hasta el primer cliente multi-recurso. La UI para configurar recursos/recetas es **Fase 3**.
 
 ---
 

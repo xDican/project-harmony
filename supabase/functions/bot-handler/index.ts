@@ -18,6 +18,7 @@ import { OPT_EMOJI, buildStepTitle } from '../_shared/bot-messages.ts';
 import { normalizeToE164 } from '../_shared/phone.ts';
 import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
 import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
+import { getAvailableSlotsForDate as computeAvailableSlots } from '../_shared/availability.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -196,6 +197,9 @@ async function handleBotMessage(
       session = await resetSession(session.id, supabase);
     }
   }
+
+  // Fase 2: org disponible en context para el motor resource-aware (availability)
+  session.context.organizationId = organizationId;
 
   // Load handoff labels and service types once per session
   if (!session.context.handoffLabels) {
@@ -651,7 +655,7 @@ async function handleDirectReschedule(
   const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
     .toFormat("EEEE dd 'de' MMMM yyyy", { locale: 'es' });
 
-  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId, slotGranularity);
+  const weeks = await getAvailableWeeks(appointment.doctor_id, durationMinutes, supabase, calendarId, slotGranularity, session.context.selectedServiceTypeId, session.context.organizationId);
 
   if (weeks.length === 0) {
     return {
@@ -2125,7 +2129,7 @@ async function handleBookingSelectWeek(
   session.context.slotGranularity = slotGranularity;
 
   // Get available weeks
-  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId, slotGranularity);
+  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId, slotGranularity, session.context.selectedServiceTypeId, session.context.organizationId);
 
   if (weeks.length === 0) {
     const connecting = handoffLabels?.connecting || session.context.handoffLabels?.connecting || 'la secretaria';
@@ -2338,7 +2342,9 @@ async function handleBookingSelectDay(
     durationMins,
     supabase,
     session.context.calendarId,
-    granularity
+    granularity,
+    session.context.selectedServiceTypeId,
+    session.context.organizationId
   );
 
   if (days.length === 0) {
@@ -2484,7 +2490,9 @@ async function showHourSlots(
     PAGE_SIZE,
     supabase,
     session.context.calendarId,
-    slotGranularity
+    slotGranularity,
+    session.context.selectedServiceTypeId,
+    session.context.organizationId
   );
 
   const isReschedule = session.context.isReschedule;
@@ -2659,7 +2667,9 @@ async function createAppointmentWithPatient(
     checkDuration,
     supabase,
     session.context.calendarId,
-    session.context.slotGranularity || Math.min(checkDuration, 30)
+    session.context.slotGranularity || Math.min(checkDuration, 30),
+    session.context.selectedServiceTypeId,
+    session.context.organizationId
   );
 
   if (!slotsCheck.includes(session.context.selectedTime)) {
@@ -3053,7 +3063,7 @@ async function handleCancelConfirm(
     }
 
     // Go to week selection (reuse booking flow)
-    const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId, session.context.slotGranularity);
+    const weeks = await getAvailableWeeks(session.context.doctorId, session.context.durationMinutes, supabase, session.context.calendarId, session.context.slotGranularity, session.context.selectedServiceTypeId, session.context.organizationId);
 
     if (weeks.length === 0) {
       return {
@@ -3398,7 +3408,9 @@ async function getAvailableWeeks(
   durationMinutes: number,
   supabase: SupabaseClient,
   calendarId?: string,
-  slotGranularity?: number
+  slotGranularity?: number,
+  serviceTypeId?: string,
+  organizationId?: string
 ): Promise<{ weekStart: string; weekLabel: string }[]> {
   const timezone = 'America/Tegucigalpa';
   const now = DateTime.now().setZone(timezone);
@@ -3418,7 +3430,9 @@ async function getAvailableWeeks(
       durationMinutes,
       supabase,
       calendarId,
-      granularity
+      granularity,
+      serviceTypeId,
+      organizationId
     );
 
     if (days.length > 0) {
@@ -3439,7 +3453,9 @@ async function getAvailableDaysInWeek(
   durationMinutes: number,
   supabase: SupabaseClient,
   calendarId?: string,
-  slotGranularity: number = 30
+  slotGranularity: number = 30,
+  serviceTypeId?: string,
+  organizationId?: string
 ): Promise<{ date: string; label: string }[]> {
   const timezone = 'America/Tegucigalpa';
   const weekStartDt = DateTime.fromISO(weekStart, { zone: timezone });
@@ -3454,7 +3470,7 @@ async function getAvailableDaysInWeek(
     if (date < now.startOf('day')) continue;
 
     // Check if this day has available slots
-    const slots = await getAvailableSlotsForDate(doctorId, dateStr, durationMinutes, supabase, calendarId, slotGranularity);
+    const slots = await getAvailableSlotsForDate(doctorId, dateStr, durationMinutes, supabase, calendarId, slotGranularity, serviceTypeId, organizationId);
 
     if (slots.length > 0) {
       const label = date.toFormat('EEEE dd MMM', { locale: 'es' });
@@ -3473,9 +3489,11 @@ async function getAvailableHoursForDate(
   pageSize: number,
   supabase: SupabaseClient,
   calendarId?: string,
-  slotGranularity: number = 30
+  slotGranularity: number = 30,
+  serviceTypeId?: string,
+  organizationId?: string
 ): Promise<{ slots: string[]; hasMore: boolean; totalSlots: number }> {
-  const allSlots = await getAvailableSlotsForDate(doctorId, date, durationMinutes, supabase, calendarId, slotGranularity);
+  const allSlots = await getAvailableSlotsForDate(doctorId, date, durationMinutes, supabase, calendarId, slotGranularity, serviceTypeId, organizationId);
   const totalSlots = allSlots.length;
   const startIdx = (page - 1) * pageSize;
   const endIdx = startIdx + pageSize;
@@ -3489,9 +3507,9 @@ async function getAvailableHoursForDate(
 }
 
 /**
- * Replicates the logic from get-available-slots edge function
- * using the service role client (no JWT needed).
- * Uses calendar_schedules when calendarId is provided, else falls back to doctor_schedules.
+ * Calcula slots disponibles para una fecha. Fase 2: delega en el motor unico
+ * `_shared/availability.ts` (antes era una copia del algoritmo de get-available-slots).
+ * Se mantiene esta firma posicional para no tocar a los llamadores del bot.
  */
 async function getAvailableSlotsForDate(
   doctorId: string,
@@ -3499,120 +3517,19 @@ async function getAvailableSlotsForDate(
   durationMinutes: number,
   supabase: SupabaseClient,
   calendarId?: string,
-  slotGranularity: number = 30
+  slotGranularity: number = 30,
+  serviceTypeId?: string,
+  organizationId?: string
 ): Promise<string[]> {
-
-  // Get day of week (Luxon: 1=Mon...7=Sun → convert to 0=Sun...6=Sat)
-  const requestedDate = DateTime.fromISO(date);
-  const dayOfWeek = requestedDate.weekday % 7;
-
-  // Fetch schedules for this day: calendar_schedules if calendarId provided, else doctor_schedules
-  let schedules: Array<{ start_time: string; end_time: string }> | null = null;
-  if (calendarId) {
-    const { data, error } = await supabase
-      .from('calendar_schedules')
-      .select('start_time, end_time')
-      .eq('calendar_id', calendarId)
-      .eq('day_of_week', dayOfWeek);
-    if (error) return [];
-    schedules = data;
-  } else {
-    const { data, error: schedError } = await supabase
-      .from('doctor_schedules')
-      .select('start_time, end_time')
-      .eq('doctor_id', doctorId)
-      .eq('day_of_week', dayOfWeek);
-    if (schedError) return [];
-    schedules = data;
-  }
-
-  if (!schedules || schedules.length === 0) return [];
-
-  // Fetch existing appointments — co-work: check ALL doctors on the same calendar
-  let appointmentDoctorIds: string[] = [doctorId];
-
-  if (calendarId) {
-    const { data: calDocRows } = await supabase
-      .from('calendar_doctors')
-      .select('doctor_id')
-      .eq('calendar_id', calendarId)
-      .eq('is_active', true);
-    if (calDocRows && calDocRows.length > 0) {
-      appointmentDoctorIds = [...new Set(calDocRows.map((r: any) => r.doctor_id))];
-    }
-  } else {
-    const { data: calDocs } = await supabase
-      .from('calendar_doctors')
-      .select('calendar_id')
-      .eq('doctor_id', doctorId)
-      .eq('is_active', true);
-    if (calDocs && calDocs.length > 0) {
-      const calIds = calDocs.map((cd: any) => cd.calendar_id);
-      const { data: allCalDocs } = await supabase
-        .from('calendar_doctors')
-        .select('doctor_id')
-        .in('calendar_id', calIds)
-        .eq('is_active', true);
-      if (allCalDocs && allCalDocs.length > 0) {
-        appointmentDoctorIds = [...new Set(allCalDocs.map((r: any) => r.doctor_id))];
-      }
-    }
-  }
-
-  const { data: appointments } = await supabase
-    .from('appointments')
-    .select('time, duration_minutes')
-    .in('doctor_id', appointmentDoctorIds)
-    .eq('date', date)
-    .not('status', 'in', '("cancelled","canceled","cancelada")');
-
-  // Build occupied intervals
-  const occupiedIntervals = (appointments || []).map((apt: any) => {
-    const start = DateTime.fromISO(`${date}T${apt.time.substring(0, 5)}:00`);
-    const end = start.plus({ minutes: apt.duration_minutes || 60 });
-    return { startMs: start.toMillis(), endMs: end.toMillis() };
+  return await computeAvailableSlots(supabase, {
+    doctorId,
+    date,
+    durationMinutes,
+    calendarId,
+    slotGranularity,
+    serviceTypeId,
+    organizationId,
   });
-
-  // Generate available slots
-  const availableSlots: string[] = [];
-
-  // Filter past slots for today
-  const timezone = 'America/Tegucigalpa';
-  const now = DateTime.now().setZone(timezone);
-  const isToday = date === now.toISODate();
-  const nowHHMM = now.toFormat('HH:mm');
-
-  for (const schedule of schedules) {
-    const workStart = DateTime.fromISO(`${date}T${schedule.start_time.substring(0, 5)}:00`);
-    const workEnd = DateTime.fromISO(`${date}T${schedule.end_time.substring(0, 5)}:00`);
-    const workEndMs = workEnd.toMillis();
-
-    let slotStart = workStart;
-
-    while (slotStart.plus({ minutes: durationMinutes }).toMillis() <= workEndMs) {
-      // Skip slots that are in the past for today
-      if (isToday && slotStart.toFormat('HH:mm') <= nowHHMM) {
-        slotStart = slotStart.plus({ minutes: slotGranularity });
-        continue;
-      }
-
-      const slotStartMs = slotStart.toMillis();
-      const slotEndMs = slotStart.plus({ minutes: durationMinutes }).toMillis();
-
-      const hasOverlap = occupiedIntervals.some(({ startMs, endMs }: any) => {
-        return slotStartMs < endMs && startMs < slotEndMs;
-      });
-
-      if (!hasOverlap) {
-        availableSlots.push(slotStart.toFormat('HH:mm'));
-      }
-
-      slotStart = slotStart.plus({ minutes: slotGranularity });
-    }
-  }
-
-  // Sort and deduplicate
-  return Array.from(new Set(availableSlots)).sort((a, b) => a.localeCompare(b));
 }
 
 async function findPatientByPhone(
