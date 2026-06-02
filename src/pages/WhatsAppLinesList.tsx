@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getWhatsAppLinesByOrganization, updateWhatsAppLine, disconnectWhatsAppLine } from '@/lib/api.supabase';
+import { listServiceTypesByLine, saveServiceTypesForLine } from '@/lib/serviceTypesApi';
 import { type EmbeddedSignupResult } from '@/lib/whatsappApi';
 import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import type { WhatsAppLine } from '@/types/organization';
@@ -118,12 +119,20 @@ export default function WhatsAppLinesList() {
     setFormLabel(line.label);
     setFormBotEnabled(line.botEnabled);
     setFormBotGreeting(line.botGreeting || '');
-    setFormServiceTypes(line.botServiceTypes || []);
+    setFormServiceTypes([]);
     setFormDefaultDuration(line.defaultDurationMinutes || '');
     setFormIsActive(line.isActive);
     setTemplateMappings([]);
     setHasActiveSecretary(null);
     setDialogOpen(true);
+
+    // Fase 1 motor: los tipos de servicio viven en la tabla service_types (fuente unica)
+    try {
+      const serviceTypes = await listServiceTypesByLine(line.id);
+      setFormServiceTypes(serviceTypes);
+    } catch (err) {
+      console.error('[openEditDialog] Error cargando tipos de servicio:', err);
+    }
 
     // Check if org has an active secretary
     const { data: secData } = await supabase
@@ -175,9 +184,16 @@ export default function WhatsAppLinesList() {
         botEnabled: formBotEnabled,
         botGreeting: formBotGreeting.trim() || undefined,
         botHandoffType: formHandoffType,
-        botServiceTypes: formServiceTypes.filter((st) => st.name.trim() !== ''),
         defaultDurationMinutes: formDefaultDuration !== '' ? Number(formDefaultDuration) : undefined,
         isActive: formIsActive,
+      });
+
+      // Fase 1 motor: persistir tipos de servicio en la tabla service_types (fuente unica)
+      await saveServiceTypesForLine({
+        lineId: editingLine.id,
+        organizationId: editingLine.organizationId,
+        clinicId: editingLine.clinicId ?? null,
+        items: formServiceTypes.filter((st) => st.name.trim() !== ''),
       });
       toast({
         title: 'Exito',

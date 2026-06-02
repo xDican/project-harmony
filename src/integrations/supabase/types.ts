@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      _debug_calls_payloads: {
+        Row: {
+          error_message: string | null
+          field: string | null
+          id: number
+          raw_value: Json
+          received_at: string
+          step: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          field?: string | null
+          id?: number
+          raw_value: Json
+          received_at?: string
+          step?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          field?: string | null
+          id?: number
+          raw_value?: Json
+          received_at?: string
+          step?: string | null
+        }
+        Relationships: []
+      }
       activation_audit_log: {
         Row: {
           action: string
@@ -54,7 +81,7 @@ export type Database = {
       }
       appointments: {
         Row: {
-          appointment_at: string | null
+          appointment_at: string
           auto_cancelled: boolean
           auto_cancelled_at: string | null
           calendar_id: string | null
@@ -78,11 +105,13 @@ export type Database = {
           reminder_morning_sent_at: string | null
           reschedule_notified_at: string | null
           service_type: string | null
+          service_type_id: string | null
           status: string
           time: string
+          visit_id: string | null
         }
         Insert: {
-          appointment_at?: string | null
+          appointment_at: string
           auto_cancelled?: boolean
           auto_cancelled_at?: string | null
           calendar_id?: string | null
@@ -106,11 +135,13 @@ export type Database = {
           reminder_morning_sent_at?: string | null
           reschedule_notified_at?: string | null
           service_type?: string | null
+          service_type_id?: string | null
           status?: string
           time: string
+          visit_id?: string | null
         }
         Update: {
-          appointment_at?: string | null
+          appointment_at?: string
           auto_cancelled?: boolean
           auto_cancelled_at?: string | null
           calendar_id?: string | null
@@ -134,8 +165,10 @@ export type Database = {
           reminder_morning_sent_at?: string | null
           reschedule_notified_at?: string | null
           service_type?: string | null
+          service_type_id?: string | null
           status?: string
           time?: string
+          visit_id?: string | null
         }
         Relationships: [
           {
@@ -164,6 +197,13 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
             referencedColumns: ["id"]
           },
         ]
@@ -501,6 +541,60 @@ export type Database = {
           },
         ]
       }
+      call_permissions: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          expires_at: string | null
+          granted_at: string | null
+          id: string
+          organization_id: string
+          raw_event: Json | null
+          revoked_at: string | null
+          source: string
+          status: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          expires_at?: string | null
+          granted_at?: string | null
+          id?: string
+          organization_id: string
+          raw_event?: Json | null
+          revoked_at?: string | null
+          source?: string
+          status: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          expires_at?: string | null
+          granted_at?: string | null
+          id?: string
+          organization_id?: string
+          raw_event?: Json | null
+          revoked_at?: string | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_permissions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_permissions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clinics: {
         Row: {
           address: string | null
@@ -765,6 +859,10 @@ export type Database = {
           body: string | null
           call_direction: string | null
           call_duration_seconds: number | null
+          call_ended_at: string | null
+          call_id_meta: string | null
+          call_started_at: string | null
+          call_status: string | null
           channel: string
           conversation_id: string | null
           created_at: string
@@ -802,6 +900,10 @@ export type Database = {
           body?: string | null
           call_direction?: string | null
           call_duration_seconds?: number | null
+          call_ended_at?: string | null
+          call_id_meta?: string | null
+          call_started_at?: string | null
+          call_status?: string | null
           channel?: string
           conversation_id?: string | null
           created_at?: string
@@ -839,6 +941,10 @@ export type Database = {
           body?: string | null
           call_direction?: string | null
           call_duration_seconds?: number | null
+          call_ended_at?: string | null
+          call_id_meta?: string | null
+          call_started_at?: string | null
+          call_status?: string | null
           channel?: string
           conversation_id?: string | null
           created_at?: string
@@ -1128,6 +1234,58 @@ export type Database = {
           },
         ]
       }
+      professional_services: {
+        Row: {
+          created_at: string
+          doctor_id: string
+          id: string
+          is_active: boolean
+          organization_id: string
+          service_type_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          doctor_id: string
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          service_type_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          doctor_id?: string
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          service_type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_services_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_services_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_services_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       promotions: {
         Row: {
           clinic_id: string | null
@@ -1281,6 +1439,50 @@ export type Database = {
           },
         ]
       }
+      resources: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          quantity: number
+          resource_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          quantity?: number
+          resource_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          quantity?: number
+          resource_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resources_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       secretaries: {
         Row: {
           created_at: string | null
@@ -1316,9 +1518,59 @@ export type Database = {
           },
         ]
       }
+      service_resources: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          quantity_required: number
+          resource_id: string
+          service_type_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          quantity_required?: number
+          resource_id: string
+          service_type_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          quantity_required?: number
+          resource_id?: string
+          service_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_resources_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_resources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_resources_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_types: {
         Row: {
           aliases: string[]
+          buffer_minutes: number
           clinic_id: string | null
           created_at: string
           display_name: string
@@ -1328,11 +1580,14 @@ export type Database = {
           is_active: boolean
           name: string
           organization_id: string
+          price: number | null
+          requires_prior_consult: boolean
           updated_at: string
           whatsapp_line_id: string | null
         }
         Insert: {
           aliases?: string[]
+          buffer_minutes?: number
           clinic_id?: string | null
           created_at?: string
           display_name: string
@@ -1342,11 +1597,14 @@ export type Database = {
           is_active?: boolean
           name: string
           organization_id: string
+          price?: number | null
+          requires_prior_consult?: boolean
           updated_at?: string
           whatsapp_line_id?: string | null
         }
         Update: {
           aliases?: string[]
+          buffer_minutes?: number
           clinic_id?: string | null
           created_at?: string
           display_name?: string
@@ -1356,6 +1614,8 @@ export type Database = {
           is_active?: boolean
           name?: string
           organization_id?: string
+          price?: number | null
+          requires_prior_consult?: boolean
           updated_at?: string
           whatsapp_line_id?: string | null
         }
@@ -1587,6 +1847,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           label: string
+          last_historical_webhook_at: string | null
           meta_access_token: string | null
           meta_phone_number_id: string | null
           meta_registered: boolean | null
@@ -1595,6 +1856,7 @@ export type Database = {
           organization_id: string
           phone_number: string
           provider: string | null
+          sync_in_progress: boolean
           twilio_account_sid: string | null
           twilio_auth_token: string | null
           twilio_messaging_service_sid: string | null
@@ -1614,6 +1876,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           label: string
+          last_historical_webhook_at?: string | null
           meta_access_token?: string | null
           meta_phone_number_id?: string | null
           meta_registered?: boolean | null
@@ -1622,6 +1885,7 @@ export type Database = {
           organization_id: string
           phone_number: string
           provider?: string | null
+          sync_in_progress?: boolean
           twilio_account_sid?: string | null
           twilio_auth_token?: string | null
           twilio_messaging_service_sid?: string | null
@@ -1641,6 +1905,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           label?: string
+          last_historical_webhook_at?: string | null
           meta_access_token?: string | null
           meta_phone_number_id?: string | null
           meta_registered?: boolean | null
@@ -1649,6 +1914,7 @@ export type Database = {
           organization_id?: string
           phone_number?: string
           provider?: string | null
+          sync_in_progress?: boolean
           twilio_account_sid?: string | null
           twilio_auth_token?: string | null
           twilio_messaging_service_sid?: string | null
@@ -1829,6 +2095,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      initiate_conversation: {
+        Args: {
+          p_organization_id: string
+          p_patient_name?: string
+          p_patient_phone: string
+        }
+        Returns: Json
       }
       is_superadmin: { Args: { _user_id: string }; Returns: boolean }
     }

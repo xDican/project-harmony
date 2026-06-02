@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 2 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 ENTREGADA + QA 14/14 en prod**. **PROXIMA SESION: arrancar FASE 1** (consolidar service_types — toca bot vivo; plan detallado abajo y en `.claude/plans/motor-agendamiento-multirecurso.md`). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 2 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + FASE 1 ENTREGADAS Y VERIFICADAS** (Fase 1: service_types consolidada como fuente unica ORG-LEVEL, bot-handler desplegado en prod, backfill 52 citas, **verificado con Demo Bot: cita con service_type_id poblado + FK resuelve OK**). **PROXIMA SESION: FASE 2** (motor disponibilidad `_shared/availability.ts` + skill/recurso aware). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -28,12 +28,14 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 | Fase | Que | Horas | Estado |
 |---|---|---|---|
 | 0 | Schema (resources, service_resources, professional_services + cols + trigger capacidad) | 3-4h | ✅ **APLICADO+VERIFICADO 2 Jun** (prod via MCP) |
-| 1 | Motor disponibilidad multi-recurso (`_shared/availability.ts` + edge `get-availability`) | 4-6h | pendiente |
-| 2 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | pendiente |
-| 3 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | pendiente |
-| 4 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
+| 1 | Consolidar service_types como fuente unica (bot lee tabla + escribe service_type_id + UI edita tabla + backfill) | 4-6h | ✅ **ENTREGADA 2 Jun** (deploy prod, falta verif Demo Bot) |
+| 2 | Motor disponibilidad `_shared/availability.ts` + skill/recurso aware | 6-8h | pendiente |
+| 3 | UI config interna (recursos/recetas/skills) | 5-7h | pendiente |
+| 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | pendiente |
+| 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | pendiente |
+| 6 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
 
-Fases 1+2 = corazon del valor (sin doble-booking + muere el "engorroso" de Dulce). Fase 3 = variable de riesgo, "done" estricto (cortar a v2 si se infla). Fase 4 = el diferenciador.
+> NOTA: la numeracion ahora coincide con `.claude/plans/motor-agendamiento-multirecurso.md` (la tabla anterior aqui estaba desfasada). Fase 2+ = corazon del valor (sin doble-booking + muere el "engorroso" de Dulce). Secuenciador = variable de riesgo, "done" estricto. Bot service-first = el diferenciador.
 
 **Anti-scope-creep (NO se hace):** niveles de proficiencia, optimizacion global del dia, cooldown de maquina, UI self-config de clinica, excepciones de horario/feriados.
 
@@ -44,6 +46,29 @@ Fases 1+2 = corazon del valor (sin doble-booking + muere el "engorroso" de Dulce
 - **Seguridad:** advisor confirma las 3 tablas con RLS+policies OK. Trigger fn con `search_path` fijo + `REVOKE EXECUTE FROM anon, authenticated` (no es RPC). No introdujo ningun ERROR nuevo (los ERROR de `bot_analytics_summary`/`_debug_calls_payloads` son deuda pre-existente).
 - **MCP Supabase disponible esta sesion** (apply_migration, execute_sql, deploy_edge_function, generate_typescript_types). Ya NO hace falta el dashboard manual mientras dure la sesion.
 - **Pendiente Fase 1:** regenerar `types.ts` (las cols/tablas nuevas aun no estan en el tipo TS — no rompe build actual porque nada las referencia todavia).
+
+### Fase 1 — ENTREGADA 2 Jun (service_types = fuente unica)
+**Decision de alcance (Diego):** redirigir la UI de edicion a la tabla (opcion recomendada), NO solo leer. Evita pudricion silenciosa: si solo el bot leyera la tabla pero la UI siguiera editando el JSONB, una edicion de servicios no se reflejaria en el bot.
+
+**Hallazgo de diagnostico:** habia split-brain. UI (`WhatsAppLinesList`) editaba JSONB `whatsapp_lines.bot_service_types`; bot lo leia; tabla `service_types` solo se poblo 1 vez el 18 May (la leian solo Promociones). Para los 4 clientes reales JSONB==tabla en contenido (1 linea=1 org, sin colisiones). El org de prueba `c8b1c83b` (3 lineas en 1 org) tenia atribucion por-linea arbitraria por la colision `UNIQUE(org,name)` del migrate con `ON CONFLICT DO NOTHING`.
+
+**Cambios:**
+- `types.ts` regenerado via MCP (tablas/cols del motor presentes).
+- **NUEVO** `src/lib/serviceTypesApi.ts`: `listServiceTypesByLine` + `saveServiceTypesForLine` (upsert por `organization_id,name` → preserva id + columnas no enviadas como buffer/price/recetas futuras; baja logica `is_active=false` de los removidos, nunca DELETE para no romper FKs). Normaliza name→lower, display_name→original.
+- `WhatsAppLinesList.tsx`: `openEditDialog` carga de la tabla; `handleSave` persiste via API. Quitado `botServiceTypes` del `updateWhatsAppLine`. (El JSONB queda como dato muerto; columna dropeable en limpieza futura. `api.supabase.ts` aun expone `botServiceTypes` opcional pero ya nadie lo invoca.)
+- `bot-handler` (desplegado prod via CLI, **2 deploys**): linea ~200 lee `service_types` **a nivel ORG** (`organization_id` + `is_active`, ordenado por `display_order`), mapea a `{id, name:display_name, duration_minutes}` (antes leia JSONB por linea). **Decision Diego 2 Jun: catalogo global org-level**, no por linea — promos/quick_replies/recetas/skills ya referencian `service_type_id` a nivel org; el line-coupling era herencia del JSONB. Para clientes reales (1 linea/org) es identico. Propaga `selectedServiceTypeId` en `maybeShowServiceTypeStep` (auto-select 1) + `handleBookingSelectService` + ambos flujos de reschedule (`handleDirectReschedule` + multi-cita; agregado `service_type_id` a los 3 selects). INSERT en `createAppointmentWithPatient` ahora con `service_type_id` (+ `service_type` nombre por compat). Cleanup en `startBookingFlow`.
+- **Migracion** `20260602130000_motor_fase1_backfill_service_type_id.sql` (aplicada prod via MCP): match best-effort `LOWER(TRIM(service_type))` = `service_types.name` misma org. **52 citas** pobladas; 16 NULL esperados (15 test org formato viejo "Consulta general (30 mins)" + 1 "Microdermoabrasion" historica de Medilaser ya no configurada). El UPDATE dispara el trigger de capacidad pero degrada (0 service_resources).
+- **Fix data Demo Bot:** reasignada "consulta general" a la linea Demo Bot (estaba en Pinares Clinic por la colision). Demo Bot vuelve a mostrar sus 2 servicios.
+
+**Typecheck `tsc --noEmit` OK.** Sesiones en curso no se rompen (cachean lineServiceTypes viejo sin id → selectedServiceTypeId null, degrada limpio).
+
+**VERIFICADO 2 Jun (Diego, Demo Bot +50493133496):** cita agendada eligiendo "Consulta general" → quedo con `service_type` ("Consulta general") + `service_type_id` (b97277cb…) poblados y el FK resuelve a la fila correcta. Tambien validada la degradacion: la linea Clinica Pinares (0 servicios) agenda directo sin paso de servicio. (Nota: el Demo Bot es +50493133496, NO confundir con la linea verified +50433899824 de demos en vivo.)
+
+**Deuda / pendiente Fase 3 (UI config):**
+- El bot ya lee org-level, pero el EDITOR (`WhatsAppLinesList` → `serviceTypesApi.listServiceTypesByLine`/`saveServiceTypesForLine`) sigue **line-scoped** (lee/guarda/soft-delete por `whatsapp_line_id`). Para clientes reales (1 linea/org) coincide con org-level → consistente. Fase 3: mover la config a una **pagina org-level dedicada ('Servicios')** y hacer el soft-delete org-scoped. La columna `whatsapp_line_id` en service_types queda como atributo opcional (sin uso para el read del bot).
+- Si vuelve el modelo **edificio multi-linea** (org con N lineas, menus distintos por linea — diferido Jun-Jul con doctor_subscriptions), agregar un M2M `line_service_types`. Hoy el ICP es clinica multi-recurso = 1 linea/org, asi que org-global es correcto.
+- `display_order` se seteo por-linea; en un org multi-linea podrian colisionar al leer org-level (cosmetico, solo afecta orden). Real clients no afectados.
+- Columna JSONB `whatsapp_lines.bot_service_types` quedo muerta → dropear en limpieza.
 
 ---
 

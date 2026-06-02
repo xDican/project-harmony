@@ -201,11 +201,29 @@ async function handleBotMessage(
   if (!session.context.handoffLabels) {
     const { data: lineConfig } = await supabase
       .from('whatsapp_lines')
-      .select('bot_handoff_type, bot_service_types')
+      .select('bot_handoff_type')
       .eq('id', whatsappLineId)
       .single();
     session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
-    session.context.lineServiceTypes = lineConfig?.bot_service_types || [];
+
+    // Fase 1 motor: los tipos de servicio son la tabla service_types (fuente unica),
+    // ya no el JSONB whatsapp_lines.bot_service_types. display_name = lo que ve el
+    // paciente; el id se propaga al INSERT (appointments.service_type_id).
+    // Catalogo ORG-LEVEL (decision Diego 2 Jun): el bot ofrece todos los servicios
+    // activos del org, no filtra por linea — multiples consumidores (promos, quick
+    // replies, recetas/skills del motor) ya referencian service_type_id a nivel org.
+    // Para clientes reales (1 linea/org) es identico a filtrar por linea.
+    const { data: stRows } = await supabase
+      .from('service_types')
+      .select('id, display_name, duration_minutes')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+    session.context.lineServiceTypes = (stRows || []).map((st: any) => ({
+      id: st.id,
+      name: st.display_name,
+      duration_minutes: st.duration_minutes ?? undefined,
+    }));
   }
   const handoffLabels = session.context.handoffLabels as { menuOption: string; connecting: string; emoji: string };
 
@@ -563,7 +581,7 @@ async function handleDirectReschedule(
   // 1. Fetch appointment with doctor info
   const { data: appointment, error: aptError } = await supabase
     .from('appointments')
-    .select('id, date, time, duration_minutes, status, doctor_id, service_type, doctors:doctor_id (id, name, prefix)')
+    .select('id, date, time, duration_minutes, status, doctor_id, service_type, service_type_id, doctors:doctor_id (id, name, prefix)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -617,6 +635,9 @@ async function handleDirectReschedule(
   // Carry over service type from original appointment
   if (appointment.service_type) {
     session.context.selectedServiceType = appointment.service_type;
+  }
+  if (appointment.service_type_id) {
+    session.context.selectedServiceTypeId = appointment.service_type_id;
   }
   // Clean stale booking context to prevent "Paso 5/4" bug
   delete session.context.availableDoctors;
@@ -1841,7 +1862,7 @@ function getStepNumbers(session: BotSession) {
  * - 2+ types → returns a BotResponse with options for the patient to choose
  */
 function maybeShowServiceTypeStep(session: BotSession): BotResponse | null {
-  const serviceTypes: Array<{ name: string; duration_minutes?: number }> = session.context.lineServiceTypes || [];
+  const serviceTypes: Array<{ id?: string; name: string; duration_minutes?: number }> = session.context.lineServiceTypes || [];
 
   if (serviceTypes.length === 0) {
     return null;
@@ -1850,6 +1871,7 @@ function maybeShowServiceTypeStep(session: BotSession): BotResponse | null {
   if (serviceTypes.length === 1) {
     // Auto-select the single type silently
     session.context.selectedServiceType = serviceTypes[0].name;
+    session.context.selectedServiceTypeId = serviceTypes[0].id || null;
     if (serviceTypes[0].duration_minutes) {
       session.context.serviceDurationOverride = serviceTypes[0].duration_minutes;
     }
@@ -1893,6 +1915,7 @@ async function startBookingFlow(
   delete session.context.rescheduleAppointmentTime;
   delete session.context.rescheduleAppointmentDoctorName;
   delete session.context.selectedServiceType;
+  delete session.context.selectedServiceTypeId;
   delete session.context.serviceDurationOverride;
   delete session.context.availableServiceTypes;
   delete session.context.availableWeeks;
@@ -2045,7 +2068,7 @@ async function handleBookingSelectService(
   organizationId: string,
   supabase: SupabaseClient
 ): Promise<BotResponse> {
-  const serviceTypes: Array<{ name: string; duration_minutes?: number }> = session.context.availableServiceTypes || [];
+  const serviceTypes: Array<{ id?: string; name: string; duration_minutes?: number }> = session.context.availableServiceTypes || [];
   let selection = parseInt(input.trim());
 
   // Fuzzy match text against service type names
@@ -2074,6 +2097,7 @@ async function handleBookingSelectService(
 
   const selected = serviceTypes[selection - 1];
   session.context.selectedServiceType = selected.name;
+  session.context.selectedServiceTypeId = selected.id || null;
   if (selected.duration_minutes) {
     session.context.serviceDurationOverride = selected.duration_minutes;
   }
@@ -2689,6 +2713,7 @@ async function createAppointmentWithPatient(
       organization_id: organizationId,
       notes: appointmentNotes,
       service_type: session.context.selectedServiceType || null,
+      service_type_id: session.context.selectedServiceTypeId || null,
       calendar_id: session.context.calendarId || null,
     })
     .select()
@@ -2859,6 +2884,7 @@ async function handleRescheduleList(
     status: apt.status,
     durationMinutes: apt.duration_minutes,
     serviceType: apt.service_type || null,
+    serviceTypeId: apt.service_type_id || null,
     doctorId: apt.doctors?.id,
     doctorName: apt.doctors ? `${apt.doctors.prefix} ${apt.doctors.name}` : 'Doctor',
   }));
@@ -3021,6 +3047,9 @@ async function handleCancelConfirm(
     // Carry over service type from original appointment
     if (selectedApt?.serviceType) {
       session.context.selectedServiceType = selectedApt.serviceType;
+    }
+    if (selectedApt?.serviceTypeId) {
+      session.context.selectedServiceTypeId = selectedApt.serviceTypeId;
     }
 
     // Go to week selection (reuse booking flow)
@@ -3680,7 +3709,7 @@ async function getPatientUpcomingAppointments(
   const { data: appointments } = await supabase
     .from('appointments')
     .select(`
-      id, date, time, status, notes, duration_minutes, service_type,
+      id, date, time, status, notes, duration_minutes, service_type, service_type_id,
       doctors:doctor_id (id, name, prefix)
     `)
     .eq('patient_id', patientId)
