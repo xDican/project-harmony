@@ -1,6 +1,6 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 25 May 2026 (Instalacion Skin Medic ejecutada. Meta restringio cuenta por falta de sitio web en portfolio — landing creada, revision enviada, esperando 24h. Numero migrado OK. Feature "iniciar conversacion desde link wa.me" construido y deployado. Bug busqueda por nombre corregido.)
+> Ultima actualizacion: 2 Jun 2026 (Decision: construir el MOTOR DE AGENDAMIENTO MULTI-RECURSO antes de buscar clientes — es el producto real, no especulacion. Reframe: gancho (Coexistence+bot) = adquisicion; motor = retencion/foso/$150. Modelo de datos cerrado con datos reales del cuestionario. Secuenciador multi-procedimiento = v1 (riesgo de scope). NLP del bot diferido hasta primer cliente. Prospeccion en paralelo obligatoria.)
 > Updates historicos en `estado-estrategia-historial.md`
 
 ---
@@ -449,3 +449,147 @@ Ademas, la plataforma OrionCare no tenia forma de iniciar conversaciones con pac
 ### Leccion operativa
 
 **Checklist onboarding pre-migracion (agregar):** Verificar que el Business Portfolio tiene sitio web ANTES de migrar el numero. Si no tiene, crear landing + agregar sitio + esperar aprobacion ANTES de la migracion.
+
+---
+
+## Sesion 1 Jun 2026 — Skin Medic cerrado, ICP refinado, Sprint Coexistence aprobado
+
+### Lo que cambio
+
+**Skin Medic perdido definitivamente 27 May.** Cliente top ($150, 45% del MRR efectivo) cancelo a las 48h por gap fundamental: el modelo "migrar el numero al Cloud API" desactiva la WhatsApp Business App de la asistente, quien queda "amputada" sin features esenciales (reenviar archivo, etiquetas, etc.). Post-mortem en [[skin-medic-perdido]].
+
+**Observacion empirica clave de Diego:** al desconectar el numero a las 5pm del dia anterior, Skin Medic perdio leads INMEDIATAMENTE — no a los 4 dias como esperaba Diego. Tres hipotesis (no excluyentes):
+1. Pacientes agendan dia-a-dia, no a 4 dias
+2. El paciente quiere respuesta en 1-2h, no espera — si no contestas se va a otra clinica
+3. El numero ya es marca conocida (boca a boca, etiquetas en celulares de recurrentes) — downtime = 100% perdida de trafico organico habitual
+
+**Implicacion:** ZERO DOWNTIME es no-negociable. El playbook "migrar el sabado en la noche" murio.
+
+### ICP definitivo confirmado
+
+| Segmento | Volumen tipico | Veredicto |
+|---|---|---|
+| Medico independiente | <5 msj/dia | OUT — sin dolor |
+| Medico + 1 asistente | 10-20 msj/dia | OUT — dolor manejable a mano |
+| **Clinica multi-recurso (1 doc + N tecnicas)** | **14 msj/HORA observado en Skin Medic** | **UNICO ICP real** |
+| Edificio multi-doctor asistente comun | medio | Posible, secundario |
+
+Diego cerro las puertas con todos los demas segmentos basado en feedback en campo. La unica metrica de mercado dura: **Skin Medic generaba ~150 msj/dia, otros clientes generan <20%**.
+
+### Solucion tecnica validada — Coexistence
+
+Investigacion con Gemini 1 Jun cerro el loop completo:
+
+1. **Coexistence es GA** (no beta) desde mediados 2025 en la mayoria del mundo
+2. **Permite mismo numero en WA Business App + Cloud API simultaneamente** via QR scan
+3. **Embedded Signup ya esta 100% implementado** en el codigo (build v16). Solo falta el switch del flavor: `featureType: 'whatsapp_business_app_onboarding'` + `sessionInfoVersion: '3'` + skipear el `POST /register`
+4. **2 webhooks adicionales criticos:** `smb_message_echoes` (lo que la asistente envia desde su celular llega al inbox web) + `smb_app_state_sync` (sincroniza cambios contactos)
+5. **History flood:** 5-15 min de inyeccion intensa al escanear QR. Filtrar por `timestamp > 5min en el pasado` para skipear bot/transcription/notifications. Debounce de 5 min sin updates = sync completo
+6. **Tech Provider status:** ya confirmado por Diego
+7. **3 clientes actuales no se pueden migrar a Coexistence sin downtime** — quedan en modo migracion destructivo. Silencio + churn organico
+
+Detalle tecnico completo en `estado-dev.md` seccion "PRIORIDAD #1 — Sprint Coexistence" y en memoria [[sprint-coexistence]].
+
+### Decisiones tomadas 1 Jun
+
+1. **Churn organico de Yeni Ramos, David Diaz/Ecoclinicas, Paredes/Medilaser** — silencio total, no comunicacion proactiva, no se intenta retencion. Su perfil no es ICP. Suma ~$145 que se va a perder en 1-3 meses. Aceptable.
+2. **Guevara se mantiene como testimonial** — NPS 9.5, 2 referidos pendientes. Cuidar.
+3. **Skin Medic NO se intenta recuperar.** En 3-4 meses con Coexistence operativo se puede reabrir conversacion como "version 2" si Mendoza/Dulce muestran interes — pero NO se busca activamente.
+4. **Sprint Coexistence arranca 1 Jun (hoy) tarde** — 14-17h trabajo concentrado, 3-4 dias calendario. Pruebas con Demo Bot verified + numero personal Diego ANTES de cualquier cliente real.
+5. **Lista 20 clinicas TGU con Warhol** — prompt enviado a Gemini (Deep Research). Inventariado puede empezar HOY en paralelo al sprint codigo. Onboarding real comienza solo despues de sprint validado.
+6. **TAM estimado:** ~20 clinicas TGU + replica a SPS/La Ceiba + horizontal a salones de belleza (mismo perfil multi-recurso) = **$8K-15K MRR techo realista**. Hito $1,500 paz mental con 8-10 clientes del ICP correcto.
+7. **Pivot horizontal posterior:** salones de belleza grandes (estilistas/manicuristas/esteticistas en paralelo) tienen mismo perfil operativo que clinica multi-recurso. Ruta de diversificacion 2027 reforzada.
+
+### Dashboard actualizado 1 Jun
+
+| Metrica | Valor |
+|---|---|
+| Clientes activos | **3** (Guevara $35, Yeni $35, Ecoclinicas $35) + Medilaser $75 desconectado |
+| MRR facturado | **$180** |
+| MRR efectivo | **$105** sin Medilaser / $180 si reconecta (improbable) |
+| Churn proyectado | -$105-$180 en 1-3 meses (Yeni, David, Paredes salen) |
+| MRR pos-churn (probable) | **$35** (solo Guevara) |
+| Burn stack | ~$65/mes |
+| Cash flow pos-churn | **-$30/mes** — sostenible muchos meses, no es negocio |
+| Hito $1,500 | Faltan $1,465 — requiere 8-10 clientes del ICP nuevo |
+| Pipeline | PAUSADO hasta Sprint Coexistence + lista 20 clinicas listas |
+| Ads | PAUSADOS permanentes — reactivar cuando haya caso de estudio ICP nuevo |
+
+### Tareas activas (post-1 Jun)
+
+- [ ] **#36** Sprint Coexistence — 10 items tecnicos. Ver `estado-dev.md` para detalle. ETA: 4 Jun
+- [ ] **#37** Inventariado 20 clinicas TGU con Warhol — prompt enviado a Gemini. Diego va recopilando lista en paralelo
+- [ ] **#38** Test Coexistence end-to-end con Demo Bot verified + numero personal Diego ANTES de cliente real
+- [ ] **#39** Documentar playbook cero-downtime: sandbox 3 dias para asistente + ventana viernes 7pm + pre-load contactos via Coexistence sync (Gemini sugiere este patron)
+- [ ] **#40** Verificar requisito version WA Business App 2.24.17+ del cliente antes de cada onboarding futuro
+- [ ] **#41** Una vez Sprint Coexistence cerrado: identificar primera clinica del ICP nuevo de la lista TGU para onboarding piloto
+- [ ] **#42** Reactivar ads ~Jul-Ago 2026 con caso de estudio del primer cliente ICP nuevo (cuando haya 4-6 semanas de uso real)
+
+### Riesgos activos (actualizado 1 Jun)
+
+1. **ALTO:** Sprint Coexistence excede 17h estimadas (probable factor sorpresa con `smb_message_echoes`/`smb_app_state_sync` que son types nuevos en webhook). Mitigacion: tests con Demo Bot antes de cliente.
+2. **ALTO:** History flood saltea filtro `isHistoricalMessage` y dispara bot a mensajes viejos en cliente real. Mitigacion: bot OFF al conectar, transcription OFF la primera hora.
+3. **MEDIO:** Lista 20 clinicas TGU no es suficiente (clinicas multi-recurso reales en TGU son < 10). Mitigacion: salir a SPS rapido + considerar horizontal salones antes.
+4. **MEDIO:** Capacidad Diego < 3h/dia + sprint + onboarding piloto. Mitigacion: sprint termina antes de buscar cliente nuevo.
+5. **BAJO:** WA Business App version < 2.24.17 en clinicas mas viejas. Mitigacion: validar pre-onboarding.
+
+### Para retomar proxima sesion estrategia
+
+Estado mental al cierre 1 Jun: Sprint Coexistence aprobado. Diego entra a modo-dev mas tarde HOY para arrancar. Primer test en Demo Bot, no cliente real. Lista TGU corre en paralelo (Warhol + Diego con outputs de Gemini Deep Research).
+
+**Primera pregunta a hacer al retomar:** ¿como fue el sprint Coexistence? ¿Cuantos items cerrados? ¿Hay clientes potenciales de la lista TGU para validar el pitch?
+
+**Decision pendiente proxima sesion:** una vez Coexistence funcional, ¿precio entrada para clinica multi-recurso sigue siendo $150 flat o se ajusta con aprendizajes Skin Medic? Validar si "$150 sin demo previo" repite o se requiere demo guiada.
+
+---
+
+## Sesion 2 Jun 2026 — Decision: construir el motor de agendamiento multi-recurso (el producto real)
+
+**Contexto entrante:** Coexistence funciona en numero de prueba de Diego. Diego planteo la duda: ¿desarrollamos mas la plataforma antes de buscar clientes, o ya estamos listos? Preocupacion concreta: el flujo de crear cita es engorroso para clinica multi-recurso (frontdesk saltando entre 6-7 calendarios) + el tema del numero de equipos.
+
+### El debate (build vs sell) y como evoluciono
+
+- Mi postura inicial (COO): NO serializar. Construir solo la vista combinada barata (~3-4h) + prospectar en paralelo, diferir el flujo perfecto (25-30h) hasta validar con cliente real. Riesgo: construir 5 semanas apostando a un N=1 muerto (Skin Medic).
+- Diego empujo de vuelta con buen razonamiento: el ICP ES multi-recurso → el flujo NO es feature, es el loop central del producto. Mercado chico e implacable (~20 clinicas TGU) premia calidad sobre velocidad.
+- **Punto que cerro el debate (Diego):** "¿que hubiera pasado si tuvieramos Coexistence con Skin Medic? Habriamos tenido que construir esto igual, porque sino solo seria otra plataforma de calendario como la que tienen." Correcto. Esto invalido mi objecion de "especulacion": el motor NO es para Skin Medic, es para TODA la categoria del ICP. Skin Medic solo lo revelo.
+
+### Decisiones tomadas
+
+1. **Construir el motor de agendamiento multi-recurso AHORA, antes de buscar clientes.** No es especulacion — es el producto-categoria. Ver [[motor-agendamiento-es-producto]].
+2. **Reframe de que ES OrionCare:** Gancho (Coexistence + bot que contesta) = adquisicion. **Motor de agendamiento = retencion / foso / justificacion del $150.** El inbox consigue al cliente; el motor lo amarra. Un competidor copia el bot en un trimestre; el motor no.
+3. **Tesis del dolor (estrella polar del scope):** fuga bilateral = pacientes que abandonan ("nunca te contestan") + recursos ociosos. Cada feature del flujo se justifica solo si reduce una de las dos fugas. El medico solo no tiene este dolor → valida el ICP. Calendario multi-recurso = table stakes (Mendoza ya lo tenia); bot que contesta = el diferenciador. Mensaje de venta = "nunca te contestan".
+4. **Modelo de datos cerrado** (con datos reales del cuestionario, seccion A4):
+   - `servicios`: nombre, duracion_min, buffer_min (default 10 = limpieza entre pacientes), equipo_tipo_id (FK nullable), requiere_consulta_previa (regla A3.4: paciente nuevo → Mendoza), precio (bot da precios, B5.4)
+   - `equipos`: nombre, **cantidad** (la columna que ES el constraint) → `3 laser, 2 radiofrecuencia, 1 CO2, 1 frag, 6 cabinas, 1 consultorio`
+   - `profesional_servicios`: M2M = la skill matrix
+   - Disponibilidad = 3 contadores (profesional libre + cabina < 6 + equipo_tipo < cantidad). Sin solver, sin optimizacion.
+   - **Hallazgo clave:** la CABINA (6) es probablemente el cuello de botella real, no la maquina. Diego solo pensaba en maquinas. Cabina = otro recurso fungible con cantidad. Buffer 10min bloquea cabina+persona, NO la maquina (A4.6: sin cooldown). El buffer es un gap competitivo (su plataforma no lo puede asignar).
+5. **Secuenciador multi-procedimiento = v1** (Diego eligio, A5.3 lo respalda: multi-procedimiento es comun). **Riesgo de scope #1** — convierte 5 semanas en 7. Definicion de "done" estricta: encadenar procedimientos consecutivos del mismo paciente en una visita, greedy primero-disponible, sin optimizacion global del dia. Si se infla → recortar a v2.
+6. **NLP / lenguaje natural del bot = DIFERIDO hasta primer cliente.** Entrenar con mensajes reales, no inventados (alinea [[inbox-only-primera-semana]] + [[no-data-inferida]]). El motor entrega valor dia 1 sin NLP (humano + flujos estructurados/botones).
+7. **Primer cliente inbox-only → analisis de mensajes semana 1 = triple proposito:** (a) training data del bot, (b) comparativa de valor para el cliente (ataca riesgo "mes 1 sin valor visible" que fue factor con Skin Medic), (c) caso de estudio para reactivar ads.
+8. **Prospeccion en paralelo = OBLIGATORIA.** No para decidir si construir (ya decidido) sino para validar que la estructura de recursos generaliza. Skin Medic (6 cabinas / 3 laser) no es universal: clinica dental tiene sillas, estetica chica tiene 3 cabinas. El modelo (recetas + cantidades) es universal; los numeros no.
+
+### Hallazgo: el cuestionario Skin Medic SI tiene datos reales
+
+Diego creia que no estaba la data de equipos. Si esta (seccion A4 contestada). Es oro para el modelo y como caso de prueba de generalizacion.
+
+### Riesgos activos (actualizado 2 Jun)
+
+1. **ALTO (nuevo):** Secuenciador multi-procedimiento infla las ~5 semanas a 7. Mitigacion: definicion de done estricta, fallback a v2.
+2. **MEDIO (nuevo):** Estructura de recursos de Skin Medic (6 cabinas/3 laser) puede no generalizar a otras clinicas del ICP → modelo cerrado en piedra prematuramente. Mitigacion: validar con 1-2 prospectos reales mientras se construye.
+3. **MEDIO:** Capacidad Diego <3h/dia + 5-7 semanas de build sin ingreso nuevo. Cash flow pos-churn -$30/mes lo aguanta muchos meses (no es bloqueador, pero el reloj corre).
+4. **MEDIO (de 1 Jun, vigente):** Lista 20 clinicas TGU insuficiente (multi-recurso reales < 10). Mitigacion: SPS + horizontal salones.
+5. Riesgos tecnicos de Coexistence (1 Jun) se mantienen hasta primer onboarding real.
+
+### Tareas activas (post-2 Jun)
+
+- [ ] **#43** Bajar el motor de agendamiento a spec tecnico en `/modo-dev` (secuenciador acotado, horas reales, definicion de done)
+- [ ] **#44** Prospeccion en paralelo (Warhol + lista TGU) — conversaciones validan estructura de recursos antes de cerrar el modelo
+- [ ] **#45** Primer cliente → inbox-only semana 1 → analisis de mensajes (training bot + comparativa cliente + caso de estudio)
+- [ ] Vigentes de 1 Jun: #38 (test Coexistence end-to-end), #39 (playbook cero-downtime), #41 (identificar primera clinica ICP), #42 (reactivar ads ~Jul-Ago con caso de estudio)
+
+### Para retomar proxima sesion
+
+**Estado mental al cierre 2 Jun:** Modelo conceptual y de datos del motor cerrado y validado contra datos reales. Diego pasa a `/modo-dev` cuando quiera para el spec tecnico. Prospeccion corre en paralelo.
+
+**Primera pregunta al retomar:** ¿avanzo el spec del motor en dev? ¿El secuenciador se mantuvo en estimacion o se inflo? ¿Hubo conversaciones de prospeccion que confirmen/refuten que la estructura de recursos generaliza?

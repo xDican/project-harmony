@@ -1,8 +1,49 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 1 Jun 2026 (Sprint Coexistence FASE A codeada. Plan revisado contra codigo — corregido hueco critico del item 2. Es la PRIORIDAD #1 del proyecto.)
+> Ultima actualizacion: 2 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 ENTREGADA + QA 14/14 en prod**. **PROXIMA SESION: arrancar FASE 1** (consolidar service_types — toca bot vivo; plan detallado abajo y en `.claude/plans/motor-agendamiento-multirecurso.md`). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
-> Plan revisado + fases: `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
+> Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
+> Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
+
+---
+
+## PRIORIDAD #1 — Motor de Agendamiento Multi-Recurso (arranca 2 Jun)
+
+**Plan completo:** `.claude/plans/motor-agendamiento-multirecurso.md`
+
+Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCTO REAL de OrionCare (retencion/foso/$150), no el inbox/bot. Coexistence = adquisicion; motor = retencion. Ver [[motor-agendamiento-es-producto]].
+
+**Hallazgo del mapeo de schema (2 Jun):** el sistema es 100% doctor-centrico, NO existe concepto de recurso finito (equipo/cabina/maquina) — cero tablas/columnas. `appointments.service_type` es string libre (ni FK). El motor es construccion nueva sobre cimientos buenos (service_types, doctors con user_id nullable = tecnicas sin login, calendar_schedules, algoritmo de slots de bot-handler reutilizable).
+
+**Decisiones de diseno ratificadas por Diego:**
+1. Receta = M2M `service_resources` (NO un FK unico — laser necesita cabina Y maquina).
+2. Secuenciador = `visit_id` + una cita por procedimiento (algoritmo de slots consecutivos, no rediseno de datos).
+3. Consumo de recursos derivado en query-time (sin tabla materializada).
+4. Tecnicas = filas en `doctors` (reuso) + label "Doctor"→"Profesional" (#24).
+5. **Config interna white-glove:** Diego hace cada instalacion. UI de config en area superadmin (power tool, no consumidor). Tablas+RLS genericas para self-service futuro.
+6. Degradacion elegante: org sin recursos configurados → booking doctor-first como hoy (no rompe clientes actuales, sin flag).
+7. NLP del bot diferido hasta primer cliente real (Fase 4 = bot service-first estructurado, opciones numeradas).
+
+**Fases (~26-36h total Claude+QA):**
+| Fase | Que | Horas | Estado |
+|---|---|---|---|
+| 0 | Schema (resources, service_resources, professional_services + cols + trigger capacidad) | 3-4h | ✅ **APLICADO+VERIFICADO 2 Jun** (prod via MCP) |
+| 1 | Motor disponibilidad multi-recurso (`_shared/availability.ts` + edge `get-availability`) | 4-6h | pendiente |
+| 2 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | pendiente |
+| 3 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | pendiente |
+| 4 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
+
+Fases 1+2 = corazon del valor (sin doble-booking + muere el "engorroso" de Dulce). Fase 3 = variable de riesgo, "done" estricto (cortar a v2 si se infla). Fase 4 = el diferenciador.
+
+**Anti-scope-creep (NO se hace):** niveles de proficiencia, optimizacion global del dia, cooldown de maquina, UI self-config de clinica, excepciones de horario/feriados.
+
+### Fase 0 — CERRADA 2 Jun (aplicada + verificada en prod)
+- Aplicada via **Supabase MCP** (OAuth de Diego) como migration atomica `motor_agendamiento_multirecurso_fase0`. 6 archivos en repo `supabase/migrations/20260602120000..120005_motor_*.sql`.
+- Tablas `resources` / `service_resources` / `professional_services` creadas con RLS org-scoped (patron `get_user_organizations`). Cols `service_types.{buffer_minutes,price,requires_prior_consult}` + `appointments.{service_type_id,visit_id}`. Trigger `validate_appointment_resource_capacity` (BEFORE INSERT/UPDATE, degradacion elegante si no hay service_type_id/receta).
+- **QA 14/14 PASADO** (suite transaccional auto-rollback en org de prueba `c8b1c83b`): boundary capacidad, no-sobre-bloqueo (sin solape), capacidad cabina=2 con conteo cruzado entre servicios, multi-recurso (cabina llena bloquea servicio de laser), buffer (30+15min), degradacion elegante (service_type_id NULL entra), cancelada-libera-recurso, reagenda-no-se-cuenta-a-si-misma + reagenda-a-slot-lleno-rechazada. 0 filas residuales, 776 citas de prod intactas.
+- **Seguridad:** advisor confirma las 3 tablas con RLS+policies OK. Trigger fn con `search_path` fijo + `REVOKE EXECUTE FROM anon, authenticated` (no es RPC). No introdujo ningun ERROR nuevo (los ERROR de `bot_analytics_summary`/`_debug_calls_payloads` son deuda pre-existente).
+- **MCP Supabase disponible esta sesion** (apply_migration, execute_sql, deploy_edge_function, generate_typescript_types). Ya NO hace falta el dashboard manual mientras dure la sesion.
+- **Pendiente Fase 1:** regenerar `types.ts` (las cols/tablas nuevas aun no estan en el tipo TS — no rompe build actual porque nada las referencia todavia).
 
 ---
 
