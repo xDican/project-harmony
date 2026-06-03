@@ -18,14 +18,6 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type ServiceTypeRow = Database["public"]["Tables"]["service_types"]["Row"];
 
-/** Forma que edita la UI y consume el bot. */
-export interface ServiceTypeItem {
-  /** Nombre tal cual lo escribe el usuario (con casing). */
-  name: string;
-  /** Duracion en minutos; undefined = usa la duracion por defecto de la linea. */
-  duration_minutes?: number;
-}
-
 /** Servicio activo a nivel org (para agendar): id + nombre + duracion. */
 export interface OrgServiceType {
   id: string;
@@ -61,108 +53,78 @@ export async function listActiveServiceTypesForOrg(
 }
 
 /**
- * Lista los tipos de servicio ACTIVOS de una linea, ordenados para mostrar/editar.
- * Devuelve el `display_name` como `name` (lo que ve el usuario).
+ * Crea o actualiza un servicio a nivel ORG (fuente unica — la administracion
+ * vive en el panel Motor → Servicios, ya no en la linea). `name` es la clave
+ * canonica en minusculas (UNIQUE por org); `display_name` conserva el casing.
+ * El create usa upsert por (organization_id, name) para reactivar/actualizar un
+ * servicio dado de baja con el mismo nombre. Preserva las columnas no enviadas
+ * (buffer/price/recetas via id).
  */
-export async function listServiceTypesByLine(
-  lineId: string
-): Promise<ServiceTypeItem[]> {
+export async function saveServiceType(params: {
+  organizationId: string;
+  id?: string;
+  displayName: string;
+  durationMinutes: number;
+}): Promise<OrgServiceType> {
+  const { organizationId, id, displayName, durationMinutes } = params;
+  const name = displayName.trim();
+  if (!name) throw new Error("El nombre del servicio es obligatorio.");
+  const duration = Math.max(1, Math.floor(durationMinutes));
+
+  if (id) {
+    const { data, error } = await supabase
+      .from("service_types")
+      .update({ display_name: name, name: name.toLowerCase(), duration_minutes: duration })
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .select("id, display_name, duration_minutes")
+      .single();
+    if (error) {
+      if (error.code === "23505") throw new Error(`Ya existe un servicio llamado "${name}".`);
+      throw error;
+    }
+    return { id: data.id, displayName: data.display_name, durationMinutes: data.duration_minutes ?? null };
+  }
+
+  // Create: display_order al final de la lista del org.
+  const { data: maxRow } = await supabase
+    .from("service_types")
+    .select("display_order")
+    .eq("organization_id", organizationId)
+    .order("display_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextOrder = ((maxRow as { display_order: number | null } | null)?.display_order ?? -1) + 1;
+
   const { data, error } = await supabase
     .from("service_types")
-    .select("display_name, duration_minutes, display_order")
-    .eq("whatsapp_line_id", lineId)
-    .eq("is_active", true)
-    .order("display_order", { ascending: true });
-
-  if (error) {
-    console.error("[listServiceTypesByLine] Error:", error);
-    throw error;
-  }
-
-  return (data || []).map((row) => ({
-    name: row.display_name,
-    duration_minutes: row.duration_minutes ?? undefined,
-  }));
+    .upsert(
+      {
+        organization_id: organizationId,
+        name: name.toLowerCase(),
+        display_name: name,
+        duration_minutes: duration,
+        is_active: true,
+        display_order: nextOrder,
+      },
+      { onConflict: "organization_id,name" }
+    )
+    .select("id, display_name, duration_minutes")
+    .single();
+  if (error) throw error;
+  return { id: data.id, displayName: data.display_name, durationMinutes: data.duration_minutes ?? null };
 }
 
-/**
- * Persiste la lista editada de tipos de servicio de una linea:
- *  - upsert (por organization_id+name) de cada item → reactiva/actualiza o inserta,
- *    preservando el id y las columnas no enviadas (buffer_minutes, price, etc.).
- *  - baja logica (is_active=false) de los servicios activos de la linea que ya no estan.
- *
- * Los nombres se normalizan a minusculas para la clave canonica `name`; el casing
- * original se guarda en `display_name`. Items con nombre vacio se ignoran.
- */
-export async function saveServiceTypesForLine(params: {
-  lineId: string;
+/** Baja logica de un servicio (is_active=false). Nunca DELETE, para no romper FKs de citas. */
+export async function deactivateServiceType(params: {
   organizationId: string;
-  clinicId?: string | null;
-  items: ServiceTypeItem[];
+  id: string;
 }): Promise<void> {
-  const { lineId, organizationId, clinicId, items } = params;
-
-  // Normalizar + dedupe por nombre canonico (gana el ultimo).
-  const byName = new Map<string, { displayName: string; duration?: number }>();
-  for (const it of items) {
-    const displayName = (it.name || "").trim();
-    if (!displayName) continue;
-    byName.set(displayName.toLowerCase(), {
-      displayName,
-      duration: it.duration_minutes,
-    });
-  }
-
-  const canonicalNames = Array.from(byName.keys());
-
-  // 1. Upsert de los items presentes (match por org+name → preserva id/recetas).
-  if (canonicalNames.length > 0) {
-    const rows = Array.from(byName.entries()).map(([name, v], idx) => ({
-      organization_id: organizationId,
-      clinic_id: clinicId ?? null,
-      whatsapp_line_id: lineId,
-      name,
-      display_name: v.displayName,
-      duration_minutes: v.duration ?? null,
-      is_active: true,
-      display_order: idx,
-    }));
-
-    const { error: upsertError } = await supabase
-      .from("service_types")
-      .upsert(rows, { onConflict: "organization_id,name" });
-
-    if (upsertError) {
-      console.error("[saveServiceTypesForLine] Upsert error:", upsertError);
-      throw upsertError;
-    }
-  }
-
-  // 2. Baja logica de los activos de esta linea que ya no estan en el formulario.
-  const { data: existing, error: existingError } = await supabase
+  const { organizationId, id } = params;
+  const { error } = await supabase
     .from("service_types")
-    .select("id, name")
-    .eq("whatsapp_line_id", lineId)
-    .eq("is_active", true);
-
-  if (existingError) {
-    console.error("[saveServiceTypesForLine] Load existing error:", existingError);
-    throw existingError;
-  }
-
-  const removedIds = (existing || [])
-    .filter((row) => !canonicalNames.includes(row.name))
-    .map((row) => row.id);
-
-  if (removedIds.length > 0) {
-    const { error: deactivateError } = await supabase
-      .from("service_types")
-      .update({ is_active: false })
-      .in("id", removedIds);
-
-    if (deactivateError) {
-      console.error("[saveServiceTypesForLine] Deactivate error:", deactivateError);
-      throw deactivateError;
-    }
-  }
+    .update({ is_active: false })
+    .eq("id", id)
+    .eq("organization_id", organizationId);
+  if (error) throw error;
 }

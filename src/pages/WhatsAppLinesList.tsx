@@ -28,7 +28,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getWhatsAppLinesByOrganization, updateWhatsAppLine, disconnectWhatsAppLine } from '@/lib/api.supabase';
-import { listServiceTypesByLine, saveServiceTypesForLine } from '@/lib/serviceTypesApi';
 import { type EmbeddedSignupResult } from '@/lib/whatsappApi';
 import MetaEmbeddedSignup from '@/components/whatsapp/MetaEmbeddedSignup';
 import type { WhatsAppLine } from '@/types/organization';
@@ -61,7 +60,6 @@ export default function WhatsAppLinesList() {
   const [formBotGreeting, setFormBotGreeting] = useState('');
   const [formDefaultDuration, setFormDefaultDuration] = useState<number | ''>('');
   const [formHandoffType, setFormHandoffType] = useState<'secretary' | 'doctor'>('secretary');
-  const [formServiceTypes, setFormServiceTypes] = useState<Array<{ name: string; duration_minutes?: number }>>([]);
   const [formIsActive, setFormIsActive] = useState(true);
 
   // Template mappings for the editing line
@@ -119,20 +117,11 @@ export default function WhatsAppLinesList() {
     setFormLabel(line.label);
     setFormBotEnabled(line.botEnabled);
     setFormBotGreeting(line.botGreeting || '');
-    setFormServiceTypes([]);
     setFormDefaultDuration(line.defaultDurationMinutes || '');
     setFormIsActive(line.isActive);
     setTemplateMappings([]);
     setHasActiveSecretary(null);
     setDialogOpen(true);
-
-    // Fase 1 motor: los tipos de servicio viven en la tabla service_types (fuente unica)
-    try {
-      const serviceTypes = await listServiceTypesByLine(line.id);
-      setFormServiceTypes(serviceTypes);
-    } catch (err) {
-      console.error('[openEditDialog] Error cargando tipos de servicio:', err);
-    }
 
     // Check if org has an active secretary
     const { data: secData } = await supabase
@@ -186,14 +175,6 @@ export default function WhatsAppLinesList() {
         botHandoffType: formHandoffType,
         defaultDurationMinutes: formDefaultDuration !== '' ? Number(formDefaultDuration) : undefined,
         isActive: formIsActive,
-      });
-
-      // Fase 1 motor: persistir tipos de servicio en la tabla service_types (fuente unica)
-      await saveServiceTypesForLine({
-        lineId: editingLine.id,
-        organizationId: editingLine.organizationId,
-        clinicId: editingLine.clinicId ?? null,
-        items: formServiceTypes.filter((st) => st.name.trim() !== ''),
       });
       toast({
         title: 'Exito',
@@ -573,75 +554,14 @@ export default function WhatsAppLinesList() {
                         )}
                       </div>
 
-                      {/* Service types */}
-                      <div className="space-y-2">
-                        <Label>Tipos de servicio (opcional)</Label>
+                      {/* Los servicios se administran en Motor → Servicios (fuente unica org-level) */}
+                      <div className="rounded-md border border-dashed p-3">
                         <p className="text-xs text-muted-foreground">
-                          Si configura 2 o mas tipos, el bot pedira al paciente que seleccione uno al agendar. Con 1 tipo se aplica automaticamente. Vacio = sin paso extra.
+                          Los <span className="font-medium">servicios</span> (nombre, duracion,
+                          buffer, receta de recursos) se administran en{' '}
+                          <span className="font-medium">Administrador → Motor → Servicios</span>.
+                          Son a nivel de toda la organizacion.
                         </p>
-                        <div className="space-y-2">
-                          {formServiceTypes.map((st, idx) => (
-                            <div key={idx} className="flex items-center gap-2">
-                              <Input
-                                value={st.name}
-                                onChange={(e) => {
-                                  const updated = [...formServiceTypes];
-                                  updated[idx] = { ...updated[idx], name: e.target.value };
-                                  setFormServiceTypes(updated);
-                                }}
-                                placeholder="Ej: Ultrasonido"
-                                disabled={saving}
-                                className="flex-1"
-                              />
-                              <Select
-                                value={st.duration_minutes ? String(st.duration_minutes) : 'default'}
-                                onValueChange={(val) => {
-                                  const updated = [...formServiceTypes];
-                                  updated[idx] = {
-                                    ...updated[idx],
-                                    duration_minutes: val === 'default' ? undefined : Number(val),
-                                  };
-                                  setFormServiceTypes(updated);
-                                }}
-                                disabled={saving}
-                              >
-                                <SelectTrigger className="w-[120px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="default">Predeterminada</SelectItem>
-                                  <SelectItem value="15">15 min</SelectItem>
-                                  <SelectItem value="30">30 min</SelectItem>
-                                  <SelectItem value="45">45 min</SelectItem>
-                                  <SelectItem value="60">60 min</SelectItem>
-                                  <SelectItem value="90">90 min</SelectItem>
-                                  <SelectItem value="120">120 min</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={saving}
-                                onClick={() => {
-                                  setFormServiceTypes(formServiceTypes.filter((_, i) => i !== idx));
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                        {formServiceTypes.length < 10 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={saving}
-                            onClick={() => setFormServiceTypes([...formServiceTypes, { name: '' }])}
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Agregar tipo de servicio
-                          </Button>
-                        )}
                       </div>
                     </>
                   )}

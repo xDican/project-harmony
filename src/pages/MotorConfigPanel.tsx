@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Pencil, Cog, Box, Stethoscope, Wrench } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Cog, Box, Stethoscope, Wrench } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
 import { useCurrentUser } from "@/context/UserContext";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +31,7 @@ import {
   type ResourceType,
   type ServiceTypeRow,
 } from "@/lib/motorConfigApi";
+import { saveServiceType, deactivateServiceType } from "@/lib/serviceTypesApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,11 +67,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   equipment: "Equipo",
   room: "Cabina / Sala",
 };
+
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 export default function MotorConfigPanel() {
   const { organizationId } = useCurrentUser();
@@ -394,32 +407,104 @@ function ServicesTab({
   boot: MotorBootstrap;
   onChanged: () => Promise<void> | void;
 }) {
-  if (boot.serviceTypes.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Esta organizacion no tiene servicios configurados. Crea los servicios
-          primero en <span className="font-medium">Lineas de WhatsApp</span> y
-          luego configura aqui su receta de recursos.
-        </CardContent>
-      </Card>
-    );
-  }
+  const { toast } = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDuration, setNewDuration] = useState(30);
+  const [creating, setCreating] = useState(false);
 
   const activeResources = boot.resources.filter((r) => r.is_active);
 
+  const handleCreate = async () => {
+    if (!newName.trim()) {
+      toast({ title: "Falta el nombre", variant: "destructive" });
+      return;
+    }
+    setCreating(true);
+    try {
+      await saveServiceType({ organizationId, displayName: newName, durationMinutes: newDuration });
+      setAddOpen(false);
+      await onChanged();
+      toast({ title: "Servicio creado" });
+    } catch (e: any) {
+      toast({ title: "No se pudo crear", description: e?.message, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {boot.serviceTypes.map((st) => (
-        <ServiceConfigCard
-          key={st.id}
-          organizationId={organizationId}
-          service={st}
-          resources={activeResources}
-          recipe={boot.recipes[st.id] ?? []}
-          onChanged={onChanged}
-        />
-      ))}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Fuente de verdad del agendamiento (bot + plataforma). Todo servicio debe
+          tener duracion.
+        </p>
+        <Button
+          size="sm"
+          onClick={() => { setNewName(""); setNewDuration(30); setAddOpen(true); }}
+          className="gap-1.5 shrink-0"
+        >
+          <Plus className="h-4 w-4" /> Agregar servicio
+        </Button>
+      </div>
+
+      {boot.serviceTypes.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Aun no hay servicios. Agrega el primero.
+          </CardContent>
+        </Card>
+      ) : (
+        boot.serviceTypes.map((st) => (
+          <ServiceConfigCard
+            key={st.id}
+            organizationId={organizationId}
+            service={st}
+            resources={activeResources}
+            recipe={boot.recipes[st.id] ?? []}
+            onChanged={onChanged}
+          />
+        ))
+      )}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo servicio</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Nombre</Label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Ej: Depilacion laser, Consulta general"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Duracion</Label>
+              <Select value={String(newDuration)} onValueChange={(v) => setNewDuration(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DURATION_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={String(d)}>{d} min</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreate} disabled={creating}>
+              {creating && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Crear
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -438,6 +523,8 @@ function ServiceConfigCard({
   onChanged: () => Promise<void> | void;
 }) {
   const { toast } = useToast();
+  const [name, setName] = useState(service.display_name);
+  const [duration, setDuration] = useState<number | null>(service.duration_minutes ?? null);
   const [buffer, setBuffer] = useState(service.buffer_minutes ?? 0);
   const [price, setPrice] = useState<string>(
     service.price != null ? String(service.price) : "",
@@ -452,6 +539,8 @@ function ServiceConfigCard({
     return map;
   });
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const toggleResource = (resourceId: string, checked: boolean) => {
     setSelected((prev) => {
@@ -467,9 +556,27 @@ function ServiceConfigCard({
   };
 
   const handleSave = async () => {
+    if (!name.trim()) {
+      toast({ title: "Falta el nombre del servicio", variant: "destructive" });
+      return;
+    }
+    if (duration == null) {
+      toast({
+        title: "Elegi una duracion",
+        description: "Todo servicio debe tener duracion (bot y plataforma la necesitan).",
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const parsedPrice = price.trim() === "" ? null : Number(price);
+      await saveServiceType({
+        organizationId,
+        id: service.id,
+        displayName: name,
+        durationMinutes: duration,
+      });
       await updateServiceTypeAttrs({
         organizationId,
         serviceTypeId: service.id,
@@ -488,7 +595,7 @@ function ServiceConfigCard({
         })),
       });
       await onChanged();
-      toast({ title: `Guardado: ${service.display_name}` });
+      toast({ title: `Guardado: ${name.trim()}` });
     } catch (e: any) {
       toast({
         title: "No se pudo guardar",
@@ -500,17 +607,55 @@ function ServiceConfigCard({
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deactivateServiceType({ organizationId, id: service.id });
+      setDeleteOpen(false);
+      await onChanged();
+      toast({ title: "Servicio eliminado" });
+    } catch (e: any) {
+      toast({ title: "No se pudo eliminar", description: e?.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          {service.display_name}
-          {service.duration_minutes != null && (
-            <Badge variant="secondary" className="font-normal">
-              {service.duration_minutes} min
-            </Badge>
-          )}
-        </CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <div className="grid gap-3 sm:grid-cols-[1fr_150px] flex-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nombre</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Duracion</Label>
+              <Select
+                value={duration != null ? String(duration) : undefined}
+                onValueChange={(v) => setDuration(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Elegir" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DURATION_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={String(d)}>{d} min</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDeleteOpen(true)}
+            className="text-muted-foreground hover:text-destructive shrink-0"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -597,6 +742,28 @@ function ServiceConfigCard({
           </Button>
         </div>
       </CardContent>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar "{service.display_name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              El servicio se dara de baja y dejara de ofrecerse en el bot y la
+              plataforma. Las citas ya agendadas no se tocan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
