@@ -18,6 +18,9 @@ const appointmentSchema = z.object({
   reminder3dEnabled: z.boolean().optional().default(false),
   organizationId: z.string().uuid("Invalid organization ID format").optional(),
   calendarId: z.string().uuid("Invalid calendar ID format").optional(),
+  // Motor multi-recurso (Fase 4): si se pasa, la cita queda ligada al servicio y
+  // el trigger de capacidad de recursos la valida. Sin el, degrada como antes.
+  serviceTypeId: z.string().uuid("Invalid service type ID format").optional(),
 });
 
 /**
@@ -144,7 +147,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { doctorId, patientId, date, time, notes, durationMinutes, reminder3dEnabled, organizationId: reqOrgId, calendarId: reqCalendarId } = validationResult.data;
+    const { doctorId, patientId, date, time, notes, durationMinutes, reminder3dEnabled, organizationId: reqOrgId, calendarId: reqCalendarId, serviceTypeId } = validationResult.data;
 
     // 6) Check user permissions: org_members first, fallback to user_roles (same pattern as upsert-doctor-schedules)
     let roles: string[] = [];
@@ -308,6 +311,27 @@ Deno.serve(async (req) => {
 
     console.log("[create-appointment] Resolved org/calendar:", { resolvedOrgId, resolvedCalendarId });
 
+    // 12a-bis) Resolver el servicio (motor multi-recurso). Si se paso serviceTypeId,
+    // se valida que pertenezca al org y se persiste service_type_id (+ nombre por compat)
+    // para que el trigger de capacidad valide los recursos. Sin servicio, degrada.
+    let resolvedServiceTypeId: string | null = null;
+    let resolvedServiceName: string | null = null;
+    if (serviceTypeId) {
+      const { data: stRow, error: stError } = await supabase
+        .from("service_types")
+        .select("display_name, organization_id")
+        .eq("id", serviceTypeId)
+        .maybeSingle();
+      if (stError || !stRow) {
+        return jsonResponse(400, { ok: false, error: "Servicio no encontrado", build: BUILD });
+      }
+      if ((stRow as any).organization_id !== resolvedOrgId) {
+        return jsonResponse(400, { ok: false, error: "El servicio no pertenece a esta organización", build: BUILD });
+      }
+      resolvedServiceTypeId = serviceTypeId;
+      resolvedServiceName = (stRow as any).display_name ?? null;
+    }
+
     // 12b) Insert appointment
     const { data: appointment, error: insertError } = await supabase
       .from("appointments")
@@ -322,6 +346,8 @@ Deno.serve(async (req) => {
         status: "agendada",
         appointment_at: appointmentAt,
         duration_minutes: durationMinutes,
+        service_type_id: resolvedServiceTypeId,
+        service_type: resolvedServiceName,
         confirmation_message_sent: false,
         reminder_24h_sent: false,
         reminder_24h_sent_at: null,
@@ -339,6 +365,17 @@ Deno.serve(async (req) => {
       const code = (insertError as any)?.code;
       if (code === "23505") {
         return jsonResponse(409, { ok: false, error: "El horario seleccionado ya está ocupado", build: BUILD });
+      }
+      // Trigger de capacidad de recursos (Fase 0): check_violation con prefijo conocido.
+      const msg = insertError.message || "";
+      if (code === "23514" || msg.includes("RESOURCE_CAPACITY_EXCEEDED")) {
+        const m = msg.match(/RESOURCE_CAPACITY_EXCEEDED:\s*([^(]+)/);
+        const recurso = m ? m[1].trim() : "un recurso";
+        return jsonResponse(409, {
+          ok: false,
+          error: `No hay capacidad de ${recurso} en ese horario. Elige otro horario.`,
+          build: BUILD,
+        });
       }
 
       return jsonResponse(500, { ok: false, error: "Error al crear la cita", details: insertError.message, build: BUILD });

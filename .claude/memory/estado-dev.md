@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 3 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + 1 + 2 + 3 ENTREGADAS.** Fase 3: UI config interna `/admin/motor` (recursos/recetas/skills + atributos de servicio) — habilita que el resource-aware del motor sea usable. **PROXIMA SESION: FASE 4** (vista combinada + booking service-first + relabel Profesional). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 3 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + 1 + 2 + 3 ENTREGADAS; FASE 4 PARCIAL (booking service-first manual).** Fase 3: UI config interna `/admin/motor`. Fase 4 (parcial): el agendamiento de la PLATAFORMA (`NuevaCita`) ahora es service-first y resource-aware (cierra el hueco que Diego cazo en QA: la plataforma sobre-agendaba cabinas). **PENDIENTE FASE 4:** vista combinada multi-calendario + relabel Profesional + day-view resource-aware. MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -31,7 +31,7 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 | 1 | Consolidar service_types como fuente unica (bot lee tabla + escribe service_type_id + UI edita tabla + backfill) | 4-6h | ✅ **ENTREGADA+VERIFICADA 2 Jun** |
 | 2 | Motor disponibilidad `_shared/availability.ts` (2A unificar + 2B resource-aware + 2C unificar days). Skill diferido a Fase 6 | 6-8h | ✅ **ENTREGADA+VERIFICADA 2 Jun** (prod, A/B + QA sintetica) |
 | 3 | UI config interna (recursos/recetas/skills) | 5-7h | ✅ **ENTREGADA 3 Jun** (`/admin/motor`, org-scoped via admin-por-org) |
-| 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | pendiente |
+| 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | 🟡 **PARCIAL 3 Jun** (booking service-first manual entregado; vista combinada + relabel + day-view pendientes) |
 | 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | pendiente |
 | 6 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
 
@@ -100,6 +100,25 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 **Deuda detectada (Fase 0, baja):** las policies DELETE de `service_resources`/`professional_services`/`resources` usan solo `has_role(uid,'admin')` SIN scope de org (un admin de org A podria, conociendo ids, borrar filas de org B). Riesgo bajo con el modelo admin-por-org (cada admin solo opera su org). Anotado para endurecer si se abre self-service.
 
 **Pendiente operativo:** sigue sin clientes con recursos configurados (resource-aware no-op) hasta primer cliente multi-recurso real. La UI ya existe para cargarlos.
+
+### Fase 4 — PARCIAL 3 Jun (booking service-first en la plataforma)
+
+**Origen:** QA de Diego encontro que el bot respetaba la capacidad de cabinas pero **el agendamiento de la plataforma (`NuevaCita`) mostraba todos los slots del medico Y permitia agendar ignorando las cabinas**. Diagnostico: el camino manual era doctor+duracion, service-agnostico → (1) pedia disponibilidad sin `serviceTypeId` (no resource-aware) y (2) insertaba con `service_type_id` NULL → **el trigger de capacidad de Fase 0 degradaba** (no protegia las citas manuales, solo las del bot). Dos huecos, misma raiz.
+
+**Fix (service-first manual):**
+- `create-appointment` (desplegado prod via CLI): acepta `serviceTypeId` opcional; valida que el servicio pertenezca al org; inserta `service_type_id` + `service_type` (nombre) → el trigger vuelve a validar. Traduce el error del trigger (`check_violation` / `RESOURCE_CAPACITY_EXCEEDED`) a 409 amigable ("No hay capacidad de {recurso} en ese horario").
+- `get-available-slots` ya era resource-aware (Fase 2B) → solo se le pasa `serviceTypeId`. Sin cambios en la EF.
+- `serviceTypesApi.ts`: nuevo `listActiveServiceTypesForOrg(orgId)` (read org-level: id+displayName+duration).
+- `api.ts` + `api.supabase.ts`: `getAvailableSlots` y `createAppointment` aceptan `serviceTypeId` opcional.
+- `NuevaCita.tsx`: si la org tiene servicios → **service-first** (selector de servicio reemplaza el de duracion; el servicio fija la duracion + habilita resource-aware en slots e insert; calendario gateado hasta elegir servicio). Si la org NO tiene servicios → **degrada** al selector de duracion de siempre (clientes actuales sin cambios).
+
+**Verificado:** `tsc --noEmit` OK. Deploy create-appointment OK. **Smoke test transaccional en prod** (org OrionCare): insert manual con `service_type_id` sobre cabina cap=1 ya ocupada → trigger rechaza con `RESOURCE_CAPACITY_EXCEEDED` (antes pasaba). 0 residuo. (Bonus: el test revelo que la org de prueba ya tiene receta `Consulta general → Cabina 1 cap 1` del QA de Diego.)
+
+**DEFERIDO de Fase 4 (no bloquea el hueco):**
+- **Day-view del calendario NO es resource-aware** (`get-available-days` no recibe `serviceTypeId`): un dia puede verse disponible aunque los recursos esten llenos; al abrirlo, el hour-view (resource-aware) muestra los slots reales. NO permite sobre-cupo (hour-view + trigger bloquean), solo es inconsistencia cosmetica. Threading de `serviceTypeId` + logica de recetas/consumers por dia en `get-available-days` cuando se quiera pulir.
+- **Vista combinada multi-calendario** (Dulce ve N profesionales en una pantalla) — pendiente.
+- **Relabel "Doctor" → "Profesional"** (#24) — pendiente.
+- **Skill matrix NO filtra** quien puede hacer el servicio en el booking manual (cualquier doctor agenda cualquier servicio) — es Fase 6.
 
 ---
 

@@ -66,8 +66,9 @@ interface ApiModule {
     status?: AppointmentStatus;
     durationMinutes?: number;
     reminder3dEnabled?: boolean;
+    serviceTypeId?: string;
   }) => Promise<Appointment>;
-  getAvailableSlots: (params: { doctorId: string; date: string; durationMinutes?: number }) => Promise<string[]>;
+  getAvailableSlots: (params: { doctorId: string; date: string; durationMinutes?: number; calendarId?: string; serviceTypeId?: string }) => Promise<string[]>;
   searchPatients: (query: string, doctorId?: string) => Promise<Patient[]>;
   getAllPatients: (doctorId?: string) => Promise<Patient[]>;
   createPatient: (input: { name: string; phone: string; email?: string; notes?: string; doctorId?: string }) => Promise<Patient & { isExisting: boolean }>;
@@ -189,6 +190,7 @@ export async function createAppointment(input: {
   status?: AppointmentStatus;
   durationMinutes?: number;
   reminder3dEnabled?: boolean;
+  serviceTypeId?: string;
 }): Promise<Appointment> {
   const apiModule = await getApiModule();
   return await apiModule.createAppointment(input);
@@ -204,6 +206,8 @@ export async function getAvailableSlots(params: {
   doctorId: string;
   date: string;
   durationMinutes?: number;
+  calendarId?: string;
+  serviceTypeId?: string;
 }): Promise<string[]> {
   const apiModule = await getApiModule();
   return await apiModule.getAvailableSlots(params);

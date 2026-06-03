@@ -361,6 +361,7 @@ export async function createAppointment(input: {
   status?: AppointmentStatus;
   durationMinutes?: number;
   reminder3dEnabled?: boolean;
+  serviceTypeId?: string;
 }): Promise<{ appointment: Appointment; whatsappSent: boolean; whatsappError?: string }> {
   try {
     // Resolve organization context for the edge function
@@ -377,6 +378,7 @@ export async function createAppointment(input: {
         durationMinutes: input.durationMinutes ?? 60,
         reminder3dEnabled: input.reminder3dEnabled ?? false,
         ...(orgId ? { organizationId: orgId } : {}),
+        ...(input.serviceTypeId ? { serviceTypeId: input.serviceTypeId } : {}),
       },
     });
 
@@ -425,6 +427,7 @@ export async function getAvailableSlots(params: {
   date: string;
   durationMinutes?: number;
   calendarId?: string;
+  serviceTypeId?: string;
 }): Promise<string[]> {
   const { data, error } = await supabase.functions.invoke('get-available-slots', {
     body: {
@@ -432,6 +435,7 @@ export async function getAvailableSlots(params: {
       date: params.date,
       durationMinutes: params.durationMinutes ?? 60,
       ...(params.calendarId ? { calendarId: params.calendarId } : {}),
+      ...(params.serviceTypeId ? { serviceTypeId: params.serviceTypeId } : {}),
     },
   });
 

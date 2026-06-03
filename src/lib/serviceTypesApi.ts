@@ -26,6 +26,40 @@ export interface ServiceTypeItem {
   duration_minutes?: number;
 }
 
+/** Servicio activo a nivel org (para agendar): id + nombre + duracion. */
+export interface OrgServiceType {
+  id: string;
+  displayName: string;
+  durationMinutes: number | null;
+}
+
+/**
+ * Lista los servicios ACTIVOS de una org para el flujo de agendamiento.
+ * Fase 4 (motor): el agendamiento manual elige un servicio (no una duracion),
+ * y eso habilita el chequeo de recursos. Org-level (1 linea/org en el ICP).
+ */
+export async function listActiveServiceTypesForOrg(
+  organizationId: string
+): Promise<OrgServiceType[]> {
+  const { data, error } = await supabase
+    .from("service_types")
+    .select("id, display_name, duration_minutes, display_order")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+
+  if (error) {
+    console.error("[listActiveServiceTypesForOrg] Error:", error);
+    throw error;
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    displayName: row.display_name,
+    durationMinutes: row.duration_minutes ?? null,
+  }));
+}
+
 /**
  * Lista los tipos de servicio ACTIVOS de una linea, ordenados para mostrar/editar.
  * Devuelve el `display_name` como `name` (lo que ve el usuario).

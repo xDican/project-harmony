@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { getAvailableSlots, getAvailableDays, createPatient, createAppointment, getDoctorById } from '@/lib/api';
+import { listActiveServiceTypesForOrg, type OrgServiceType } from '@/lib/serviceTypesApi';
 import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
 import { useCurrentUser } from '@/context/UserContext';
 import { useSingleDoctor } from '@/hooks/useSingleDoctor';
@@ -32,7 +33,7 @@ import type { Doctor } from '@/types/doctor';
  * Mobile: single-column with toggle calendar popup
  */
 export default function NuevaCita() {
-  const { user, isDoctor, isDoctorView } = useCurrentUser();
+  const { user, isDoctor, isDoctorView, organizationId } = useCurrentUser();
   const { singleDoctor, isSingleDoctorOrg, isLoading: loadingDoctors } = useSingleDoctor();
 
   // Core selection state
@@ -48,6 +49,12 @@ export default function NuevaCita() {
   // Duration state
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
   const [reminder3dEnabled, setReminder3dEnabled] = useState(false);
+
+  // Service state (motor multi-recurso Fase 4). Si la org tiene servicios, el
+  // agendamiento es service-first: el servicio fija la duracion y habilita el
+  // chequeo de recursos. Si no tiene, degrada al selector de duracion de siempre.
+  const [services, setServices] = useState<OrgServiceType[]>([]);
+  const [selectedServiceTypeId, setSelectedServiceTypeId] = useState<string | null>(null);
 
   // Available days state
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -111,6 +118,24 @@ export default function NuevaCita() {
     }
   }, [selectedPatient]);
 
+  // Cargar servicios de la org (service-first si existen)
+  useEffect(() => {
+    if (!organizationId) return;
+    listActiveServiceTypesForOrg(organizationId)
+      .then(setServices)
+      .catch((error) => {
+        console.error('[NuevaCita] Error cargando servicios:', error);
+        setServices([]);
+      });
+  }, [organizationId]);
+
+  // Al elegir servicio, fijar la duracion segun el servicio (fallback 30 min)
+  useEffect(() => {
+    if (!selectedServiceTypeId) return;
+    const svc = services.find((s) => s.id === selectedServiceTypeId);
+    if (svc) setDurationMinutes(svc.durationMinutes ?? 30);
+  }, [selectedServiceTypeId, services]);
+
   /**
    * Fetch available days when doctor, duration, or month changes
    */
@@ -165,6 +190,7 @@ export default function NuevaCita() {
         date: dateString,
         durationMinutes: durationMinutes,
         calendarId: selectedCalendarId,
+        serviceTypeId: selectedServiceTypeId ?? undefined,
       })
         .then(slots => {
           let filteredSlots = slots;
@@ -188,7 +214,7 @@ export default function NuevaCita() {
       setAvailableSlots([]);
       setSelectedSlot(null);
     }
-  }, [selectedDoctor, selectedDate, durationMinutes, selectedCalendarId]);
+  }, [selectedDoctor, selectedDate, durationMinutes, selectedCalendarId, selectedServiceTypeId]);
 
   // Auto-scroll to Agendar button when slots finish loading
   useEffect(() => {
@@ -379,6 +405,7 @@ export default function NuevaCita() {
         notes: undefined,
         durationMinutes: durationMinutes,
         reminder3dEnabled,
+        serviceTypeId: selectedServiceTypeId ?? undefined,
       });
 
       const displayDate = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
@@ -409,6 +436,7 @@ export default function NuevaCita() {
       setSelectedSlot(null);
       setAvailableSlots([]);
       setDurationMinutes(30);
+      setSelectedServiceTypeId(null);
       setReminder3dEnabled(false);
       setCalendarOpen(false);
     } catch (error: any) {
@@ -423,13 +451,18 @@ export default function NuevaCita() {
     }
   };
 
-  const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !isCreatingAppointment;
+  // Si la org tiene servicios, hay que elegir uno antes de ver disponibilidad
+  const needsService = services.length > 0 && !selectedServiceTypeId;
+  const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !needsService && !isCreatingAppointment;
   const showDoctorStep = !isDoctorView && !loadingDoctors && !isSingleDoctorOrg;
   const patientStepNum = showDoctorStep ? 2 : 1;
   const fechaStepNum = showDoctorStep ? 3 : 2;
 
-  // Calendar is not ready until a doctor is selected
-  const calendarDisabled = !selectedDoctor;
+  // Calendar is not ready until a doctor (y servicio, si aplica) is selected
+  const calendarDisabled = !selectedDoctor || needsService;
+  const calendarHint = !selectedDoctor
+    ? 'Selecciona un médico para ver disponibilidad'
+    : 'Selecciona un servicio para ver disponibilidad';
 
   // Shared calendar modifiers
   const calendarModifiers = {
@@ -500,26 +533,53 @@ export default function NuevaCita() {
                 {fechaStepNum}. Seleccionar Fecha
               </Label>
 
-              {/* Duration */}
-              <div>
-                <Label className="text-sm text-muted-foreground">Duración</Label>
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
-                  {durationOptions.map((option) => (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      variant={durationMinutes === option.value ? 'default' : 'outline'}
-                      onClick={() => setDurationMinutes(option.value)}
-                      className={cn(
-                        'h-12',
-                        durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
-                      )}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+              {/* Servicio (si la org tiene) o Duración (degradación) */}
+              {services.length > 0 ? (
+                <div>
+                  <Label className="text-sm text-muted-foreground">Servicio</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                    {services.map((svc) => (
+                      <Button
+                        key={svc.id}
+                        type="button"
+                        variant={selectedServiceTypeId === svc.id ? 'default' : 'outline'}
+                        onClick={() => setSelectedServiceTypeId(svc.id)}
+                        className={cn(
+                          'h-12 whitespace-normal text-sm leading-tight',
+                          selectedServiceTypeId === svc.id && 'ring-2 ring-primary ring-offset-2'
+                        )}
+                      >
+                        {svc.displayName}
+                      </Button>
+                    ))}
+                  </div>
+                  {selectedServiceTypeId && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Duración: {durationOptions.find(d => d.value === durationMinutes)?.label || `${durationMinutes} min`}
+                    </p>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <Label className="text-sm text-muted-foreground">Duración</Label>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+                    {durationOptions.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={durationMinutes === option.value ? 'default' : 'outline'}
+                        onClick={() => setDurationMinutes(option.value)}
+                        className={cn(
+                          'h-12',
+                          durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
+                        )}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 
@@ -536,7 +596,7 @@ export default function NuevaCita() {
                     {calendarDisabled && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
                         <p className="text-sm text-muted-foreground font-medium">
-                          Selecciona un médico para ver disponibilidad
+                          {calendarHint}
                         </p>
                       </div>
                     )}
@@ -582,7 +642,9 @@ export default function NuevaCita() {
                   {calendarDisabled ? (
                     <Alert className="mt-2">
                       <AlertDescription>
-                        Selecciona un médico primero para ver las fechas disponibles.
+                        {!selectedDoctor
+                          ? 'Selecciona un médico primero para ver las fechas disponibles.'
+                          : 'Selecciona un servicio primero para ver las fechas disponibles.'}
                       </AlertDescription>
                     </Alert>
                   ) : (
