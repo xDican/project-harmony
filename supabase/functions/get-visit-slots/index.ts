@@ -28,23 +28,21 @@ Deno.serve(async (req) => {
   if (cors) return cors;
 
   try {
+    // Auth: mismo patron que get-available-slots (funcion de solo-lectura de
+    // disponibilidad). La validacion real del JWT la hace el gateway (verify_jwt);
+    // aqui solo exigimos el header presente y usamos service-role para cruzar
+    // calendarios/recursos (RLS no aplica al motor). NO usamos getUser (la 2.39.0
+    // no valida el header global como la 2.83.0 -> daba 401 falso).
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return jsonResponse(401, { ok: false, error: "Missing Authorization header", build: BUILD });
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       return jsonResponse(500, { ok: false, error: "Supabase env vars not configured", build: BUILD });
     }
 
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError || !user) return jsonResponse(401, { ok: false, error: "Unauthorized", build: BUILD });
 
     const body = await req.json();
     const parsed = reqSchema.safeParse(body);
