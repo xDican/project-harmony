@@ -32,7 +32,7 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 | 2 | Motor disponibilidad `_shared/availability.ts` (2A unificar + 2B resource-aware + 2C unificar days). Skill diferido a Fase 6 | 6-8h | ✅ **ENTREGADA+VERIFICADA 2 Jun** (prod, A/B + QA sintetica) |
 | 3 | UI config interna (recursos/recetas/skills) | 5-7h | ✅ **ENTREGADA 3 Jun** (`/admin/motor`, org-scoped via admin-por-org) |
 | 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | ✅ **CERRADA 3 Jun** (service-first + servicios fuente unica + vista combinada con auto-asignacion QA-aprobados + relabel #24 global "Profesional" aplicado; day-view resource-aware deferido cosmetico) |
-| 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | 🟢 **ENTREGADA 3 Jun** (backend QA a-e PASS + UI; pendiente E2E manual de Diego) |
+| 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | ✅ **ENTREGADA + E2E QA-APROBADO 3 Jun** (verificado en DB real; 2 fixes post-QA: get-visit-slots 401 + reagendar visita-aware) |
 | 6 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
 
 > NOTA: la numeracion ahora coincide con `.claude/plans/motor-agendamiento-multirecurso.md` (la tabla anterior aqui estaba desfasada). Fase 2+ = corazon del valor (sin doble-booking + muere el "engorroso" de Dulce). Secuenciador = variable de riesgo, "done" estricto. Bot service-first = el diferenciador.
@@ -148,9 +148,13 @@ Plan: `.claude/plans/fase-5-es-el-shiny-orbit.md`. Una **visita** = N procedimie
 
 **Seguridad:** RPC + EFs nuevos confian en la auth de la EF (service-role), igual que `create-appointment`. NO hay constraint DB de doble-booking de profesional (igual que el booking simple); el secuenciador lo evita en read-time + chequeo de slot exacto en `create-visit`. Race concurrente documentado, aceptable para white-glove.
 
-**PENDIENTE para cerrar Fase 5: E2E manual de Diego** (logueado, org con servicios+recursos+skills): toggle Visita → 2-3 procedimientos → fecha → elegir inicio → asignacion (probar override) → confirmar → N filas mismo `visit_id` back-to-back + 1 WhatsApp; cancelar via PatientDetail → todas canceladas. Valida tambien la salida del greedy. Org de prueba `c8b1c83b` ya tiene "Consulta general" (dur30/buf15) → Cabina 1 (cap2) + Diego/Lizzy con skill.
+**E2E QA-APROBADO 3 Jun (Diego, logueado).** Verificado en DB real (org prueba): visita `351d7ce2` = Consulta general 08:30 (Diego, 30min) → Consulta especialista 09:00 (Lizzy, 15min), back-to-back exacto, **profesionales distintos**, mismo `visit_id`; cancelar 1 fila → cascada cancelo ambas (`81dc4db5` 2/2 cancelada). Greedy + suma + back-to-back + cancel-bloque confirmados con datos reales.
+- **Fix post-QA (commit 1b27f28):** reagendar una cita parte de visita SI se bloqueaba (409) pero mostraba error generico. Ahora `RescheduleModal` recibe `visitId` (plumbeado: `Appointment.visitId`+`mapAppointment`+`PatientDetail`) y, si la cita es de una visita, muestra mensaje claro SIN el form ("cancela la visita y vuelve a agendar"). `handleSubmit` extrae el mensaje del body en cualquier 4xx.
+- **Fix post-QA (commit ceee2be):** `get-visit-slots` daba 401 (usaba supabase-js 2.39.0 + `getUser`); alineado al patron de `get-available-slots` (header presente + service-role, gateway valida).
 
-**Fast-follow (diferido):** reagendar-visita-en-bloque (RPC `reschedule_visit`, mismo patron que P2+P3).
+**Fast-follow (diferido, fuera de Fase 5):**
+- Reagendar-visita-en-bloque (RPC `reschedule_visit`, mismo patron que P2+P3). Hoy: cancelar+reagendar.
+- `RescheduleModal` de citas NORMALES sigue duration-based (no service/resource-aware); el trigger de capacidad lo protege (409 con mensaje claro), pero la UX ideal seria service-first como `NuevaCita`.
 
 ---
 
