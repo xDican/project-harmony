@@ -135,7 +135,7 @@ export function enumerateSlots(
  * Primario: calendar_schedules (por calendarId, o agregando los calendarios del
  * doctor). Fallback: doctor_schedules.
  */
-async function loadSchedules(
+export async function loadSchedules(
   supabase: SupabaseClient,
   doctorId: string,
   dayOfWeek: number,
@@ -185,7 +185,7 @@ async function loadSchedules(
  * IDs de doctores cuyas citas ocupan los slots (co-working): todos los doctores
  * activos del/los calendario(s) relevante(s). Default: [doctorId].
  */
-async function loadCoworkDoctorIds(
+export async function loadCoworkDoctorIds(
   supabase: SupabaseClient,
   doctorId: string,
   calendarId?: string,
@@ -225,7 +225,7 @@ async function loadCoworkDoctorIds(
  * Carga el buffer del servicio candidato y su receta (recursos requeridos con
  * capacidad). Solo recursos activos cuentan (igual que el trigger Fase 0).
  */
-async function loadCandidateRecipe(
+export async function loadCandidateRecipe(
   supabase: SupabaseClient,
   serviceTypeId: string,
 ): Promise<{ buffer: number; recipe: RecipeItem[] }> {
@@ -257,7 +257,7 @@ async function loadCandidateRecipe(
  * de TODAS las citas activas del org en la fecha que consumen alguno de los
  * recursos de la receta. Consumo derivado en query-time (sin tabla materializada).
  */
-async function loadResourceConsumers(
+export async function loadResourceConsumers(
   supabase: SupabaseClient,
   organizationId: string,
   date: string,
@@ -384,4 +384,175 @@ export async function getAvailableSlotsForDate(
     candidateBuffer,
     resourceOk: recipe.length > 0 ? resourceOk : undefined,
   });
+}
+
+// ============================================================================
+// Fase 5 — Secuenciador de visitas multi-procedimiento.
+// Estado del dia batcheado (citas EXTERNAS) + predicados de intervalo arbitrario.
+// Los procedimientos de una visita son secuenciales back-to-back: se chequean
+// independientes vs citas externas (nunca entre si), igual que el trigger visit-aware.
+// ============================================================================
+
+interface MsWindow {
+  startMs: number;
+  endMs: number;
+}
+
+export interface VisitDayState {
+  date: string;
+  windowsByDoctor: Map<string, MsWindow[]>;
+  occupiedByDoctor: Map<string, OccupiedInterval[]>;
+  consumersByResource: Map<string, ResourceConsumer[]>;
+  serviceMeta: Map<string, { buffer: number; recipe: RecipeItem[] }>;
+}
+
+/**
+ * Carga (una vez) el estado del dia para el secuenciador: ventanas laborales y
+ * citas externas (con buffer + co-working) por doctor, consumo de recursos por
+ * recurso, y buffer/receta por servicio. Sin la visita en construccion.
+ */
+export async function loadVisitDayState(
+  supabase: SupabaseClient,
+  params: { organizationId: string; date: string; doctorIds: string[]; serviceTypeIds: string[] },
+): Promise<VisitDayState> {
+  const { organizationId, date, doctorIds, serviceTypeIds } = params;
+  const dayOfWeek = DateTime.fromISO(date).weekday % 7;
+
+  const windowsByDoctor = new Map<string, MsWindow[]>();
+  const coworkByDoctor = new Map<string, string[]>();
+  const allCoworkIds = new Set<string>();
+  for (const docId of doctorIds) {
+    const schedules = await loadSchedules(supabase, docId, dayOfWeek);
+    windowsByDoctor.set(
+      docId,
+      schedules.map((s) => ({
+        startMs: buildDateTime(date, s.start_time).toMillis(),
+        endMs: buildDateTime(date, s.end_time).toMillis(),
+      })),
+    );
+    const cowork = await loadCoworkDoctorIds(supabase, docId);
+    coworkByDoctor.set(docId, cowork);
+    for (const id of cowork) allCoworkIds.add(id);
+  }
+
+  // Citas del dia de los doctores co-working (footprint = duracion + buffer del servicio)
+  const occByDoctorRaw = new Map<string, OccupiedInterval[]>();
+  if (allCoworkIds.size > 0) {
+    const { data: appts } = await supabase
+      .from("appointments")
+      .select("doctor_id, time, duration_minutes, service_types(buffer_minutes)")
+      .in("doctor_id", [...allCoworkIds])
+      .eq("date", date)
+      .not("status", "in", CANCELLED_STATUSES);
+    for (const apt of appts || []) {
+      const a = apt as any;
+      const start = buildDateTime(date, a.time);
+      const buf = a.service_types?.buffer_minutes ?? 0;
+      const end = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
+      if (!occByDoctorRaw.has(a.doctor_id)) occByDoctorRaw.set(a.doctor_id, []);
+      occByDoctorRaw.get(a.doctor_id)!.push({ startMs: start.toMillis(), endMs: end.toMillis() });
+    }
+  }
+  const occupiedByDoctor = new Map<string, OccupiedInterval[]>();
+  for (const docId of doctorIds) {
+    const cowork = coworkByDoctor.get(docId) ?? [docId];
+    const merged: OccupiedInterval[] = [];
+    for (const cw of cowork) {
+      const arr = occByDoctorRaw.get(cw);
+      if (arr) merged.push(...arr);
+    }
+    occupiedByDoctor.set(docId, merged);
+  }
+
+  // Buffer + receta por servicio; union de recursos para el mapa de consumo
+  const serviceMeta = new Map<string, { buffer: number; recipe: RecipeItem[] }>();
+  const recipeResourceIds = new Set<string>();
+  for (const svcId of serviceTypeIds) {
+    const loaded = await loadCandidateRecipe(supabase, svcId);
+    serviceMeta.set(svcId, loaded);
+    for (const r of loaded.recipe) recipeResourceIds.add(r.resourceId);
+  }
+  const consumersByResource = await loadResourceConsumers(supabase, organizationId, date, [...recipeResourceIds]);
+
+  return { date, windowsByDoctor, occupiedByDoctor, consumersByResource, serviceMeta };
+}
+
+/** ¿El doctor puede tomar [slotStart, clinicalEnd] (cabe en una ventana) sin solape externo (vs footprint)? */
+export function isDoctorFree(
+  state: VisitDayState,
+  doctorId: string,
+  slotStartMs: number,
+  clinicalEndMs: number,
+  footprintEndMs: number,
+): boolean {
+  const windows = state.windowsByDoctor.get(doctorId) ?? [];
+  const fits = windows.some((w) => slotStartMs >= w.startMs && clinicalEndMs <= w.endMs);
+  if (!fits) return false;
+  const occ = state.occupiedByDoctor.get(doctorId) ?? [];
+  return !occ.some(({ startMs, endMs }) => slotStartMs < endMs && startMs < footprintEndMs);
+}
+
+/** ¿Hay capacidad de recursos del servicio en [slotStart, footprintEnd] vs citas externas? */
+export function isResourceCapacityOk(
+  state: VisitDayState,
+  serviceTypeId: string,
+  slotStartMs: number,
+  footprintEndMs: number,
+): boolean {
+  const meta = state.serviceMeta.get(serviceTypeId);
+  if (!meta) return true;
+  for (const r of meta.recipe) {
+    const consumers = state.consumersByResource.get(r.resourceId) || [];
+    let used = 0;
+    for (const c of consumers) {
+      if (slotStartMs < c.endMs && c.startMs < footprintEndMs) used += c.qty;
+    }
+    if (used + r.requiredNow > r.capacity) return false;
+  }
+  return true;
+}
+
+/** Buffer del servicio (0 si no tiene). */
+export function serviceBuffer(state: VisitDayState, serviceTypeId: string): number {
+  return state.serviceMeta.get(serviceTypeId)?.buffer ?? 0;
+}
+
+/** ms naive de fecha+hora (consistente con el motor). */
+export function dateTimeToMs(date: string, time: string): number {
+  return buildDateTime(date, time).toMillis();
+}
+
+/** ms naive → "HH:mm" (round-trip consistente con dateTimeToMs). */
+export function msToHHMM(ms: number): string {
+  return DateTime.fromMillis(ms).toFormat("HH:mm");
+}
+
+/**
+ * Candidatos de inicio de visita: union de las ventanas de los doctores dados en
+ * pasos de `granularity` minutos, filtrando slots pasados para hoy (zona Honduras).
+ * Mismo criterio de hoy que enumerateSlots. El "cabe la duracion" se valida luego
+ * por procedimiento en isDoctorFree.
+ */
+export function visitStartCandidates(
+  state: VisitDayState,
+  doctorIds: string[],
+  granularity: number,
+): number[] {
+  const now = DateTime.now().setZone(AVAILABILITY_TIMEZONE);
+  const isToday = state.date === now.toISODate();
+  const nowHHMM = now.toFormat("HH:mm");
+
+  const set = new Set<number>();
+  for (const docId of doctorIds) {
+    const windows = state.windowsByDoctor.get(docId) ?? [];
+    for (const w of windows) {
+      let t = w.startMs;
+      while (t < w.endMs) {
+        const hhmm = DateTime.fromMillis(t).toFormat("HH:mm");
+        if (!(isToday && hhmm <= nowHHMM)) set.add(t);
+        t += granularity * 60000;
+      }
+    }
+  }
+  return [...set].sort((a, b) => a - b);
 }

@@ -413,6 +413,127 @@ export async function createAppointment(input: {
   }
 }
 
+// Motor multi-recurso (Fase 5): crea una VISITA = N procedimientos que comparten visit_id,
+// insertados atomicamente (RPC) con horas back-to-back ya calculadas por el secuenciador.
+export interface VisitProcedureInput {
+  serviceTypeId: string;
+  doctorId: string;
+  date: string;
+  time: string;
+  durationMinutes: number;
+  calendarId?: string;
+  notes?: string;
+}
+
+export interface CreatedVisitRow {
+  id: string;
+  visit_id: string;
+  seq: number;
+  doctor_id: string;
+  service_type_id: string | null;
+  service_type: string | null;
+  date: string;
+  time: string;
+  appointment_at: string;
+  duration_minutes: number;
+}
+
+export async function createVisitAppointments(input: {
+  patientId: string;
+  procedures: VisitProcedureInput[];
+  reminder3dEnabled?: boolean;
+  organizationId?: string;
+}): Promise<{ visitId: string | null; appointments: CreatedVisitRow[]; whatsappSent: boolean; whatsappError?: string }> {
+  try {
+    const orgId = input.organizationId ?? (await getActiveOrganizationId());
+    if (!orgId) throw new Error('No se pudo resolver la organización');
+
+    const { data, error } = await supabase.functions.invoke('create-visit', {
+      body: {
+        patientId: input.patientId,
+        organizationId: orgId,
+        reminder3dEnabled: input.reminder3dEnabled ?? false,
+        procedures: input.procedures,
+      },
+    });
+
+    if (error) {
+      // En 409/4xx el mensaje amigable (ej: capacidad de recurso) viene en el body, no en error.message.
+      let bodyMsg: string | undefined;
+      try {
+        const ctx = (error as any).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const j = await ctx.json();
+          bodyMsg = j?.error;
+        }
+      } catch { /* ignore */ }
+      throw new Error(bodyMsg || error.message || 'Error al crear la visita');
+    }
+
+    if (data?.error) throw new Error(data.error);
+    if (!data?.ok) throw new Error('Respuesta inválida del servidor');
+
+    return {
+      visitId: data.visitId ?? null,
+      appointments: (data.appointments ?? []) as CreatedVisitRow[],
+      whatsappSent: !!data.whatsappSent,
+      whatsappError: data.whatsappError ?? undefined,
+    };
+  } catch (error: any) {
+    console.error('Error createVisitAppointments:', error);
+    throw error;
+  }
+}
+
+// Secuenciador (Fase 5): dado un servicio ordenado de procedimientos, devuelve los
+// inicios de visita factibles (back-to-back) con profesional libre por procedimiento.
+export interface VisitSlotProcedure {
+  serviceTypeId: string;
+  serviceName: string | null;
+  start: string; // HH:mm
+  end: string;   // HH:mm
+  durationMinutes: number;
+  freeDoctorIds: string[];
+  suggestedDoctorId: string | null;
+}
+
+export interface VisitSlot {
+  start: string; // HH:mm (inicio de la visita)
+  procedures: VisitSlotProcedure[];
+}
+
+export interface VisitDoctorInfo {
+  name: string;
+  prefix: string | null;
+  label: string;
+  isTecnica: boolean;
+}
+
+export async function getVisitSlots(input: {
+  date: string;
+  procedures: { serviceTypeId: string; durationMinutes?: number }[];
+  organizationId?: string;
+}): Promise<{ slots: VisitSlot[]; doctors: Record<string, VisitDoctorInfo>; reason?: string }> {
+  const orgId = input.organizationId ?? (await getActiveOrganizationId());
+  if (!orgId) throw new Error('No se pudo resolver la organización');
+
+  const { data, error } = await supabase.functions.invoke('get-visit-slots', {
+    body: { organizationId: orgId, date: input.date, procedures: input.procedures },
+  });
+
+  if (error) {
+    console.error('Error calling get-visit-slots:', error);
+    throw new Error(error.message || 'Error al calcular disponibilidad de la visita');
+  }
+  if (data?.error) throw new Error(data.error);
+
+  return {
+    slots: (data?.slots ?? []) as VisitSlot[],
+    doctors: (data?.doctors ?? {}) as Record<string, VisitDoctorInfo>,
+    reason: data?.reason,
+  };
+}
+
 // --------------------------
 // 5. getAvailableSlots
 // --------------------------

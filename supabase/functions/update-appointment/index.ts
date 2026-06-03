@@ -118,6 +118,28 @@ Deno.serve(async (req) => {
 
     // Acciones
     if (parsed.data.action === "cancel") {
+      // Visit-aware (Fase 5): si la cita es parte de una visita multi-procedimiento,
+      // cancelar TODAS las filas que comparten visit_id (cancelar afecta el bloque).
+      if (appt.visit_id) {
+        // Doctor-only no cancela visitas multi-profesional (pueden incluir filas de otros).
+        if (isDoctor && !isAdmin && !isSecretary) {
+          return json(403, {
+            ok: false,
+            error: "Esta cita es parte de una visita. Pídele a recepción o administración que la cancele completa.",
+            build: BUILD,
+          });
+        }
+        const { data: updated, error: updErr } = await supabase
+          .from("appointments")
+          .update({ status: "cancelada" })
+          .eq("visit_id", appt.visit_id)
+          .neq("status", "cancelada")
+          .select("*");
+
+        if (updErr) return json(500, { ok: false, error: "Cancel failed", details: updErr.message, build: BUILD });
+        return json(200, { ok: true, appointments: updated, visitCancelled: true, count: updated?.length ?? 0, build: BUILD });
+      }
+
       const { data: updated, error: updErr } = await supabase
         .from("appointments")
         .update({ status: "cancelada" })
@@ -143,6 +165,16 @@ Deno.serve(async (req) => {
     }
 
     if (parsed.data.action === "reschedule") {
+      // Visit-aware (Fase 5): el reagendado de bloque completo se difiere (fast-follow).
+      // MVP: una cita parte de una visita no se reagenda suelta (rompe la secuencia).
+      if (appt.visit_id) {
+        return json(409, {
+          ok: false,
+          error: "Esta cita es parte de una visita de varios procedimientos. Para cambiar el horario, cancela la visita y vuelve a agendarla.",
+          build: BUILD,
+        });
+      }
+
       const { date, time, durationMinutes, notes } = parsed.data;
 
       let normalizedTime = time;

@@ -10,6 +10,22 @@ import { supabase } from './supabaseClient';
 export interface CancelAppointmentResult {
   ok: boolean;
   error?: string;
+  /** Fase 5: true si la cita era parte de una visita y se cancelo el bloque completo. */
+  visitCancelled?: boolean;
+  /** Cantidad de citas canceladas (>=1 en visita). */
+  count?: number;
+}
+
+/** Lee el body JSON de un error de functions.invoke (mensaje amigable en 4xx). */
+async function readInvokeErrorBody(error: any): Promise<string | undefined> {
+  try {
+    const ctx = error?.context;
+    if (ctx && typeof ctx.json === 'function') {
+      const j = await ctx.json();
+      return j?.error;
+    }
+  } catch { /* ignore */ }
+  return undefined;
 }
 
 export interface RescheduleAppointmentResult {
@@ -31,14 +47,15 @@ export async function cancelAppointment(appointmentId: string): Promise<CancelAp
     });
 
     if (error) {
-      return { ok: false, error: error.message || 'Error al cancelar la cita' };
+      const bodyMsg = await readInvokeErrorBody(error);
+      return { ok: false, error: bodyMsg || error.message || 'Error al cancelar la cita' };
     }
 
     if (!data?.ok) {
       return { ok: false, error: data?.error || 'Error al cancelar la cita' };
     }
 
-    return { ok: true };
+    return { ok: true, visitCancelled: !!data.visitCancelled, count: data.count ?? 1 };
   } catch (err: any) {
     console.error('Error canceling appointment:', err);
     return { ok: false, error: err?.message || 'Error inesperado al cancelar la cita' };
@@ -66,8 +83,10 @@ export async function rescheduleAppointment(params: {
     });
 
     if (error) {
-      const isConflict = error.message?.toLowerCase().includes('ocupado');
-      return { ok: false, error: error.message || 'Error al re-agendar la cita', isConflict };
+      const bodyMsg = await readInvokeErrorBody(error);
+      const msg = bodyMsg || error.message || 'Error al re-agendar la cita';
+      const isConflict = msg.toLowerCase().includes('ocupado');
+      return { ok: false, error: msg, isConflict };
     }
 
     if (!data?.ok) {

@@ -83,10 +83,12 @@ export default function PatientDetail() {
       if (!result.ok) {
         throw new Error(result.error);
       }
-      
+
       toast({
-        title: 'Cita cancelada',
-        description: 'Cita cancelada.',
+        title: result.visitCancelled && (result.count ?? 1) > 1 ? 'Visita cancelada' : 'Cita cancelada',
+        description: result.visitCancelled && (result.count ?? 1) > 1
+          ? `Se cancelaron los ${result.count} procedimientos de la visita.`
+          : 'Cita cancelada.',
       });
       refetch();
     } catch (err: any) {

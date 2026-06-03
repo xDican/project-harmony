@@ -83,7 +83,7 @@ const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
                 variant="ghost"
                 size="sm"
                 onClick={handleClearSelection}
-                aria-label="Cambiar médico"
+                aria-label="Cambiar profesional"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -97,12 +97,12 @@ const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Buscar por médico o especialidad..."
+              placeholder="Buscar por profesional o especialidad..."
               value={query}
               onChange={(e) => handleInputChange(e.target.value)}
               onFocus={() => query.length > 0 && setIsOpen(true)}
               className="pl-9"
-              aria-label="Buscar médico"
+              aria-label="Buscar profesional"
               aria-expanded={showDropdown}
               aria-controls="doctor-results"
             />
@@ -118,7 +118,7 @@ const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
               <CardContent className="p-0">
                 {isLoading ? (
                   <div className="p-4 text-center text-sm text-muted-foreground">
-                    Buscando médicos...
+                    Buscando profesionales...
                   </div>
                 ) : doctors.length > 0 ? (
                   <ul className="divide-y divide-border">
@@ -150,7 +150,7 @@ const DoctorSearch = ({ onSelect, value }: DoctorSearchProps) => {
                 ) : (
                   <div className="p-4 text-center">
                     <p className="text-sm text-muted-foreground">
-                      No se encontraron médicos para "{query}"
+                      No se encontraron profesionales para "{query}"
                     </p>
                   </div>
                 )}

@@ -6,6 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
 import SlotSelector from '@/components/SlotSelector';
+import VisitBooking from '@/components/VisitBooking';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -54,6 +55,10 @@ export default function NuevaCita() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const agendarRef = useRef<HTMLDivElement>(null);
   const fechaRef = useRef<HTMLDivElement>(null);
+
+  // Modo visita multi-procedimiento (Fase 5). Opt-in, solo en orgs con servicios +
+  // multi-profesional. Aislado en VisitBooking; el flujo de cita simple no cambia.
+  const [visitMode, setVisitMode] = useState(false);
 
   // Duration state
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -392,10 +397,10 @@ export default function NuevaCita() {
     if (!patientLinkDoctorId) {
       toast({
         variant: "destructive",
-        title: combinedMode ? "Selecciona un servicio primero" : "Selecciona un médico primero",
+        title: combinedMode ? "Selecciona un servicio primero" : "Selecciona un profesional primero",
         description: combinedMode
           ? "Elige el servicio para poder registrar al paciente."
-          : "Debes seleccionar un médico antes de crear un paciente nuevo.",
+          : "Debes seleccionar un profesional antes de crear un paciente nuevo.",
       });
       return;
     }
@@ -427,8 +432,8 @@ export default function NuevaCita() {
     if (!doctorId) {
       toast({
         variant: "destructive",
-        title: "Médico requerido",
-        description: "Selecciona un servicio o médico antes de crear un paciente.",
+        title: "Profesional requerido",
+        description: "Selecciona un servicio o profesional antes de crear un paciente.",
       });
       return;
     }
@@ -571,7 +576,7 @@ export default function NuevaCita() {
   const calendarHint = combinedMode
     ? 'Selecciona un servicio para ver disponibilidad'
     : (!selectedDoctor
-        ? 'Selecciona un médico para ver disponibilidad'
+        ? 'Selecciona un profesional para ver disponibilidad'
         : 'Selecciona un servicio para ver disponibilidad');
 
   // Shared calendar modifiers
@@ -611,6 +616,37 @@ export default function NuevaCita() {
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="space-y-8">
+            {/* Tipo de agendamiento: cita simple vs visita multi-procedimiento */}
+            {canCombine && (
+              <section>
+                <Label className="text-sm text-muted-foreground mb-2 block">¿Qué querés agendar?</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={!visitMode ? 'default' : 'outline'}
+                    onClick={() => setVisitMode(false)}
+                    className="h-auto py-2 flex-col items-start text-left"
+                  >
+                    <span className="font-medium">Cita simple</span>
+                    <span className="text-xs font-normal opacity-80">Un solo procedimiento</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={visitMode ? 'default' : 'outline'}
+                    onClick={() => setVisitMode(true)}
+                    className="h-auto py-2 flex-col items-start text-left"
+                  >
+                    <span className="font-medium">Visita (varios)</span>
+                    <span className="text-xs font-normal opacity-80">Procedimientos consecutivos</span>
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            {visitMode && organizationId ? (
+              <VisitBooking organizationId={organizationId} services={services} />
+            ) : (
+            <>
             {/* Modo de asignación (solo orgs multi-profesional con servicios) */}
             {canCombine && (
               <section>
@@ -638,11 +674,11 @@ export default function NuevaCita() {
               </section>
             )}
 
-            {/* Paso 1: Médico (si aplica) */}
+            {/* Paso 1: Profesional (si aplica) */}
             {showDoctorStep && (
               <section>
                 <Label className="text-lg font-semibold text-foreground mb-3 block">
-                  1. Seleccionar Médico
+                  1. Seleccionar Profesional
                 </Label>
                 <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
               </section>
@@ -780,7 +816,7 @@ export default function NuevaCita() {
                     <Alert className="mt-2">
                       <AlertDescription>
                         {!selectedDoctor
-                          ? 'Selecciona un médico primero para ver las fechas disponibles.'
+                          ? 'Selecciona un profesional primero para ver las fechas disponibles.'
                           : 'Selecciona un servicio primero para ver las fechas disponibles.'}
                       </AlertDescription>
                     </Alert>
@@ -937,6 +973,8 @@ export default function NuevaCita() {
                 </p>
               )}
             </div>
+            </>
+            )}
         </div>
       </div>
 
