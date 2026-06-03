@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 2 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + 1 + 2 ENTREGADAS Y VERIFICADAS EN PROD.** Fase 1: service_types fuente unica org-level + service_type_id. Fase 2: `_shared/availability.ts` motor unico de slots, resource-aware (capacidad+buffer) con degradacion, get-available-days unificado. **PROXIMA SESION: FASE 3** (UI config interna de recursos/recetas/skills — habilita que el resource-aware del motor sea usable). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 3 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASE 0 + 1 + 2 + 3 ENTREGADAS.** Fase 3: UI config interna `/admin/motor` (recursos/recetas/skills + atributos de servicio) — habilita que el resource-aware del motor sea usable. **PROXIMA SESION: FASE 4** (vista combinada + booking service-first + relabel Profesional). MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -30,7 +30,7 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 | 0 | Schema (resources, service_resources, professional_services + cols + trigger capacidad) | 3-4h | ✅ **APLICADO+VERIFICADO 2 Jun** (prod via MCP) |
 | 1 | Consolidar service_types como fuente unica (bot lee tabla + escribe service_type_id + UI edita tabla + backfill) | 4-6h | ✅ **ENTREGADA+VERIFICADA 2 Jun** |
 | 2 | Motor disponibilidad `_shared/availability.ts` (2A unificar + 2B resource-aware + 2C unificar days). Skill diferido a Fase 6 | 6-8h | ✅ **ENTREGADA+VERIFICADA 2 Jun** (prod, A/B + QA sintetica) |
-| 3 | UI config interna (recursos/recetas/skills) | 5-7h | pendiente |
+| 3 | UI config interna (recursos/recetas/skills) | 5-7h | ✅ **ENTREGADA 3 Jun** (`/admin/motor`, org-scoped via admin-por-org) |
 | 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | pendiente |
 | 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | pendiente |
 | 6 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
@@ -79,7 +79,27 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 
 **Skill-aware (professional_services) DIFERIDO a Fase 6** (booking service-first): hoy el booking es professional-first, skill-matching seria prematuro.
 
-**Pendiente operativo Fase 2:** ningun cliente tiene recursos configurados aun (0 resources/recetas) → el resource-aware es no-op hasta el primer cliente multi-recurso. La UI para configurar recursos/recetas es **Fase 3**.
+**Pendiente operativo Fase 2:** ningun cliente tiene recursos configurados aun (0 resources/recetas) → el resource-aware es no-op hasta el primer cliente multi-recurso. La UI para configurar recursos/recetas es **Fase 3** (ya entregada, abajo).
+
+### Fase 3 — ENTREGADA 3 Jun (UI config interna del motor)
+
+**Decision de arquitectura (Diego 3 Jun):** en vez de edge function service_role gateada por superadmin, **modelo de admin-por-org**. Se crea UN usuario admin por cada org cliente al hacer onboarding; mantenemos esa lista de credenciales de nuestro lado. Diego se loguea como el admin de la org del cliente y configura. Asi el CRUD usa **supabase-js directo org-scoped** (mismo camino que `serviceTypesApi.ts`) — el RLS `get_user_organizations` pasa porque el usuario ES miembro. **NO se construyo edge function.** (Verificado en DB: los superadmins actuales NO son miembros de las orgs cliente reales → supabase-js directo desde un panel superadmin habria chocado con RLS; de ahi la decision.)
+
+**Alcance quirurgico:** la creacion de servicios (nombre/duracion) **se queda** en `WhatsAppLinesList` (lo lee el bot, ya funciona). Fase 3 solo agrega encima: atributos nuevos del servicio + recetas + skills + recursos. Sin migracion nueva (tablas/cols de Fase 0).
+
+**Archivos:**
+- **NUEVO** `src/lib/motorConfigApi.ts` — CRUD tipado org-scoped: `loadMotorBootstrap` (recursos+servicios+doctores+recetas+skills en 5 queries paralelas), `saveResource`/`setResourceActive` (recursos: baja logica, nunca DELETE — preserva recetas FK), `setServiceRecipe`/`setProfessionalSkills` (estrategia **reemplazo completo**: delete del set + insert), `updateServiceTypeAttrs` (buffer/price/requires_prior_consult).
+- **NUEVO** `src/pages/MotorConfigPanel.tsx` — ruta `/admin/motor` (admin-only). Sin selector de org (opera sobre `useCurrentUser().organizationId`). 3 tabs: **Recursos** (tabla + dialog CRUD, switch activo), **Servicios** (card por servicio: buffer/precio/consulta-previa + receta de recursos con cantidad), **Profesionales** (skill matrix: checkboxes de servicios por profesional, badge "Tecnica" si `user_id` NULL).
+- `src/App.tsx` — ruta `/admin/motor` lazy + RoleBasedRoute `['admin']`.
+- `src/components/MainLayout.tsx` — entrada "Motor" (icono Cog) en el submenu colapsable Administrador (admin-gated).
+
+**Verificacion:** `tsc --noEmit` OK. **Smoke test RLS transaccional en prod** simulando el usuario admin-miembro (set_config request.jwt.claims, NO service_role): insert recurso → receta → skill → delete (set-replace) → soft-delete recurso → update attrs de servicio, todo PASA bajo las policies reales; rollback limpio (0 residuos, attrs revertidos). Confirma que el camino real del frontend funciona end-to-end.
+
+**Login de prueba para Diego:** `dican19+smoketest05@gmail.com` es admin-miembro de la org de prueba **OrionCare** (`c8b1c83b`, 3 servicios). Sirve para probar la UI ya mismo. Para clientes reales: crear su admin-por-org primero.
+
+**Deuda detectada (Fase 0, baja):** las policies DELETE de `service_resources`/`professional_services`/`resources` usan solo `has_role(uid,'admin')` SIN scope de org (un admin de org A podria, conociendo ids, borrar filas de org B). Riesgo bajo con el modelo admin-por-org (cada admin solo opera su org). Anotado para endurecer si se abre self-service.
+
+**Pendiente operativo:** sigue sin clientes con recursos configurados (resource-aware no-op) hasta primer cliente multi-recurso real. La UI ya existe para cargarlos.
 
 ---
 

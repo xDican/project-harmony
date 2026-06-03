@@ -50,6 +50,7 @@ const QuickRepliesPage = lazy(() => import("./pages/QuickRepliesPage"));
 const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const PromotionFormPage = lazy(() => import("./pages/PromotionFormPage"));
 const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
+const MotorConfigPanel = lazy(() => import("./pages/MotorConfigPanel"));
 const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
 const StepDoctor = lazy(() => import("./pages/onboarding/StepDoctor"));
 const StepSchedule = lazy(() => import("./pages/onboarding/StepSchedule"));
@@ -338,6 +339,11 @@ const App = () => {
             <Route path="/admin/whatsapp-lines" element={
               <RoleBasedRoute allowedRoles={['admin']}>
                 <WhatsAppLinesList />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/motor" element={
+              <RoleBasedRoute allowedRoles={['admin']}>
+                <MotorConfigPanel />
               </RoleBasedRoute>
             } />
             <Route path="/admin/bot-faqs" element={

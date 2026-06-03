@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles, Cog } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
@@ -241,6 +241,10 @@ export default function MainLayout({
       to: '/admin/whatsapp-lines',
       label: 'WhatsApp',
       icon: MessageSquare
+    }, {
+      to: '/admin/motor',
+      label: 'Motor',
+      icon: Cog
     }, {
       to: '/admin/bot-faqs',
       label: 'Bot FAQs',
