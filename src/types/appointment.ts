@@ -9,4 +9,5 @@ export interface Appointment {
   status: AppointmentStatus;
   notes?: string;
   durationMinutes?: number;  // Duration in minutes (default: 60)
+  visitId?: string | null;   // Motor Fase 5: si pertenece a una visita multi-procedimiento
 }

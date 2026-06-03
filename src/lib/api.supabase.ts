@@ -63,6 +63,7 @@ function mapAppointment(appointment: any): Appointment {
     status: appointment.status as AppointmentStatus,
     notes: appointment.notes ?? undefined,
     durationMinutes: appointment.duration_minutes ?? 60,
+    visitId: appointment.visit_id ?? null,
   };
 }
 

@@ -39,6 +39,7 @@ export default function PatientDetail() {
     date: string;
     time: string;
     durationMinutes?: number;
+    visitId?: string | null;
   } | null>(null);
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
@@ -104,13 +105,14 @@ export default function PatientDetail() {
     }
   };
 
-  const handleRescheduleClick = (apt: { id: string; doctorId: string; date: string; time: string; durationMinutes?: number }) => {
+  const handleRescheduleClick = (apt: { id: string; doctorId: string; date: string; time: string; durationMinutes?: number; visitId?: string | null }) => {
     setRescheduleAppointment({
       id: apt.id,
       doctorId: apt.doctorId,
       date: apt.date,
       time: apt.time,
       durationMinutes: apt.durationMinutes,
+      visitId: apt.visitId ?? null,
     });
   };
 
@@ -568,6 +570,7 @@ export default function PatientDetail() {
             currentDate={rescheduleAppointment.date}
             currentTime={rescheduleAppointment.time}
             currentDuration={rescheduleAppointment.durationMinutes}
+            visitId={rescheduleAppointment.visitId}
             onSuccess={handleRescheduleSuccess}
           />
         )}
@@ -586,12 +589,13 @@ interface UpcomingAppointmentCardProps {
     doctorName: string;
     status: string;
     durationMinutes?: number;
+    visitId?: string | null;
   };
   formatDate: (date: string) => string;
   formatTime: (time: string) => string;
   canCancelAppointment: (date: string, time: string, status: string) => boolean;
   handleCancelClick: (id: string) => void;
-  handleRescheduleClick: (apt: { id: string; doctorId: string; date: string; time: string; durationMinutes?: number }) => void;
+  handleRescheduleClick: (apt: { id: string; doctorId: string; date: string; time: string; durationMinutes?: number; visitId?: string | null }) => void;
   cancelingId: string | null;
 }
 

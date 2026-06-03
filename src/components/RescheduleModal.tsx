@@ -32,6 +32,10 @@ interface RescheduleModalProps {
   currentDate: string;
   currentTime: string;
   currentDuration?: number;
+  /** Motor Fase 5: si la cita es parte de una visita multi-procedimiento, no se
+   *  reagenda suelta (rompe la secuencia). Se muestra un mensaje y se invita a
+   *  cancelar la visita y volver a agendarla. */
+  visitId?: string | null;
   onSuccess: () => void;
 }
 
@@ -53,8 +57,10 @@ export function RescheduleModal({
   currentDate,
   currentTime,
   currentDuration = 60,
+  visitId,
   onSuccess,
 }: RescheduleModalProps) {
+  const isVisit = !!visitId;
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
@@ -219,7 +225,17 @@ export function RescheduleModal({
       });
 
       if (error) {
-        throw new Error(error.message || 'Error al re-agendar la cita');
+        // El mensaje amigable (capacidad, visita, etc.) viene en el body del 4xx,
+        // no en error.message (que es generico "non-2xx status code").
+        let bodyMsg: string | undefined;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const j = await ctx.json();
+            bodyMsg = j?.error;
+          }
+        } catch { /* ignore */ }
+        throw new Error(bodyMsg || error.message || 'Error al re-agendar la cita');
       }
 
       // Check for errors in the response
@@ -311,6 +327,22 @@ export function RescheduleModal({
           </DialogDescription>
         </DialogHeader>
 
+        {isVisit ? (
+          <div className="space-y-4 py-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="ml-2">
+                Esta cita es parte de una <strong>visita de varios procedimientos</strong>.
+                Para cambiar el horario, cancela la visita completa (desde el botón
+                "Cancelar" en el detalle del paciente) y vuelve a agendarla.
+              </AlertDescription>
+            </Alert>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)}>Entendido</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <>
         <div className="space-y-6 py-4">
           {/* Step 1: Duration selector (PRIMERO) */}
           <div className="space-y-2">
@@ -457,6 +489,8 @@ export function RescheduleModal({
             )}
           </Button>
         </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
