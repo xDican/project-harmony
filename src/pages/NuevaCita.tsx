@@ -18,6 +18,15 @@ import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { getAvailableSlots, getAvailableDays, createPatient, createAppointment, getDoctorById } from '@/lib/api';
 import { listActiveServiceTypesForOrg, type OrgServiceType } from '@/lib/serviceTypesApi';
+import {
+  getQualifiedDoctors,
+  getCombinedDays,
+  getCombinedSlots,
+  getDoctorLoadForDate,
+  pickLeastLoaded,
+  doctorLabel,
+  type QualifiedDoctor,
+} from '@/lib/combinedAvailability';
 import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
 import { useCurrentUser } from '@/context/UserContext';
 import { useSingleDoctor } from '@/hooks/useSingleDoctor';
@@ -56,6 +65,15 @@ export default function NuevaCita() {
   const [services, setServices] = useState<OrgServiceType[]>([]);
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState<string | null>(null);
 
+  // Vista combinada (Fase 4). 'auto' = service-first + auto-asignacion entre todos
+  // los profesionales que saben el servicio; 'specific' = elegir un profesional
+  // (override). Solo aplica en orgs con servicios y mas de un profesional.
+  const [assignMode, setAssignMode] = useState<'auto' | 'specific'>('auto');
+  const [qualifiedDoctors, setQualifiedDoctors] = useState<QualifiedDoctor[]>([]);
+  const [slotFreeDoctors, setSlotFreeDoctors] = useState<Record<string, string[]>>({});
+  const [doctorLoad, setDoctorLoad] = useState<Record<string, number>>({});
+  const [assignedDoctorId, setAssignedDoctorId] = useState<string | null>(null);
+
   // Available days state
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [availableDaysMap, setAvailableDaysMap] = useState<Record<string, { canFit: boolean; working: boolean }>>({});
@@ -84,6 +102,12 @@ export default function NuevaCita() {
     { value: 90, label: '1.5 horas' },
     { value: 120, label: '2 horas' },
   ];
+
+  // Modo combinado: service-first + auto-asignacion. Solo en orgs con servicios y
+  // varios profesionales (un doctor logueado o una org de 1 doctor agendan directo).
+  const hasServices = services.length > 0;
+  const canCombine = hasServices && !isDoctorView && !isSingleDoctorOrg;
+  const combinedMode = canCombine && assignMode === 'auto';
 
   // Auto-fill doctor for logged-in doctors
   useEffect(() => {
@@ -136,85 +160,149 @@ export default function NuevaCita() {
     if (svc) setDurationMinutes(svc.durationMinutes ?? 30);
   }, [selectedServiceTypeId, services]);
 
-  /**
-   * Fetch available days when doctor, duration, or month changes
-   */
-  const fetchAvailableDays = useCallback(async (doctorId: string, month: Date, duration: number) => {
-    const monthString = format(month, 'yyyy-MM');
-
-    setIsLoadingDays(true);
-    setErrorDays(null);
-
-    try {
-      const daysMap = await getAvailableDays({
-        doctorId,
-        month: monthString,
-        durationMinutes: duration,
-        calendarId: selectedCalendarId,
+  // Modo combinado: cargar los profesionales que saben hacer el servicio elegido.
+  useEffect(() => {
+    if (!combinedMode || !organizationId || !selectedServiceTypeId) {
+      setQualifiedDoctors([]);
+      return;
+    }
+    getQualifiedDoctors(organizationId, selectedServiceTypeId)
+      .then(setQualifiedDoctors)
+      .catch((e) => {
+        console.error('[NuevaCita] Error cargando profesionales del servicio:', e);
+        setQualifiedDoctors([]);
       });
-      setAvailableDaysMap(daysMap);
+  }, [combinedMode, organizationId, selectedServiceTypeId]);
 
-      if (selectedDate) {
-        const dateString = format(selectedDate, 'yyyy-MM-dd');
-        if (daysMap[dateString] && !daysMap[dateString].canFit) {
-          setSelectedDate(undefined);
-          setSelectedSlot(null);
-          setAvailableSlots([]);
-        }
+  // Al cambiar servicio o modo de asignacion, reset de fecha/hora/asignacion.
+  useEffect(() => {
+    setSelectedDate(undefined);
+    setSelectedSlot(null);
+    setAvailableSlots([]);
+    setSlotFreeDoctors({});
+    setAssignedDoctorId(null);
+  }, [selectedServiceTypeId, assignMode]);
+
+  // Fetch de dias disponibles: combinado (union de profesionales) o de un doctor.
+  const applyDaysMap = useCallback((daysMap: Record<string, { canFit: boolean; working: boolean }>) => {
+    setAvailableDaysMap(daysMap);
+    if (selectedDate) {
+      const ds = format(selectedDate, 'yyyy-MM-dd');
+      if (daysMap[ds] && !daysMap[ds].canFit) {
+        setSelectedDate(undefined);
+        setSelectedSlot(null);
+        setAvailableSlots([]);
       }
-    } catch (error) {
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const month = format(currentMonth, 'yyyy-MM');
+    const onError = (error: unknown) => {
       console.error('[NuevaCita] Error fetching available days:', error);
       setErrorDays('No se pudieron cargar los días disponibles');
       setAvailableDaysMap({});
-    } finally {
-      setIsLoadingDays(false);
-    }
-  }, [selectedDate, selectedCalendarId]);
+    };
 
-  // Trigger fetch when doctor, duration, or month changes
-  useEffect(() => {
-    if (selectedDoctor) {
-      fetchAvailableDays(selectedDoctor.id, currentMonth, durationMinutes);
+    if (combinedMode) {
+      if (!selectedServiceTypeId || qualifiedDoctors.length === 0) {
+        setAvailableDaysMap({});
+        return;
+      }
+      setIsLoadingDays(true);
+      setErrorDays(null);
+      getCombinedDays({ doctors: qualifiedDoctors, month, durationMinutes })
+        .then(applyDaysMap)
+        .catch(onError)
+        .finally(() => setIsLoadingDays(false));
+    } else if (selectedDoctor) {
+      setIsLoadingDays(true);
+      setErrorDays(null);
+      getAvailableDays({ doctorId: selectedDoctor.id, month, durationMinutes, calendarId: selectedCalendarId })
+        .then(applyDaysMap)
+        .catch(onError)
+        .finally(() => setIsLoadingDays(false));
+    } else {
+      setAvailableDaysMap({});
     }
-  }, [selectedDoctor, currentMonth, durationMinutes, selectedCalendarId, fetchAvailableDays]);
+  }, [combinedMode, selectedDoctor, qualifiedDoctors, selectedServiceTypeId, currentMonth, durationMinutes, selectedCalendarId, applyDaysMap]);
 
-  // Fetch available slots when doctor, date, or duration changes
+  // Fetch de slots: combinado (union + profesionales libres por hora) o de un doctor.
   useEffect(() => {
-    if (selectedDoctor && selectedDate) {
-      setIsLoadingSlots(true);
+    const ready = !!selectedDate && (combinedMode
+      ? (!!selectedServiceTypeId && qualifiedDoctors.length > 0)
+      : !!selectedDoctor);
+
+    if (!ready) {
+      setAvailableSlots([]);
       setSelectedSlot(null);
+      setSlotFreeDoctors({});
+      return;
+    }
 
-      const dateString = format(selectedDate, 'yyyy-MM-dd');
+    setIsLoadingSlots(true);
+    setSelectedSlot(null);
+    const dateString = format(selectedDate!, 'yyyy-MM-dd');
+    const todayFilter = (times: string[]) => {
+      if (!isToday(selectedDate!)) return times;
+      const nowMin = getCurrentTimeInMinutes();
+      return times.filter((t) => timeStringToMinutes(t) > nowMin);
+    };
+
+    if (combinedMode) {
+      getCombinedSlots({ doctors: qualifiedDoctors, date: dateString, durationMinutes, serviceTypeId: selectedServiceTypeId! })
+        .then((combined) => {
+          const freeMap: Record<string, string[]> = {};
+          for (const s of combined) freeMap[s.time] = s.freeDoctorIds;
+          setSlotFreeDoctors(freeMap);
+          setAvailableSlots(todayFilter(combined.map((s) => s.time)));
+        })
+        .catch((error) => {
+          console.error('Error loading combined slots:', error);
+          setAvailableSlots([]);
+          setSlotFreeDoctors({});
+        })
+        .finally(() => setIsLoadingSlots(false));
+    } else {
       getAvailableSlots({
-        doctorId: selectedDoctor.id,
+        doctorId: selectedDoctor!.id,
         date: dateString,
-        durationMinutes: durationMinutes,
+        durationMinutes,
         calendarId: selectedCalendarId,
         serviceTypeId: selectedServiceTypeId ?? undefined,
       })
-        .then(slots => {
-          let filteredSlots = slots;
-          if (isToday(selectedDate)) {
-            const currentTimeInMinutes = getCurrentTimeInMinutes();
-            filteredSlots = slots.filter(slot => {
-              const slotTimeInMinutes = timeStringToMinutes(slot);
-              return slotTimeInMinutes > currentTimeInMinutes;
-            });
-          }
-          setAvailableSlots(filteredSlots);
-        })
-        .catch(error => {
+        .then((slots) => setAvailableSlots(todayFilter(slots)))
+        .catch((error) => {
           console.error('Error loading slots:', error);
           setAvailableSlots([]);
         })
-        .finally(() => {
-          setIsLoadingSlots(false);
-        });
-    } else {
-      setAvailableSlots([]);
-      setSelectedSlot(null);
+        .finally(() => setIsLoadingSlots(false));
     }
-  }, [selectedDoctor, selectedDate, durationMinutes, selectedCalendarId, selectedServiceTypeId]);
+  }, [combinedMode, selectedDoctor, selectedDate, durationMinutes, selectedCalendarId, selectedServiceTypeId, qualifiedDoctors]);
+
+  // Modo combinado: carga del dia para auto-asignar al menos cargado.
+  useEffect(() => {
+    if (!combinedMode || !organizationId || !selectedDate || qualifiedDoctors.length === 0) {
+      setDoctorLoad({});
+      return;
+    }
+    getDoctorLoadForDate({
+      organizationId,
+      date: format(selectedDate, 'yyyy-MM-dd'),
+      doctorIds: qualifiedDoctors.map((d) => d.id),
+    })
+      .then(setDoctorLoad)
+      .catch(() => setDoctorLoad({}));
+  }, [combinedMode, organizationId, selectedDate, qualifiedDoctors]);
+
+  // Modo combinado: al elegir hora, auto-asignar el profesional libre menos cargado.
+  useEffect(() => {
+    if (!combinedMode || !selectedSlot) {
+      setAssignedDoctorId(null);
+      return;
+    }
+    setAssignedDoctorId(pickLeastLoaded(slotFreeDoctors[selectedSlot] ?? [], doctorLoad));
+  }, [combinedMode, selectedSlot, slotFreeDoctors, doctorLoad]);
 
   // Auto-scroll to Agendar button when slots finish loading
   useEffect(() => {
@@ -296,12 +384,18 @@ export default function NuevaCita() {
     return !dayInfo.working || !dayInfo.canFit;
   };
 
+  // Doctor al que se vincula el paciente nuevo. En modo combinado el paciente no
+  // es de un doctor especifico → se usa el asignado o el primer profesional del servicio.
+  const patientLinkDoctorId = selectedDoctor?.id ?? assignedDoctorId ?? qualifiedDoctors[0]?.id ?? user?.doctorId;
+
   const handleCreateNewPatient = ({ nameOrPhone }: { nameOrPhone: string }) => {
-    if (!selectedDoctor && !user?.doctorId) {
+    if (!patientLinkDoctorId) {
       toast({
         variant: "destructive",
-        title: "Selecciona un médico primero",
-        description: "Debes seleccionar un médico antes de crear un paciente nuevo.",
+        title: combinedMode ? "Selecciona un servicio primero" : "Selecciona un médico primero",
+        description: combinedMode
+          ? "Elige el servicio para poder registrar al paciente."
+          : "Debes seleccionar un médico antes de crear un paciente nuevo.",
       });
       return;
     }
@@ -329,12 +423,12 @@ export default function NuevaCita() {
       return;
     }
 
-    const doctorId = selectedDoctor?.id ?? user?.doctorId;
+    const doctorId = patientLinkDoctorId;
     if (!doctorId) {
       toast({
         variant: "destructive",
         title: "Médico requerido",
-        description: "Selecciona un médico antes de crear un paciente.",
+        description: "Selecciona un servicio o médico antes de crear un paciente.",
       });
       return;
     }
@@ -383,7 +477,16 @@ export default function NuevaCita() {
   };
 
   const handleCreateAppointment = async () => {
-    if (!selectedPatient || !selectedDoctor || !selectedDate || !selectedSlot) {
+    // Doctor efectivo: en combinado es el auto-asignado; si no, el elegido.
+    const effectiveDoctorId = combinedMode ? assignedDoctorId : selectedDoctor?.id ?? null;
+    const assignedDoctor = combinedMode
+      ? qualifiedDoctors.find((d) => d.id === assignedDoctorId)
+      : null;
+    const effectiveDoctorName = combinedMode
+      ? (assignedDoctor ? doctorLabel(assignedDoctor) : '')
+      : (selectedDoctor?.name ?? '');
+
+    if (!selectedPatient || !effectiveDoctorId || !selectedDate || !selectedSlot) {
       toast({
         variant: "destructive",
         title: "Campos incompletos",
@@ -398,7 +501,7 @@ export default function NuevaCita() {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
 
       const result = await createAppointment({
-        doctorId: selectedDoctor.id,
+        doctorId: effectiveDoctorId,
         patientId: selectedPatient.id,
         date: dateString,
         time: selectedSlot,
@@ -416,7 +519,7 @@ export default function NuevaCita() {
         description: (
           <div className="mt-2 space-y-1">
             <p><strong>Paciente:</strong> {selectedPatient.name}</p>
-            <p><strong>Doctor:</strong> {selectedDoctor.name}</p>
+            <p><strong>Profesional:</strong> {effectiveDoctorName}</p>
             <p><strong>Fecha:</strong> {displayDate}</p>
             <p><strong>Hora:</strong> {selectedSlot}</p>
             <p><strong>Duración:</strong> {displayDuration}</p>
@@ -435,6 +538,8 @@ export default function NuevaCita() {
       setSelectedDate(undefined);
       setSelectedSlot(null);
       setAvailableSlots([]);
+      setSlotFreeDoctors({});
+      setAssignedDoctorId(null);
       setDurationMinutes(30);
       setSelectedServiceTypeId(null);
       setReminder3dEnabled(false);
@@ -452,17 +557,22 @@ export default function NuevaCita() {
   };
 
   // Si la org tiene servicios, hay que elegir uno antes de ver disponibilidad
-  const needsService = services.length > 0 && !selectedServiceTypeId;
-  const isFormValid = selectedPatient && selectedDoctor && selectedDate && selectedSlot && !needsService && !isCreatingAppointment;
-  const showDoctorStep = !isDoctorView && !loadingDoctors && !isSingleDoctorOrg;
+  const needsService = hasServices && !selectedServiceTypeId;
+  // Doctor efectivo para validar el form (combinado: auto-asignado).
+  const formDoctorId = combinedMode ? assignedDoctorId : (selectedDoctor?.id ?? null);
+  const isFormValid = !!selectedPatient && !!formDoctorId && !!selectedDate && !!selectedSlot && !needsService && !isCreatingAppointment;
+  // En modo combinado no hay paso "Médico" (service-first); en modo específico sí.
+  const showDoctorStep = !combinedMode && !isDoctorView && !loadingDoctors && !isSingleDoctorOrg;
   const patientStepNum = showDoctorStep ? 2 : 1;
   const fechaStepNum = showDoctorStep ? 3 : 2;
 
-  // Calendar is not ready until a doctor (y servicio, si aplica) is selected
-  const calendarDisabled = !selectedDoctor || needsService;
-  const calendarHint = !selectedDoctor
-    ? 'Selecciona un médico para ver disponibilidad'
-    : 'Selecciona un servicio para ver disponibilidad';
+  // Calendario listo cuando hay servicio (combinado) o médico+servicio (específico).
+  const calendarDisabled = combinedMode ? needsService : (!selectedDoctor || needsService);
+  const calendarHint = combinedMode
+    ? 'Selecciona un servicio para ver disponibilidad'
+    : (!selectedDoctor
+        ? 'Selecciona un médico para ver disponibilidad'
+        : 'Selecciona un servicio para ver disponibilidad');
 
   // Shared calendar modifiers
   const calendarModifiers = {
@@ -501,6 +611,33 @@ export default function NuevaCita() {
     <MainLayout>
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="space-y-8">
+            {/* Modo de asignación (solo orgs multi-profesional con servicios) */}
+            {canCombine && (
+              <section>
+                <Label className="text-sm text-muted-foreground mb-2 block">¿Cómo agendar?</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={assignMode === 'auto' ? 'default' : 'outline'}
+                    onClick={() => setAssignMode('auto')}
+                    className="h-auto py-2 flex-col items-start text-left"
+                  >
+                    <span className="font-medium">Cualquier profesional</span>
+                    <span className="text-xs font-normal opacity-80">El sistema asigna al que esté libre</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={assignMode === 'specific' ? 'default' : 'outline'}
+                    onClick={() => setAssignMode('specific')}
+                    className="h-auto py-2 flex-col items-start text-left"
+                  >
+                    <span className="font-medium">Elegir profesional</span>
+                    <span className="text-xs font-normal opacity-80">Para un profesional específico</span>
+                  </Button>
+                </div>
+              </section>
+            )}
+
             {/* Paso 1: Médico (si aplica) */}
             {showDoctorStep && (
               <section>
@@ -744,6 +881,43 @@ export default function NuevaCita() {
                   </div>
                 )}
               </div>
+
+              {/* Profesional asignado (modo combinado) */}
+              {combinedMode && selectedSlot && (() => {
+                const freeIds = slotFreeDoctors[selectedSlot] ?? [];
+                const freeDocs = qualifiedDoctors.filter((d) => freeIds.includes(d.id));
+                return (
+                  <div className="rounded-lg border p-3 bg-card space-y-2">
+                    <Label className="text-sm text-muted-foreground">Profesional asignado</Label>
+                    {freeDocs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No hay profesional libre en este horario.
+                      </p>
+                    ) : freeDocs.length === 1 ? (
+                      <p className="text-sm font-medium">{doctorLabel(freeDocs[0])}</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {freeDocs.map((d) => (
+                            <Button
+                              key={d.id}
+                              type="button"
+                              size="sm"
+                              variant={assignedDoctorId === d.id ? 'default' : 'outline'}
+                              onClick={() => setAssignedDoctorId(d.id)}
+                            >
+                              {doctorLabel(d)}
+                            </Button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Auto-asignado al menos cargado; podés cambiarlo.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </section>
 
             {/* Botón Agendar */}

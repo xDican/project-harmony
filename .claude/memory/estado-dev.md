@@ -116,11 +116,21 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 
 **Servicios = fuente unica en Motor → Servicios (3 Jun, decision Diego):** se elimino la seccion "Tipos de servicio" del editor de linea (`WhatsAppLinesList`) y la administracion completa de servicios (crear/editar nombre+duracion + buffer/precio/consulta + receta + baja logica) vive ahora en el tab **Servicios** del panel `/admin/motor`, org-level. Motiva el bug que Diego cazo: "Consulta general" tenia `duration_minutes=NULL` (opcion "Predeterminada" del editor viejo) → bot y plataforma defaultean distinto (bot: line default/60; plataforma: 30) → slots distintos. El editor nuevo **exige duracion** (sin opcion "Predeterminada") para que no se pueda volver a guardar un servicio sin duracion. `serviceTypesApi`: nuevos `saveServiceType` (upsert org,name) + `deactivateServiceType`; removidas las funciones line-scoped muertas (`listServiceTypesByLine`/`saveServiceTypesForLine`) + `ServiceTypeItem`. El bot no se toca (ya lee `service_types` org-level desde Fase 1). NOTA: la columna `service_types.whatsapp_line_id` queda vestigial (los servicios nuevos no la setean; el bot lee por org).
 
-**DEFERIDO de Fase 4 (no bloquea el hueco):**
-- **Day-view del calendario NO es resource-aware** (`get-available-days` no recibe `serviceTypeId`): un dia puede verse disponible aunque los recursos esten llenos; al abrirlo, el hour-view (resource-aware) muestra los slots reales. NO permite sobre-cupo (hour-view + trigger bloquean), solo es inconsistencia cosmetica. Threading de `serviceTypeId` + logica de recetas/consumers por dia en `get-available-days` cuando se quiera pulir.
-- **Vista combinada multi-calendario** (Dulce ve N profesionales en una pantalla) — pendiente.
-- **Relabel "Doctor" → "Profesional"** (#24) — pendiente.
-- **Skill matrix NO filtra** quien puede hacer el servicio en el booking manual (cualquier doctor agenda cualquier servicio) — es Fase 6.
+### Fase 4 — vista combinada + auto-asignacion ENTREGADA 3 Jun
+
+**Decisiones Diego:** service-first + override opcional (elegir profesional especifico); auto-asigna al **menos cargado** con opcion de cambiar.
+
+**Implementacion (combinacion client-side, v1):** reusa las EFs ya probadas (`get-available-slots`/`get-available-days`) en fan-out + union, sin backend nuevo. Para el ICP (1 doctor + unas tecnicas) son pocas llamadas paralelas. Si escala, mover a una EF unica `get-combined-slots` (reusable tambien por el bot Fase 6).
+- **NUEVO** `src/lib/combinedAvailability.ts`: `getQualifiedDoctors` (skill matrix `professional_services` + **fallback a todos los doctores del org** si el servicio no tiene skills declarados → no bloquea antes de configurar), `getCombinedDays` (union de dias), `getCombinedSlots` (union de slots + lista de profesionales libres por hora), `getDoctorLoadForDate` (conteo de citas/dia), `pickLeastLoaded`, `doctorLabel`.
+- `NuevaCita.tsx`: modo `auto` (default, "Cualquier profesional") vs `specific` (override, "Elegir profesional"). Toggle visible solo en orgs con servicios + multi-profesional (`canCombine`). En auto: service-first → dias/slots combinados → al elegir hora auto-asigna el menos cargado entre los libres, con botones para cambiar. `createAppointment` usa el doctor efectivo (asignado en combinado). Degradacion total: org sin servicios o single-doctor/doctorView → flujo doctor+duracion de siempre.
+
+**Verificado:** `tsc --noEmit` OK. (QA en vivo pendiente de Diego sobre el deploy de Vercel.)
+
+**DEFERIDO de Fase 4 (no bloquea):**
+- **Day-view del calendario NO es resource-aware** (`get-available-days` no recibe `serviceTypeId`): un dia puede verse disponible aunque los recursos esten llenos; al abrirlo, el hour-view (resource-aware) muestra los slots reales. NO permite sobre-cupo (hour-view + trigger bloquean), solo cosmetico. (En combinado tampoco, mismo motivo.)
+- **Relabel "Doctor" → "Profesional"** (#24) — pendiente (en el toast de exito ya dice "Profesional"; falta el resto de la UI).
+- **Skill matrix en el BOT** (Fase 6): el bot sigue professional-first; el filtrado por skill + service-first del bot es Fase 6. En la plataforma ya se usa la skill matrix (con fallback).
+- **Optimizacion:** mover la combinacion a una EF unica si crece el numero de profesionales.
 
 ---
 
