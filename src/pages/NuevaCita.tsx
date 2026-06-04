@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle, Loader2, Bell, Plus, ArrowUp, ArrowDown, Sparkles, CalendarClock, Calendar, Pencil,
-  Search, Clock, Trash2,
+  Search, Clock, Trash2, Check,
 } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
@@ -41,6 +41,26 @@ function fmtDuration(min: number): string {
 
 function fmtMoney(n: number): string {
   return `L ${n.toLocaleString('en-US')}`;
+}
+
+/** Iniciales (máx 2) para el avatar del paciente. */
+function initialsOf(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+}
+
+/** Pill "Paso N" en el header de cada sección; check cuando el paso está completo. */
+function StepBadge({ n, done }: { n: number; done: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium',
+        done ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+      )}
+    >
+      {done && <Check className="h-3 w-3" />}
+      Paso {n}
+    </span>
+  );
 }
 
 /**
@@ -152,33 +172,65 @@ export default function NuevaCita() {
     <MainLayout mainClassName="overflow-hidden flex flex-col">
       {/* Contenido scrollable (en Fase 3 se ajusta a no-scroll con cajas internas) */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <div className="mx-auto grid w-full max-w-[1700px] gap-6 p-4 md:p-6 lg:grid-cols-[2fr_3fr]">
+        <div className="mx-auto grid w-full max-w-[1700px] gap-4 p-4 md:gap-6 md:p-6 lg:grid-cols-[2fr_3fr]">
           {/* ===== Columna izquierda — armar la cita =====
               min-w-0: evita el "grid blowout" (los chips nowrap forzarían a la
               columna a crecer al ancho del contenido y empujarían la página). */}
-          <div className="space-y-6 min-w-0">
+          <div className="space-y-4 min-w-0">
             {/* 1. Paciente */}
             <section className="rounded-xl border bg-card p-4">
-              <Label className="text-base font-semibold mb-3 block">1. Paciente</Label>
-              <PatientSearch
-                onSelect={c.setSelectedPatient}
-                onCreateNew={handleCreateNew}
-                value={c.selectedPatient}
-                doctorId={c.selectedDoctor?.id}
-              />
-              {c.selectedPatient && (
-                <div className="mt-3 flex items-center justify-between rounded-lg border p-3">
-                  <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">Recordatorio extra</p>
-                      <p className="text-xs text-muted-foreground">
-                        {c.reminder3dEnabled ? '2 WhatsApp: 3 días + 24h' : '1 WhatsApp: 24h antes'}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <Label className="text-base font-semibold">Paciente</Label>
+                <StepBadge n={1} done={!!c.selectedPatient} />
+              </div>
+              {c.selectedPatient ? (
+                // Seleccionado → tarjeta compacta (avatar + nombre) + fila de recordatorio.
+                <>
+                  <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                      {initialsOf(c.selectedPatient.name)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground">Paciente</p>
+                      <p className="truncate text-sm font-medium">{c.selectedPatient.name}</p>
+                    </div>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto shrink-0 p-0"
+                      onClick={() => c.setSelectedPatient(null as any)}
+                    >
+                      Cambiar
+                    </Button>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between rounded-lg border px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm">
+                        Recordatorio extra <span className="text-muted-foreground">· 3 días antes</span>
                       </p>
                     </div>
+                    <Switch checked={c.reminder3dEnabled} onCheckedChange={c.setReminder3d} />
                   </div>
-                  <Switch checked={c.reminder3dEnabled} onCheckedChange={c.setReminder3d} />
-                </div>
+                </>
+              ) : (
+                // Sin seleccionar → buscador + crear nuevo (estado expandido, Paso 1).
+                <>
+                  <PatientSearch
+                    onSelect={c.setSelectedPatient}
+                    onCreateNew={handleCreateNew}
+                    value={c.selectedPatient}
+                    doctorId={c.selectedDoctor?.id}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => { setNewName(''); setNewPhone(''); setCreateOpen(true); }}
+                    className="mt-2 w-full border-dashed text-primary"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Crear nuevo paciente
+                  </Button>
+                </>
               )}
             </section>
 
@@ -192,9 +244,12 @@ export default function NuevaCita() {
 
             {/* 2. Servicios (o Duración en degradación) */}
             <section className="rounded-xl border bg-card p-4">
-              <Label className="text-base font-semibold mb-1 block">
-                {showServices ? '2. Servicios de la cita' : '2. Duración'}
-              </Label>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <Label className="text-base font-semibold">
+                  {showServices ? 'Servicios a realizar' : 'Duración'}
+                </Label>
+                <StepBadge n={2} done={showServices ? c.items.length > 0 : true} />
+              </div>
               {showServices ? (
                 <ServicePicker composer={c} />
               ) : (
@@ -219,7 +274,10 @@ export default function NuevaCita() {
           {/* Desktop: el panel va inline en la 2ª columna (sin cambios visuales). */}
           <div className="hidden lg:block">
             <section className="rounded-xl border bg-card p-4">
-              <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <Label className="text-base font-semibold">Fecha y hora</Label>
+                <StepBadge n={3} done={!!(c.selectedDate && c.selectedStart)} />
+              </div>
               <DateTimePanel composer={c} />
             </section>
           </div>
@@ -229,47 +287,50 @@ export default function NuevaCita() {
         </div>
       </div>
 
-      {/* ===== Footer sticky — resumen + profesional + Agendar =====
-          Móvil: resumen arriba (envuelve) + botón full-width abajo.
-          Desktop: resumen a la izquierda, botón a la derecha (ml-auto). */}
+      {/* ===== Footer sticky — profesional + total estimado + Agendar =====
+          Móvil: resumen (profesional · total) arriba + botón full-width abajo.
+          Desktop: resumen a la izquierda, botón a la derecha. */}
       <footer className="shrink-0 border-t bg-card">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 md:flex-row md:flex-wrap md:items-center md:gap-4 md:px-6">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div>
-              <p className="text-xs text-muted-foreground">Cita programada para</p>
-              <p className="text-sm font-medium">
-                {c.selectedDate && c.selectedStart
-                  ? `${format(c.selectedDate, "EEE d 'de' MMM", { locale: es })} · ${to12h(c.selectedStart)}`
-                  : '—'}
-              </p>
+        <div className="mx-auto max-w-6xl px-4 py-3 md:px-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="flex items-end justify-between gap-6 md:justify-start md:gap-10">
+              {/* Profesional asignado (o "Por asignar") */}
+              <div className="min-w-0">
+                {c.selectedStart && c.chain.length > 0 ? (
+                  <ProfesionalSummary composer={c} labelFor={labelFor} />
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">Profesional asignado</p>
+                    <p className="text-sm font-medium text-muted-foreground">Por asignar</p>
+                  </>
+                )}
+              </div>
+
+              {/* Total estimado (solo con servicios) */}
+              {showServices && (
+                <div className="text-right md:text-left">
+                  <p className="text-xs text-muted-foreground">Total estimado</p>
+                  <p className="text-lg font-bold leading-tight">{fmtMoney(c.totalPrice)}</p>
+                  {c.items.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {c.items.length} servicio{c.items.length > 1 ? 's' : ''} · {fmtDuration(c.totalDuration)}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {(c.path !== 'duration' && c.items.length > 0) && (
-              <div>
-                <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-sm font-medium">
-                  {c.items.length} servicio{c.items.length > 1 ? 's' : ''}
-                  {c.totalPrice > 0 ? ` · ${fmtMoney(c.totalPrice)}` : ''} · {fmtDuration(c.totalDuration)}
-                </p>
-              </div>
-            )}
-
-            {/* Profesional(es) asignado(s) */}
-            {c.selectedStart && c.chain.length > 0 && (
-              <ProfesionalSummary composer={c} labelFor={labelFor} />
-            )}
-          </div>
-
-          <div className="md:ml-auto">
-            {submitHint && (
-              <p className="mb-1.5 text-xs text-muted-foreground md:text-right">{submitHint}</p>
-            )}
-            <Button onClick={handleAgendar} disabled={!c.canSubmit} size="lg" className="w-full md:w-auto">
-              {c.isSubmitting
-                ? <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                : <CheckCircle className="mr-2 h-5 w-5" />}
-              {c.isSubmitting ? 'Agendando…' : 'Agendar cita'}
-            </Button>
+            <div className="md:shrink-0">
+              {submitHint && (
+                <p className="mb-1.5 text-xs text-muted-foreground md:text-right">{submitHint}</p>
+              )}
+              <Button onClick={handleAgendar} disabled={!c.canSubmit} size="lg" className="w-full md:w-auto">
+                {c.isSubmitting
+                  ? <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  : <CheckCircle className="mr-2 h-5 w-5" />}
+                {c.isSubmitting ? 'Agendando…' : 'Agendar cita'}
+              </Button>
+            </div>
           </div>
         </div>
       </footer>
@@ -404,23 +465,26 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
         <p className="py-2 text-sm text-muted-foreground">Sin resultados para “{query}”.</p>
       )}
 
-      {/* Servicios elegidos */}
-      {multiService
-        ? c.items.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {c.items.map((svc, idx) => (
-                <ServiceRow key={`${svc.id}-${idx}`} svc={svc} idx={idx} />
-              ))}
-              <p className="text-xs text-muted-foreground">
-                {c.items.length} servicio{c.items.length > 1 ? 's' : ''} · Duración total estimada: {fmtDuration(c.totalDuration)}
-              </p>
-            </div>
-          )
-        : c.items[0] && (
-            <div className="mt-3">
-              <ServiceRow svc={c.items[0]} idx={0} />
-            </div>
-          )}
+      {/* Servicios elegidos (o placeholder corto si aún no hay ninguno) */}
+      {c.items.length === 0 ? (
+        <div className="mt-3 flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center">
+          <Plus className="h-5 w-5 text-muted-foreground/60" />
+          <p className="text-sm text-muted-foreground">Selecciona servicios para ver el total</p>
+        </div>
+      ) : multiService ? (
+        <div className="mt-3 space-y-2">
+          {c.items.map((svc, idx) => (
+            <ServiceRow key={`${svc.id}-${idx}`} svc={svc} idx={idx} />
+          ))}
+          <p className="text-xs text-muted-foreground">
+            {c.items.length} servicio{c.items.length > 1 ? 's' : ''} · Duración total estimada: {fmtDuration(c.totalDuration)}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-3">
+          <ServiceRow svc={c.items[0]} idx={0} />
+        </div>
+      )}
     </>
   );
 }
@@ -542,7 +606,10 @@ function MobileDateTime({ composer: c }: { composer: Composer }) {
 
   return (
     <section className="lg:hidden min-w-0 rounded-xl border bg-card p-4">
-      <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <Label className="text-base font-semibold">Fecha y hora</Label>
+        <StepBadge n={3} done={!!(c.selectedDate && c.selectedStart)} />
+      </div>
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>
           <button
@@ -607,7 +674,7 @@ function ProfesionalSummary({
   return (
     <div className="flex items-center gap-2">
       <div>
-        <p className="text-xs text-muted-foreground">Profesional{single ? '' : 'es'}</p>
+        <p className="text-xs text-muted-foreground">Profesional{single ? '' : 'es'} asignado{single ? '' : 's'}</p>
         <p className="flex items-center gap-1.5 text-sm font-medium">
           {single ? labelFor(c.chain[0].doctorId) : `${c.chain.length} profesionales`}
           {isAuto && (
