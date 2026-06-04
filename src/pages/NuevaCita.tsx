@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-  CheckCircle, Loader2, Bell, Plus, X, ArrowUp, ArrowDown, Sparkles, CalendarClock, Calendar, Pencil,
+  CheckCircle, Loader2, Bell, Plus, ArrowUp, ArrowDown, Sparkles, CalendarClock, Calendar, Pencil,
+  Search, Clock, Trash2,
 } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
@@ -19,6 +20,7 @@ import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerT
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { useAppointmentComposer } from '@/hooks/useAppointmentComposer';
+import type { OrgServiceType } from '@/lib/serviceTypesApi';
 import type { Doctor } from '@/types/doctor';
 
 /** "HH:mm" (24h) → "10:00 AM". */
@@ -60,7 +62,6 @@ export default function NuevaCita() {
     id ? (c.doctorsDict[id]?.label ?? c.selectedDoctor?.name ?? '—') : '—';
 
   const showServices = c.path !== 'duration';
-  const multiService = c.maxItems > 1;
 
   const handleCreateNew = ({ nameOrPhone }: { nameOrPhone: string }) => {
     const isPhone = /^\d+[-\s]?\d*$/.test(nameOrPhone);
@@ -193,61 +194,7 @@ export default function NuevaCita() {
                 {showServices ? '2. Servicios de la cita' : '2. Duración'}
               </Label>
               {showServices ? (
-                <>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {multiService ? 'Agrega los servicios en el orden en que se atenderán.' : 'Elegí el servicio.'}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {c.catalog.map((svc) => {
-                      const selectedSingle = !multiService && c.items[0]?.id === svc.id;
-                      return (
-                        <Button
-                          key={svc.id}
-                          type="button"
-                          variant={selectedSingle ? 'default' : 'outline'}
-                          onClick={() => c.addService(svc)}
-                          className="h-auto py-2 flex-col items-start text-left whitespace-normal"
-                        >
-                          <span className="flex items-center gap-1 font-medium">
-                            {multiService && <Plus className="h-3.5 w-3.5 shrink-0" />}
-                            {svc.displayName}
-                          </span>
-                          <span className="text-xs font-normal opacity-80">
-                            {svc.durationMinutes ?? 30}m{svc.price != null ? ` · ${fmtMoney(svc.price)}` : ''}
-                          </span>
-                        </Button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Lista de servicios agregados (solo multi-servicio) */}
-                  {multiService && c.items.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs text-muted-foreground">Servicios a agendar ({c.items.length})</p>
-                      {c.items.map((svc, idx) => (
-                        <div key={`${svc.id}-${idx}`} className="flex items-center gap-2 rounded-lg border p-2">
-                          <span className="w-5 text-center text-xs font-mono text-muted-foreground">{idx + 1}</span>
-                          <span className="flex-1 text-sm font-medium">
-                            {svc.displayName}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {svc.durationMinutes ?? 30}m{svc.price != null ? ` · ${fmtMoney(svc.price)}` : ''}
-                            </span>
-                          </span>
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={idx === 0} onClick={() => c.moveService(idx, -1)}>
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={idx === c.items.length - 1} onClick={() => c.moveService(idx, 1)}>
-                            <ArrowDown className="h-4 w-4" />
-                          </Button>
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => c.removeService(idx)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <p className="text-xs text-muted-foreground">Duración total estimada: {fmtDuration(c.totalDuration)}</p>
-                    </div>
-                  )}
-                </>
+                <ServicePicker composer={c} />
               ) : (
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   {c.durationOptions.map((opt) => (
@@ -353,6 +300,128 @@ export default function NuevaCita() {
 }
 
 type Composer = ReturnType<typeof useAppointmentComposer>;
+
+/**
+ * ServicePicker — selección de servicios estilo "carrito limpio": buscador +
+ * chips horizontales (catálogo, scroll lateral) en vez de la grilla 2-col que se
+ * amontonaba. Los servicios elegidos se listan como cards de ancho completo con
+ * duración + precio a la derecha y un solo botón de quitar. Single-servicio:
+ * el chip seleccionado se resalta y reemplaza (maxItems=1). Multi: acumula en orden.
+ */
+function ServicePicker({ composer: c }: { composer: Composer }) {
+  const [query, setQuery] = useState('');
+  const multiService = c.maxItems > 1;
+  const q = query.trim().toLowerCase();
+  const filtered = q ? c.catalog.filter((s) => s.displayName.toLowerCase().includes(q)) : c.catalog;
+
+  // Fila limpia de un servicio elegido (compartida single/multi).
+  const ServiceRow = ({ svc, idx }: { svc: OrgServiceType; idx: number }) => (
+    <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
+      {multiService && (
+        <div className="flex flex-col text-muted-foreground">
+          <button
+            type="button"
+            disabled={idx === 0}
+            onClick={() => c.moveService(idx, -1)}
+            className="hover:text-foreground disabled:opacity-30"
+            aria-label="Subir"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            disabled={idx === c.items.length - 1}
+            onClick={() => c.moveService(idx, 1)}
+            className="hover:text-foreground disabled:opacity-30"
+            aria-label="Bajar"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{svc.displayName}</p>
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" /> {svc.durationMinutes ?? 30} min
+        </p>
+      </div>
+      {svc.price != null && <p className="shrink-0 text-sm font-medium">{fmtMoney(svc.price)}</p>}
+      <button
+        type="button"
+        onClick={() => c.removeService(idx)}
+        className="shrink-0 rounded-full p-1.5 text-destructive transition-colors hover:bg-destructive/10"
+        aria-label="Quitar servicio"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      <p className="text-sm text-muted-foreground mb-3">
+        {multiService ? 'Buscá y agregá los servicios en el orden en que se atenderán.' : 'Buscá y elegí el servicio.'}
+      </p>
+
+      {/* Buscador */}
+      <div className="relative mb-2">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar tratamientos…"
+          className="pl-9"
+        />
+      </div>
+
+      {/* Chips horizontales del catálogo (scroll lateral, sin barra visible) */}
+      {filtered.length > 0 ? (
+        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {filtered.map((svc) => {
+            const selectedSingle = !multiService && c.items[0]?.id === svc.id;
+            return (
+              <button
+                key={svc.id}
+                type="button"
+                onClick={() => c.addService(svc)}
+                className={cn(
+                  'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  selectedSingle ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
+                )}
+              >
+                {multiService && <Plus className="h-3.5 w-3.5" />}
+                {svc.displayName}
+                <span className="opacity-70">
+                  · {svc.durationMinutes ?? 30}m{svc.price != null ? ` · ${fmtMoney(svc.price)}` : ''}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="py-2 text-sm text-muted-foreground">Sin resultados para “{query}”.</p>
+      )}
+
+      {/* Servicios elegidos */}
+      {multiService
+        ? c.items.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {c.items.map((svc, idx) => (
+                <ServiceRow key={`${svc.id}-${idx}`} svc={svc} idx={idx} />
+              ))}
+              <p className="text-xs text-muted-foreground">
+                {c.items.length} servicio{c.items.length > 1 ? 's' : ''} · Duración total estimada: {fmtDuration(c.totalDuration)}
+              </p>
+            </div>
+          )
+        : c.items[0] && (
+            <div className="mt-3">
+              <ServiceRow svc={c.items[0]} idx={0} />
+            </div>
+          )}
+    </>
+  );
+}
 
 /**
  * Compuerta de la zona de fecha: si falta el insumo previo (profesional/servicio/
