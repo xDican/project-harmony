@@ -306,7 +306,14 @@ export default function NuevaCita() {
       <footer className="shrink-0 border-t bg-card">
         <div className="mx-auto max-w-6xl px-4 py-3 md:px-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div className="flex items-end justify-between gap-6 md:justify-start md:gap-10">
+            {/* Mobile: el resumen no aparece hasta elegir fecha y hora (solo el botón).
+                Desktop (lg+): siempre visible. */}
+            <div
+              className={cn(
+                'items-end justify-between gap-6 md:justify-start md:gap-10',
+                c.selectedDate && c.selectedStart ? 'flex' : 'hidden lg:flex',
+              )}
+            >
               {/* Profesional asignado (o "Por asignar") */}
               <div className="min-w-0">
                 {c.selectedStart && c.chain.length > 0 ? (
@@ -335,7 +342,14 @@ export default function NuevaCita() {
 
             <div className="md:shrink-0">
               {submitHint && (
-                <p className="mb-1.5 text-xs text-muted-foreground md:text-right">{submitHint}</p>
+                <p
+                  className={cn(
+                    'mb-1.5 text-xs text-muted-foreground md:text-right',
+                    !(c.selectedDate && c.selectedStart) && 'hidden lg:block',
+                  )}
+                >
+                  {submitHint}
+                </p>
               )}
               <Button onClick={handleAgendar} disabled={!c.canSubmit} size="lg" className="w-full md:w-auto">
                 {c.isSubmitting
