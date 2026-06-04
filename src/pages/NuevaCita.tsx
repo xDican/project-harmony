@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { useAppointmentComposer } from '@/hooks/useAppointmentComposer';
@@ -311,36 +311,33 @@ export default function NuevaCita() {
       <footer className="shrink-0 border-t bg-card">
         <div className="mx-auto max-w-6xl px-4 py-3 md:px-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            {/* Mobile: el resumen no aparece hasta elegir fecha y hora (solo el botón).
-                Desktop (lg+): siempre visible. */}
+            {/* Resumen (profesional + total). Mobile: filas etiqueta→valor alineadas; no
+                aparece hasta elegir fecha y hora. Desktop (lg+): siempre, en columnas. */}
             <div
               className={cn(
-                'items-end justify-between gap-6 md:justify-start md:gap-10',
-                c.selectedDate && c.selectedStart ? 'flex' : 'hidden lg:flex',
+                'gap-2 md:gap-10',
+                c.selectedDate && c.selectedStart
+                  ? 'flex flex-col md:flex-row md:items-end'
+                  : 'hidden lg:flex lg:flex-row lg:items-end',
               )}
             >
-              {/* Profesional asignado (o "Por asignar") */}
-              <div className="min-w-0">
+              {/* Profesional */}
+              <div className="flex items-center justify-between gap-3 md:block md:gap-0">
+                <span className="text-xs text-muted-foreground">
+                  Profesional{c.chain.length > 1 ? 'es' : ''} asignado{c.chain.length > 1 ? 's' : ''}
+                </span>
                 {c.selectedStart && c.chain.length > 0 ? (
                   <ProfesionalSummary composer={c} labelFor={labelFor} />
                 ) : (
-                  <>
-                    <p className="text-xs text-muted-foreground">Profesional asignado</p>
-                    <p className="text-sm font-medium text-muted-foreground">Por asignar</p>
-                  </>
+                  <span className="text-sm font-medium text-muted-foreground">Por asignar</span>
                 )}
               </div>
 
               {/* Total estimado (solo con servicios) */}
               {showServices && (
-                <div className="text-right md:text-left">
-                  <p className="text-xs text-muted-foreground">Total estimado</p>
-                  <p className="text-lg font-bold leading-tight">{fmtMoney(c.totalPrice)}</p>
-                  {c.items.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {c.items.length} servicio{c.items.length > 1 ? 's' : ''} · {fmtDuration(c.totalDuration)}
-                    </p>
-                  )}
+                <div className="flex items-center justify-between gap-3 md:block md:gap-0">
+                  <span className="text-xs text-muted-foreground">Total estimado</span>
+                  <span className="text-base font-bold">{fmtMoney(c.totalPrice)}</span>
                 </div>
               )}
             </div>
@@ -528,7 +525,7 @@ function dateGate(c: Composer): { blocked: boolean; hint: string } {
  * usaba inline en la columna derecha; ahora reutilizable para renderizar tanto
  * inline (desktop) como dentro del bottom-sheet (mobile).
  */
-function DateTimePanel({ composer: c }: { composer: Composer }) {
+function DateTimePanel({ composer: c, collapsibleCalendar }: { composer: Composer; collapsibleCalendar?: boolean }) {
   const { blocked, hint } = dateGate(c);
   const morning = c.starts.filter((t) => Number(t.split(':')[0]) < 12);
   const afternoon = c.starts.filter((t) => Number(t.split(':')[0]) >= 12);
@@ -554,6 +551,7 @@ function DateTimePanel({ composer: c }: { composer: Composer }) {
         onPrev={c.goPrevMonth}
         onNext={c.goNextMonth}
         isLoading={c.isLoadingDays || Object.keys(c.daysMap).length === 0}
+        collapsible={collapsibleCalendar}
       />
       {c.daysError && (
         <p className="text-xs text-destructive">{c.daysError}. Probá otro mes.</p>
@@ -657,16 +655,25 @@ function MobileDateTime({ composer: c }: { composer: Composer }) {
             {!blocked && <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />}
           </button>
         </DrawerTrigger>
-        <DrawerContent className="max-h-[92vh]">
+        <DrawerContent className="mt-0 h-[100dvh] max-h-[100dvh] rounded-none">
           <DrawerHeader className="pb-2 text-left">
-            <DrawerTitle>Fecha y hora</DrawerTitle>
+            <DrawerTitle>Seleccionar fecha y hora</DrawerTitle>
+            <DrawerDescription>Elige el momento de la cita.</DrawerDescription>
           </DrawerHeader>
-          <div className="overflow-y-auto px-4 pb-2">
-            <DateTimePanel composer={c} />
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
+            <DateTimePanel composer={c} collapsibleCalendar />
           </div>
-          <DrawerFooter>
-            <Button onClick={() => setOpen(false)} disabled={!hasSel} size="lg">
-              {hasSel ? 'Listo' : 'Elegí fecha y horario'}
+          <DrawerFooter className="gap-2 border-t">
+            {hasSel && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Selección:</span>
+                <span className="font-semibold capitalize text-primary">
+                  {format(c.selectedDate!, "EEE d 'de' MMM", { locale: es })} · {to12h(c.selectedStart!)}
+                </span>
+              </div>
+            )}
+            <Button onClick={() => setOpen(false)} disabled={!hasSel} size="lg" className="w-full">
+              {hasSel ? 'Confirmar fecha y hora' : 'Seleccione fecha y hora'}
             </Button>
           </DrawerFooter>
         </DrawerContent>
@@ -689,17 +696,14 @@ function ProfesionalSummary({
 
   return (
     <div className="flex items-center gap-2">
-      <div>
-        <p className="text-xs text-muted-foreground">Profesional{single ? '' : 'es'} asignado{single ? '' : 's'}</p>
-        <p className="flex items-center gap-1.5 text-sm font-medium">
-          {single ? labelFor(c.chain[0].doctorId) : `${c.chain.length} profesionales`}
-          {isAuto && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
-              <Sparkles className="h-3 w-3" /> Auto
-            </span>
-          )}
-        </p>
-      </div>
+      <span className="flex items-center gap-1.5 text-sm font-medium">
+        {single ? labelFor(c.chain[0].doctorId) : `${c.chain.length} profesionales`}
+        {isAuto && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
+            <Sparkles className="h-3 w-3" /> Auto
+          </span>
+        )}
+      </span>
       {isAuto && (canChange || !single) && (
         <Popover>
           <PopoverTrigger asChild>
