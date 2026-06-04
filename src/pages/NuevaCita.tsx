@@ -7,11 +7,12 @@ import {
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
-import WeekStrip from '@/components/WeekStrip';
+import MonthGrid from '@/components/MonthGrid';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
@@ -148,7 +149,7 @@ export default function NuevaCita() {
     <MainLayout mainClassName="overflow-hidden flex flex-col">
       {/* Contenido scrollable (en Fase 3 se ajusta a no-scroll con cajas internas) */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <div className="mx-auto max-w-6xl p-4 md:p-6 grid gap-6 lg:grid-cols-2">
+        <div className="mx-auto grid w-full max-w-[1700px] gap-6 p-4 md:p-6 lg:grid-cols-[2fr_3fr]">
           {/* ===== Columna izquierda — armar la cita ===== */}
           <div className="space-y-6">
             {/* 1. Paciente */}
@@ -263,42 +264,45 @@ export default function NuevaCita() {
             </section>
           </div>
 
-          {/* ===== Columna derecha — cuándo ===== */}
-          <div className="space-y-4">
-            <section>
+          {/* ===== Columna derecha — cuándo (un solo cuadro) ===== */}
+          <div>
+            <section className="rounded-xl border bg-card p-4">
               <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
 
               {dateBlocked ? (
-                <div className="rounded-xl border border-dashed bg-muted/30 p-8 text-center">
-                  <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
-                  <p className="text-sm text-muted-foreground font-medium">{dateHint}</p>
+                <div className="rounded-lg border border-dashed bg-muted/30 p-10 text-center">
+                  <CalendarClock className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
+                  <p className="text-sm font-medium text-muted-foreground">{dateHint}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <WeekStrip
-                    days={c.windowDays}
+                  <MonthGrid
+                    monthAnchor={c.monthAnchor}
+                    days={c.monthDays}
                     daysMap={c.daysMap}
                     selectedDate={c.selectedDate}
                     onSelect={c.setSelectedDate}
                     canGoPrev={c.canGoPrev}
-                    onPrev={c.goPrevWeek}
-                    onNext={c.goNextWeek}
+                    onPrev={c.goPrevMonth}
+                    onNext={c.goNextMonth}
                     isLoading={c.isLoadingDays}
                   />
                   {c.daysError && (
-                    <p className="text-xs text-destructive">{c.daysError}. Probá otra semana.</p>
+                    <p className="text-xs text-destructive">{c.daysError}. Probá otro mes.</p>
                   )}
 
+                  <Separator />
+
                   {/* Horarios Mañana / Tarde */}
-                  <div className="rounded-xl border bg-card p-3">
-                    <p className="text-sm font-medium mb-2">
+                  <div>
+                    <p className="mb-2 text-sm font-medium">
                       {c.selectedDate
                         ? `Horario — ${format(c.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
                         : 'Horario'}
                     </p>
                     {!c.selectedDate ? (
                       <p className="py-4 text-center text-sm italic text-muted-foreground">
-                        Selecciona un día arriba
+                        Selecciona un día en el calendario
                       </p>
                     ) : c.isLoadingSlots ? (
                       <div className="flex items-center justify-center py-6">
@@ -309,13 +313,13 @@ export default function NuevaCita() {
                         {c.slotsReason ?? 'No hay horarios disponibles para esta fecha'}
                       </p>
                     ) : (
-                      <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+                      <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
                         {[{ label: 'Mañana', times: morning }, { label: 'Tarde', times: afternoon }]
                           .filter((g) => g.times.length > 0)
                           .map((g) => (
                             <div key={g.label}>
                               <p className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">{g.label}</p>
-                              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
                                 {g.times.map((t) => (
                                   <Button
                                     key={t}

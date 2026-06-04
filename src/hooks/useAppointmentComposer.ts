@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths } from 'date-fns';
 import {
   getAvailableDays,
   getAvailableSlots,
@@ -71,8 +71,6 @@ const DURATION_OPTIONS = [
   { value: 120, label: '2 horas' },
 ];
 
-const WINDOW_DAYS = 14; // 2 semanas (week-strip del mockup)
-
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd');
 
 /** Suma minutos a un "HH:mm" y devuelve "HH:mm" (naive, sin zona). */
@@ -121,8 +119,8 @@ export function useAppointmentComposer() {
   const [selectedCalendarId, setSelectedCalendarId] = useState<string | undefined>();
   const [reminder3dEnabled, setReminder3dEnabled] = useState(false);
 
-  // --- Ventana de fechas (week-strip) ---
-  const [windowStart, setWindowStart] = useState<Date>(() => getLocalToday());
+  // --- Mes mostrado en la grilla de fechas ---
+  const [monthAnchor, setMonthAnchor] = useState<Date>(() => startOfMonth(getLocalToday()));
   const [daysMap, setDaysMap] = useState<Record<string, { working: boolean; canFit: boolean }>>({});
   const [isLoadingDays, setIsLoadingDays] = useState(false);
   const [daysError, setDaysError] = useState<string | null>(null);
@@ -199,10 +197,10 @@ export function useAppointmentComposer() {
     setVisitSlots([]);
   }, [items, effectiveDuration, selectedDoctor?.id]);
 
-  // ----- Días disponibles de la ventana (week-strip) -----
-  const windowDays = useMemo(
-    () => Array.from({ length: WINDOW_DAYS }, (_, i) => addDays(windowStart, i)),
-    [windowStart],
+  // ----- Días del mes mostrado (grilla mensual) -----
+  const monthDays = useMemo(
+    () => eachDayOfInterval({ start: startOfMonth(monthAnchor), end: endOfMonth(monthAnchor) }),
+    [monthAnchor],
   );
 
   useEffect(() => {
@@ -218,30 +216,21 @@ export function useAppointmentComposer() {
       try {
         if (path === 'visit-engine') {
           const map = await getVisitDays({
-            startDate: fmtDate(windowStart),
-            days: WINDOW_DAYS,
+            startDate: fmtDate(startOfMonth(monthAnchor)),
+            days: monthDays.length,
             procedures: visitProcedures,
             organizationId,
           });
           if (!cancelled) setDaysMap(map);
         } else {
-          // get-available-days es por MES y la ventana de 2 sem puede cruzar meses.
-          const months = [...new Set(windowDays.map((d) => format(d, 'yyyy-MM')))];
-          const maps = await Promise.all(
-            months.map((m) =>
-              getAvailableDays({
-                doctorId: selectedDoctor!.id,
-                month: m,
-                durationMinutes: effectiveDuration,
-                calendarId: selectedCalendarId,
-              }),
-            ),
-          );
-          if (!cancelled) {
-            const merged: Record<string, { working: boolean; canFit: boolean }> = {};
-            for (const m of maps) Object.assign(merged, m);
-            setDaysMap(merged);
-          }
+          // get-available-days ya es por mes → una sola llamada.
+          const map = await getAvailableDays({
+            doctorId: selectedDoctor!.id,
+            month: format(monthAnchor, 'yyyy-MM'),
+            durationMinutes: effectiveDuration,
+            calendarId: selectedCalendarId,
+          });
+          if (!cancelled) setDaysMap(map);
         }
       } catch (e) {
         console.error('[composer] Error cargando días:', e);
@@ -257,7 +246,7 @@ export function useAppointmentComposer() {
     return () => {
       cancelled = true;
     };
-  }, [path, items, visitProcedures, selectedDoctor?.id, effectiveDuration, windowStart, windowDays, selectedCalendarId, organizationId]);
+  }, [path, items, visitProcedures, selectedDoctor?.id, effectiveDuration, monthAnchor, monthDays, selectedCalendarId, organizationId]);
 
   // ----- Slots de la fecha elegida -----
   useEffect(() => {
@@ -397,16 +386,16 @@ export function useAppointmentComposer() {
     setAssignments((prev) => ({ ...prev, [idx]: doctorId }));
   }, []);
 
-  // ----- Navegación de semana (no antes de hoy) -----
-  const today = getLocalToday();
-  const canGoPrev = windowStart > today;
-  const goPrevWeek = useCallback(() => {
-    setWindowStart((prev) => {
-      const back = addDays(prev, -7);
-      return back < today ? today : back;
+  // ----- Navegación de mes (no antes del mes actual) -----
+  const currentMonthStart = startOfMonth(getLocalToday());
+  const canGoPrev = monthAnchor > currentMonthStart;
+  const goPrevMonth = useCallback(() => {
+    setMonthAnchor((prev) => {
+      const back = startOfMonth(addMonths(prev, -1));
+      return back < currentMonthStart ? currentMonthStart : back;
     });
-  }, [today]);
-  const goNextWeek = useCallback(() => setWindowStart((prev) => addDays(prev, 7)), []);
+  }, [currentMonthStart]);
+  const goNextMonth = useCallback(() => setMonthAnchor((prev) => startOfMonth(addMonths(prev, 1))), []);
 
   // ----- Toggle de recordatorio (persiste preferencia del paciente) -----
   const setReminder3d = useCallback((checked: boolean) => {
@@ -450,7 +439,7 @@ export function useAppointmentComposer() {
     setVisitSlots([]);
     setAssignments({});
     setReminder3dEnabled(false);
-    setWindowStart(getLocalToday());
+    setMonthAnchor(startOfMonth(getLocalToday()));
     if (!isSingleDoctorOrg && !isDoctorView) setSelectedDoctor(null);
   }, [isSingleDoctorOrg, isDoctorView]);
 
@@ -521,14 +510,15 @@ export function useAppointmentComposer() {
     // profesional (paths con doctor fijo)
     selectedDoctor,
     setSelectedDoctor,
-    // ventana / días
-    windowDays,
+    // mes / días
+    monthAnchor,
+    monthDays,
     daysMap,
     isLoadingDays,
     daysError,
     canGoPrev,
-    goPrevWeek,
-    goNextWeek,
+    goPrevMonth,
+    goNextMonth,
     // fecha + slots
     selectedDate,
     setSelectedDate,

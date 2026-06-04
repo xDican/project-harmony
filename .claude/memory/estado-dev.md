@@ -285,8 +285,12 @@ actual NO se tocó (sigue 100% funcional).
 `NuevaCita.tsx` reescrita como vista única consumiendo `useAppointmentComposer`. `tsc --noEmit` OK.
 - **App-shell 2-col** vía `MainLayout mainClassName="overflow-hidden flex flex-col"`; footer sticky
   como hijo `shrink-0` (sin position:fixed). Contenido `overflow-auto` (no-scroll perfecto → Fase 3).
-- **NUEVO `src/components/WeekStrip.tsx`**: 14 días (2 sem, grilla 7), ‹ › navega por semana (no antes
-  de hoy), días sin cupo/pasados tachados. Alimentado por `daysMap` del hook.
+- **NUEVO `src/components/MonthGrid.tsx`** (reemplazó WeekStrip 4 Jun, feedback Diego: aprovechar
+  espacio + mostrar todo el mes): grilla MENSUAL alineada por día de semana (Dom–Sáb), navegable mes a
+  mes (no antes del mes actual), días sin cupo/pasados tachados. Alimentado por `daysMap`. Simplificó
+  el path no-ICP (1 llamada `get-available-days` por mes, sin merge de meses).
+- **Paso 3 unificado en UNA card** (MonthGrid + separador + horarios juntos) + layout más ancho
+  (`max-w-[1700px]`, cols `2fr/3fr`) para aprovechar el espacio.
 - Izq: Paciente (PatientSearch + card recordatorio) + Servicios (catálogo + lista ordenada ↑↓✕ con
   total, o selector de Duración en path duración, o DoctorSearch si `requiresDoctorSelection`).
 - Der: WeekStrip + Horarios Mañana/Tarde (caja scroll, formato 12h).
