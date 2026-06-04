@@ -177,16 +177,29 @@ export default function NuevaCita() {
               min-w-0: evita el "grid blowout" (los chips nowrap forzarían a la
               columna a crecer al ancho del contenido y empujarían la página). */}
           <div className="space-y-4 min-w-0">
-            {/* 1. Paciente */}
-            <section className="rounded-xl border bg-card p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
+            {/* 1. Paciente — al seleccionar, en mobile se elimina el chrome del Paso 1
+                (header + borde/padding de la sección) y queda solo la tarjeta de info con
+                el recordatorio adentro, subiendo los servicios; en desktop se mantiene la
+                card con header. */}
+            <section
+              className={cn(
+                'rounded-xl',
+                c.selectedPatient ? 'lg:border lg:bg-card lg:p-4' : 'border bg-card p-4',
+              )}
+            >
+              <div
+                className={cn(
+                  'mb-3 flex items-center justify-between gap-2',
+                  c.selectedPatient && 'hidden lg:flex',
+                )}
+              >
                 <Label className="text-base font-semibold">Paciente</Label>
                 <StepBadge n={1} done={!!c.selectedPatient} />
               </div>
               {c.selectedPatient ? (
-                // Seleccionado → tarjeta compacta (avatar + nombre) + fila de recordatorio.
-                <>
-                  <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
+                // Seleccionado → un solo bloque: info del paciente + recordatorio adentro.
+                <div className="overflow-hidden rounded-lg border bg-card">
+                  <div className="flex items-center gap-3 p-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                       {initialsOf(c.selectedPatient.name)}
                     </span>
@@ -203,7 +216,7 @@ export default function NuevaCita() {
                       Cambiar
                     </Button>
                   </div>
-                  <div className="mt-2 flex items-center justify-between rounded-lg border px-3 py-2">
+                  <div className="flex items-center justify-between border-t px-3 py-2">
                     <div className="flex items-center gap-2">
                       <Bell className="h-4 w-4 text-muted-foreground" />
                       <p className="text-sm">
@@ -212,7 +225,7 @@ export default function NuevaCita() {
                     </div>
                     <Switch checked={c.reminder3dEnabled} onCheckedChange={c.setReminder3d} />
                   </div>
-                </>
+                </div>
               ) : (
                 // Sin seleccionar → buscador + crear nuevo (estado expandido, Paso 1).
                 <>
@@ -422,10 +435,6 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
 
   return (
     <>
-      <p className="text-sm text-muted-foreground mb-3">
-        {multiService ? 'Buscá y agregá los servicios en el orden en que se atenderán.' : 'Buscá y elegí el servicio.'}
-      </p>
-
       {/* Buscador */}
       <div className="relative mb-2">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
