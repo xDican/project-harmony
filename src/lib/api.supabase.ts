@@ -535,6 +535,32 @@ export async function getVisitSlots(input: {
   };
 }
 
+// Rediseño Fase 0: disponibilidad de visita por RANGO de dias (week-strip). Devuelve
+// por fecha { working, canFit } para tachar los dias sin cupo, en UNA llamada (datos
+// batcheados) en vez de N llamadas a get-visit-slots. Mismo motor que get-visit-slots
+// → strip y slots no divergen.
+export async function getVisitDays(input: {
+  startDate: string;
+  days: number;
+  procedures: { serviceTypeId: string; durationMinutes?: number }[];
+  organizationId?: string;
+}): Promise<Record<string, { working: boolean; canFit: boolean }>> {
+  const orgId = input.organizationId ?? (await getActiveOrganizationId());
+  if (!orgId) throw new Error('No se pudo resolver la organización');
+
+  const { data, error } = await supabase.functions.invoke('get-visit-days', {
+    body: { organizationId: orgId, startDate: input.startDate, days: input.days, procedures: input.procedures },
+  });
+
+  if (error) {
+    console.error('Error calling get-visit-days:', error);
+    throw new Error(error.message || 'Error al calcular disponibilidad por día de la visita');
+  }
+  if (data?.error) throw new Error(data.error);
+
+  return (data?.days ?? {}) as Record<string, { working: boolean; canFit: boolean }>;
+}
+
 // --------------------------
 // 5. getAvailableSlots
 // --------------------------

@@ -23,6 +23,7 @@ export interface OrgServiceType {
   id: string;
   displayName: string;
   durationMinutes: number | null;
+  price: number | null;
 }
 
 /**
@@ -35,7 +36,7 @@ export async function listActiveServiceTypesForOrg(
 ): Promise<OrgServiceType[]> {
   const { data, error } = await supabase
     .from("service_types")
-    .select("id, display_name, duration_minutes, display_order")
+    .select("id, display_name, duration_minutes, price, display_order")
     .eq("organization_id", organizationId)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
@@ -49,6 +50,7 @@ export async function listActiveServiceTypesForOrg(
     id: row.id,
     displayName: row.display_name,
     durationMinutes: row.duration_minutes ?? null,
+    price: (row as { price?: number | null }).price ?? null,
   }));
 }
 
@@ -77,13 +79,13 @@ export async function saveServiceType(params: {
       .update({ display_name: name, name: name.toLowerCase(), duration_minutes: duration })
       .eq("id", id)
       .eq("organization_id", organizationId)
-      .select("id, display_name, duration_minutes")
+      .select("id, display_name, duration_minutes, price")
       .single();
     if (error) {
       if (error.code === "23505") throw new Error(`Ya existe un servicio llamado "${name}".`);
       throw error;
     }
-    return { id: data.id, displayName: data.display_name, durationMinutes: data.duration_minutes ?? null };
+    return { id: data.id, displayName: data.display_name, durationMinutes: data.duration_minutes ?? null, price: (data as { price?: number | null }).price ?? null };
   }
 
   // Create: display_order al final de la lista del org.
@@ -109,10 +111,10 @@ export async function saveServiceType(params: {
       },
       { onConflict: "organization_id,name" }
     )
-    .select("id, display_name, duration_minutes")
+    .select("id, display_name, duration_minutes, price")
     .single();
   if (error) throw error;
-  return { id: data.id, displayName: data.display_name, durationMinutes: data.duration_minutes ?? null };
+  return { id: data.id, displayName: data.display_name, durationMinutes: data.duration_minutes ?? null, price: (data as { price?: number | null }).price ?? null };
 }
 
 /** Baja logica de un servicio (is_active=false). Nunca DELETE, para no romper FKs de citas. */

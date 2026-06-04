@@ -556,3 +556,304 @@ export function visitStartCandidates(
   }
   return [...set].sort((a, b) => a - b);
 }
+
+// ============================================================================
+// Fase 0 del rediseño UI — disponibilidad de visita por RANGO de dias.
+// `get-visit-days` necesita saber, para los ~14 dias del week-strip, si CADA dia
+// admite al menos un inicio de visita factible (para tachar los que no). En vez de
+// 14 llamadas a get-visit-slots, se batchea TODO el rango en pocas queries (mismo
+// patron que get-available-days) y se corre el greedy por dia EN MEMORIA. Reusa las
+// mismas primitivas que get-visit-slots → strip y slots no pueden divergir.
+// ============================================================================
+
+interface ScheduleDowRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+/**
+ * Horarios de TODA la semana de un doctor (sin filtrar dow). Variante batcheada de
+ * loadSchedules (camino sin calendarId): agrega calendar_schedules de los calendarios
+ * del doctor, con fallback a doctor_schedules. Se llama 1 vez por doctor para todo el
+ * rango (los horarios dependen del dia-de-semana, no de la fecha).
+ */
+export async function loadSchedulesAllDows(
+  supabase: SupabaseClient,
+  doctorId: string,
+): Promise<ScheduleDowRow[]> {
+  let rows: ScheduleDowRow[] = [];
+
+  const { data: calDoctors } = await supabase
+    .from("calendar_doctors")
+    .select("calendar_id")
+    .eq("doctor_id", doctorId)
+    .eq("is_active", true);
+  if (calDoctors && calDoctors.length > 0) {
+    const calIds = calDoctors.map((cd: any) => cd.calendar_id);
+    const { data } = await supabase
+      .from("calendar_schedules")
+      .select("day_of_week, start_time, end_time")
+      .in("calendar_id", calIds);
+    rows = (data || []) as ScheduleDowRow[];
+  }
+
+  if (rows.length === 0) {
+    const { data } = await supabase
+      .from("doctor_schedules")
+      .select("day_of_week, start_time, end_time")
+      .eq("doctor_id", doctorId);
+    rows = (data || []) as ScheduleDowRow[];
+  }
+
+  return rows;
+}
+
+/**
+ * Estado de visita para un RANGO de fechas, batcheado. Devuelve un VisitDayState por
+ * fecha (mismo shape y semantica que loadVisitDayState) pero cargando los datos del
+ * rango completo en pocas queries fijas, independiente del numero de dias:
+ *   - receta/buffer por servicio: estatico (1 vez por servicio)
+ *   - co-working + horarios por doctor: estatico (1 vez por doctor; horarios por dow)
+ *   - citas externas (footprint) y consumo de recursos: 1 query de rango cada uno,
+ *     agrupadas por fecha en memoria.
+ */
+export async function loadVisitRangeState(
+  supabase: SupabaseClient,
+  params: { organizationId: string; dates: string[]; doctorIds: string[]; serviceTypeIds: string[] },
+): Promise<Map<string, VisitDayState>> {
+  const { organizationId, dates, doctorIds, serviceTypeIds } = params;
+
+  // Receta + buffer por servicio (estatico); union de recursos para el consumo.
+  const serviceMeta = new Map<string, { buffer: number; recipe: RecipeItem[] }>();
+  const recipeResourceIds = new Set<string>();
+  for (const svcId of serviceTypeIds) {
+    const loaded = await loadCandidateRecipe(supabase, svcId);
+    serviceMeta.set(svcId, loaded);
+    for (const r of loaded.recipe) recipeResourceIds.add(r.resourceId);
+  }
+
+  // Co-working + horarios de toda la semana por doctor (estatico).
+  const coworkByDoctor = new Map<string, string[]>();
+  const allCoworkIds = new Set<string>();
+  const schedByDoctorDow = new Map<string, Map<number, ScheduleWindow[]>>();
+  for (const docId of doctorIds) {
+    const cowork = await loadCoworkDoctorIds(supabase, docId);
+    coworkByDoctor.set(docId, cowork);
+    for (const id of cowork) allCoworkIds.add(id);
+
+    const rows = await loadSchedulesAllDows(supabase, docId);
+    const byDow = new Map<number, ScheduleWindow[]>();
+    for (const r of rows) {
+      if (!byDow.has(r.day_of_week)) byDow.set(r.day_of_week, []);
+      byDow.get(r.day_of_week)!.push({ start_time: r.start_time, end_time: r.end_time });
+    }
+    schedByDoctorDow.set(docId, byDow);
+  }
+
+  const dateSet = new Set(dates);
+  const sorted = [...dates].sort();
+  const minDate = sorted[0];
+  const maxDate = sorted[sorted.length - 1];
+
+  // Citas externas (footprint = duracion + buffer del servicio) de los co-workers, por fecha.
+  const occByDateDoctor = new Map<string, Map<string, OccupiedInterval[]>>();
+  if (allCoworkIds.size > 0) {
+    const { data: appts } = await supabase
+      .from("appointments")
+      .select("doctor_id, date, time, duration_minutes, service_types(buffer_minutes)")
+      .in("doctor_id", [...allCoworkIds])
+      .gte("date", minDate)
+      .lte("date", maxDate)
+      .not("status", "in", CANCELLED_STATUSES);
+    for (const apt of appts || []) {
+      const a = apt as any;
+      if (!dateSet.has(a.date)) continue;
+      const start = buildDateTime(a.date, a.time);
+      const buf = a.service_types?.buffer_minutes ?? 0;
+      const end = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
+      if (!occByDateDoctor.has(a.date)) occByDateDoctor.set(a.date, new Map());
+      const m = occByDateDoctor.get(a.date)!;
+      if (!m.has(a.doctor_id)) m.set(a.doctor_id, []);
+      m.get(a.doctor_id)!.push({ startMs: start.toMillis(), endMs: end.toMillis() });
+    }
+  }
+
+  // Consumo de recursos por fecha (citas del org que tocan algun recurso de las recetas).
+  const consumersByDate = new Map<string, Map<string, ResourceConsumer[]>>();
+  if (recipeResourceIds.size > 0) {
+    const { data: dayAppts } = await supabase
+      .from("appointments")
+      .select("date, time, duration_minutes, service_types(buffer_minutes, service_resources(resource_id, quantity_required))")
+      .eq("organization_id", organizationId)
+      .gte("date", minDate)
+      .lte("date", maxDate)
+      .not("status", "in", CANCELLED_STATUSES)
+      .not("service_type_id", "is", null);
+    for (const apt of dayAppts || []) {
+      const a = apt as any;
+      if (!dateSet.has(a.date)) continue;
+      const st = a.service_types;
+      if (!st) continue;
+      const srList = st.service_resources || [];
+      const buf = st.buffer_minutes ?? 0;
+      const start = buildDateTime(a.date, a.time);
+      const startMs = start.toMillis();
+      const endMs = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf }).toMillis();
+      for (const sr of srList) {
+        if (!recipeResourceIds.has(sr.resource_id)) continue;
+        if (!consumersByDate.has(a.date)) consumersByDate.set(a.date, new Map());
+        const m = consumersByDate.get(a.date)!;
+        if (!m.has(sr.resource_id)) m.set(sr.resource_id, []);
+        m.get(sr.resource_id)!.push({ startMs, endMs, qty: sr.quantity_required });
+      }
+    }
+  }
+
+  // Ensamblar VisitDayState por fecha (mismo armado que loadVisitDayState).
+  const result = new Map<string, VisitDayState>();
+  for (const date of dates) {
+    const dow = DateTime.fromISO(date).weekday % 7;
+
+    const windowsByDoctor = new Map<string, MsWindow[]>();
+    for (const docId of doctorIds) {
+      const wins = (schedByDoctorDow.get(docId)?.get(dow) ?? []).map((s) => ({
+        startMs: buildDateTime(date, s.start_time).toMillis(),
+        endMs: buildDateTime(date, s.end_time).toMillis(),
+      }));
+      windowsByDoctor.set(docId, wins);
+    }
+
+    const occForDate = occByDateDoctor.get(date) ?? new Map<string, OccupiedInterval[]>();
+    const occupiedByDoctor = new Map<string, OccupiedInterval[]>();
+    for (const docId of doctorIds) {
+      const cowork = coworkByDoctor.get(docId) ?? [docId];
+      const merged: OccupiedInterval[] = [];
+      for (const cw of cowork) {
+        const arr = occForDate.get(cw);
+        if (arr) merged.push(...arr);
+      }
+      occupiedByDoctor.set(docId, merged);
+    }
+
+    const consumersByResource = consumersByDate.get(date) ?? new Map<string, ResourceConsumer[]>();
+    result.set(date, { date, windowsByDoctor, occupiedByDoctor, consumersByResource, serviceMeta });
+  }
+
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+// Resolucion de contexto de visita (servicios + profesionales calificados).
+// COMPARTIDA por get-visit-slots y get-visit-days: ambas DEBEN resolver los mismos
+// profesionales por servicio o el strip diria "disponible" donde los slots dicen
+// "sin profesional". Extraida verbatim de get-visit-slots (sin cambiar la logica).
+// ----------------------------------------------------------------------------
+
+export interface ResolvedProcedure {
+  serviceTypeId: string;
+  durationMinutes: number;
+  qualified: string[]; // doctor ids, ordenados por nombre (determinista)
+}
+
+export interface VisitDoctorDictEntry {
+  name: string;
+  prefix: string | null;
+  label: string;
+  isTecnica: boolean;
+}
+
+export interface VisitContext {
+  /** Error fatal (servicio inexistente / de otra org). El EF responde con status. */
+  fatal?: { status: number; error: string };
+  /** Un servicio sin profesionales calificados → resultado vacio con esta razon. */
+  emptyReason?: string;
+  procResolved: ResolvedProcedure[];
+  distinctSvcIds: string[];
+  svcById: Map<string, any>;
+  allDoctorIds: string[];
+  doctorsDict: Record<string, VisitDoctorDictEntry>;
+}
+
+export async function resolveVisitContext(
+  supabase: SupabaseClient,
+  organizationId: string,
+  procedures: Array<{ serviceTypeId: string; durationMinutes?: number }>,
+): Promise<VisitContext> {
+  const empty: VisitContext = {
+    procResolved: [], distinctSvcIds: [], svcById: new Map(), allDoctorIds: [], doctorsDict: {},
+  };
+
+  // Servicios + duracion (request o service_types).
+  const distinctSvcIds = [...new Set(procedures.map((p) => p.serviceTypeId))];
+  const { data: svcRows, error: svcErr } = await supabase
+    .from("service_types")
+    .select("id, display_name, duration_minutes, organization_id")
+    .in("id", distinctSvcIds);
+  if (svcErr) return { ...empty, fatal: { status: 500, error: "Error cargando servicios" } };
+  const svcById = new Map((svcRows ?? []).map((s: any) => [s.id, s]));
+  for (const id of distinctSvcIds) {
+    const s = svcById.get(id);
+    if (!s || s.organization_id !== organizationId) {
+      return { ...empty, fatal: { status: 400, error: "Un servicio no pertenece a esta organizacion" } };
+    }
+  }
+
+  // Profesionales del org + skill matrix (fallback a todos si el servicio no tiene skills).
+  const { data: orgDoctors, error: docErr } = await supabase
+    .from("doctors")
+    .select("id, name, prefix, user_id")
+    .eq("organization_id", organizationId)
+    .order("name", { ascending: true });
+  if (docErr) return { ...empty, fatal: { status: 500, error: "Error cargando profesionales" } };
+  const allDoctors = (orgDoctors ?? []) as Array<any>;
+  const docInfo = new Map(allDoctors.map((d) => [d.id, d]));
+
+  const { data: skillRows } = await supabase
+    .from("professional_services")
+    .select("doctor_id, service_type_id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .in("service_type_id", distinctSvcIds);
+  const skilledBySvc = new Map<string, string[]>();
+  for (const s of skillRows ?? []) {
+    const r = s as any;
+    if (!skilledBySvc.has(r.service_type_id)) skilledBySvc.set(r.service_type_id, []);
+    skilledBySvc.get(r.service_type_id)!.push(r.doctor_id);
+  }
+  const qualifiedBySvc = new Map<string, string[]>();
+  for (const id of distinctSvcIds) {
+    const skilled = skilledBySvc.get(id);
+    const ids = (skilled && skilled.length > 0)
+      ? allDoctors.filter((d) => skilled.includes(d.id)).map((d) => d.id)
+      : allDoctors.map((d) => d.id);
+    qualifiedBySvc.set(id, ids);
+  }
+
+  const procResolved: ResolvedProcedure[] = procedures.map((p) => ({
+    serviceTypeId: p.serviceTypeId,
+    durationMinutes: p.durationMinutes ?? (svcById.get(p.serviceTypeId)?.duration_minutes ?? 30),
+    qualified: qualifiedBySvc.get(p.serviceTypeId) ?? [],
+  }));
+  for (const p of procResolved) {
+    if (p.qualified.length === 0) {
+      const name = svcById.get(p.serviceTypeId)?.display_name ?? "un servicio";
+      return { ...empty, distinctSvcIds, svcById, emptyReason: `No hay profesionales que ofrezcan "${name}".` };
+    }
+  }
+
+  const allDoctorIds = [...new Set(procResolved.flatMap((p) => p.qualified))];
+  const doctorsDict: Record<string, VisitDoctorDictEntry> = {};
+  for (const id of allDoctorIds) {
+    const d = docInfo.get(id);
+    if (!d) continue;
+    doctorsDict[id] = {
+      name: d.name,
+      prefix: d.prefix ?? null,
+      label: `${d.prefix ?? ""} ${d.name}`.trim(),
+      isTecnica: !d.user_id,
+    };
+  }
+
+  return { procResolved, distinctSvcIds, svcById, allDoctorIds, doctorsDict };
+}

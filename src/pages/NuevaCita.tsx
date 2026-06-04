@@ -1,1034 +1,471 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CheckCircle, Loader2, AlertCircle, Bell, Calendar as CalendarIcon, ChevronUp, ChevronDown } from 'lucide-react';
+import {
+  CheckCircle, Loader2, Bell, Plus, X, ArrowUp, ArrowDown, Sparkles, CalendarClock,
+} from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
 import DoctorSearch from '@/components/DoctorSearch';
-import SlotSelector from '@/components/SlotSelector';
-import VisitBooking from '@/components/VisitBooking';
+import WeekStrip from '@/components/WeekStrip';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Calendar } from '@/components/ui/calendar';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
-import { getAvailableSlots, getAvailableDays, createPatient, createAppointment, getDoctorById } from '@/lib/api';
-import { listActiveServiceTypesForOrg, type OrgServiceType } from '@/lib/serviceTypesApi';
-import {
-  getQualifiedDoctors,
-  getCombinedDays,
-  getCombinedSlots,
-  getDoctorLoadForDate,
-  pickLeastLoaded,
-  doctorLabel,
-  type QualifiedDoctor,
-} from '@/lib/combinedAvailability';
-import { getLocalToday, isToday, getCurrentTimeInMinutes, timeStringToMinutes } from '@/lib/dateUtils';
-import { useCurrentUser } from '@/context/UserContext';
-import { useSingleDoctor } from '@/hooks/useSingleDoctor';
-import { supabase } from '@/lib/supabaseClient';
-import { updatePatientReminder3d } from '@/lib/api.supabase';
-import type { Patient } from '@/types/patient';
+import { useAppointmentComposer } from '@/hooks/useAppointmentComposer';
 import type { Doctor } from '@/types/doctor';
 
+/** "HH:mm" (24h) → "10:00 AM". */
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const ap = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ap}`;
+}
+
+/** Minutos → "1h 05m" / "45m". */
+function fmtDuration(min: number): string {
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${String(m).padStart(2, '0')}m`;
+}
+
+function fmtMoney(n: number): string {
+  return `L ${n.toLocaleString('en-US')}`;
+}
+
 /**
- * NuevaCita - New appointment creation page
- *
- * Desktop: 2-column layout (left=who, right=when) with always-visible calendar
- * Mobile: single-column with toggle calendar popup
+ * NuevaCita — vista única de agendamiento (rediseño). Una sola pantalla basada en
+ * servicios: con 1 servicio es una cita normal, con 2+ son procedimientos
+ * consecutivos de una visita (sin toggle de modo). Toda la lógica/datos viven en
+ * useAppointmentComposer; aquí solo el layout app-shell 2-col + footer sticky.
  */
 export default function NuevaCita() {
-  const { user, isDoctor, isDoctorView, organizationId } = useCurrentUser();
-  const { singleDoctor, isSingleDoctorOrg, isLoading: loadingDoctors } = useSingleDoctor();
+  const c = useAppointmentComposer();
 
-  // Core selection state
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [selectedCalendarId, setSelectedCalendarId] = useState<string | undefined>();
-  const [selectedDate, setSelectedDate] = useState<Date>();
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const agendarRef = useRef<HTMLDivElement>(null);
-  const fechaRef = useRef<HTMLDivElement>(null);
+  // Crear paciente nuevo
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  // Modo visita multi-procedimiento (Fase 5). Opt-in, solo en orgs con servicios +
-  // multi-profesional. Aislado en VisitBooking; el flujo de cita simple no cambia.
-  const [visitMode, setVisitMode] = useState(false);
+  const labelFor = (id: string | null): string =>
+    id ? (c.doctorsDict[id]?.label ?? c.selectedDoctor?.name ?? '—') : '—';
 
-  // Duration state
-  const [durationMinutes, setDurationMinutes] = useState<number>(30);
-  const [reminder3dEnabled, setReminder3dEnabled] = useState(false);
+  const morning = c.starts.filter((t) => Number(t.split(':')[0]) < 12);
+  const afternoon = c.starts.filter((t) => Number(t.split(':')[0]) >= 12);
 
-  // Service state (motor multi-recurso Fase 4). Si la org tiene servicios, el
-  // agendamiento es service-first: el servicio fija la duracion y habilita el
-  // chequeo de recursos. Si no tiene, degrada al selector de duracion de siempre.
-  const [services, setServices] = useState<OrgServiceType[]>([]);
-  const [selectedServiceTypeId, setSelectedServiceTypeId] = useState<string | null>(null);
+  const showServices = c.path !== 'duration';
+  const multiService = c.maxItems > 1;
 
-  // Vista combinada (Fase 4). 'auto' = service-first + auto-asignacion entre todos
-  // los profesionales que saben el servicio; 'specific' = elegir un profesional
-  // (override). Solo aplica en orgs con servicios y mas de un profesional.
-  const [assignMode, setAssignMode] = useState<'auto' | 'specific'>('auto');
-  const [qualifiedDoctors, setQualifiedDoctors] = useState<QualifiedDoctor[]>([]);
-  const [slotFreeDoctors, setSlotFreeDoctors] = useState<Record<string, string[]>>({});
-  const [doctorLoad, setDoctorLoad] = useState<Record<string, number>>({});
-  const [assignedDoctorId, setAssignedDoctorId] = useState<string | null>(null);
-
-  // Available days state
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [availableDaysMap, setAvailableDaysMap] = useState<Record<string, { canFit: boolean; working: boolean }>>({});
-  const [isLoadingDays, setIsLoadingDays] = useState(false);
-  const [errorDays, setErrorDays] = useState<string | null>(null);
-
-  // Slots state
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-
-  // Loading states
-  const [isLoadingDoctor, setIsLoadingDoctor] = useState(false);
-  const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
-
-  // Create patient dialog state
-  const [isCreatePatientOpen, setIsCreatePatientOpen] = useState(false);
-  const [newPatientName, setNewPatientName] = useState('');
-  const [newPatientPhone, setNewPatientPhone] = useState('');
-  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
-
-  // Duration options
-  const durationOptions = [
-    { value: 15, label: '15 min' },
-    { value: 30, label: '30 min' },
-    { value: 60, label: '1 hora' },
-    { value: 90, label: '1.5 horas' },
-    { value: 120, label: '2 horas' },
-  ];
-
-  // Modo combinado: service-first + auto-asignacion. Solo en orgs con servicios y
-  // varios profesionales (un doctor logueado o una org de 1 doctor agendan directo).
-  const hasServices = services.length > 0;
-  const canCombine = hasServices && !isDoctorView && !isSingleDoctorOrg;
-  const combinedMode = canCombine && assignMode === 'auto';
-
-  // Auto-fill doctor for logged-in doctors
-  useEffect(() => {
-    if (isDoctorView && user?.doctorId && !selectedDoctor) {
-      setIsLoadingDoctor(true);
-      getDoctorById(user.doctorId)
-        .then((doctor) => {
-          if (doctor) {
-            setSelectedDoctor(doctor);
-          }
-        })
-        .catch((error) => {
-          console.error('Error fetching doctor info:', error);
-        })
-        .finally(() => {
-          setIsLoadingDoctor(false);
-        });
-    }
-  }, [isDoctorView, user?.doctorId, selectedDoctor]);
-
-  // Auto-fill doctor for single-doctor orgs
-  useEffect(() => {
-    if (isSingleDoctorOrg && singleDoctor && !selectedDoctor) {
-      setSelectedDoctor(singleDoctor);
-    }
-  }, [isSingleDoctorOrg, singleDoctor, selectedDoctor]);
-
-  // Auto-fill reminder toggle when patient is selected
-  useEffect(() => {
-    if (selectedPatient) {
-      setReminder3dEnabled(selectedPatient.reminder3dPreferred ?? false);
-    }
-  }, [selectedPatient]);
-
-  // Cargar servicios de la org (service-first si existen)
-  useEffect(() => {
-    if (!organizationId) return;
-    listActiveServiceTypesForOrg(organizationId)
-      .then(setServices)
-      .catch((error) => {
-        console.error('[NuevaCita] Error cargando servicios:', error);
-        setServices([]);
-      });
-  }, [organizationId]);
-
-  // Al elegir servicio, fijar la duracion segun el servicio (fallback 30 min)
-  useEffect(() => {
-    if (!selectedServiceTypeId) return;
-    const svc = services.find((s) => s.id === selectedServiceTypeId);
-    if (svc) setDurationMinutes(svc.durationMinutes ?? 30);
-  }, [selectedServiceTypeId, services]);
-
-  // Modo combinado: cargar los profesionales que saben hacer el servicio elegido.
-  useEffect(() => {
-    if (!combinedMode || !organizationId || !selectedServiceTypeId) {
-      setQualifiedDoctors([]);
-      return;
-    }
-    getQualifiedDoctors(organizationId, selectedServiceTypeId)
-      .then(setQualifiedDoctors)
-      .catch((e) => {
-        console.error('[NuevaCita] Error cargando profesionales del servicio:', e);
-        setQualifiedDoctors([]);
-      });
-  }, [combinedMode, organizationId, selectedServiceTypeId]);
-
-  // Al cambiar servicio o modo de asignacion, reset de fecha/hora/asignacion.
-  useEffect(() => {
-    setSelectedDate(undefined);
-    setSelectedSlot(null);
-    setAvailableSlots([]);
-    setSlotFreeDoctors({});
-    setAssignedDoctorId(null);
-  }, [selectedServiceTypeId, assignMode]);
-
-  // Fetch de dias disponibles: combinado (union de profesionales) o de un doctor.
-  const applyDaysMap = useCallback((daysMap: Record<string, { canFit: boolean; working: boolean }>) => {
-    setAvailableDaysMap(daysMap);
-    if (selectedDate) {
-      const ds = format(selectedDate, 'yyyy-MM-dd');
-      if (daysMap[ds] && !daysMap[ds].canFit) {
-        setSelectedDate(undefined);
-        setSelectedSlot(null);
-        setAvailableSlots([]);
-      }
-    }
-  }, [selectedDate]);
-
-  useEffect(() => {
-    const month = format(currentMonth, 'yyyy-MM');
-    const onError = (error: unknown) => {
-      console.error('[NuevaCita] Error fetching available days:', error);
-      setErrorDays('No se pudieron cargar los días disponibles');
-      setAvailableDaysMap({});
-    };
-
-    if (combinedMode) {
-      if (!selectedServiceTypeId || qualifiedDoctors.length === 0) {
-        setAvailableDaysMap({});
-        return;
-      }
-      setIsLoadingDays(true);
-      setErrorDays(null);
-      getCombinedDays({ doctors: qualifiedDoctors, month, durationMinutes })
-        .then(applyDaysMap)
-        .catch(onError)
-        .finally(() => setIsLoadingDays(false));
-    } else if (selectedDoctor) {
-      setIsLoadingDays(true);
-      setErrorDays(null);
-      getAvailableDays({ doctorId: selectedDoctor.id, month, durationMinutes, calendarId: selectedCalendarId })
-        .then(applyDaysMap)
-        .catch(onError)
-        .finally(() => setIsLoadingDays(false));
-    } else {
-      setAvailableDaysMap({});
-    }
-  }, [combinedMode, selectedDoctor, qualifiedDoctors, selectedServiceTypeId, currentMonth, durationMinutes, selectedCalendarId, applyDaysMap]);
-
-  // Fetch de slots: combinado (union + profesionales libres por hora) o de un doctor.
-  useEffect(() => {
-    const ready = !!selectedDate && (combinedMode
-      ? (!!selectedServiceTypeId && qualifiedDoctors.length > 0)
-      : !!selectedDoctor);
-
-    if (!ready) {
-      setAvailableSlots([]);
-      setSelectedSlot(null);
-      setSlotFreeDoctors({});
-      return;
-    }
-
-    setIsLoadingSlots(true);
-    setSelectedSlot(null);
-    const dateString = format(selectedDate!, 'yyyy-MM-dd');
-    const todayFilter = (times: string[]) => {
-      if (!isToday(selectedDate!)) return times;
-      const nowMin = getCurrentTimeInMinutes();
-      return times.filter((t) => timeStringToMinutes(t) > nowMin);
-    };
-
-    if (combinedMode) {
-      getCombinedSlots({ doctors: qualifiedDoctors, date: dateString, durationMinutes, serviceTypeId: selectedServiceTypeId! })
-        .then((combined) => {
-          const freeMap: Record<string, string[]> = {};
-          for (const s of combined) freeMap[s.time] = s.freeDoctorIds;
-          setSlotFreeDoctors(freeMap);
-          setAvailableSlots(todayFilter(combined.map((s) => s.time)));
-        })
-        .catch((error) => {
-          console.error('Error loading combined slots:', error);
-          setAvailableSlots([]);
-          setSlotFreeDoctors({});
-        })
-        .finally(() => setIsLoadingSlots(false));
-    } else {
-      getAvailableSlots({
-        doctorId: selectedDoctor!.id,
-        date: dateString,
-        durationMinutes,
-        calendarId: selectedCalendarId,
-        serviceTypeId: selectedServiceTypeId ?? undefined,
-      })
-        .then((slots) => setAvailableSlots(todayFilter(slots)))
-        .catch((error) => {
-          console.error('Error loading slots:', error);
-          setAvailableSlots([]);
-        })
-        .finally(() => setIsLoadingSlots(false));
-    }
-  }, [combinedMode, selectedDoctor, selectedDate, durationMinutes, selectedCalendarId, selectedServiceTypeId, qualifiedDoctors]);
-
-  // Modo combinado: carga del dia para auto-asignar al menos cargado.
-  useEffect(() => {
-    if (!combinedMode || !organizationId || !selectedDate || qualifiedDoctors.length === 0) {
-      setDoctorLoad({});
-      return;
-    }
-    getDoctorLoadForDate({
-      organizationId,
-      date: format(selectedDate, 'yyyy-MM-dd'),
-      doctorIds: qualifiedDoctors.map((d) => d.id),
-    })
-      .then(setDoctorLoad)
-      .catch(() => setDoctorLoad({}));
-  }, [combinedMode, organizationId, selectedDate, qualifiedDoctors]);
-
-  // Modo combinado: al elegir hora, auto-asignar el profesional libre menos cargado.
-  useEffect(() => {
-    if (!combinedMode || !selectedSlot) {
-      setAssignedDoctorId(null);
-      return;
-    }
-    setAssignedDoctorId(pickLeastLoaded(slotFreeDoctors[selectedSlot] ?? [], doctorLoad));
-  }, [combinedMode, selectedSlot, slotFreeDoctors, doctorLoad]);
-
-  // Auto-scroll to Agendar button when slots finish loading
-  useEffect(() => {
-    if (!isLoadingSlots && availableSlots.length > 0) {
-      setTimeout(() => {
-        agendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 100);
-    }
-  }, [isLoadingSlots, availableSlots]);
-
-  // Fetch calendarId when doctor changes
-  useEffect(() => {
-    setSelectedCalendarId(undefined);
-    if (!selectedDoctor) return;
-    supabase
-      .from('calendar_doctors')
-      .select('calendar_id')
-      .eq('doctor_id', selectedDoctor.id)
-      .eq('is_active', true)
-      .maybeSingle()
-      .then(({ data }) => setSelectedCalendarId(data?.calendar_id ?? undefined))
-      .catch(() => {});
-  }, [selectedDoctor?.id]);
-
-  // Reset patient, date, slots, and available days when doctor changes
-  useEffect(() => {
-    setSelectedPatient(null);
-    setSelectedDate(undefined);
-    setSelectedSlot(null);
-    setAvailableSlots([]);
-    setAvailableDaysMap({});
-    setCurrentMonth(new Date());
-    setCalendarOpen(false);
-  }, [selectedDoctor]);
-
-  // Reset date and slots when duration changes
-  useEffect(() => {
-    setSelectedDate(undefined);
-    setSelectedSlot(null);
-    setAvailableSlots([]);
-  }, [durationMinutes]);
-
-  const handlePatientSelect = (patient: Patient) => {
-    setSelectedPatient(patient);
-    setTimeout(() => {
-      fechaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, 150);
-  };
-
-  const handleDoctorSelect = (doctor: Doctor | null) => {
-    setSelectedDoctor(doctor);
-    if (!doctor) {
-      setSelectedDate(undefined);
-      setSelectedSlot(null);
-      setAvailableSlots([]);
-      setCalendarOpen(false);
-    }
-  };
-
-  const handleMonthChange = (month: Date) => {
-    setCurrentMonth(month);
-  };
-
-  const handleReminder3dToggle = (checked: boolean) => {
-    setReminder3dEnabled(checked);
-    if (selectedPatient) {
-      updatePatientReminder3d(selectedPatient.id, checked); // fire-and-forget
-    }
-  };
-
-  const isDateDisabled = (date: Date): boolean => {
-    if (date < getLocalToday()) return true;
-
-    const dateString = format(date, 'yyyy-MM-dd');
-    const dayInfo = availableDaysMap[dateString];
-
-    if (!dayInfo) return false;
-
-    return !dayInfo.working || !dayInfo.canFit;
-  };
-
-  // Doctor al que se vincula el paciente nuevo. En modo combinado el paciente no
-  // es de un doctor especifico → se usa el asignado o el primer profesional del servicio.
-  const patientLinkDoctorId = selectedDoctor?.id ?? assignedDoctorId ?? qualifiedDoctors[0]?.id ?? user?.doctorId;
-
-  const handleCreateNewPatient = ({ nameOrPhone }: { nameOrPhone: string }) => {
-    if (!patientLinkDoctorId) {
-      toast({
-        variant: "destructive",
-        title: combinedMode ? "Selecciona un servicio primero" : "Selecciona un profesional primero",
-        description: combinedMode
-          ? "Elige el servicio para poder registrar al paciente."
-          : "Debes seleccionar un profesional antes de crear un paciente nuevo.",
-      });
-      return;
-    }
-
+  const handleCreateNew = ({ nameOrPhone }: { nameOrPhone: string }) => {
     const isPhone = /^\d+[-\s]?\d*$/.test(nameOrPhone);
-
     if (isPhone) {
-      setNewPatientName('');
-      setNewPatientPhone(nameOrPhone);
+      setNewName('');
+      setNewPhone(nameOrPhone);
     } else {
-      setNewPatientName(nameOrPhone);
-      setNewPatientPhone('');
+      setNewName(nameOrPhone);
+      setNewPhone('');
     }
-
-    setIsCreatePatientOpen(true);
+    setCreateOpen(true);
   };
 
-  const handleSaveNewPatient = async () => {
-    if (!newPatientName.trim() || !newPatientPhone.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Campos incompletos",
-        description: "Por favor, completa el nombre y teléfono del paciente.",
-      });
+  const handleSaveNew = async () => {
+    if (!newName.trim() || !newPhone.trim()) {
+      toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Completa nombre y teléfono.' });
       return;
     }
-
-    const doctorId = patientLinkDoctorId;
-    if (!doctorId) {
-      toast({
-        variant: "destructive",
-        title: "Profesional requerido",
-        description: "Selecciona un servicio o profesional antes de crear un paciente.",
-      });
-      return;
-    }
-
-    setIsCreatingPatient(true);
-
+    setCreating(true);
     try {
-      const patient = await createPatient({
-        name: newPatientName.trim(),
-        phone: formatPhoneForStorage(newPatientPhone.trim()),
-        doctorId,
+      const patient = await c.createPatientForBooking({
+        name: newName.trim(),
+        phone: formatPhoneForStorage(newPhone.trim()),
       });
-
-      setSelectedPatient(patient);
-      setIsCreatePatientOpen(false);
-      setNewPatientName('');
-      setNewPatientPhone('');
-
-      if (patient.isExisting) {
-        toast({
-          title: "Número ya registrado",
-          description: `El teléfono ya pertenece al paciente "${patient.name}". Se ha seleccionado para esta cita.`,
-        });
-      } else {
-        toast({
-          title: "Paciente creado",
-          description: `${patient.name} ha sido agregado exitosamente.`,
-        });
-      }
-    } catch (error) {
-      console.error('Error creating patient:', error);
+      c.setSelectedPatient(patient);
+      setCreateOpen(false);
+      setNewName('');
+      setNewPhone('');
       toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo crear el paciente. Intenta nuevamente.",
+        title: patient.isExisting ? 'Número ya registrado' : 'Paciente creado',
+        description: patient.isExisting
+          ? `El teléfono ya pertenece a "${patient.name}". Se seleccionó para esta cita.`
+          : `${patient.name} agregado exitosamente.`,
       });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'No se pudo crear el paciente.' });
     } finally {
-      setIsCreatingPatient(false);
+      setCreating(false);
     }
   };
 
-  const handleCancelCreatePatient = () => {
-    setIsCreatePatientOpen(false);
-    setNewPatientName('');
-    setNewPatientPhone('');
-  };
-
-  const handleCreateAppointment = async () => {
-    // Doctor efectivo: en combinado es el auto-asignado; si no, el elegido.
-    const effectiveDoctorId = combinedMode ? assignedDoctorId : selectedDoctor?.id ?? null;
-    const assignedDoctor = combinedMode
-      ? qualifiedDoctors.find((d) => d.id === assignedDoctorId)
-      : null;
-    const effectiveDoctorName = combinedMode
-      ? (assignedDoctor ? doctorLabel(assignedDoctor) : '')
-      : (selectedDoctor?.name ?? '');
-
-    if (!selectedPatient || !effectiveDoctorId || !selectedDate || !selectedSlot) {
-      toast({
-        variant: "destructive",
-        title: "Campos incompletos",
-        description: "Por favor, completa todos los campos antes de crear la cita.",
-      });
-      return;
-    }
-
-    setIsCreatingAppointment(true);
-
+  const handleAgendar = async () => {
     try {
-      const dateString = format(selectedDate, 'yyyy-MM-dd');
-
-      const result = await createAppointment({
-        doctorId: effectiveDoctorId,
-        patientId: selectedPatient.id,
-        date: dateString,
-        time: selectedSlot,
-        notes: undefined,
-        durationMinutes: durationMinutes,
-        reminder3dEnabled,
-        serviceTypeId: selectedServiceTypeId ?? undefined,
-      });
-
-      const displayDate = format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
-      const displayDuration = durationOptions.find(d => d.value === durationMinutes)?.label || `${durationMinutes} min`;
-
+      const res = await c.submit();
       toast({
-        title: "¡Cita creada exitosamente!",
+        title: res.kind === 'visit' ? '¡Visita agendada!' : '¡Cita creada exitosamente!',
         description: (
           <div className="mt-2 space-y-1">
-            <p><strong>Paciente:</strong> {selectedPatient.name}</p>
-            <p><strong>Profesional:</strong> {effectiveDoctorName}</p>
-            <p><strong>Fecha:</strong> {displayDate}</p>
-            <p><strong>Hora:</strong> {selectedSlot}</p>
-            <p><strong>Duración:</strong> {displayDuration}</p>
-            {!result.whatsappSent && (
+            <p><strong>Paciente:</strong> {c.selectedPatient?.name}</p>
+            {c.selectedDate && (
+              <p><strong>Fecha:</strong> {format(c.selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}</p>
+            )}
+            {c.chain.map((p, i) => (
+              <p key={i}>
+                <strong>{to12h(p.start)}</strong> — {p.serviceName} ({labelFor(p.doctorId)})
+              </p>
+            ))}
+            {!res.whatsappSent && (
               <p className="text-muted-foreground text-xs mt-1">
-                WhatsApp no enviado{result.whatsappError ? `: ${result.whatsappError}` : ': no hay línea configurada'}.
+                WhatsApp no enviado{res.whatsappError ? `: ${res.whatsappError}` : ''}.
               </p>
             )}
           </div>
         ),
       });
-
-      // Reset form + volver a paso 1
-      setSelectedPatient(null);
-      setSelectedDoctor(null);
-      setSelectedDate(undefined);
-      setSelectedSlot(null);
-      setAvailableSlots([]);
-      setSlotFreeDoctors({});
-      setAssignedDoctorId(null);
-      setDurationMinutes(30);
-      setSelectedServiceTypeId(null);
-      setReminder3dEnabled(false);
-      setCalendarOpen(false);
-    } catch (error: any) {
-      console.error('Error creating appointment:', error);
-      toast({
-        variant: "destructive",
-        title: "Error al crear la cita",
-        description: error.message || "Ocurrió un error al intentar crear la cita. Por favor, intenta nuevamente.",
-      });
-    } finally {
-      setIsCreatingAppointment(false);
+      c.reset();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error al agendar', description: e.message || 'Intenta nuevamente.' });
     }
   };
 
-  // Si la org tiene servicios, hay que elegir uno antes de ver disponibilidad
-  const needsService = hasServices && !selectedServiceTypeId;
-  // Doctor efectivo para validar el form (combinado: auto-asignado).
-  const formDoctorId = combinedMode ? assignedDoctorId : (selectedDoctor?.id ?? null);
-  const isFormValid = !!selectedPatient && !!formDoctorId && !!selectedDate && !!selectedSlot && !needsService && !isCreatingAppointment;
-  // En modo combinado no hay paso "Médico" (service-first); en modo específico sí.
-  const showDoctorStep = !combinedMode && !isDoctorView && !loadingDoctors && !isSingleDoctorOrg;
-  const patientStepNum = showDoctorStep ? 2 : 1;
-  const fechaStepNum = showDoctorStep ? 3 : 2;
-
-  // Calendario listo cuando hay servicio (combinado) o médico+servicio (específico).
-  const calendarDisabled = combinedMode ? needsService : (!selectedDoctor || needsService);
-  const calendarHint = combinedMode
-    ? 'Selecciona un servicio para ver disponibilidad'
-    : (!selectedDoctor
-        ? 'Selecciona un profesional para ver disponibilidad'
-        : 'Selecciona un servicio para ver disponibilidad');
-
-  // Shared calendar modifiers
-  const calendarModifiers = {
-    unavailable: (date: Date) => {
-      const dateString = format(date, 'yyyy-MM-dd');
-      const dayInfo = availableDaysMap[dateString];
-      return dayInfo ? (!dayInfo.working || !dayInfo.canFit) : false;
-    }
-  };
-  const calendarModifiersClassNames = {
-    unavailable: 'text-muted-foreground/50 line-through cursor-not-allowed'
-  };
-
-  // Reminder toggle (shown below PatientSearch when patient is selected)
-  const renderReminderToggle = () => {
-    if (!selectedPatient) return null;
-    return (
-      <div className="border rounded-xl p-4 bg-card">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium">Recordatorio extra</p>
-              <p className="text-xs text-muted-foreground">
-                {reminder3dEnabled ? "2 WhatsApp: 3 días + 24h" : "1 WhatsApp: 24h antes"}
-              </p>
-            </div>
-          </div>
-          <Switch checked={reminder3dEnabled} onCheckedChange={handleReminder3dToggle} />
-        </div>
-      </div>
-    );
-  };
+  // Hint de la zona de fecha bloqueada
+  const dateBlocked =
+    (c.path === 'duration' && (!c.selectedDoctor))
+    || (c.path !== 'duration' && c.items.length === 0)
+    || (c.requiresDoctorSelection && !c.selectedDoctor);
+  const dateHint = c.requiresDoctorSelection && !c.selectedDoctor
+    ? 'Selecciona un profesional para ver disponibilidad'
+    : c.path === 'duration'
+      ? 'Selecciona una duración para ver disponibilidad'
+      : 'Selecciona un servicio para ver disponibilidad';
 
   return (
-    <MainLayout>
-      <div className="container mx-auto p-6 max-w-2xl">
-        <div className="space-y-8">
-            {/* Tipo de agendamiento: cita simple vs visita multi-procedimiento */}
-            {canCombine && (
-              <section>
-                <Label className="text-sm text-muted-foreground mb-2 block">¿Qué querés agendar?</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={!visitMode ? 'default' : 'outline'}
-                    onClick={() => setVisitMode(false)}
-                    className="h-auto py-2 flex-col items-start text-left"
-                  >
-                    <span className="font-medium">Cita simple</span>
-                    <span className="text-xs font-normal opacity-80">Un solo procedimiento</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={visitMode ? 'default' : 'outline'}
-                    onClick={() => setVisitMode(true)}
-                    className="h-auto py-2 flex-col items-start text-left"
-                  >
-                    <span className="font-medium">Visita (varios)</span>
-                    <span className="text-xs font-normal opacity-80">Procedimientos consecutivos</span>
-                  </Button>
-                </div>
-              </section>
-            )}
-
-            {visitMode && organizationId ? (
-              <VisitBooking organizationId={organizationId} services={services} />
-            ) : (
-            <>
-            {/* Modo de asignación (solo orgs multi-profesional con servicios) */}
-            {canCombine && (
-              <section>
-                <Label className="text-sm text-muted-foreground mb-2 block">¿Cómo agendar?</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={assignMode === 'auto' ? 'default' : 'outline'}
-                    onClick={() => setAssignMode('auto')}
-                    className="h-auto py-2 flex-col items-start text-left"
-                  >
-                    <span className="font-medium">Cualquier profesional</span>
-                    <span className="text-xs font-normal opacity-80">El sistema asigna al que esté libre</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={assignMode === 'specific' ? 'default' : 'outline'}
-                    onClick={() => setAssignMode('specific')}
-                    className="h-auto py-2 flex-col items-start text-left"
-                  >
-                    <span className="font-medium">Elegir profesional</span>
-                    <span className="text-xs font-normal opacity-80">Para un profesional específico</span>
-                  </Button>
-                </div>
-              </section>
-            )}
-
-            {/* Paso 1: Profesional (si aplica) */}
-            {showDoctorStep && (
-              <section>
-                <Label className="text-lg font-semibold text-foreground mb-3 block">
-                  1. Seleccionar Profesional
-                </Label>
-                <DoctorSearch onSelect={handleDoctorSelect} value={selectedDoctor} />
-              </section>
-            )}
-
-            {/* Paso: Paciente + toggle en card */}
-            <section>
-              <Label className="text-lg font-semibold text-foreground mb-3 block">
-                {patientStepNum}. Seleccionar Paciente
-              </Label>
+    <MainLayout mainClassName="overflow-hidden flex flex-col">
+      {/* Contenido scrollable (en Fase 3 se ajusta a no-scroll con cajas internas) */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        <div className="mx-auto max-w-6xl p-4 md:p-6 grid gap-6 lg:grid-cols-2">
+          {/* ===== Columna izquierda — armar la cita ===== */}
+          <div className="space-y-6">
+            {/* 1. Paciente */}
+            <section className="rounded-xl border bg-card p-4">
+              <Label className="text-base font-semibold mb-3 block">1. Paciente</Label>
               <PatientSearch
-                onSelect={handlePatientSelect}
-                onCreateNew={handleCreateNewPatient}
-                value={selectedPatient}
-                doctorId={selectedDoctor?.id}
+                onSelect={c.setSelectedPatient}
+                onCreateNew={handleCreateNew}
+                value={c.selectedPatient}
+                doctorId={c.selectedDoctor?.id}
               />
-              <div className="mt-3">
-                {renderReminderToggle()}
-              </div>
-            </section>
-
-            {/* Paso: Fecha y hora */}
-            <section className="space-y-4">
-              <Label className="text-lg font-semibold text-foreground mb-3 block">
-                {fechaStepNum}. Seleccionar Fecha
-              </Label>
-
-              {/* Servicio (si la org tiene) o Duración (degradación) */}
-              {services.length > 0 ? (
-                <div>
-                  <Label className="text-sm text-muted-foreground">Servicio</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                    {services.map((svc) => (
-                      <Button
-                        key={svc.id}
-                        type="button"
-                        variant={selectedServiceTypeId === svc.id ? 'default' : 'outline'}
-                        onClick={() => setSelectedServiceTypeId(svc.id)}
-                        className={cn(
-                          'h-12 whitespace-normal text-sm leading-tight',
-                          selectedServiceTypeId === svc.id && 'ring-2 ring-primary ring-offset-2'
-                        )}
-                      >
-                        {svc.displayName}
-                      </Button>
-                    ))}
+              {c.selectedPatient && (
+                <div className="mt-3 flex items-center justify-between rounded-lg border p-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Recordatorio extra</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.reminder3dEnabled ? '2 WhatsApp: 3 días + 24h' : '1 WhatsApp: 24h antes'}
+                      </p>
+                    </div>
                   </div>
-                  {selectedServiceTypeId && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Duración: {durationOptions.find(d => d.value === durationMinutes)?.label || `${durationMinutes} min`}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <Label className="text-sm text-muted-foreground">Duración</Label>
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
-                    {durationOptions.map((option) => (
-                      <Button
-                        key={option.value}
-                        type="button"
-                        variant={durationMinutes === option.value ? 'default' : 'outline'}
-                        onClick={() => setDurationMinutes(option.value)}
-                        className={cn(
-                          'h-12',
-                          durationMinutes === option.value && 'ring-2 ring-primary ring-offset-2'
-                        )}
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
-                  </div>
+                  <Switch checked={c.reminder3dEnabled} onCheckedChange={c.setReminder3d} />
                 </div>
               )}
+            </section>
 
-              <Separator />
+            {/* Selector de profesional (solo path duración multi-doctor) */}
+            {c.requiresDoctorSelection && (
+              <section className="rounded-xl border bg-card p-4">
+                <Label className="text-base font-semibold mb-3 block">Profesional</Label>
+                <DoctorSearch onSelect={(d: Doctor | null) => c.setSelectedDoctor(d)} value={c.selectedDoctor} />
+              </section>
+            )}
 
-              {/* Date selector — scroll target */}
-              <div ref={fechaRef}>
-                {/* Desktop calendar: always visible, full-width */}
-                <div className="hidden md:block">
-                  <Label className="text-sm text-muted-foreground">Fecha</Label>
-                  <div className={cn(
-                    "relative mt-2 border rounded-md p-4 bg-background",
-                    "[&_td_button]:!w-full [&_td_button]:!h-10",
-                    (calendarDisabled || isLoadingDays) && "pointer-events-none"
-                  )}>
-                    {calendarDisabled && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
-                        <p className="text-sm text-muted-foreground font-medium">
-                          {calendarHint}
-                        </p>
-                      </div>
-                    )}
-                    {isLoadingDays && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Cargando disponibilidad...</span>
-                        </div>
-                      </div>
-                    )}
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={(date) => !isLoadingDays && setSelectedDate(date)}
-                      month={currentMonth}
-                      onMonthChange={handleMonthChange}
-                      disabled={isDateDisabled}
-                      className={cn("p-0 w-full")}
-                      classNames={{
-                        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0 w-full",
-                        month: "space-y-4 w-full",
-                        head_cell: "text-muted-foreground rounded-md flex-1 font-normal text-[0.8rem]",
-                        cell: "h-10 flex-1 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                      }}
-                      modifiers={calendarModifiers}
-                      modifiersClassNames={calendarModifiersClassNames}
-                    />
+            {/* 2. Servicios (o Duración en degradación) */}
+            <section className="rounded-xl border bg-card p-4">
+              <Label className="text-base font-semibold mb-1 block">
+                {showServices ? '2. Servicios de la cita' : '2. Duración'}
+              </Label>
+              {showServices ? (
+                <>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {multiService ? 'Agrega los servicios en el orden en que se atenderán.' : 'Elegí el servicio.'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {c.catalog.map((svc) => {
+                      const selectedSingle = !multiService && c.items[0]?.id === svc.id;
+                      return (
+                        <Button
+                          key={svc.id}
+                          type="button"
+                          variant={selectedSingle ? 'default' : 'outline'}
+                          onClick={() => c.addService(svc)}
+                          className="h-auto py-2 flex-col items-start text-left whitespace-normal"
+                        >
+                          <span className="flex items-center gap-1 font-medium">
+                            {multiService && <Plus className="h-3.5 w-3.5 shrink-0" />}
+                            {svc.displayName}
+                          </span>
+                          <span className="text-xs font-normal opacity-80">
+                            {svc.durationMinutes ?? 30}m{svc.price != null ? ` · ${fmtMoney(svc.price)}` : ''}
+                          </span>
+                        </Button>
+                      );
+                    })}
                   </div>
-                  {errorDays && (
-                    <Alert variant="destructive" className="py-2 mt-2">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-sm">
-                        {errorDays}. Puedes seleccionar cualquier fecha manualmente.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
 
-                {/* Mobile calendar: toggle popup */}
-                <div className="md:hidden">
-                  <Label className="text-sm text-muted-foreground">Fecha</Label>
-                  {calendarDisabled ? (
-                    <Alert className="mt-2">
-                      <AlertDescription>
-                        {!selectedDoctor
-                          ? 'Selecciona un profesional primero para ver las fechas disponibles.'
-                          : 'Selecciona un servicio primero para ver las fechas disponibles.'}
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <div className="relative mt-2 space-y-3">
-                      <Button
-                        variant="outline"
-                        disabled={isLoadingDays}
-                        className={cn(
-                          'w-full justify-between text-left font-normal',
-                          !selectedDate && 'text-muted-foreground'
-                        )}
-                        onClick={() => setCalendarOpen(!calendarOpen)}
-                      >
-                        <span className="flex items-center">
-                          {isLoadingDays ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                          )}
-                          {selectedDate
-                            ? format(selectedDate, "PPP", { locale: es })
-                            : isLoadingDays
-                              ? 'Cargando disponibilidad...'
-                              : 'Seleccionar fecha'}
-                        </span>
-                        {calendarOpen ? (
-                          <ChevronUp className="h-4 w-4 opacity-50" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </Button>
-                      {calendarOpen && (
-                        <div className={cn(
-                          "relative absolute bottom-full left-0 right-0 z-50 mb-2 border rounded-md p-3 bg-background shadow-lg",
-                          isLoadingDays && "pointer-events-none"
-                        )}>
-                          {isLoadingDays && (
-                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 rounded-md">
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>Cargando disponibilidad...</span>
-                              </div>
-                            </div>
-                          )}
-                          <Calendar
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={(date) => {
-                              if (isLoadingDays) return;
-                              setSelectedDate(date);
-                              setCalendarOpen(false);
-                            }}
-                            month={currentMonth}
-                            onMonthChange={handleMonthChange}
-                            disabled={isDateDisabled}
-                            className={cn("p-0 w-full")}
-                            modifiers={calendarModifiers}
-                            modifiersClassNames={calendarModifiersClassNames}
-                          />
+                  {/* Lista de servicios agregados (solo multi-servicio) */}
+                  {multiService && c.items.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs text-muted-foreground">Servicios a agendar ({c.items.length})</p>
+                      {c.items.map((svc, idx) => (
+                        <div key={`${svc.id}-${idx}`} className="flex items-center gap-2 rounded-lg border p-2">
+                          <span className="w-5 text-center text-xs font-mono text-muted-foreground">{idx + 1}</span>
+                          <span className="flex-1 text-sm font-medium">
+                            {svc.displayName}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {svc.durationMinutes ?? 30}m{svc.price != null ? ` · ${fmtMoney(svc.price)}` : ''}
+                            </span>
+                          </span>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={idx === 0} onClick={() => c.moveService(idx, -1)}>
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={idx === c.items.length - 1} onClick={() => c.moveService(idx, 1)}>
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => c.removeService(idx)}>
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
-                      )}
-                      {errorDays && (
-                        <Alert variant="destructive" className="py-2">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription className="text-sm">
-                            {errorDays}. Puedes seleccionar cualquier fecha manualmente.
-                          </AlertDescription>
-                        </Alert>
-                      )}
+                      ))}
+                      <p className="text-xs text-muted-foreground">Duración total estimada: {fmtDuration(c.totalDuration)}</p>
                     </div>
                   )}
+                </>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {c.durationOptions.map((opt) => (
+                    <Button
+                      key={opt.value}
+                      type="button"
+                      variant={c.durationMinutes === opt.value ? 'default' : 'outline'}
+                      onClick={() => c.setDurationMinutes(opt.value)}
+                      className="h-11"
+                    >
+                      {opt.label}
+                    </Button>
+                  ))}
                 </div>
-              </div>
+              )}
+            </section>
+          </div>
 
-              <Separator />
+          {/* ===== Columna derecha — cuándo ===== */}
+          <div className="space-y-4">
+            <section>
+              <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
 
-              {/* Slots */}
-              <div>
-                <Label className="text-sm text-muted-foreground">
-                  {selectedDate ? `Horario — ${format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}` : "Horario"}
-                </Label>
-                {!selectedDate ? (
-                  <p className="text-sm text-muted-foreground italic text-center py-4">
-                    Selecciona una fecha en el calendario
-                  </p>
-                ) : isLoadingSlots ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <div className="mt-2">
-                    <SlotSelector
-                      slots={availableSlots}
-                      selectedSlot={selectedSlot}
-                      onSelect={setSelectedSlot}
-                    />
-                  </div>
-                )}
-              </div>
+              {dateBlocked ? (
+                <div className="rounded-xl border border-dashed bg-muted/30 p-8 text-center">
+                  <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
+                  <p className="text-sm text-muted-foreground font-medium">{dateHint}</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <WeekStrip
+                    days={c.windowDays}
+                    daysMap={c.daysMap}
+                    selectedDate={c.selectedDate}
+                    onSelect={c.setSelectedDate}
+                    canGoPrev={c.canGoPrev}
+                    onPrev={c.goPrevWeek}
+                    onNext={c.goNextWeek}
+                    isLoading={c.isLoadingDays}
+                  />
+                  {c.daysError && (
+                    <p className="text-xs text-destructive">{c.daysError}. Probá otra semana.</p>
+                  )}
 
-              {/* Profesional asignado (modo combinado) */}
-              {combinedMode && selectedSlot && (() => {
-                const freeIds = slotFreeDoctors[selectedSlot] ?? [];
-                const freeDocs = qualifiedDoctors.filter((d) => freeIds.includes(d.id));
-                return (
-                  <div className="rounded-lg border p-3 bg-card space-y-2">
-                    <Label className="text-sm text-muted-foreground">Profesional asignado</Label>
-                    {freeDocs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No hay profesional libre en este horario.
+                  {/* Horarios Mañana / Tarde */}
+                  <div className="rounded-xl border bg-card p-3">
+                    <p className="text-sm font-medium mb-2">
+                      {c.selectedDate
+                        ? `Horario — ${format(c.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
+                        : 'Horario'}
+                    </p>
+                    {!c.selectedDate ? (
+                      <p className="py-4 text-center text-sm italic text-muted-foreground">
+                        Selecciona un día arriba
                       </p>
-                    ) : freeDocs.length === 1 ? (
-                      <p className="text-sm font-medium">{doctorLabel(freeDocs[0])}</p>
+                    ) : c.isLoadingSlots ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : c.starts.length === 0 ? (
+                      <p className="py-4 text-center text-sm text-muted-foreground">
+                        {c.slotsReason ?? 'No hay horarios disponibles para esta fecha'}
+                      </p>
                     ) : (
-                      <>
-                        <div className="flex flex-wrap gap-2">
-                          {freeDocs.map((d) => (
-                            <Button
-                              key={d.id}
-                              type="button"
-                              size="sm"
-                              variant={assignedDoctorId === d.id ? 'default' : 'outline'}
-                              onClick={() => setAssignedDoctorId(d.id)}
-                            >
-                              {doctorLabel(d)}
-                            </Button>
+                      <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+                        {[{ label: 'Mañana', times: morning }, { label: 'Tarde', times: afternoon }]
+                          .filter((g) => g.times.length > 0)
+                          .map((g) => (
+                            <div key={g.label}>
+                              <p className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">{g.label}</p>
+                              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                {g.times.map((t) => (
+                                  <Button
+                                    key={t}
+                                    type="button"
+                                    size="sm"
+                                    variant={c.selectedStart === t ? 'default' : 'outline'}
+                                    onClick={() => c.setSelectedStart(t)}
+                                    className={cn('font-mono', c.selectedStart === t && 'ring-2 ring-primary ring-offset-1')}
+                                  >
+                                    {to12h(t)}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
                           ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Auto-asignado al menos cargado; podés cambiarlo.
-                        </p>
-                      </>
+                      </div>
                     )}
                   </div>
-                );
-              })()}
-            </section>
-
-            {/* Botón Agendar */}
-            <div ref={agendarRef} className="pt-6 border-t">
-              <Button
-                onClick={handleCreateAppointment}
-                disabled={!isFormValid}
-                size="lg"
-                className="w-full"
-              >
-                <CheckCircle className="mr-2 h-5 w-5" />
-                {isCreatingAppointment ? 'Agendando...' : 'Agendar'}
-              </Button>
-              {!isFormValid && (
-                <p className="text-sm text-muted-foreground text-center mt-3">
-                  Completa todos los campos para crear la cita
-                </p>
+                </div>
               )}
-            </div>
-            </>
-            )}
+            </section>
+          </div>
         </div>
       </div>
 
-      {/* Create Patient Dialog */}
-      <Dialog open={isCreatePatientOpen} onOpenChange={setIsCreatePatientOpen}>
+      {/* ===== Footer sticky — resumen + profesional + Agendar ===== */}
+      <footer className="shrink-0 border-t bg-card">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3 md:px-6">
+          <div className="min-w-[10rem]">
+            <p className="text-xs text-muted-foreground">Cita programada para</p>
+            <p className="text-sm font-medium">
+              {c.selectedDate && c.selectedStart
+                ? `${format(c.selectedDate, "EEE d 'de' MMM", { locale: es })} · ${to12h(c.selectedStart)}`
+                : '—'}
+            </p>
+          </div>
+
+          {(c.path !== 'duration' && c.items.length > 0) && (
+            <div>
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-sm font-medium">
+                {c.items.length} servicio{c.items.length > 1 ? 's' : ''}
+                {c.totalPrice > 0 ? ` · ${fmtMoney(c.totalPrice)}` : ''} · {fmtDuration(c.totalDuration)}
+              </p>
+            </div>
+          )}
+
+          {/* Profesional(es) asignado(s) */}
+          {c.selectedStart && c.chain.length > 0 && (
+            <ProfesionalSummary composer={c} labelFor={labelFor} />
+          )}
+
+          <div className="ml-auto">
+            <Button onClick={handleAgendar} disabled={!c.canSubmit} size="lg">
+              <CheckCircle className="mr-2 h-5 w-5" />
+              {c.isSubmitting ? 'Agendando…' : 'Agendar cita'}
+            </Button>
+          </div>
+        </div>
+      </footer>
+
+      {/* Crear paciente */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Crear nuevo paciente</DialogTitle>
-            <DialogDescription>
-              Ingresa los datos del paciente para agregarlo al sistema.
-            </DialogDescription>
+            <DialogDescription>Ingresa los datos del paciente para agregarlo al sistema.</DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="patient-name">Nombre completo</Label>
-              <Input
-                id="patient-name"
-                value={newPatientName}
-                onChange={(e) => setNewPatientName(e.target.value)}
-                placeholder="Ej: María García López"
-                autoFocus
-              />
+              <Label htmlFor="np-name">Nombre completo</Label>
+              <Input id="np-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: María García López" autoFocus />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="patient-phone">Teléfono</Label>
-              <Input
-                id="patient-phone"
-                value={newPatientPhone}
-                onChange={(e) => setNewPatientPhone(formatPhoneInput(e.target.value))}
-                placeholder="1234-5678"
-                maxLength={9}
-              />
+              <Label htmlFor="np-phone">Teléfono</Label>
+              <Input id="np-phone" value={newPhone} onChange={(e) => setNewPhone(formatPhoneInput(e.target.value))} placeholder="1234-5678" maxLength={9} />
             </div>
           </div>
-
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={handleCancelCreatePatient}
-              disabled={isCreatingPatient}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSaveNewPatient}
-              disabled={isCreatingPatient}
-            >
-              {isCreatingPatient ? 'Guardando...' : 'Guardar'}
-            </Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Cancelar</Button>
+            <Button onClick={handleSaveNew} disabled={creating}>{creating ? 'Guardando…' : 'Guardar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </MainLayout>
+  );
+}
+
+/** Resumen del/los profesional(es) asignado(s) en el footer, con cambio por procedimiento. */
+function ProfesionalSummary({
+  composer: c,
+  labelFor,
+}: {
+  composer: ReturnType<typeof useAppointmentComposer>;
+  labelFor: (id: string | null) => string;
+}) {
+  const isAuto = c.path === 'visit-engine';
+  const single = c.chain.length === 1;
+  const canChange = c.chain.some((p) => p.freeDoctorIds.length > 1);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div>
+        <p className="text-xs text-muted-foreground">Profesional{single ? '' : 'es'}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          {single ? labelFor(c.chain[0].doctorId) : `${c.chain.length} profesionales`}
+          {isAuto && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
+              <Sparkles className="h-3 w-3" /> Auto
+            </span>
+          )}
+        </p>
+      </div>
+      {isAuto && (canChange || !single) && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+              {single ? 'Cambiar' : 'Ver detalle'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80">
+            <p className="mb-2 text-sm font-medium">Detalle de la visita</p>
+            <div className="space-y-3">
+              {c.chain.map((p, i) => (
+                <div key={i} className="border-b pb-2 last:border-b-0 last:pb-0">
+                  <p className="text-sm font-medium">{p.start}–{p.end} · {p.serviceName}</p>
+                  {p.freeDoctorIds.length <= 1 ? (
+                    <p className="text-sm text-muted-foreground">{labelFor(p.doctorId)}</p>
+                  ) : (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {p.freeDoctorIds.map((docId) => (
+                        <Button
+                          key={docId}
+                          type="button"
+                          size="sm"
+                          variant={p.doctorId === docId ? 'default' : 'outline'}
+                          onClick={() => c.setAssignment(i, docId)}
+                        >
+                          {labelFor(docId)}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Auto-asignado al menos cargado; podés cambiarlo.</p>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
   );
 }

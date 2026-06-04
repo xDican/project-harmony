@@ -220,10 +220,83 @@ copia el sidebar/top-bar del mockup; se mantiene `MainLayout`.
 **Defaults tomados:** reminder3d = toggle compacto en card de Paciente · servicios muestran
 precio+duración (sin categoría, no existe en `service_types`) · header actual se mantiene.
 
-**Fases (~14-20h, todo frontend):** 1) componente unificado (absorbe VisitBooking, insert-split) ·
-2) UI (app-shell 2-col, `WeekStrip`, footer, panel "Ver detalle") · 3) estados+mobile+validación ·
-4) limpieza (remover VisitBooking) + verificar reagendar + QA. **Trabajar por fases con checkpoints
-de Diego. PROXIMA SESIÓN: arrancar Fase 1.**
+**Fases (~14-20h, todo frontend + Fase 0 backend):** 0) `get-visit-days` (week-strip resource-aware) ·
+1) componente unificado (absorbe VisitBooking, insert-split) · 2) UI (app-shell 2-col, `WeekStrip`,
+footer, panel "Ver detalle") · 3) estados+mobile+validación · 4) limpieza (remover VisitBooking) +
+verificar reagendar + QA. **Trabajar por fases con checkpoints de Diego.**
+
+### Refinamientos del review (4 Jun) — en `.claude/plans/rediseno-nueva-cita-ui.md`
+Se revisó el código antes de implementar y se resolvieron 5 huecos plan↔código (sección
+"Refinamientos del review de código"): (1) el week-strip necesitaba fuente de días que
+`get-visit-slots` (per-fecha) no da → **Fase 0**; (2) days-EF son por-mes y el strip de 2 sem cruza
+meses → fetch 1-2 meses + merge; (3) "una sola vista" = 1 UI pero 3 paths de datos (ICP via
+get-visit-slots; single-doctor/doctor-view via get-available-slots con doctor fijo; sin-servicios via
+duración) — `get-visit-slots` auto-asigna y no fija profesional; (4) en el path ICP NO se usan
+`getDoctorLoadForDate`/`pickLeastLoaded` (la EF ya trae `suggestedDoctorId`); (5) eliminar el
+auto-scroll (`agendarRef`/`fechaRef`) con el app-shell.
+
+### Fase 0 — `get-visit-days` DESPLEGADA 4 Jun (PENDIENTE solo smoke test de lógica)
+**Deploy OK** (`npx supabase functions deploy get-visit-days get-visit-slots`, bundle incluyó
+`_shared/availability.ts`+`cors.ts` sin error → módulo compartido compila/bundlea limpio). Ambas
+activas en prod. Falta solo verificación de LÓGICA (no testeable sin JWT/app): get-visit-slots se
+valida con "agendar una visita como hasta ahora" (E2E Fase 5 lo cubre); get-visit-days se valida
+cuando Fase 1 lo cablee (comparar días tachados del strip vs slots reales).
+Es a las visitas lo que `get-available-days` a las citas simples: dado el rango del week-strip (~14
+días), devuelve por día `{working, canFit}` para tachar los sin cupo en UNA llamada (datos batcheados
+por rango), no N llamadas a `get-visit-slots`. **Resource-aware** (arregla de paso la deuda "day-view
+no resource-aware" para el ICP).
+- **`_shared/availability.ts`** (+3 exports): `loadSchedulesAllDows` (horarios de toda la semana de
+  un doctor, 1 query), `loadVisitRangeState` (estado de visita por rango → `Map<fecha,VisitDayState>`,
+  mismo armado que `loadVisitDayState` pero 2 queries de rango para citas/consumo + estáticos por
+  doctor/servicio), `resolveVisitContext` (resolución compartida servicios+profesionales calificados).
+- **`get-visit-slots`**: refactor para usar `resolveVisitContext` (extracción verbatim; greedy
+  intacto). **Razón:** strip y slots DEBEN resolver los mismos profesionales o el strip mostraría
+  "disponible" donde los slots dicen "sin profesional". Comportamiento idéntico → necesita re-smoke
+  de Diego (E2E Fase 5/6 ya cubre el greedy).
+- **NUEVA `get-visit-days/index.ts`**: resuelve contexto → `loadVisitRangeState` → greedy por día con
+  early-exit (basta 1 inicio factible). Auth = patrón get-visit-slots (header + service-role).
+- **Wrapper** `getVisitDays` en `api.supabase.ts`. **`tsc --noEmit` OK.**
+- **Deuda de validación:** `deno`/CLI no están en PATH de la sesión Claude (sí en el shell de Diego).
+  **Deploy:** `npx supabase functions deploy get-visit-days get-visit-slots --project-ref soxrlxvivuplezssgssq`
+  (bundlea `_shared` + type-check). `get-visit-days` es inerte hasta Fase 1 (nada la invoca) → deploy
+  seguro; `get-visit-slots` redeploy es behavior-preserving. Smoke test: invocar get-visit-days con la
+  org de prueba OrionCare (Diego+Lizzy) y 1-2 servicios, comparar días tachados vs get-visit-slots.
+
+### Fase 1 — data-hook unificado IMPLEMENTADO 4 Jun (sin UI; página actual intacta)
+**NUEVO `src/hooks/useAppointmentComposer.ts`** — núcleo de datos/lógica de la Nueva Cita unificada.
+NO renderiza: expone estado + acciones para que Fase 2 (UI) las consuma. La página `NuevaCita.tsx`
+actual NO se tocó (sigue 100% funcional).
+- **3 paths derivados** (sin toggle de modo): `visit-engine` (ICP = hasServices && !isDoctorView &&
+  !isSingleDoctorOrg → get-visit-days + get-visit-slots, 1..N servicios, auto-asigna menos cargado
+  server-side); `single-doctor` (doctor logueado u org 1-doctor con servicios → get-available-days/
+  slots con doctor FIJO + serviceTypeId resource-aware, 1 servicio); `duration` (org sin servicios →
+  selector de duración + doctor, get-available-* clásico). Preserva el comportamiento de los 4
+  clientes reales (single-doctor) y de doctores logueados.
+- **Ventana de 14 días** (week-strip): visit-engine usa `getVisitDays`; los otros paths fetchean los
+  1-2 meses que cruza la ventana con `getAvailableDays` y mergean (refinamiento #2).
+- **Insert-split:** 2+ procedimientos (solo visit-engine) → `create-visit` (atómico); 1 →
+  `create-appointment` (sin visit_id → reagenda normal, sin regresión).
+- **Sin getDoctorLoadForDate/pickLeastLoaded en cliente** (refinamiento #4): el sugerido lo trae
+  get-visit-slots (`suggestedDoctorId`), overridable vía `freeDoctorIds`.
+- **Cambio aditivo** en `serviceTypesApi.ts`: `OrgServiceType.price` + se selecciona `price` (para el
+  total del footer). Returns de `saveServiceType` actualizados. `tsc --noEmit` OK.
+
+### Fase 2 — UI (núcleo) IMPLEMENTADA 4 Jun (PENDIENTE checkpoint visual de Diego)
+`NuevaCita.tsx` reescrita como vista única consumiendo `useAppointmentComposer`. `tsc --noEmit` OK.
+- **App-shell 2-col** vía `MainLayout mainClassName="overflow-hidden flex flex-col"`; footer sticky
+  como hijo `shrink-0` (sin position:fixed). Contenido `overflow-auto` (no-scroll perfecto → Fase 3).
+- **NUEVO `src/components/WeekStrip.tsx`**: 14 días (2 sem, grilla 7), ‹ › navega por semana (no antes
+  de hoy), días sin cupo/pasados tachados. Alimentado por `daysMap` del hook.
+- Izq: Paciente (PatientSearch + card recordatorio) + Servicios (catálogo + lista ordenada ↑↓✕ con
+  total, o selector de Duración en path duración, o DoctorSearch si `requiresDoctorSelection`).
+- Der: WeekStrip + Horarios Mañana/Tarde (caja scroll, formato 12h).
+- Footer: resumen fecha/hora + Total (servicios·L·duración) + `ProfesionalSummary` (badge ✨Auto en
+  visit-engine + Popover "Ver detalle" con timeline + cambio por procedimiento vía `freeDoctorIds`) +
+  botón Agendar (insert-split por `submit()`).
+- `VisitBooking` ya NO se importa (quedó huérfano → se remueve en Fase 4). Auto-scroll eliminado.
+
+**PROXIMA SESIÓN: tras OK visual de Diego → Fase 3 (no-scroll app-shell + mobile 1-col + estados/
+validación fina) y Fase 4 (remover VisitBooking + verificar reagendar intacto + QA en vivo 3 paths).**
 
 ---
 
