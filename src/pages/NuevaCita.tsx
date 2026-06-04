@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle, Loader2, Bell, Plus, ArrowUp, ArrowDown, Sparkles, CalendarClock, Calendar, Pencil,
-  Search, Clock, Trash2, Check,
+  Search, Trash2, Check,
 } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
@@ -258,9 +258,14 @@ export default function NuevaCita() {
             {/* 2. Servicios (o Duración en degradación) */}
             <section className="rounded-xl border bg-card p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <Label className="text-base font-semibold">
-                  {showServices ? 'Servicios a realizar' : 'Duración'}
-                </Label>
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <Label className="text-base font-semibold">
+                    {showServices ? 'Servicios a realizar' : 'Duración'}
+                  </Label>
+                  {showServices && c.items.length > 0 && (
+                    <span className="shrink-0 text-xs text-muted-foreground">est. {fmtDuration(c.totalDuration)}</span>
+                  )}
+                </div>
                 <StepBadge n={2} done={showServices ? c.items.length > 0 : true} />
               </div>
               {showServices ? (
@@ -404,11 +409,11 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
   const q = query.trim().toLowerCase();
   const filtered = q ? c.catalog.filter((s) => s.displayName.toLowerCase().includes(q)) : c.catalog;
 
-  // Fila limpia de un servicio elegido (compartida single/multi).
+  // Fila compacta de un servicio elegido: nombre + duración + precio en 1 línea.
   const ServiceRow = ({ svc, idx }: { svc: OrgServiceType; idx: number }) => (
-    <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
+    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
       {multiService && (
-        <div className="flex flex-col text-muted-foreground">
+        <div className="flex shrink-0 flex-col leading-none text-muted-foreground">
           <button
             type="button"
             disabled={idx === 0}
@@ -416,7 +421,7 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
             className="hover:text-foreground disabled:opacity-30"
             aria-label="Subir"
           >
-            <ArrowUp className="h-4 w-4" />
+            <ArrowUp className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
@@ -425,21 +430,17 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
             className="hover:text-foreground disabled:opacity-30"
             aria-label="Bajar"
           >
-            <ArrowDown className="h-4 w-4" />
+            <ArrowDown className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{svc.displayName}</p>
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="h-3 w-3" /> {svc.durationMinutes ?? 30} min
-        </p>
-      </div>
-      {svc.price != null && <p className="shrink-0 text-sm font-medium">{fmtMoney(svc.price)}</p>}
+      <p className="min-w-0 flex-1 truncate text-sm font-medium">{svc.displayName}</p>
+      <span className="shrink-0 text-xs text-muted-foreground">{svc.durationMinutes ?? 30} min</span>
+      {svc.price != null && <span className="shrink-0 text-sm font-medium">{fmtMoney(svc.price)}</span>}
       <button
         type="button"
         onClick={() => c.removeService(idx)}
-        className="shrink-0 rounded-full p-1.5 text-destructive transition-colors hover:bg-destructive/10"
+        className="shrink-0 rounded-full p-1 text-destructive transition-colors hover:bg-destructive/10"
         aria-label="Quitar servicio"
       >
         <Trash2 className="h-4 w-4" />
@@ -475,11 +476,7 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
                   selectedSingle ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
                 )}
               >
-                {multiService && <Plus className="h-3.5 w-3.5" />}
                 {svc.displayName}
-                <span className="opacity-70">
-                  · {svc.durationMinutes ?? 30}m{svc.price != null ? ` · ${fmtMoney(svc.price)}` : ''}
-                </span>
               </button>
             );
           })}
@@ -490,8 +487,7 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
 
       {/* Servicios elegidos (o placeholder corto si aún no hay ninguno) */}
       {c.items.length === 0 ? (
-        <div className="mt-3 flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center">
-          <Plus className="h-5 w-5 text-muted-foreground/60" />
+        <div className="mt-3 rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-center">
           <p className="text-sm text-muted-foreground">Selecciona servicios para ver el total</p>
         </div>
       ) : multiService ? (
@@ -499,9 +495,6 @@ function ServicePicker({ composer: c }: { composer: Composer }) {
           {c.items.map((svc, idx) => (
             <ServiceRow key={`${svc.id}-${idx}`} svc={svc} idx={idx} />
           ))}
-          <p className="text-xs text-muted-foreground">
-            {c.items.length} servicio{c.items.length > 1 ? 's' : ''} · Duración total estimada: {fmtDuration(c.totalDuration)}
-          </p>
         </div>
       ) : (
         <div className="mt-3">
