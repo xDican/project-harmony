@@ -153,8 +153,10 @@ export default function NuevaCita() {
       {/* Contenido scrollable (en Fase 3 se ajusta a no-scroll con cajas internas) */}
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="mx-auto grid w-full max-w-[1700px] gap-6 p-4 md:p-6 lg:grid-cols-[2fr_3fr]">
-          {/* ===== Columna izquierda — armar la cita ===== */}
-          <div className="space-y-6">
+          {/* ===== Columna izquierda — armar la cita =====
+              min-w-0: evita el "grid blowout" (los chips nowrap forzarían a la
+              columna a crecer al ancho del contenido y empujarían la página). */}
+          <div className="space-y-6 min-w-0">
             {/* 1. Paciente */}
             <section className="rounded-xl border bg-card p-4">
               <Label className="text-base font-semibold mb-3 block">1. Paciente</Label>
@@ -539,7 +541,7 @@ function MobileDateTime({ composer: c }: { composer: Composer }) {
   const hasSel = Boolean(c.selectedDate && c.selectedStart);
 
   return (
-    <section className="lg:hidden rounded-xl border bg-card p-4">
+    <section className="lg:hidden min-w-0 rounded-xl border bg-card p-4">
       <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>
