@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle, Loader2, Bell, Plus, ArrowUp, ArrowDown, Sparkles, CalendarClock, Calendar, Pencil,
-  Search, Trash2, Check,
+  Search, Trash2, Check, ChevronRight,
 } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
@@ -614,40 +614,35 @@ function MobileDateTime({ composer: c }: { composer: Composer }) {
   const hasSel = Boolean(c.selectedDate && c.selectedStart);
 
   return (
-    <section className="lg:hidden min-w-0 rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Label className="text-base font-semibold">Fecha y hora</Label>
-        <StepBadge n={3} done={!!(c.selectedDate && c.selectedStart)} />
-      </div>
+    <section className="lg:hidden min-w-0">
       <Drawer open={open} onOpenChange={setOpen}>
+        {/* Tarjeta única del Paso 3: título "Fecha y hora" + badge + valor, todo
+            tappable (abre el calendario). Sin header/borde extra encima. */}
         <DrawerTrigger asChild>
           <button
             type="button"
             disabled={blocked}
-            className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+            className="flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <Calendar className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              {hasSel ? (
-                <>
-                  <span className="block text-sm font-medium capitalize">
-                    {format(c.selectedDate!, "EEE d 'de' MMM", { locale: es })} · {to12h(c.selectedStart!)}
-                  </span>
-                  {c.chain.length > 0 && (
-                    <span className="block text-xs text-muted-foreground">
-                      Duración total: {fmtDuration(c.totalDuration)}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="block text-sm text-muted-foreground">
-                  {blocked ? hint : 'Toca para elegir fecha y hora'}
-                </span>
-              )}
+              <span className="flex items-center gap-2">
+                <span className="text-base font-semibold">Fecha y hora</span>
+                <StepBadge n={3} done={hasSel} />
+              </span>
+              <span className="mt-0.5 block truncate text-sm text-muted-foreground">
+                {hasSel
+                  ? `${format(c.selectedDate!, "EEE d 'de' MMM", { locale: es })} · ${to12h(c.selectedStart!)}${c.chain.length > 0 ? ` · ${fmtDuration(c.totalDuration)}` : ''}`
+                  : blocked
+                    ? hint
+                    : 'Toca para elegir fecha y hora'}
+              </span>
             </span>
-            {!blocked && <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />}
+            {!blocked && (hasSel
+              ? <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />
+              : <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />)}
           </button>
         </DrawerTrigger>
         <DrawerContent className="mt-0 h-[100dvh] max-h-[100dvh] rounded-none">
