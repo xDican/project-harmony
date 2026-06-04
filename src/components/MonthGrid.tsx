@@ -116,8 +116,8 @@ export default function MonthGrid({
         </div>
 
         {collapsed ? (
-          // Vista semana (colapsada): tira horizontal de cards Lun→Dom.
-          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          // Vista semana (colapsada): semana Lun→Dom completa en una sola línea.
+          <div className="grid grid-cols-7 gap-1">
             {weekDays.map((date) => {
               const ds = format(date, 'yyyy-MM-dd');
               const unavailable = isUnavailable(date);
@@ -129,7 +129,7 @@ export default function MonthGrid({
                   disabled={unavailable}
                   onClick={() => handleSelect(date)}
                   className={cn(
-                    'flex w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border py-2 transition-colors',
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg border py-1.5 transition-colors',
                     'disabled:cursor-not-allowed',
                     selected
                       ? 'border-primary bg-primary text-primary-foreground'
@@ -138,8 +138,8 @@ export default function MonthGrid({
                         : 'hover:bg-accent',
                   )}
                 >
-                  <span className="text-[0.7rem] font-medium uppercase">{format(date, 'EEE', { locale: es })}</span>
-                  <span className="text-lg font-semibold leading-none">{format(date, 'd')}</span>
+                  <span className="text-[0.6rem] font-medium uppercase">{format(date, 'EEE', { locale: es })}</span>
+                  <span className="text-base font-semibold leading-none">{format(date, 'd')}</span>
                 </button>
               );
             })}

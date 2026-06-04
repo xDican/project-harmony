@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
+import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { useAppointmentComposer } from '@/hooks/useAppointmentComposer';
@@ -559,13 +559,8 @@ function DateTimePanel({ composer: c, collapsibleCalendar }: { composer: Compose
 
       <Separator />
 
-      {/* Horarios Mañana / Tarde */}
+      {/* Horarios mañana / tarde */}
       <div>
-        <p className="mb-2 text-sm font-medium">
-          {c.selectedDate
-            ? `Horario — ${format(c.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
-            : 'Horario'}
-        </p>
         {!c.selectedDate ? (
           <p className="py-4 text-center text-sm italic text-muted-foreground">
             Selecciona un día en el calendario
@@ -580,12 +575,12 @@ function DateTimePanel({ composer: c, collapsibleCalendar }: { composer: Compose
           </p>
         ) : (
           <div className="space-y-3">
-            {[{ label: 'Mañana', times: morning }, { label: 'Tarde', times: afternoon }]
+            {[{ label: 'Horario en la mañana', times: morning }, { label: 'Horario en la tarde', times: afternoon }]
               .filter((g) => g.times.length > 0)
               .map((g) => (
                 <div key={g.label}>
                   <p className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">{g.label}</p>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                  <div className="grid grid-cols-4 gap-2 lg:grid-cols-5">
                     {g.times.map((t) => (
                       <Button
                         key={t}
@@ -593,7 +588,7 @@ function DateTimePanel({ composer: c, collapsibleCalendar }: { composer: Compose
                         size="sm"
                         variant={c.selectedStart === t ? 'default' : 'outline'}
                         onClick={() => c.setSelectedStart(t)}
-                        className={cn('font-mono', c.selectedStart === t && 'ring-2 ring-primary ring-offset-1')}
+                        className={cn('px-1 font-mono text-xs', c.selectedStart === t && 'ring-2 ring-primary ring-offset-1')}
                       >
                         {to12h(t)}
                       </Button>
@@ -657,8 +652,10 @@ function MobileDateTime({ composer: c }: { composer: Composer }) {
         </DrawerTrigger>
         <DrawerContent className="mt-0 h-[100dvh] max-h-[100dvh] rounded-none">
           <DrawerHeader className="pb-2 text-left">
-            <DrawerTitle>Seleccionar fecha y hora</DrawerTitle>
-            <DrawerDescription>Elige el momento de la cita.</DrawerDescription>
+            <div className="flex items-center justify-between gap-2">
+              <DrawerTitle>Seleccionar fecha y hora</DrawerTitle>
+              <StepBadge n={3} done={hasSel} />
+            </div>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
             <DateTimePanel composer={c} collapsibleCalendar />
