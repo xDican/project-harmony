@@ -219,7 +219,7 @@ async function handleBotMessage(
     // Para clientes reales (1 linea/org) es identico a filtrar por linea.
     const { data: stRows } = await supabase
       .from('service_types')
-      .select('id, display_name, duration_minutes')
+      .select('id, display_name, duration_minutes, price, requires_prior_consult')
       .eq('organization_id', organizationId)
       .eq('is_active', true)
       .order('display_order', { ascending: true });
@@ -227,6 +227,10 @@ async function handleBotMessage(
       id: st.id,
       name: st.display_name,
       duration_minutes: st.duration_minutes ?? undefined,
+      // Fase 6: price (el bot lo da en confirmacion) + requires_prior_consult
+      // (paciente nuevo debe ver al doctor antes del procedimiento).
+      price: st.price ?? undefined,
+      requires_prior_consult: st.requires_prior_consult ?? false,
     }));
   }
   const handoffLabels = session.context.handoffLabels as { menuOption: string; connecting: string; emoji: string };
@@ -1920,8 +1924,10 @@ async function startBookingFlow(
   delete session.context.rescheduleAppointmentDoctorName;
   delete session.context.selectedServiceType;
   delete session.context.selectedServiceTypeId;
+  delete session.context.selectedServicePrice;
   delete session.context.serviceDurationOverride;
   delete session.context.availableServiceTypes;
+  delete session.context.availableDoctors;
   delete session.context.availableWeeks;
   delete session.context.availableDays;
   delete session.context.availableSlots;
@@ -1931,6 +1937,18 @@ async function startBookingFlow(
   delete session.context.slotPage;
   delete session.context.cancelConfirmPhase;
   delete session.context.upcomingAppointments;
+  // Fase 6 — estado del modo combinado (service-first multi-profesional)
+  delete session.context.combinedMode;
+  delete session.context.qualifiedDoctors;
+  delete session.context.combinedSlotDoctors;
+
+  // Fase 6 — SERVICE-FIRST: si el org tiene servicios configurados, el servicio va
+  // primero (el bot calcula los profesionales calificados y auto-asigna). Si NO hay
+  // servicios, cae al flujo professional-first legacy (clientes actuales, degradacion).
+  const orgServiceTypes: Array<{ id?: string; name: string }> = session.context.lineServiceTypes || [];
+  if (orgServiceTypes.length >= 1) {
+    return await startServiceFirstFlow(session, organizationId, supabase);
+  }
 
   // Get doctors linked to this WhatsApp line
   const { data: lineDoctors } = await supabase
@@ -2003,6 +2021,330 @@ async function startBookingFlow(
     nextState: 'booking_select_doctor',
     sessionComplete: false,
   };
+}
+
+// ============================================================================
+// Fase 6 — SERVICE-FIRST + disponibilidad combinada + auto-asignacion
+// ============================================================================
+
+/**
+ * Profesionales que pueden ejecutar un servicio (skill matrix `professional_services`,
+ * org-level). Si NINGUNO tiene el skill declarado, devuelve TODOS los doctores del org
+ * (degradacion: no bloquea el agendamiento antes de configurar skills). Port directo de
+ * `src/lib/combinedAvailability.ts` getQualifiedDoctors para paridad bot/plataforma.
+ */
+async function getQualifiedDoctorsForService(
+  supabase: SupabaseClient,
+  organizationId: string,
+  serviceTypeId: string,
+): Promise<Array<{ id: string; name: string; prefix: string | null }>> {
+  const { data: skills } = await supabase
+    .from('professional_services')
+    .select('doctor_id')
+    .eq('organization_id', organizationId)
+    .eq('service_type_id', serviceTypeId)
+    .eq('is_active', true);
+
+  const skilledIds = (skills || []).map((s: any) => s.doctor_id);
+
+  let query = supabase
+    .from('doctors')
+    .select('id, name, prefix')
+    .eq('organization_id', organizationId)
+    .order('name', { ascending: true });
+  if (skilledIds.length > 0) query = query.in('id', skilledIds);
+
+  const { data } = await query;
+  return (data || []) as Array<{ id: string; name: string; prefix: string | null }>;
+}
+
+/** Etiqueta visible de un profesional ("Dra. Lizzy lopez"). */
+function doctorDisplayLabel(d: { prefix?: string | null; name: string }): string {
+  return `${d.prefix ?? ''} ${d.name}`.trim();
+}
+
+/**
+ * Paciente "nuevo" para efectos de consulta previa: no existe registro por telefono,
+ * o existe pero sin citas no-canceladas en el org.
+ */
+async function isNewPatient(
+  phone: string,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<boolean> {
+  const patient = await findPatientByPhone(phone, organizationId, supabase);
+  if (!patient) return true;
+  const { count } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('patient_id', patient.id)
+    .not('status', 'in', '("cancelada","cancelled","canceled")');
+  return (count ?? 0) === 0;
+}
+
+/**
+ * Primer calendario activo de un doctor (para setear appointments.calendar_id al
+ * auto-asignar en modo combinado). null si no tiene.
+ */
+async function firstActiveCalendarId(
+  supabase: SupabaseClient,
+  doctorId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('calendar_doctors')
+    .select('calendar_id')
+    .eq('doctor_id', doctorId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.calendar_id ?? null;
+}
+
+/**
+ * Calendario que la LINEA usa para un doctor (whatsapp_line_doctors). Preservar este
+ * calendario en el camino single-doctor es CRITICO para no cambiar la disponibilidad de
+ * los clientes actuales: el bot legacy computaba slots con el calendario de la linea.
+ */
+async function lineCalendarForDoctor(
+  supabase: SupabaseClient,
+  whatsappLineId: string,
+  doctorId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('whatsapp_line_doctors')
+    .select('calendar_id')
+    .eq('whatsapp_line_id', whatsappLineId)
+    .eq('doctor_id', doctorId)
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.calendar_id ?? null;
+}
+
+/** Conteo de citas no-canceladas por doctor en una fecha (para auto-asignar al menos cargado). */
+async function getDoctorLoadForDate(
+  supabase: SupabaseClient,
+  organizationId: string,
+  date: string,
+  doctorIds: string[],
+): Promise<Record<string, number>> {
+  const load: Record<string, number> = {};
+  for (const id of doctorIds) load[id] = 0;
+  if (doctorIds.length === 0) return load;
+
+  const { data } = await supabase
+    .from('appointments')
+    .select('doctor_id')
+    .eq('organization_id', organizationId)
+    .eq('date', date)
+    .in('doctor_id', doctorIds)
+    .not('status', 'in', '("cancelada","cancelled","canceled")');
+
+  for (const row of data || []) {
+    const id = (row as any).doctor_id;
+    load[id] = (load[id] ?? 0) + 1;
+  }
+  return load;
+}
+
+/** Profesional libre menos cargado. Empate → orden recibido (lista ordenada por nombre = determinista). */
+function pickLeastLoaded(freeDoctorIds: string[], load: Record<string, number>): string | null {
+  if (freeDoctorIds.length === 0) return null;
+  let best = freeDoctorIds[0];
+  for (const id of freeDoctorIds) {
+    if ((load[id] ?? 0) < (load[best] ?? 0)) best = id;
+  }
+  return best;
+}
+
+/** Union de dias disponibles en una semana entre los profesionales calificados. */
+async function getCombinedDaysInWeek(
+  doctors: Array<{ id: string }>,
+  weekStart: string,
+  durationMinutes: number,
+  supabase: SupabaseClient,
+  slotGranularity: number,
+  serviceTypeId?: string,
+  organizationId?: string,
+): Promise<{ date: string; label: string }[]> {
+  const merged = new Map<string, string>();
+  for (const d of doctors) {
+    // calendarId undefined → agrega los calendarios propios del doctor (igual que la plataforma)
+    const days = await getAvailableDaysInWeek(
+      d.id, weekStart, durationMinutes, supabase, undefined, slotGranularity, serviceTypeId, organizationId,
+    );
+    for (const day of days) if (!merged.has(day.date)) merged.set(day.date, day.label);
+  }
+  return [...merged.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, label]) => ({ date, label }));
+}
+
+/** Semanas con al menos un dia disponible entre los profesionales calificados. */
+async function getCombinedWeeks(
+  doctors: Array<{ id: string }>,
+  durationMinutes: number,
+  supabase: SupabaseClient,
+  slotGranularity: number,
+  serviceTypeId?: string,
+  organizationId?: string,
+): Promise<{ weekStart: string; weekLabel: string }[]> {
+  const timezone = 'America/Tegucigalpa';
+  const now = DateTime.now().setZone(timezone);
+  const weeks: { weekStart: string; weekLabel: string }[] = [];
+  const MAX_RESULTS = 2;
+  const MAX_SCAN = 6;
+
+  for (let i = 0; i < MAX_SCAN && weeks.length < MAX_RESULTS; i++) {
+    const weekStart = now.plus({ weeks: i }).startOf('week');
+    const weekEnd = weekStart.plus({ days: 6 });
+    const days = await getCombinedDaysInWeek(
+      doctors, weekStart.toISODate() || '', durationMinutes, supabase, slotGranularity, serviceTypeId, organizationId,
+    );
+    if (days.length > 0) {
+      const label = `Semana del ${weekStart.toFormat('dd MMM', { locale: 'es' })} al ${weekEnd.toFormat('dd MMM', { locale: 'es' })}`;
+      weeks.push({ weekStart: weekStart.toISODate() || '', weekLabel: label });
+    }
+  }
+  return weeks;
+}
+
+/**
+ * Union de slots (HH:mm) de una fecha entre los profesionales calificados, con la lista
+ * de profesionales libres en cada hora (para auto-asignar al elegir). Resource-aware via
+ * serviceTypeId (Fase 2B).
+ */
+async function getCombinedSlotsForDate(
+  doctors: Array<{ id: string }>,
+  date: string,
+  durationMinutes: number,
+  supabase: SupabaseClient,
+  slotGranularity: number,
+  serviceTypeId?: string,
+  organizationId?: string,
+): Promise<Map<string, string[]>> {
+  const byTime = new Map<string, string[]>();
+  for (const d of doctors) {
+    const slots = await getAvailableSlotsForDate(
+      d.id, date, durationMinutes, supabase, undefined, slotGranularity, serviceTypeId, organizationId,
+    );
+    for (const t of slots) {
+      if (!byTime.has(t)) byTime.set(t, []);
+      byTime.get(t)!.push(d.id);
+    }
+  }
+  return byTime;
+}
+
+/**
+ * Entrada del flujo service-first. 1 servicio → auto-select silencioso. 2+ → menu de servicios.
+ */
+async function startServiceFirstFlow(
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<BotResponse> {
+  const serviceTypes: Array<{ id?: string; name: string; duration_minutes?: number; price?: number; requires_prior_consult?: boolean }> =
+    session.context.lineServiceTypes || [];
+
+  // Un solo servicio → auto-select y resolver profesionales (sin paso visible)
+  if (serviceTypes.length === 1) {
+    session.context.bookingTotalSteps = 4;
+    return await resolveServiceAndContinue(serviceTypes[0], session, organizationId, supabase);
+  }
+
+  // 2+ servicios → menu
+  session.context.availableServiceTypes = serviceTypes;
+  session.context.bookingTotalSteps = 5;
+  const stepTitle = buildStepTitle(OPT_EMOJI.agendar, 'Agendar cita', 1, 5);
+  return {
+    message: `${stepTitle}\n\n📋 ¿Que tipo de servicio necesita?`,
+    options: serviceTypes.map((st) => st.name),
+    requiresInput: true,
+    nextState: 'booking_select_service',
+    sessionComplete: false,
+  };
+}
+
+/**
+ * Tras elegir el servicio: (1) gating de consulta previa para paciente nuevo;
+ * (2) resuelve profesionales calificados → single-doctor o modo combinado; (3) va a semanas.
+ */
+async function resolveServiceAndContinue(
+  service: { id?: string; name: string; duration_minutes?: number; price?: number; requires_prior_consult?: boolean },
+  session: BotSession,
+  organizationId: string,
+  supabase: SupabaseClient,
+): Promise<BotResponse> {
+  session.context.selectedServiceType = service.name;
+  session.context.selectedServiceTypeId = service.id || null;
+  session.context.selectedServicePrice = service.price ?? null;
+  if (service.duration_minutes) session.context.serviceDurationOverride = service.duration_minutes;
+
+  const connecting = session.context.handoffLabels?.connecting || 'la secretaria';
+
+  // (1) Consulta previa: paciente nuevo + servicio que la requiere → agendar la consulta primero.
+  if (service.requires_prior_consult) {
+    const isNew = await isNewPatient(session.patient_phone, organizationId, supabase);
+    if (isNew) {
+      const allServices: Array<{ id?: string; name: string; requires_prior_consult?: boolean }> =
+        session.context.lineServiceTypes || [];
+      const consultServices = allServices.filter((st) => !st.requires_prior_consult);
+      if (consultServices.length === 0) {
+        return {
+          message: `📋 *${service.name}* requiere una consulta de valoracion previa.\n\nConectando con ${connecting} para coordinarla...`,
+          requiresInput: false,
+          nextState: 'handoff_secretary',
+          sessionComplete: true,
+        };
+      }
+      session.context.availableServiceTypes = consultServices;
+      session.context.bookingTotalSteps = consultServices.length >= 2 ? 5 : 4;
+      return {
+        message: `📋 *${service.name}* requiere una consulta de valoracion previa para pacientes nuevos.\n\nPrimero agendemos su consulta. ¿Cual necesita?`,
+        options: consultServices.map((st) => st.name),
+        requiresInput: true,
+        nextState: 'booking_select_service',
+        sessionComplete: false,
+      };
+    }
+  }
+
+  // (2) Profesionales calificados
+  const qualified = service.id
+    ? await getQualifiedDoctorsForService(supabase, organizationId, service.id)
+    : [];
+
+  if (qualified.length === 0) {
+    return {
+      message: `⚠️ No hay profesionales disponibles para ese servicio.\n\nConectando con ${connecting}...`,
+      requiresInput: false,
+      nextState: 'handoff_secretary',
+      sessionComplete: true,
+    };
+  }
+
+  if (qualified.length === 1) {
+    // Single-doctor: comportamiento normal (sin auto-asignacion combinada).
+    // Preferir el calendario de la LINEA (parity exacta con el bot legacy para clientes
+    // actuales); fallback al primer calendario activo del doctor (tecnicas no ligadas a linea).
+    const d = qualified[0];
+    session.context.doctorId = d.id;
+    session.context.doctorName = doctorDisplayLabel(d);
+    session.context.calendarId =
+      (await lineCalendarForDoctor(supabase, session.whatsapp_line_id, d.id))
+      ?? (await firstActiveCalendarId(supabase, d.id))
+      ?? undefined;
+    session.context.combinedMode = false;
+    return await handleBookingSelectWeek('', session, organizationId, supabase);
+  }
+
+  // (3) Modo combinado: union de disponibilidad + auto-asignacion al elegir hora
+  session.context.combinedMode = true;
+  session.context.qualifiedDoctors = qualified.map((d) => ({ id: d.id, name: doctorDisplayLabel(d) }));
+  delete session.context.doctorId;
+  delete session.context.calendarId;
+  return await handleBookingSelectWeek('', session, organizationId, supabase);
 }
 
 // Fuzzy match user text against a list of displayed options (accent-insensitive)
@@ -2100,13 +2442,8 @@ async function handleBookingSelectService(
   }
 
   const selected = serviceTypes[selection - 1];
-  session.context.selectedServiceType = selected.name;
-  session.context.selectedServiceTypeId = selected.id || null;
-  if (selected.duration_minutes) {
-    session.context.serviceDurationOverride = selected.duration_minutes;
-  }
-
-  return await handleBookingSelectWeek('', session, organizationId, supabase);
+  // Fase 6: service-first → resuelve profesionales calificados + consulta previa + auto-asignacion.
+  return await resolveServiceAndContinue(selected, session, organizationId, supabase);
 }
 
 async function handleBookingSelectWeek(
@@ -2128,8 +2465,10 @@ async function handleBookingSelectWeek(
   const slotGranularity = Math.min(durationMinutes, 30);
   session.context.slotGranularity = slotGranularity;
 
-  // Get available weeks
-  const weeks = await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId, slotGranularity, session.context.selectedServiceTypeId, session.context.organizationId);
+  // Get available weeks — Fase 6: en modo combinado, union entre profesionales calificados.
+  const weeks = session.context.combinedMode
+    ? await getCombinedWeeks(session.context.qualifiedDoctors || [], durationMinutes, supabase, slotGranularity, session.context.selectedServiceTypeId, session.context.organizationId)
+    : await getAvailableWeeks(session.context.doctorId, durationMinutes, supabase, session.context.calendarId, slotGranularity, session.context.selectedServiceTypeId, session.context.organizationId);
 
   if (weeks.length === 0) {
     const connecting = handoffLabels?.connecting || session.context.handoffLabels?.connecting || 'la secretaria';
@@ -2150,8 +2489,11 @@ async function handleBookingSelectWeek(
   const steps = getStepNumbers(session);
   const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
 
+  // En combinado no hay doctor fijo aun (se auto-asigna al elegir hora).
+  const weekFor = session.context.combinedMode ? '' : ` con ${session.context.doctorName}`;
+
   return {
-    message: `${stepTitle}\n\nSeleccione la semana para su cita con ${session.context.doctorName}:\n👉 Escriba el numero`,
+    message: `${stepTitle}\n\nSeleccione la semana para su cita${weekFor}:\n👉 Escriba el numero`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
@@ -2336,16 +2678,27 @@ async function handleBookingSelectDay(
   // Get available days in the selected week
   const durationMins = session.context.durationMinutes || 60;
   const granularity = session.context.slotGranularity || Math.min(durationMins, 30);
-  const days = await getAvailableDaysInWeek(
-    session.context.doctorId,
-    selectedWeek.weekStart,
-    durationMins,
-    supabase,
-    session.context.calendarId,
-    granularity,
-    session.context.selectedServiceTypeId,
-    session.context.organizationId
-  );
+  // Fase 6: en modo combinado, union de dias entre profesionales calificados.
+  const days = session.context.combinedMode
+    ? await getCombinedDaysInWeek(
+        session.context.qualifiedDoctors || [],
+        selectedWeek.weekStart,
+        durationMins,
+        supabase,
+        granularity,
+        session.context.selectedServiceTypeId,
+        session.context.organizationId
+      )
+    : await getAvailableDaysInWeek(
+        session.context.doctorId,
+        selectedWeek.weekStart,
+        durationMins,
+        supabase,
+        session.context.calendarId,
+        granularity,
+        session.context.selectedServiceTypeId,
+        session.context.organizationId
+      );
 
   if (days.length === 0) {
     const stepTitle = buildStepTitle(flowEmoji, flowName, steps.weekStep, steps.totalSteps);
@@ -2416,6 +2769,26 @@ async function handleBookingSelectHour(
       const selectedTime = slots[selection - 1];
       session.context.selectedTime = selectedTime;
 
+      // Fase 6 — auto-asignacion: en modo combinado, resolver el profesional menos
+      // cargado entre los libres en esta hora. De aqui en adelante el flujo es single-doctor.
+      if (session.context.combinedMode) {
+        const freeIds: string[] = (session.context.combinedSlotDoctors || {})[selectedTime] || [];
+        if (freeIds.length === 0) {
+          // El slot quedo sin profesional (race / cache vieja) → refrescar horarios.
+          session.context.availableSlots = null;
+          return await showHourSlots(session, supabase);
+        }
+        const load = await getDoctorLoadForDate(supabase, organizationId, session.context.selectedDate, freeIds);
+        const assignedId = pickLeastLoaded(freeIds, load) as string;
+        const assigned = (session.context.qualifiedDoctors || []).find((d: any) => d.id === assignedId);
+        session.context.doctorId = assignedId;
+        session.context.doctorName = assigned?.name || 'su profesional';
+        session.context.calendarId =
+          (await lineCalendarForDoctor(supabase, session.whatsapp_line_id, assignedId))
+          ?? (await firstActiveCalendarId(supabase, assignedId))
+          ?? undefined;
+      }
+
       // Show confirmation
       const timezone = 'America/Tegucigalpa';
       const selectedDate = DateTime.fromISO(session.context.selectedDate, { zone: timezone });
@@ -2424,9 +2797,14 @@ async function handleBookingSelectHour(
       const confirmTitle = buildStepTitle(OPT_EMOJI.confirmar, 'Confirmar cita', steps.confirmStep, steps.totalSteps);
 
       const serviceTypeLine = session.context.selectedServiceType ? `\n📋 ${session.context.selectedServiceType}` : '';
+      // Fase 6 — precio pre-establecido del servicio (si esta configurado).
+      const priceVal = session.context.selectedServicePrice;
+      const priceLine = (priceVal !== null && priceVal !== undefined)
+        ? `\n💵 Lps. ${Number(priceVal).toLocaleString('es-HN')}`
+        : '';
 
       return {
-        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
+        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}${serviceTypeLine}${priceLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
         options: [`${OPT_EMOJI.confirmar} Si, confirmar`, `${OPT_EMOJI.cambiar} Cambiar horario`, `${OPT_EMOJI.cancelar} Cancelar`],
         requiresInput: true,
         nextState: 'booking_confirm',
@@ -2482,18 +2860,43 @@ async function showHourSlots(
   const durationMinutes = session.context.durationMinutes || 60;
   const slotGranularity = session.context.slotGranularity || Math.min(durationMinutes, 30);
 
-  const result = await getAvailableHoursForDate(
-    session.context.doctorId,
-    session.context.selectedDate,
-    durationMinutes,
-    page,
-    PAGE_SIZE,
-    supabase,
-    session.context.calendarId,
-    slotGranularity,
-    session.context.selectedServiceTypeId,
-    session.context.organizationId
-  );
+  let result: { slots: string[]; hasMore: boolean };
+  if (session.context.combinedMode) {
+    // Fase 6: union de horas entre profesionales calificados + libres por hora (auto-asignacion).
+    const byTime = await getCombinedSlotsForDate(
+      session.context.qualifiedDoctors || [],
+      session.context.selectedDate,
+      durationMinutes,
+      supabase,
+      slotGranularity,
+      session.context.selectedServiceTypeId,
+      session.context.organizationId
+    );
+    // Persistir libres-por-hora para resolver el profesional al confirmar el slot.
+    const freeByTime: Record<string, string[]> = {};
+    for (const [t, ids] of byTime.entries()) freeByTime[t] = ids;
+    session.context.combinedSlotDoctors = freeByTime;
+
+    const allTimes = [...byTime.keys()].sort((a, b) => a.localeCompare(b));
+    const startIdx = (page - 1) * PAGE_SIZE;
+    result = {
+      slots: allTimes.slice(startIdx, startIdx + PAGE_SIZE),
+      hasMore: startIdx + PAGE_SIZE < allTimes.length,
+    };
+  } else {
+    result = await getAvailableHoursForDate(
+      session.context.doctorId,
+      session.context.selectedDate,
+      durationMinutes,
+      page,
+      PAGE_SIZE,
+      supabase,
+      session.context.calendarId,
+      slotGranularity,
+      session.context.selectedServiceTypeId,
+      session.context.organizationId
+    );
+  }
 
   const isReschedule = session.context.isReschedule;
   const flowEmoji = isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.agendar;
@@ -2525,8 +2928,11 @@ async function showHourSlots(
 
   const stepTitle = buildStepTitle(flowEmoji, flowName, steps.hourStep, steps.totalSteps);
 
+  // En combinado el profesional se auto-asigna al elegir hora → no se muestra aun.
+  const hourSubtitle = session.context.combinedMode ? '' : `\n${session.context.doctorName}`;
+
   return {
-    message: `${stepTitle}\n\n${OPT_EMOJI.horarios} Horarios disponibles — *${dayLabel}*\n${session.context.doctorName}`,
+    message: `${stepTitle}\n\n${OPT_EMOJI.horarios} Horarios disponibles — *${dayLabel}*${hourSubtitle}`,
     options,
     requiresInput: true,
     nextState: 'booking_select_hour',
@@ -3052,6 +3458,11 @@ async function handleCancelConfirm(
     // Clean stale booking context to prevent "Paso 5/4" bug
     delete session.context.availableDoctors;
     delete session.context.availableServiceTypes;
+    // Fase 6: el reschedule SIEMPRE es single-doctor (mismo doctor de la cita) → limpiar combinado.
+    delete session.context.combinedMode;
+    delete session.context.qualifiedDoctors;
+    delete session.context.combinedSlotDoctors;
+    delete session.context.selectedServicePrice;
     session.context.bookingTotalSteps = 4; // Reschedule always 4 steps (doctor already selected)
 
     // Carry over service type from original appointment

@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 3 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASES 0-5 ENTREGADAS.** Fase 5 (secuenciador multi-procedimiento `visit_id`, RIESGO #1) construida y desplegada hoy: backend QA-aprobado (compuertas a-e PASS, transaccional auto-rollback en prod), UI entregada. **PENDIENTE: E2E manual de Diego logueado** (agendar una visita real desde `/agenda/nueva-cita` → toggle "Visita (varios)" → verificar inicios factibles, asignacion, N filas mismo visit_id, 1 WhatsApp, cancelar visita). Ese E2E tambien cubre la verificacion de la salida del greedy de get-visit-slots (no testeable sin login). **PROXIMA SESION: Fase 6 (bot service-first estructurado, el diferenciador) + fast-follow: reagendar-visita-en-bloque (hoy diferido a cancelar+reagendar).** Tambien pendiente: QA visual del relabel #24 de Fase 4. MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 3 Jun 2026 (PRIORIDAD #1 = Motor de Agendamiento Multi-Recurso. **FASES 0-6 ENTREGADAS — MOTOR COMPLETO.** Fase 6 (bot service-first + combinada + auto-asignacion) **E2E NUCLEO QA-APROBADO 3 Jun** con 2 citas reales (misma hora, profesionales distintos auto-asignados, verificado en DB). Solo falta confirmacion visual de 2 add-ons de bajo riesgo (consulta-previa + precio) y los fast-follows diferidos (reagendar-visita-en-bloque, RescheduleModal service-aware). Ver seccion Fase 6 abajo + `.claude/plans/fase-6-bot-service-first.md`.** Fase 5 (secuenciador multi-procedimiento `visit_id`, RIESGO #1) construida y desplegada hoy: backend QA-aprobado (compuertas a-e PASS, transaccional auto-rollback en prod), UI entregada. **PENDIENTE: E2E manual de Diego logueado** (agendar una visita real desde `/agenda/nueva-cita` → toggle "Visita (varios)" → verificar inicios factibles, asignacion, N filas mismo visit_id, 1 WhatsApp, cancelar visita). Ese E2E tambien cubre la verificacion de la salida del greedy de get-visit-slots (no testeable sin login). **PROXIMA SESION: Fase 6 (bot service-first estructurado, el diferenciador) + fast-follow: reagendar-visita-en-bloque (hoy diferido a cancelar+reagendar).** Tambien pendiente: QA visual del relabel #24 de Fase 4. MCP Supabase disponible. Es el producto real, ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -33,7 +33,7 @@ Decision estrategica 2 Jun: el motor de agendamiento multi-recurso es el PRODUCT
 | 3 | UI config interna (recursos/recetas/skills) | 5-7h | ✅ **ENTREGADA 3 Jun** (`/admin/motor`, org-scoped via admin-por-org) |
 | 4 | Vista combinada + booking service-first para Dulce + label Profesional | 6-8h | ✅ **CERRADA 3 Jun** (service-first + servicios fuente unica + vista combinada con auto-asignacion QA-aprobados + relabel #24 global "Profesional" aplicado; day-view resource-aware deferido cosmetico) |
 | 5 | Secuenciador multi-procedimiento (greedy, `visit_id`) — RIESGO #1 acotado | 4-6h | ✅ **ENTREGADA + E2E QA-APROBADO 3 Jun** (verificado en DB real; 2 fixes post-QA: get-visit-slots 401 + reagendar visita-aware) |
-| 6 | Bot service-first estructurado (sin NLP) | 4-6h | pendiente |
+| 6 | Bot service-first estructurado (sin NLP) | 4-6h | ✅ **ENTREGADA + E2E QA-APROBADO 3 Jun** (2 citas reales: misma hora 10:00, profesionales distintos auto-asignados; precio visible antes de confirmar ✓). Pendiente solo confirmacion visual de consulta-previa |
 
 > NOTA: la numeracion ahora coincide con `.claude/plans/motor-agendamiento-multirecurso.md` (la tabla anterior aqui estaba desfasada). Fase 2+ = corazon del valor (sin doble-booking + muere el "engorroso" de Dulce). Secuenciador = variable de riesgo, "done" estricto. Bot service-first = el diferenciador.
 
@@ -155,6 +155,75 @@ Plan: `.claude/plans/fase-5-es-el-shiny-orbit.md`. Una **visita** = N procedimie
 **Fast-follow (diferido, fuera de Fase 5):**
 - Reagendar-visita-en-bloque (RPC `reschedule_visit`, mismo patron que P2+P3). Hoy: cancelar+reagendar.
 - `RescheduleModal` de citas NORMALES sigue duration-based (no service/resource-aware); el trigger de capacidad lo protege (409 con mensaje claro), pero la UX ideal seria service-first como `NuevaCita`.
+
+### Fase 6 — Bot service-first estructurado IMPLEMENTADA 3 Jun (el diferenciador) — PENDIENTE deploy + E2E
+
+Plan: `.claude/plans/fase-6-bot-service-first.md`. **Decisiones Diego (3 Jun):** (1) **auto-asigna el menos cargado SIN paso de elegir profesional** (bot maximo control + fuga de oferta); (2) alcance = **nucleo + consulta previa + precio** (cierra la verificacion F6 completa).
+
+**Que hace:** invierte el flujo del bot de professional-first → **service-first**. El paciente elige el SERVICIO, el bot calcula los profesionales calificados (skill matrix `professional_services` + fallback a todos = degradacion), muestra disponibilidad **combinada** (union resource-aware via Fase 2B) y al elegir hora **auto-asigna el menos cargado**. Replica en el bot lo que `NuevaCita`/`combinedAvailability.ts` ya hacen en la plataforma (Fase 4).
+
+**De-risk (clave):** los 4 clientes reales son lineas de **1 doctor** → para ellos no cambia nada visible (nunca ven paso de doctor; combined degrada a 1 profesional; 1 servicio = auto-select silencioso = identico a hoy). El cambio de orden solo afecta orgs multi-profesional = el ICP + la org de prueba (Diego+Lizzy con skills). **Blindaje extra:** el camino single-doctor prefiere el calendario de la LINEA (`whatsapp_line_doctors.calendar_id`) con fallback a `calendar_doctors` → parity exacta de disponibilidad con el bot legacy para clientes actuales (evita que un mismatch de calendario les cambie los slots).
+
+**Arquitectura (minima invasion):** la logica combinada solo afecta la ENUMERACION semana/dia/hora; al elegir hora el bot auto-asigna y setea `doctorId/doctorName/calendarId` → todo el downstream (confirmar/nombre/INSERT/re-validacion) queda single-doctor SIN cambios. El flujo legacy professional-first (org SIN servicios) se mantiene intacto como fallback.
+
+**Cambios (todos en `bot-handler/index.ts`, +446 lineas):**
+- Carga de `service_types` agrega `price` + `requires_prior_consult` a `lineServiceTypes`.
+- `startBookingFlow`: si org tiene servicios → `startServiceFirstFlow`; si no → legacy. Limpia `combinedMode/qualifiedDoctors/combinedSlotDoctors/availableDoctors/selectedServicePrice`.
+- NUEVAS: `startServiceFirstFlow`, `resolveServiceAndContinue` (gating consulta-previa + skill resolve), `getQualifiedDoctorsForService` (port org-level de combinedAvailability), `isNewPatient`, `getCombinedWeeks/DaysInWeek/SlotsForDate`, `getDoctorLoadForDate`, `pickLeastLoaded`, `firstActiveCalendarId`, `lineCalendarForDoctor`, `doctorDisplayLabel`.
+- `handleBookingSelectService` reescrito → `resolveServiceAndContinue`.
+- Branch `combinedMode` en `handleBookingSelectWeek/Day` + `showHourSlots` (guarda `combinedSlotDoctors` = libres por hora). Auto-asignacion en `handleBookingSelectHour` al elegir slot. Precio en confirmacion (`💵 Lps. ...`).
+- Reschedule limpia `combinedMode` (siempre single-doctor, mismo doctor de la cita).
+
+**Consulta previa:** paciente NUEVO (`isNewPatient`: sin registro o sin citas no-canceladas) + servicio `requires_prior_consult=true` → ofrece los servicios con `requires_prior_consult=false` (las consultas) primero; si no hay ninguno → handoff. Al elegir la consulta vuelve por el mismo handler y procede.
+
+**Verificacion:** `deno check` sobre bot-handler **type-clean** (unico error = preexistente `_shared/meta-media.ts:225` Blob/Uint8Array, falso positivo de Deno 2.8 vs runtime Supabase, no tocado). **DESPLEGADA a prod 3 Jun** (`supabase functions deploy bot-handler`, bundler OK).
+
+**E2E NUCLEO QA-APROBADO 3 Jun (Diego, 2 citas reales via bot, verificadas en DB org prueba):** ambas Consulta general a las **10:00 del 04-Jun**, profesionales DISTINTOS auto-asignados — 1ra a Lizzy (`c113d3ab`, menos cargada; Diego ya tenia citas ese dia), 2da a Diego (`75a27c93`, unico libre a las 10:00 tras ocuparse Lizzy). `service_type_id` (b97277cb Consulta general) + `calendar_id` por doctor (Lizzy 7594…/ Diego 297f…) + `appointment_at` 16:00 UTC = 10:00 -06 correctos, `duration_minutes` 30. **Confirma toda la cadena:** union combinada, menos-cargado, exclusion del profesional ocupado en la 2da pasada, llenado de capacidad cruzada (2 pacientes misma hora = 2 recursos). **Precio confirmado visualmente 3 Jun** (Diego: la linea `💵 Lps.` aparece antes de confirmar cuando el servicio tiene `price`). **Pendiente solo confirmacion visual (bajo riesgo):** consulta-previa (paciente nuevo + `requires_prior_consult`).** (org prueba OrionCare con Diego+Lizzy skilled): service-first multi-profesional → dias/horas combinados → auto-asigna menos cargado en confirmacion; resource-aware (cabina llena oculta hora); degradacion Demo Bot 1-doctor sin cambios; consulta previa paciente nuevo; precio en confirmacion.
+
+**Anti-scope-creep:** NO elegir profesional especifico (auto y punto), NO NLP, precio ad-hoc sigue siendo FAQ, reagendar combinado diferido.
+
+---
+
+## PROXIMO — Rediseño UI "Nueva Cita" (vista única) — PLANIFICADO 3 Jun, sin arrancar
+
+**Plan completo:** `.claude/plans/rediseno-nueva-cita-ui.md`. Brief y prompts de Stitch en
+`docs/stitch-brief-nueva-cita.md` + `docs/stitch-prompt-vista-unica.md`.
+
+**Origen:** Diego pidió rediseñar `/citas/nueva` (se veía "medio feo" = tema slate por defecto +
+1 columna). Se iteró con Google Stitch hasta un mockup aprobado (iteración 3): **app-shell sin
+scroll de página, 2 columnas, week-strip de 2 semanas, slots Mañana/Tarde en caja con scroll
+interno, footer sticky con auto-asignación**.
+
+**Decisión de producto clave (Diego):** **UNIFICAR cita simple + visita en UNA sola vista** — el
+usuario agrega 1+ servicios (1 = cita normal, 2+ = procedimientos consecutivos), sin toggle de modo.
+Quita la fricción de "elegir modo". Implementar el mockup = implementar esta unificación.
+
+**Arquitectura acordada (clave para no romper nada):**
+- **Disponibilidad SIEMPRE vía `get-visit-slots`** (ya maneja 1..N; devuelve inicios factibles +
+  profesional sugerido + `freeDoctorIds` por procedimiento).
+- **INSERT ramifica por cantidad:** 1 servicio → `create-appointment` (SIN `visit_id`, reagenda
+  normal); 2+ → `create-visit` (con `visit_id`, atómico). **Razón:** si toda cita llevara `visit_id`,
+  `update-appointment` bloquearía el reagendar (línea 170: `if (appt.visit_id)` → 409). Ramificar el
+  insert evita esa regresión. NO unificar el backend en "todo es visita".
+- **Degradación:** orgs SIN servicios → flujo viejo basado en duración (fallback).
+- **Cambio de profesional por procedimiento:** chips desde `freeDoctorIds` (ya existe en VisitBooking).
+
+**Decisión de alcance visual (Diego):** **"solo layout, sin teal"** — se implementa la estructura
+nueva con el tema **slate actual** (reusa tokens/componentes shadcn + lucide). La identidad teal/ámbar
++ Geist del mockup queda **diferida** (a futuro es cambio centralizado en CSS vars, barato). NO se
+copia el sidebar/top-bar del mockup; se mantiene `MainLayout`.
+
+**Integración verificada:** `MainLayout` NO se toca — su `<main>` acepta `mainClassName`; pasando
+`overflow-hidden flex flex-col` se logra el app-shell y el footer va como hijo `shrink-0` (sin
+`position:fixed` frágil). Sin EFs ni migraciones nuevas (backend ya existe).
+
+**Defaults tomados:** reminder3d = toggle compacto en card de Paciente · servicios muestran
+precio+duración (sin categoría, no existe en `service_types`) · header actual se mantiene.
+
+**Fases (~14-20h, todo frontend):** 1) componente unificado (absorbe VisitBooking, insert-split) ·
+2) UI (app-shell 2-col, `WeekStrip`, footer, panel "Ver detalle") · 3) estados+mobile+validación ·
+4) limpieza (remover VisitBooking) + verificar reagendar + QA. **Trabajar por fases con checkpoints
+de Diego. PROXIMA SESIÓN: arrancar Fase 1.**
 
 ---
 
