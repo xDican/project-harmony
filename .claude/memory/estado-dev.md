@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-2 commiteadas: 4e8c964, e0f2dbd, 6bd4a05; Fase 3 implementada sin commitear): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive (botón full-width en móvil) + hint del siguiente paso pendiente + spinner al agendar, `tsc` OK.** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **PENDIENTE: Fase 4** (remover `VisitBooking.tsx` huérfano + verificar reagendar intacto + QA en vivo de los 3 paths, ojo `single-doctor` con cliente real y `duration` sin servicios). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-3 commiteadas + **rediseño mobile completo basado en mockups de Stitch, en prod 4 Jun** — último commit 76baaa0): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive + hint del siguiente paso + spinner. SEGUIDO de un rediseño mobile extenso iterado con Diego sobre mockups de Stitch (todo en prod, `tsc` OK): bottom-sheet `Drawer` fullscreen para fecha/hora; `MonthGrid` colapsable (mes↔semana, "Expandir"); patrón "todo a la vista" por pasos con badges "Paso N"; paciente que colapsa a tarjeta-avatar (recordatorio integrado, sin chrome en mobile); `ServicePicker` estilo carrito (buscador + chips solo-nombre + cards en 1 línea + est. al lado del título); footer compacto (solo botón hasta elegir fecha/hora; profesional en 1 línea según 1 vs 2+; sin total estimado); Paso 3 unificado en una sola tarjeta tappable. Diego: "me gusta como está, quedan ajustes menores para más tarde".** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **PENDIENTE: Fase 4** (remover `VisitBooking.tsx` huérfano + verificar reagendar intacto + QA en vivo de los 3 paths, ojo `single-doctor` con cliente real y `duration` sin servicios). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -321,9 +321,36 @@ sale del `<main>` flex-col + footer `shrink-0`). Lo que faltaba de verdad y se h
 Nota: el "no-scroll app-shell" estricto de Fase 3 ya se había relajado (decisión Diego: usar el espacio,
 contenido con `overflow-auto`) → NO se persiguió; el footer fijo se logra con el flex-col del main.
 
-**PROXIMA SESIÓN: tras OK visual de Diego (Fase 2+3) → Fase 4 (remover VisitBooking huérfano +
-verificar reagendar intacto por el insert-split + QA en vivo de los 3 paths: visit-engine ICP,
-single-doctor con cliente real, duration sin servicios).**
+### Rediseño mobile (4 Jun) — iterado con Diego sobre mockups de Stitch, TODO EN PROD
+Serie de commits 68e21c3 → 76baaa0. Solo `NuevaCita.tsx` + `MonthGrid.tsx`. Cada paso: implementar →
+push → Diego revisa en Vercel desde el teléfono → siguiente. Desktop intacto (todo bajo breakpoints
+`lg`/`md` o props que solo activa el camino mobile). `tsc` limpio en cada commit. Entregado:
+- **Fecha/hora en `Drawer` (vaul) fullscreen:** tarjeta tappable en mobile abre bottom-sheet a
+  `h-[100dvh] mt-0` (override twMerge sobre el `mt-24` base). Desktop sigue con el panel inline.
+  `DateTimePanel` extraído y reutilizado inline (desktop) y dentro del drawer (mobile).
+- **`MonthGrid` colapsable** (prop `collapsible`, solo en el drawer): al elegir día colapsa a la **semana**
+  de ese día (grid 7-col en 1 línea, sin scroll) con botón "Expandir" para volver al mes. Header del
+  drawer con badge "Paso 3"; horarios "Horario en la mañana/tarde", 4 por línea en mobile (5 desktop),
+  sin el header redundante de fecha.
+- **Patrón "todo a la vista" por pasos:** badges `StepBadge` "Paso N" (✓ al completar). Paciente sin
+  seleccionar = buscador + "Crear nuevo paciente"; al seleccionar **colapsa a tarjeta-avatar** (iniciales
+  + nombre + Cambiar) con el recordatorio integrado dentro del mismo bloque; en mobile se elimina el
+  chrome del Paso 1 (header + borde) para subir los servicios.
+- **`ServicePicker` (extraído) estilo carrito:** buscador + chips horizontales **solo-nombre** (sin +,
+  sin duración/precio) + cards de servicio elegido en **1 línea** (nombre · duración · precio · quitar);
+  placeholder corto "Selecciona servicios…"; tiempo estimado junto al título ("Servicios a realizar ·
+  est. 1h 15m").
+- **Footer compacto:** en mobile no muestra info hasta elegir fecha y hora (solo el botón); luego muestra
+  **solo profesional asignado** (sin total estimado): 1 prof = "Profesional asignado <nombre>" + Auto +
+  Cambiar (si aplica); 2+ = "X profesionales asignados" + Auto + Ver detalle, en 1 línea.
+  `ProfesionalSummary` refactorizado a inline (la etiqueta vive en el propio texto).
+- **Paso 3 unificado:** título "Fecha y hora" + badge "Paso 3" + valor/hint en UNA tarjeta tappable
+  (antes header encima de un botón-tarjeta = borde dentro de borde). Chevron › sin elegir / lápiz ✏ elegido.
+
+**PENDIENTE (Diego: "ajustes menores para más tarde", sin especificar aún) + Fase 4 todavía abierta:**
+remover `VisitBooking.tsx` huérfano + verificar reagendar intacto por el insert-split + QA en vivo de los
+3 paths (visit-engine ICP, single-doctor con cliente real, duration sin servicios). Aún falta el OK visual
+de Diego en DESKTOP (todo el feedback fue mobile).
 
 ---
 
