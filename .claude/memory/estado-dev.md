@@ -291,6 +291,11 @@ actual NO se tocó (sigue 100% funcional).
   el path no-ICP (1 llamada `get-available-days` por mes, sin merge de meses).
 - **Paso 3 unificado en UNA card** (MonthGrid + separador + horarios juntos) + layout más ancho
   (`max-w-[1700px]`, cols `2fr/3fr`) para aprovechar el espacio.
+- **Ajustes post-feedback Diego (4 Jun):** (a) overlay de carga gris + `pointer-events-none` en
+  MonthGrid mientras carga la disponibilidad diaria (`isLoading = isLoadingDays || daysMap vacío` →
+  bloquea clicks de día/flechas hasta tener datos, cierra el hueco del click prematuro); (b) horarios
+  SIN scroll interno (quitado `max-h-72 overflow-y-auto`) → usan el espacio vertical disponible. Esto
+  reemplaza la idea de "cajas de altura fija con scroll" de Fase 3.
 - Izq: Paciente (PatientSearch + card recordatorio) + Servicios (catálogo + lista ordenada ↑↓✕ con
   total, o selector de Duración en path duración, o DoctorSearch si `requiresDoctorSelection`).
 - Der: WeekStrip + Horarios Mañana/Tarde (caja scroll, formato 12h).

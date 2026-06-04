@@ -285,7 +285,7 @@ export default function NuevaCita() {
                     canGoPrev={c.canGoPrev}
                     onPrev={c.goPrevMonth}
                     onNext={c.goNextMonth}
-                    isLoading={c.isLoadingDays}
+                    isLoading={c.isLoadingDays || Object.keys(c.daysMap).length === 0}
                   />
                   {c.daysError && (
                     <p className="text-xs text-destructive">{c.daysError}. Probá otro mes.</p>
@@ -313,7 +313,7 @@ export default function NuevaCita() {
                         {c.slotsReason ?? 'No hay horarios disponibles para esta fecha'}
                       </p>
                     ) : (
-                      <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                      <div className="space-y-3">
                         {[{ label: 'Mañana', times: morning }, { label: 'Tarde', times: afternoon }]
                           .filter((g) => g.times.length > 0)
                           .map((g) => (

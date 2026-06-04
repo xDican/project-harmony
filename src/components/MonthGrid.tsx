@@ -47,7 +47,16 @@ export default function MonthGrid({
   };
 
   return (
-    <div>
+    <div className="relative">
+      {isLoading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/70">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Cargando disponibilidad…</span>
+          </div>
+        </div>
+      )}
+      <div className={cn(isLoading && 'pointer-events-none')}>
       <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
@@ -108,6 +117,7 @@ export default function MonthGrid({
             </button>
           );
         })}
+      </div>
       </div>
     </div>
   );
