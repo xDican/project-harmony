@@ -145,6 +145,21 @@ export default function NuevaCita() {
       ? 'Selecciona una duración para ver disponibilidad'
       : 'Selecciona un servicio para ver disponibilidad';
 
+  // Hint del siguiente paso pendiente (footer): guía cuando "Agendar" está
+  // deshabilitado, en el mismo orden visual del flujo.
+  const submitHint: string | null = (() => {
+    if (c.isSubmitting || c.canSubmit) return null;
+    if (!c.selectedPatient) return 'Selecciona un paciente';
+    if (c.path === 'duration') {
+      if (c.requiresDoctorSelection && !c.selectedDoctor) return 'Selecciona un profesional';
+    } else if (c.items.length === 0) {
+      return 'Agrega un servicio';
+    }
+    if (!c.selectedDate) return 'Elige una fecha';
+    if (!c.selectedStart) return 'Elige un horario';
+    return null;
+  })();
+
   return (
     <MainLayout mainClassName="overflow-hidden flex flex-col">
       {/* Contenido scrollable (en Fase 3 se ajusta a no-scroll con cajas internas) */}
@@ -345,36 +360,45 @@ export default function NuevaCita() {
         </div>
       </div>
 
-      {/* ===== Footer sticky — resumen + profesional + Agendar ===== */}
+      {/* ===== Footer sticky — resumen + profesional + Agendar =====
+          Móvil: resumen arriba (envuelve) + botón full-width abajo.
+          Desktop: resumen a la izquierda, botón a la derecha (ml-auto). */}
       <footer className="shrink-0 border-t bg-card">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3 md:px-6">
-          <div className="min-w-[10rem]">
-            <p className="text-xs text-muted-foreground">Cita programada para</p>
-            <p className="text-sm font-medium">
-              {c.selectedDate && c.selectedStart
-                ? `${format(c.selectedDate, "EEE d 'de' MMM", { locale: es })} · ${to12h(c.selectedStart)}`
-                : '—'}
-            </p>
-          </div>
-
-          {(c.path !== 'duration' && c.items.length > 0) && (
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 md:flex-row md:flex-wrap md:items-center md:gap-4 md:px-6">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
-              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xs text-muted-foreground">Cita programada para</p>
               <p className="text-sm font-medium">
-                {c.items.length} servicio{c.items.length > 1 ? 's' : ''}
-                {c.totalPrice > 0 ? ` · ${fmtMoney(c.totalPrice)}` : ''} · {fmtDuration(c.totalDuration)}
+                {c.selectedDate && c.selectedStart
+                  ? `${format(c.selectedDate, "EEE d 'de' MMM", { locale: es })} · ${to12h(c.selectedStart)}`
+                  : '—'}
               </p>
             </div>
-          )}
 
-          {/* Profesional(es) asignado(s) */}
-          {c.selectedStart && c.chain.length > 0 && (
-            <ProfesionalSummary composer={c} labelFor={labelFor} />
-          )}
+            {(c.path !== 'duration' && c.items.length > 0) && (
+              <div>
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-sm font-medium">
+                  {c.items.length} servicio{c.items.length > 1 ? 's' : ''}
+                  {c.totalPrice > 0 ? ` · ${fmtMoney(c.totalPrice)}` : ''} · {fmtDuration(c.totalDuration)}
+                </p>
+              </div>
+            )}
 
-          <div className="ml-auto">
-            <Button onClick={handleAgendar} disabled={!c.canSubmit} size="lg">
-              <CheckCircle className="mr-2 h-5 w-5" />
+            {/* Profesional(es) asignado(s) */}
+            {c.selectedStart && c.chain.length > 0 && (
+              <ProfesionalSummary composer={c} labelFor={labelFor} />
+            )}
+          </div>
+
+          <div className="md:ml-auto">
+            {submitHint && (
+              <p className="mb-1.5 text-xs text-muted-foreground md:text-right">{submitHint}</p>
+            )}
+            <Button onClick={handleAgendar} disabled={!c.canSubmit} size="lg" className="w-full md:w-auto">
+              {c.isSubmitting
+                ? <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                : <CheckCircle className="mr-2 h-5 w-5" />}
               {c.isSubmitting ? 'Agendando…' : 'Agendar cita'}
             </Button>
           </div>

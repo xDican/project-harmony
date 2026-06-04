@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-2 ENTREGADAS + en prod/commiteado** (commits 4e8c964, e0f2dbd, 6bd4a05): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll. Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **PENDIENTE: Fase 3** (mobile 1-col + footer fijo + estados finos; el "no-scroll app-shell" se relajó por feedback de Diego = usar el espacio) **y Fase 4** (remover `VisitBooking.tsx` huérfano + verificar reagendar intacto + QA en vivo de los 3 paths, ojo `single-doctor` con cliente real y `duration` sin servicios). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-2 commiteadas: 4e8c964, e0f2dbd, 6bd4a05; Fase 3 implementada sin commitear): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive (botón full-width en móvil) + hint del siguiente paso pendiente + spinner al agendar, `tsc` OK.** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **PENDIENTE: Fase 4** (remover `VisitBooking.tsx` huérfano + verificar reagendar intacto + QA en vivo de los 3 paths, ojo `single-doctor` con cliente real y `duration` sin servicios). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -304,8 +304,26 @@ actual NO se tocó (sigue 100% funcional).
   botón Agendar (insert-split por `submit()`).
 - `VisitBooking` ya NO se importa (quedó huérfano → se remueve en Fase 4). Auto-scroll eliminado.
 
-**PROXIMA SESIÓN: tras OK visual de Diego → Fase 3 (no-scroll app-shell + mobile 1-col + estados/
-validación fina) y Fase 4 (remover VisitBooking + verificar reagendar intacto + QA en vivo 3 paths).**
+### Fase 3 — mobile + footer + estados finos IMPLEMENTADA 4 Jun (PENDIENTE checkpoint visual Diego)
+Solo `NuevaCita.tsx` (quirúrgico). `tsc --noEmit` OK. Al revisar el código, lo de Fase 3 ya estaba
+mayormente cubierto por Fase 2 (estados vacío/cargando/sin-slots/error vía overlay MonthGrid + spinner
+slots + `slotsReason`/`daysError`; 1-columna en mobile cae solo porque el grid es `lg:grid-cols-[2fr_3fr]`
+→ debajo de `lg` 1 col, orden DOM correcto Paciente→Profesional→Servicios→Fecha; footer fijo abajo ya
+sale del `<main>` flex-col + footer `shrink-0`). Lo que faltaba de verdad y se hizo:
+- **Footer responsive:** contenedor `flex flex-col gap-3 md:flex-row md:flex-wrap`. Móvil = cluster de
+  resumen (fecha·hora / Total / `ProfesionalSummary`) que envuelve arriba + botón **full-width** abajo;
+  desktop = resumen a la izquierda + botón a la derecha (`md:ml-auto`, ancho auto). Antes el `flex-wrap`
+  + `ml-auto` dejaba el botón chico/desalineado en pantalla angosta.
+- **Hint del siguiente paso** (estado fino): cuando `!canSubmit`, texto arriba del botón guiando el paso
+  pendiente en orden de flujo ("Selecciona un paciente" → "Agrega un servicio"/"Selecciona un profesional"
+  en path duración → "Elige una fecha" → "Elige un horario"). Cierra el "deshabilitado en silencio".
+- **Spinner al agendar:** `Loader2` animado en vez de `CheckCircle` mientras `isSubmitting`.
+Nota: el "no-scroll app-shell" estricto de Fase 3 ya se había relajado (decisión Diego: usar el espacio,
+contenido con `overflow-auto`) → NO se persiguió; el footer fijo se logra con el flex-col del main.
+
+**PROXIMA SESIÓN: tras OK visual de Diego (Fase 2+3) → Fase 4 (remover VisitBooking huérfano +
+verificar reagendar intacto por el insert-split + QA en vivo de los 3 paths: visit-engine ICP,
+single-doctor con cliente real, duration sin servicios).**
 
 ---
 
