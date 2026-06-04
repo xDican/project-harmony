@@ -305,40 +305,24 @@ export default function NuevaCita() {
         </div>
       </div>
 
-      {/* ===== Footer sticky — profesional + total estimado + Agendar =====
-          Móvil: resumen (profesional · total) arriba + botón full-width abajo.
-          Desktop: resumen a la izquierda, botón a la derecha. */}
+      {/* ===== Footer sticky — profesional asignado + Agendar =====
+          Móvil: profesional arriba (al elegir fecha y hora) + botón full-width abajo.
+          Desktop: profesional a la izquierda, botón a la derecha. */}
       <footer className="shrink-0 border-t bg-card">
         <div className="mx-auto max-w-6xl px-4 py-3 md:px-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            {/* Resumen (profesional + total). Mobile: filas etiqueta→valor alineadas; no
-                aparece hasta elegir fecha y hora. Desktop (lg+): siempre, en columnas. */}
+            {/* Resumen — solo profesional asignado (sin total). Mobile: aparece al
+                elegir fecha y hora. Desktop (lg+): siempre. */}
             <div
               className={cn(
-                'gap-2 md:gap-10',
-                c.selectedDate && c.selectedStart
-                  ? 'flex flex-col md:flex-row md:items-end'
-                  : 'hidden lg:flex lg:flex-row lg:items-end',
+                'min-w-0 items-center',
+                c.selectedDate && c.selectedStart ? 'flex' : 'hidden lg:flex',
               )}
             >
-              {/* Profesional */}
-              <div className="flex items-center justify-between gap-3 md:block md:gap-0">
-                <span className="text-xs text-muted-foreground">
-                  Profesional{c.chain.length > 1 ? 'es' : ''} asignado{c.chain.length > 1 ? 's' : ''}
-                </span>
-                {c.selectedStart && c.chain.length > 0 ? (
-                  <ProfesionalSummary composer={c} labelFor={labelFor} />
-                ) : (
-                  <span className="text-sm font-medium text-muted-foreground">Por asignar</span>
-                )}
-              </div>
-
-              {/* Total estimado (solo con servicios) */}
-              {showServices && (
-                <div className="flex items-center justify-between gap-3 md:block md:gap-0">
-                  <span className="text-xs text-muted-foreground">Total estimado</span>
-                  <span className="text-base font-bold">{fmtMoney(c.totalPrice)}</span>
-                </div>
+              {c.selectedStart && c.chain.length > 0 ? (
+                <ProfesionalSummary composer={c} labelFor={labelFor} />
+              ) : (
+                <span className="text-sm text-muted-foreground">Profesional asignado · Por asignar</span>
               )}
             </div>
 
@@ -687,15 +671,22 @@ function ProfesionalSummary({
   const canChange = c.chain.some((p) => p.freeDoctorIds.length > 1);
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="flex items-center gap-1.5 text-sm font-medium">
-        {single ? labelFor(c.chain[0].doctorId) : `${c.chain.length} profesionales`}
-        {isAuto && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
-            <Sparkles className="h-3 w-3" /> Auto
-          </span>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="text-sm">
+        {single ? (
+          <>
+            <span className="text-muted-foreground">Profesional asignado </span>
+            <span className="font-medium">{labelFor(c.chain[0].doctorId)}</span>
+          </>
+        ) : (
+          <span className="font-medium">{c.chain.length} profesionales asignados</span>
         )}
       </span>
+      {isAuto && (
+        <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
+          <Sparkles className="h-3 w-3" /> Auto
+        </span>
+      )}
       {isAuto && (canChange || !single) && (
         <Popover>
           <PopoverTrigger asChild>
