@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-  CheckCircle, Loader2, Bell, Plus, X, ArrowUp, ArrowDown, Sparkles, CalendarClock,
+  CheckCircle, Loader2, Bell, Plus, X, ArrowUp, ArrowDown, Sparkles, CalendarClock, Calendar, Pencil,
 } from 'lucide-react';
 import MainLayout from '@/components/MainLayout';
 import PatientSearch from '@/components/PatientSearch';
@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { toast } from '@/hooks/use-toast';
 import { cn, formatPhoneInput, formatPhoneForStorage } from '@/lib/utils';
 import { useAppointmentComposer } from '@/hooks/useAppointmentComposer';
@@ -57,9 +58,6 @@ export default function NuevaCita() {
 
   const labelFor = (id: string | null): string =>
     id ? (c.doctorsDict[id]?.label ?? c.selectedDoctor?.name ?? '—') : '—';
-
-  const morning = c.starts.filter((t) => Number(t.split(':')[0]) < 12);
-  const afternoon = c.starts.filter((t) => Number(t.split(':')[0]) >= 12);
 
   const showServices = c.path !== 'duration';
   const multiService = c.maxItems > 1;
@@ -133,17 +131,6 @@ export default function NuevaCita() {
       toast({ variant: 'destructive', title: 'Error al agendar', description: e.message || 'Intenta nuevamente.' });
     }
   };
-
-  // Hint de la zona de fecha bloqueada
-  const dateBlocked =
-    (c.path === 'duration' && (!c.selectedDoctor))
-    || (c.path !== 'duration' && c.items.length === 0)
-    || (c.requiresDoctorSelection && !c.selectedDoctor);
-  const dateHint = c.requiresDoctorSelection && !c.selectedDoctor
-    ? 'Selecciona un profesional para ver disponibilidad'
-    : c.path === 'duration'
-      ? 'Selecciona una duración para ver disponibilidad'
-      : 'Selecciona un servicio para ver disponibilidad';
 
   // Hint del siguiente paso pendiente (footer): guía cuando "Agendar" está
   // deshabilitado, en el mismo orden visual del flujo.
@@ -279,84 +266,17 @@ export default function NuevaCita() {
             </section>
           </div>
 
-          {/* ===== Columna derecha — cuándo (un solo cuadro) ===== */}
-          <div>
+          {/* ===== Columna derecha — cuándo (desktop: inline; mobile: drawer) ===== */}
+          {/* Desktop: el panel va inline en la 2ª columna (sin cambios visuales). */}
+          <div className="hidden lg:block">
             <section className="rounded-xl border bg-card p-4">
               <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
-
-              {dateBlocked ? (
-                <div className="rounded-lg border border-dashed bg-muted/30 p-10 text-center">
-                  <CalendarClock className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
-                  <p className="text-sm font-medium text-muted-foreground">{dateHint}</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <MonthGrid
-                    monthAnchor={c.monthAnchor}
-                    days={c.monthDays}
-                    daysMap={c.daysMap}
-                    selectedDate={c.selectedDate}
-                    onSelect={c.setSelectedDate}
-                    canGoPrev={c.canGoPrev}
-                    onPrev={c.goPrevMonth}
-                    onNext={c.goNextMonth}
-                    isLoading={c.isLoadingDays || Object.keys(c.daysMap).length === 0}
-                  />
-                  {c.daysError && (
-                    <p className="text-xs text-destructive">{c.daysError}. Probá otro mes.</p>
-                  )}
-
-                  <Separator />
-
-                  {/* Horarios Mañana / Tarde */}
-                  <div>
-                    <p className="mb-2 text-sm font-medium">
-                      {c.selectedDate
-                        ? `Horario — ${format(c.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
-                        : 'Horario'}
-                    </p>
-                    {!c.selectedDate ? (
-                      <p className="py-4 text-center text-sm italic text-muted-foreground">
-                        Selecciona un día en el calendario
-                      </p>
-                    ) : c.isLoadingSlots ? (
-                      <div className="flex items-center justify-center py-6">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : c.starts.length === 0 ? (
-                      <p className="py-4 text-center text-sm text-muted-foreground">
-                        {c.slotsReason ?? 'No hay horarios disponibles para esta fecha'}
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {[{ label: 'Mañana', times: morning }, { label: 'Tarde', times: afternoon }]
-                          .filter((g) => g.times.length > 0)
-                          .map((g) => (
-                            <div key={g.label}>
-                              <p className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">{g.label}</p>
-                              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-                                {g.times.map((t) => (
-                                  <Button
-                                    key={t}
-                                    type="button"
-                                    size="sm"
-                                    variant={c.selectedStart === t ? 'default' : 'outline'}
-                                    onClick={() => c.setSelectedStart(t)}
-                                    className={cn('font-mono', c.selectedStart === t && 'ring-2 ring-primary ring-offset-1')}
-                                  >
-                                    {to12h(t)}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              <DateTimePanel composer={c} />
             </section>
           </div>
+
+          {/* Mobile: tarjeta resumen tappable que abre el calendario en un bottom-sheet. */}
+          <MobileDateTime composer={c} />
         </div>
       </div>
 
@@ -429,6 +349,175 @@ export default function NuevaCita() {
         </DialogContent>
       </Dialog>
     </MainLayout>
+  );
+}
+
+type Composer = ReturnType<typeof useAppointmentComposer>;
+
+/**
+ * Compuerta de la zona de fecha: si falta el insumo previo (profesional/servicio/
+ * duración) no se puede mostrar disponibilidad. Centralizado para que el panel
+ * inline (desktop) y la tarjeta del drawer (mobile) usen el mismo criterio.
+ */
+function dateGate(c: Composer): { blocked: boolean; hint: string } {
+  const blocked =
+    (c.path === 'duration' && !c.selectedDoctor)
+    || (c.path !== 'duration' && c.items.length === 0)
+    || (c.requiresDoctorSelection && !c.selectedDoctor);
+  const hint = c.requiresDoctorSelection && !c.selectedDoctor
+    ? 'Selecciona un profesional para ver disponibilidad'
+    : c.path === 'duration'
+      ? 'Selecciona una duración para ver disponibilidad'
+      : 'Selecciona un servicio para ver disponibilidad';
+  return { blocked, hint };
+}
+
+/**
+ * DateTimePanel — calendario mensual + horarios Mañana/Tarde. Mismo cuerpo que se
+ * usaba inline en la columna derecha; ahora reutilizable para renderizar tanto
+ * inline (desktop) como dentro del bottom-sheet (mobile).
+ */
+function DateTimePanel({ composer: c }: { composer: Composer }) {
+  const { blocked, hint } = dateGate(c);
+  const morning = c.starts.filter((t) => Number(t.split(':')[0]) < 12);
+  const afternoon = c.starts.filter((t) => Number(t.split(':')[0]) >= 12);
+
+  if (blocked) {
+    return (
+      <div className="rounded-lg border border-dashed bg-muted/30 p-10 text-center">
+        <CalendarClock className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
+        <p className="text-sm font-medium text-muted-foreground">{hint}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <MonthGrid
+        monthAnchor={c.monthAnchor}
+        days={c.monthDays}
+        daysMap={c.daysMap}
+        selectedDate={c.selectedDate}
+        onSelect={c.setSelectedDate}
+        canGoPrev={c.canGoPrev}
+        onPrev={c.goPrevMonth}
+        onNext={c.goNextMonth}
+        isLoading={c.isLoadingDays || Object.keys(c.daysMap).length === 0}
+      />
+      {c.daysError && (
+        <p className="text-xs text-destructive">{c.daysError}. Probá otro mes.</p>
+      )}
+
+      <Separator />
+
+      {/* Horarios Mañana / Tarde */}
+      <div>
+        <p className="mb-2 text-sm font-medium">
+          {c.selectedDate
+            ? `Horario — ${format(c.selectedDate, "EEEE d 'de' MMMM", { locale: es })}`
+            : 'Horario'}
+        </p>
+        {!c.selectedDate ? (
+          <p className="py-4 text-center text-sm italic text-muted-foreground">
+            Selecciona un día en el calendario
+          </p>
+        ) : c.isLoadingSlots ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : c.starts.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            {c.slotsReason ?? 'No hay horarios disponibles para esta fecha'}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {[{ label: 'Mañana', times: morning }, { label: 'Tarde', times: afternoon }]
+              .filter((g) => g.times.length > 0)
+              .map((g) => (
+                <div key={g.label}>
+                  <p className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">{g.label}</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                    {g.times.map((t) => (
+                      <Button
+                        key={t}
+                        type="button"
+                        size="sm"
+                        variant={c.selectedStart === t ? 'default' : 'outline'}
+                        onClick={() => c.setSelectedStart(t)}
+                        className={cn('font-mono', c.selectedStart === t && 'ring-2 ring-primary ring-offset-1')}
+                      >
+                        {to12h(t)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MobileDateTime — solo mobile (`lg:hidden`). Reemplaza el calendario inline por una
+ * tarjeta-resumen tappable; al tocarla se abre un bottom-sheet con el DateTimePanel.
+ * Resuelve el problema de que el calendario + slots ocupaban ~2 pantallas de scroll.
+ */
+function MobileDateTime({ composer: c }: { composer: Composer }) {
+  const [open, setOpen] = useState(false);
+  const { blocked, hint } = dateGate(c);
+  const hasSel = Boolean(c.selectedDate && c.selectedStart);
+
+  return (
+    <section className="lg:hidden rounded-xl border bg-card p-4">
+      <Label className="text-base font-semibold mb-3 block">3. Fecha y hora</Label>
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerTrigger asChild>
+          <button
+            type="button"
+            disabled={blocked}
+            className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Calendar className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              {hasSel ? (
+                <>
+                  <span className="block text-sm font-medium capitalize">
+                    {format(c.selectedDate!, "EEE d 'de' MMM", { locale: es })} · {to12h(c.selectedStart!)}
+                  </span>
+                  {c.chain.length > 0 && (
+                    <span className="block text-xs text-muted-foreground">
+                      Duración total: {fmtDuration(c.totalDuration)}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="block text-sm text-muted-foreground">
+                  {blocked ? hint : 'Toca para elegir fecha y hora'}
+                </span>
+              )}
+            </span>
+            {!blocked && <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />}
+          </button>
+        </DrawerTrigger>
+        <DrawerContent className="max-h-[92vh]">
+          <DrawerHeader className="pb-2 text-left">
+            <DrawerTitle>Fecha y hora</DrawerTitle>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-4 pb-2">
+            <DateTimePanel composer={c} />
+          </div>
+          <DrawerFooter>
+            <Button onClick={() => setOpen(false)} disabled={!hasSel} size="lg">
+              {hasSel ? 'Listo' : 'Elegí fecha y horario'}
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </section>
   );
 }
 
