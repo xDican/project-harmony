@@ -12,7 +12,7 @@ import {
   resolveVisitContext,
 } from "../_shared/availability.ts";
 
-const BUILD = "get-visit-slots@2026-06-03_motor_fase5_v1";
+const BUILD = "get-visit-slots@2026-06-05_par1";
 const MAX_SLOTS = 40; // cap de inicios devueltos (UX + payload)
 
 const reqSchema = z.object({
@@ -59,25 +59,28 @@ Deno.serve(async (req) => {
     if (ctx.emptyReason) return jsonResponse(200, { ok: true, slots: [], reason: ctx.emptyReason, build: BUILD });
     const { procResolved, distinctSvcIds, svcById, allDoctorIds, doctorsDict } = ctx;
 
-    // Estado del dia (citas externas) batcheado una vez
-    const state = await loadVisitDayState(supabase, {
-      organizationId,
-      date,
-      doctorIds: allDoctorIds,
-      serviceTypeIds: distinctSvcIds,
-    });
+    // Estado del dia (citas externas) batcheado + carga por doctor (para asignar el
+    // menos cargado) en paralelo: la query de carga no depende de `state`. Init de
+    // doctorLoad en orden de allDoctorIds (sin cambio de output).
+    const [state, loadRes] = await Promise.all([
+      loadVisitDayState(supabase, {
+        organizationId,
+        date,
+        doctorIds: allDoctorIds,
+        serviceTypeIds: distinctSvcIds,
+      }),
+      supabase
+        .from("appointments")
+        .select("doctor_id")
+        .eq("organization_id", organizationId)
+        .eq("date", date)
+        .in("doctor_id", allDoctorIds)
+        .not("status", "in", '("cancelled","canceled","cancelada")'),
+    ]);
 
-    // Carga por doctor en la fecha (para asignar el menos cargado)
     const doctorLoad: Record<string, number> = {};
     for (const id of allDoctorIds) doctorLoad[id] = 0;
-    const { data: loadRows } = await supabase
-      .from("appointments")
-      .select("doctor_id")
-      .eq("organization_id", organizationId)
-      .eq("date", date)
-      .in("doctor_id", allDoctorIds)
-      .not("status", "in", '("cancelled","canceled","cancelada")');
-    for (const r of loadRows ?? []) {
+    for (const r of loadRes.data ?? []) {
       const id = (r as any).doctor_id;
       doctorLoad[id] = (doctorLoad[id] ?? 0) + 1;
     }

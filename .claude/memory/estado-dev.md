@@ -7,28 +7,70 @@
 
 ---
 
-## ⏭️ PRÓXIMA SESIÓN — Optimización tiempos de carga (calendario/horarios) — PLANIFICADO 5 Jun, NO arrancado
+## ✅ Optimización tiempos de carga (calendario/horarios) — CASO #1 ENTREGADO + EN PROD 5 Jun
 
-**Plan completo:** `.claude/plans/optimizacion-tiempos-carga-disponibilidad.md`
+**Plan:** `.claude/plans/optimizacion-tiempos-carga-disponibilidad.md`
 
-Diego siente que el calendario/horarios de "Nueva Cita" "toma bastante tiempo". Diagnóstico
-validado: `_shared/availability.ts` hace ~20 round-trips DB **en serie** (loops por doctor/
-servicio en `loadVisitDayState`/`loadVisitRangeState`, 3 queries en serie en
-`resolveVisitContext`, 2 en `loadCandidateRecipe`). Plan en 3 casos:
-- **#1 Paralelizar el motor con `Promise.all`** (behavior-preserving, output byte-idéntico) —
-  6 sub-pasos de menor→mayor riesgo (loadCandidateRecipe → get-visit-slots index →
-  getAvailableSlotsForDate → loadVisitDayState → loadVisitRangeState → resolveVisitContext).
-  **Empezar por aquí.** ~4-5h (1 sesión). La verificación A/B (fechas futuras → neutraliza
-  `DateTime.now()`, comparar JSON antes/después) es lo más caro y NO-negociable.
-- **#2 Logs de timing** (`Date.now()` + `BUILD` bump + campo `timingMs` debug-gated) — ~30-45
-  min, mismo deploy, da baseline y detecta si el *cold start* domina.
-- **#3 Caché React Query** en `useAppointmentComposer` (infra ya existe, nadie usa `useQuery`
-  aún) — opcional, decidir con números del #2. staleTime corto + invalidar tras agendar.
-  Verificado que el 409 de `create-appointment` evita doble-reserva → caché es seguro.
+**Decisión de método (Diego 5 Jun): "medir primero".** Antes de tocar código se midió wall-clock
+(cold vs warm) de las 4 EFs sobre prod (fechas futuras, anon key). Hallazgo: las llamadas
+**calientes** ya eran lentísimas (get-visit-days 2430ms, get-visit-slots 1871ms warm) → **NO es
+cold-start, es trabajo DB serial**. Esto validó el #1 y volvió **redundante el Caso #2** (logs
+timingMs): el wall-clock warm ya aísla el server-side (la red es constante, se cancela en el A/B).
 
-Decisión Diego: documentar y parar (no arrancar para no quedarse sin tokens a media tarea).
-**Fuera de alcance #1:** loops propios de `bot-handler` (requieren E2E del bot) + dedupe de
-`get-available-days`.
+**Caso #1 — paralelización del motor con `Promise.all` (behavior-preserving) — HECHO.** Los 6
+puntos del plan, en `_shared/availability.ts` (+`get-visit-slots/index.ts`):
+1. `loadCandidateRecipe` — 2 queries (buffer + receta) en paralelo.
+2. `get-visit-slots/index.ts` — `loadVisitDayState` + query `doctorLoad` en paralelo.
+3. `getAvailableSlotsForDate` — `loadSchedules` primero (early-return intacto), luego 2 cadenas
+   independientes (receta→consumers / cowork→appts) en `Promise.all`.
+4. `loadVisitDayState` — 2 niveles de `Promise.all` (doctores map + servicios map; luego appts +
+   consumers). Reducciones de Sets/Maps iteran el array de **input** (no orden de resolución).
+5. `loadVisitRangeState` — mismo patrón a nivel rango; guards `allCoworkIds`/`recipeResourceIds`
+   preservados con `Promise.resolve({data:[]})`.
+6. `resolveVisitContext` — 3 queries (svc/doctores/skills) en paralelo + early-returns replicados
+   en orden `svcErr→org-check→docErr` (trabajo DB extra solo en paths de error raros).
+
+**Deploy:** vía **CLI `npx supabase functions deploy`** (auth de Diego **cacheada** → el CLI corre
+con `npx -y supabase@latest`, NO hace falta deno ni access-token; el CLI auto-bundlea `_shared`).
+Desplegadas las 4: get-available-slots, get-available-days, get-visit-slots, get-visit-days. BUILD
+bumpeado (`@2026-06-05_par1` / `v1.3.0_par1`).
+
+**Verificación A/B byte-idéntico (lo no-negociable): PASÓ.** 7 casos con fechas futuras (neutraliza
+`now()`), JSON antes/después idéntico (normalizando solo el campo `build`): visit-slots 1proc +
+2proc (resource-aware, receta Consulta general→Cabina 1), visit-days rango 14d, available-slots base
++ resource-aware, available-days mes, y path fatal 400 (servicio de otra org). Output del motor
+preservado exactamente.
+
+**Resultado (wall-clock warm, org prueba OrionCare 2 doctores skilled):**
+| Función | antes | después | mejora |
+|---|---|---|---|
+| get-visit-days (calendario ICP) | 2430ms | **820ms** | **~3x** |
+| get-visit-slots (horarios ICP) | 1871ms | **804ms** | **~2.3x** |
+| get-available-days (single-doctor) | 949ms | 844ms | ~−11% |
+| get-available-slots (single-doctor) | 949ms | 873ms | ~−8% |
+
+El path ICP de "Nueva Cita" (get-visit-*) es el que mejora fuerte (era la queja de Diego). El floor
+~800ms warm incluye ~130ms de RTT de red del medidor → server-side ~670ms (de ~2300ms). Las
+available-* mejoran poco: en modo base la cadena de receta es no-op (poco que paralelizar).
+
+**PENDIENTE / follow-ups:**
+- **QA visual de Diego (logueado):** abrir "Nueva Cita" multi-recurso y confirmar que se siente más
+  rápido + calendario/horarios correctos. El A/B prueba output idéntico en el read path; agendar
+  (create-appointment/create-visit) NO se tocó.
+- **bot-handler REDESPLEGADO 5 Jun** (Diego pidió esta opción): ya corre con la `getAvailableSlotsForDate`
+  paralela. Bundle OK (7 _shared incluyendo availability.ts). Smoke de boot: POST `{}` → 401 estructurado
+  propio (`UNAUTHORIZED_NO_AUTH_HEADER`) en 135ms = módulo carga y ejecuta; logs sin 500/boot-error.
+  PENDIENTE: smoke conversacional real del bot (un mensaje al Demo Bot +50493133496) — bajo riesgo,
+  el output del motor es byte-idéntico.
+- **Confirmación server-side (logs `execution_time_ms`, excluye red del medidor):** get-visit-days
+  v1→v2 `~2100ms → ~680ms` (~3x); get-visit-slots v3→v4 `~1800ms → ~700ms` (~2.5x).
+- **Caso #3 (caché React Query en `useAppointmentComposer`)** — OPCIONAL, decidir con estos números.
+  Atacaría la re-navegación (volver a un mes/fecha ya visto = instantáneo), no el primer fetch. El
+  409 de `create-appointment` evita doble-reserva → caché seguro. infra ya existe (QueryClient en
+  App.tsx, nadie usa `useQuery` aún).
+- **Fuera de alcance #1 (deferido):** loops propios de `bot-handler` (getCombinedSlotsForDate etc.,
+  requieren E2E del bot) + queries inline seriales de `get-available-days/index.ts` (no usa
+  getAvailableSlotsForDate; su ~840ms es su propio código — refactor aparte) + dedupe de get-available-days.
 
 ---
 

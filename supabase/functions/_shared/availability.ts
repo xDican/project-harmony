@@ -229,19 +229,21 @@ export async function loadCandidateRecipe(
   supabase: SupabaseClient,
   serviceTypeId: string,
 ): Promise<{ buffer: number; recipe: RecipeItem[] }> {
-  const { data: stRow } = await supabase
-    .from("service_types")
-    .select("buffer_minutes")
-    .eq("id", serviceTypeId)
-    .maybeSingle();
-  const buffer = (stRow as any)?.buffer_minutes ?? 0;
+  // Las 2 queries dependen solo de serviceTypeId (no entre si) → paralelas.
+  const [stRes, srRes] = await Promise.all([
+    supabase
+      .from("service_types")
+      .select("buffer_minutes")
+      .eq("id", serviceTypeId)
+      .maybeSingle(),
+    supabase
+      .from("service_resources")
+      .select("resource_id, quantity_required, resources(quantity, is_active)")
+      .eq("service_type_id", serviceTypeId),
+  ]);
+  const buffer = (stRes.data as any)?.buffer_minutes ?? 0;
 
-  const { data: srRows } = await supabase
-    .from("service_resources")
-    .select("resource_id, quantity_required, resources(quantity, is_active)")
-    .eq("service_type_id", serviceTypeId);
-
-  const recipe: RecipeItem[] = (srRows || [])
+  const recipe: RecipeItem[] = (srRes.data || [])
     .filter((r: any) => r.resources?.is_active)
     .map((r: any) => ({
       resourceId: r.resource_id,
@@ -319,53 +321,59 @@ export async function getAvailableSlotsForDate(
 
   const resourceAware = !!(serviceTypeId && organizationId);
 
-  // Receta + buffer del candidato (solo en modo resource-aware)
-  let candidateBuffer = 0;
-  let recipe: RecipeItem[] = [];
-  let consumersByResource = new Map<string, ResourceConsumer[]>();
-  if (resourceAware) {
-    const loaded = await loadCandidateRecipe(supabase, serviceTypeId!);
-    candidateBuffer = loaded.buffer;
-    recipe = loaded.recipe;
-    consumersByResource = await loadResourceConsumers(
-      supabase,
-      organizationId!,
-      date,
-      recipe.map((r) => r.resourceId),
-    );
-  }
-
-  // Footprint profesional (citas de co-working). En modo resource-aware se aplica
-  // el buffer del servicio de cada cita; en modo base es la duracion cruda (= 2A).
-  const appointmentDoctorIds = await loadCoworkDoctorIds(supabase, doctorId, calendarId);
-  const occupiedIntervals: OccupiedInterval[] = resourceAware
-    ? ((
-        await supabase
+  // Dos cadenas INDEPENDIENTES (cada una secuencial internamente) en paralelo:
+  //  A) receta+buffer del candidato → consumo de recursos (solo resource-aware).
+  //  B) doctores co-working → sus citas del dia (footprint profesional). En modo
+  //     resource-aware aplica el buffer del servicio de cada cita; en base, duracion
+  //     cruda (= 2A). El orden del array no importa (overlap via .some()).
+  const [recipeChain, occupiedIntervals] = await Promise.all([
+    (async (): Promise<{
+      candidateBuffer: number;
+      recipe: RecipeItem[];
+      consumersByResource: Map<string, ResourceConsumer[]>;
+    }> => {
+      if (!resourceAware) {
+        return { candidateBuffer: 0, recipe: [], consumersByResource: new Map() };
+      }
+      const loaded = await loadCandidateRecipe(supabase, serviceTypeId!);
+      const consumers = await loadResourceConsumers(
+        supabase,
+        organizationId!,
+        date,
+        loaded.recipe.map((r) => r.resourceId),
+      );
+      return { candidateBuffer: loaded.buffer, recipe: loaded.recipe, consumersByResource: consumers };
+    })(),
+    (async (): Promise<OccupiedInterval[]> => {
+      const appointmentDoctorIds = await loadCoworkDoctorIds(supabase, doctorId, calendarId);
+      if (resourceAware) {
+        const { data } = await supabase
           .from("appointments")
           .select("time, duration_minutes, service_types(buffer_minutes)")
           .in("doctor_id", appointmentDoctorIds)
           .eq("date", date)
-          .not("status", "in", CANCELLED_STATUSES)
-      ).data || []
-      ).map((apt: any) => {
-        const start = buildDateTime(date, apt.time);
-        const buf = apt.service_types?.buffer_minutes ?? 0;
-        const end = start.plus({ minutes: (apt.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
-        return { startMs: start.toMillis(), endMs: end.toMillis() };
-      })
-    : ((
-        await supabase
-          .from("appointments")
-          .select("time, duration_minutes")
-          .in("doctor_id", appointmentDoctorIds)
-          .eq("date", date)
-          .not("status", "in", CANCELLED_STATUSES)
-      ).data || []
-      ).map((apt: any) => {
+          .not("status", "in", CANCELLED_STATUSES);
+        return (data || []).map((apt: any) => {
+          const start = buildDateTime(date, apt.time);
+          const buf = apt.service_types?.buffer_minutes ?? 0;
+          const end = start.plus({ minutes: (apt.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
+          return { startMs: start.toMillis(), endMs: end.toMillis() };
+        });
+      }
+      const { data } = await supabase
+        .from("appointments")
+        .select("time, duration_minutes")
+        .in("doctor_id", appointmentDoctorIds)
+        .eq("date", date)
+        .not("status", "in", CANCELLED_STATUSES);
+      return (data || []).map((apt: any) => {
         const start = buildDateTime(date, apt.time);
         const end = start.plus({ minutes: apt.duration_minutes ?? DEFAULT_DURATION_MINUTES });
         return { startMs: start.toMillis(), endMs: end.toMillis() };
       });
+    })(),
+  ]);
+  const { candidateBuffer, recipe, consumersByResource } = recipeChain;
 
   // Predicado de capacidad de recursos (solo en modo resource-aware; recipe vacia → siempre ok)
   const resourceOk = (slotStartMs: number, slotEndMs: number): boolean => {
@@ -418,11 +426,26 @@ export async function loadVisitDayState(
   const { organizationId, date, doctorIds, serviceTypeIds } = params;
   const dayOfWeek = DateTime.fromISO(date).weekday % 7;
 
+  // Nivel 0: cargas estaticas independientes en paralelo — por doctor
+  // (horarios + co-working) y por servicio (receta). Las reducciones de abajo
+  // iteran doctorIds/serviceTypeIds (no el orden de resolucion) para que
+  // [...allCoworkIds]/[...recipeResourceIds] queden identicos al camino serial.
+  const [doctorLoads, serviceLoads] = await Promise.all([
+    Promise.all(doctorIds.map((docId) =>
+      Promise.all([
+        loadSchedules(supabase, docId, dayOfWeek),
+        loadCoworkDoctorIds(supabase, docId),
+      ]).then(([schedules, cowork]) => ({ docId, schedules, cowork })),
+    )),
+    Promise.all(serviceTypeIds.map((svcId) =>
+      loadCandidateRecipe(supabase, svcId).then((loaded) => ({ svcId, loaded })),
+    )),
+  ]);
+
   const windowsByDoctor = new Map<string, MsWindow[]>();
   const coworkByDoctor = new Map<string, string[]>();
   const allCoworkIds = new Set<string>();
-  for (const docId of doctorIds) {
-    const schedules = await loadSchedules(supabase, docId, dayOfWeek);
+  for (const { docId, schedules, cowork } of doctorLoads) {
     windowsByDoctor.set(
       docId,
       schedules.map((s) => ({
@@ -430,28 +453,39 @@ export async function loadVisitDayState(
         endMs: buildDateTime(date, s.end_time).toMillis(),
       })),
     );
-    const cowork = await loadCoworkDoctorIds(supabase, docId);
     coworkByDoctor.set(docId, cowork);
     for (const id of cowork) allCoworkIds.add(id);
   }
 
-  // Citas del dia de los doctores co-working (footprint = duracion + buffer del servicio)
+  const serviceMeta = new Map<string, { buffer: number; recipe: RecipeItem[] }>();
+  const recipeResourceIds = new Set<string>();
+  for (const { svcId, loaded } of serviceLoads) {
+    serviceMeta.set(svcId, loaded);
+    for (const r of loaded.recipe) recipeResourceIds.add(r.resourceId);
+  }
+
+  // Nivel 1: citas externas del dia (footprint) + consumo de recursos, en paralelo
+  // (ambas dependen solo de los Sets ya construidos arriba).
+  const [apptsRes, consumersByResource] = await Promise.all([
+    allCoworkIds.size > 0
+      ? supabase
+          .from("appointments")
+          .select("doctor_id, time, duration_minutes, service_types(buffer_minutes)")
+          .in("doctor_id", [...allCoworkIds])
+          .eq("date", date)
+          .not("status", "in", CANCELLED_STATUSES)
+      : Promise.resolve({ data: [] as any[] }),
+    loadResourceConsumers(supabase, organizationId, date, [...recipeResourceIds]),
+  ]);
+
   const occByDoctorRaw = new Map<string, OccupiedInterval[]>();
-  if (allCoworkIds.size > 0) {
-    const { data: appts } = await supabase
-      .from("appointments")
-      .select("doctor_id, time, duration_minutes, service_types(buffer_minutes)")
-      .in("doctor_id", [...allCoworkIds])
-      .eq("date", date)
-      .not("status", "in", CANCELLED_STATUSES);
-    for (const apt of appts || []) {
-      const a = apt as any;
-      const start = buildDateTime(date, a.time);
-      const buf = a.service_types?.buffer_minutes ?? 0;
-      const end = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
-      if (!occByDoctorRaw.has(a.doctor_id)) occByDoctorRaw.set(a.doctor_id, []);
-      occByDoctorRaw.get(a.doctor_id)!.push({ startMs: start.toMillis(), endMs: end.toMillis() });
-    }
+  for (const apt of apptsRes.data || []) {
+    const a = apt as any;
+    const start = buildDateTime(date, a.time);
+    const buf = a.service_types?.buffer_minutes ?? 0;
+    const end = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
+    if (!occByDoctorRaw.has(a.doctor_id)) occByDoctorRaw.set(a.doctor_id, []);
+    occByDoctorRaw.get(a.doctor_id)!.push({ startMs: start.toMillis(), endMs: end.toMillis() });
   }
   const occupiedByDoctor = new Map<string, OccupiedInterval[]>();
   for (const docId of doctorIds) {
@@ -463,16 +497,6 @@ export async function loadVisitDayState(
     }
     occupiedByDoctor.set(docId, merged);
   }
-
-  // Buffer + receta por servicio; union de recursos para el mapa de consumo
-  const serviceMeta = new Map<string, { buffer: number; recipe: RecipeItem[] }>();
-  const recipeResourceIds = new Set<string>();
-  for (const svcId of serviceTypeIds) {
-    const loaded = await loadCandidateRecipe(supabase, svcId);
-    serviceMeta.set(svcId, loaded);
-    for (const r of loaded.recipe) recipeResourceIds.add(r.resourceId);
-  }
-  const consumersByResource = await loadResourceConsumers(supabase, organizationId, date, [...recipeResourceIds]);
 
   return { date, windowsByDoctor, occupiedByDoctor, consumersByResource, serviceMeta };
 }
@@ -624,25 +648,36 @@ export async function loadVisitRangeState(
 ): Promise<Map<string, VisitDayState>> {
   const { organizationId, dates, doctorIds, serviceTypeIds } = params;
 
-  // Receta + buffer por servicio (estatico); union de recursos para el consumo.
+  // Nivel 0: cargas estaticas independientes en paralelo — por servicio (receta) y
+  // por doctor (co-working + horarios de toda la semana). Las reducciones iteran
+  // serviceTypeIds/doctorIds (no el orden de resolucion) → [...recipeResourceIds]/
+  // [...allCoworkIds] identicos al camino serial.
+  const [serviceLoads, doctorLoads] = await Promise.all([
+    Promise.all(serviceTypeIds.map((svcId) =>
+      loadCandidateRecipe(supabase, svcId).then((loaded) => ({ svcId, loaded })),
+    )),
+    Promise.all(doctorIds.map((docId) =>
+      Promise.all([
+        loadCoworkDoctorIds(supabase, docId),
+        loadSchedulesAllDows(supabase, docId),
+      ]).then(([cowork, rows]) => ({ docId, cowork, rows })),
+    )),
+  ]);
+
   const serviceMeta = new Map<string, { buffer: number; recipe: RecipeItem[] }>();
   const recipeResourceIds = new Set<string>();
-  for (const svcId of serviceTypeIds) {
-    const loaded = await loadCandidateRecipe(supabase, svcId);
+  for (const { svcId, loaded } of serviceLoads) {
     serviceMeta.set(svcId, loaded);
     for (const r of loaded.recipe) recipeResourceIds.add(r.resourceId);
   }
 
-  // Co-working + horarios de toda la semana por doctor (estatico).
   const coworkByDoctor = new Map<string, string[]>();
   const allCoworkIds = new Set<string>();
   const schedByDoctorDow = new Map<string, Map<number, ScheduleWindow[]>>();
-  for (const docId of doctorIds) {
-    const cowork = await loadCoworkDoctorIds(supabase, docId);
+  for (const { docId, cowork, rows } of doctorLoads) {
     coworkByDoctor.set(docId, cowork);
     for (const id of cowork) allCoworkIds.add(id);
 
-    const rows = await loadSchedulesAllDows(supabase, docId);
     const byDow = new Map<number, ScheduleWindow[]>();
     for (const r of rows) {
       if (!byDow.has(r.day_of_week)) byDow.set(r.day_of_week, []);
@@ -656,57 +691,63 @@ export async function loadVisitRangeState(
   const minDate = sorted[0];
   const maxDate = sorted[sorted.length - 1];
 
+  // Nivel 1: las 2 queries de rango (citas externas + consumo de recursos) en
+  // paralelo. Guards preservados: si el Set esta vacio NO se construye la query
+  // (Promise.resolve({data:[]})), identico al camino serial.
+  const [apptsRes, dayApptsRes] = await Promise.all([
+    allCoworkIds.size > 0
+      ? supabase
+          .from("appointments")
+          .select("doctor_id, date, time, duration_minutes, service_types(buffer_minutes)")
+          .in("doctor_id", [...allCoworkIds])
+          .gte("date", minDate)
+          .lte("date", maxDate)
+          .not("status", "in", CANCELLED_STATUSES)
+      : Promise.resolve({ data: [] as any[] }),
+    recipeResourceIds.size > 0
+      ? supabase
+          .from("appointments")
+          .select("date, time, duration_minutes, service_types(buffer_minutes, service_resources(resource_id, quantity_required))")
+          .eq("organization_id", organizationId)
+          .gte("date", minDate)
+          .lte("date", maxDate)
+          .not("status", "in", CANCELLED_STATUSES)
+          .not("service_type_id", "is", null)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
   // Citas externas (footprint = duracion + buffer del servicio) de los co-workers, por fecha.
   const occByDateDoctor = new Map<string, Map<string, OccupiedInterval[]>>();
-  if (allCoworkIds.size > 0) {
-    const { data: appts } = await supabase
-      .from("appointments")
-      .select("doctor_id, date, time, duration_minutes, service_types(buffer_minutes)")
-      .in("doctor_id", [...allCoworkIds])
-      .gte("date", minDate)
-      .lte("date", maxDate)
-      .not("status", "in", CANCELLED_STATUSES);
-    for (const apt of appts || []) {
-      const a = apt as any;
-      if (!dateSet.has(a.date)) continue;
-      const start = buildDateTime(a.date, a.time);
-      const buf = a.service_types?.buffer_minutes ?? 0;
-      const end = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
-      if (!occByDateDoctor.has(a.date)) occByDateDoctor.set(a.date, new Map());
-      const m = occByDateDoctor.get(a.date)!;
-      if (!m.has(a.doctor_id)) m.set(a.doctor_id, []);
-      m.get(a.doctor_id)!.push({ startMs: start.toMillis(), endMs: end.toMillis() });
-    }
+  for (const apt of apptsRes.data || []) {
+    const a = apt as any;
+    if (!dateSet.has(a.date)) continue;
+    const start = buildDateTime(a.date, a.time);
+    const buf = a.service_types?.buffer_minutes ?? 0;
+    const end = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf });
+    if (!occByDateDoctor.has(a.date)) occByDateDoctor.set(a.date, new Map());
+    const m = occByDateDoctor.get(a.date)!;
+    if (!m.has(a.doctor_id)) m.set(a.doctor_id, []);
+    m.get(a.doctor_id)!.push({ startMs: start.toMillis(), endMs: end.toMillis() });
   }
 
   // Consumo de recursos por fecha (citas del org que tocan algun recurso de las recetas).
   const consumersByDate = new Map<string, Map<string, ResourceConsumer[]>>();
-  if (recipeResourceIds.size > 0) {
-    const { data: dayAppts } = await supabase
-      .from("appointments")
-      .select("date, time, duration_minutes, service_types(buffer_minutes, service_resources(resource_id, quantity_required))")
-      .eq("organization_id", organizationId)
-      .gte("date", minDate)
-      .lte("date", maxDate)
-      .not("status", "in", CANCELLED_STATUSES)
-      .not("service_type_id", "is", null);
-    for (const apt of dayAppts || []) {
-      const a = apt as any;
-      if (!dateSet.has(a.date)) continue;
-      const st = a.service_types;
-      if (!st) continue;
-      const srList = st.service_resources || [];
-      const buf = st.buffer_minutes ?? 0;
-      const start = buildDateTime(a.date, a.time);
-      const startMs = start.toMillis();
-      const endMs = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf }).toMillis();
-      for (const sr of srList) {
-        if (!recipeResourceIds.has(sr.resource_id)) continue;
-        if (!consumersByDate.has(a.date)) consumersByDate.set(a.date, new Map());
-        const m = consumersByDate.get(a.date)!;
-        if (!m.has(sr.resource_id)) m.set(sr.resource_id, []);
-        m.get(sr.resource_id)!.push({ startMs, endMs, qty: sr.quantity_required });
-      }
+  for (const apt of dayApptsRes.data || []) {
+    const a = apt as any;
+    if (!dateSet.has(a.date)) continue;
+    const st = a.service_types;
+    if (!st) continue;
+    const srList = st.service_resources || [];
+    const buf = st.buffer_minutes ?? 0;
+    const start = buildDateTime(a.date, a.time);
+    const startMs = start.toMillis();
+    const endMs = start.plus({ minutes: (a.duration_minutes ?? DEFAULT_DURATION_MINUTES) + buf }).toMillis();
+    for (const sr of srList) {
+      if (!recipeResourceIds.has(sr.resource_id)) continue;
+      if (!consumersByDate.has(a.date)) consumersByDate.set(a.date, new Map());
+      const m = consumersByDate.get(a.date)!;
+      if (!m.has(sr.resource_id)) m.set(sr.resource_id, []);
+      m.get(sr.resource_id)!.push({ startMs, endMs, qty: sr.quantity_required });
     }
   }
 
@@ -784,14 +825,33 @@ export async function resolveVisitContext(
     procResolved: [], distinctSvcIds: [], svcById: new Map(), allDoctorIds: [], doctorsDict: {},
   };
 
-  // Servicios + duracion (request o service_types).
+  // Las 3 queries (servicios, profesionales del org, skill matrix) filtran por
+  // inputs del request — no por el resultado de servicios — → en paralelo. Los
+  // chequeos de error se replican en el MISMO orden que el camino serial
+  // (svcErr → org-check → docErr) para producir identico fatal/emptyReason.
+  // Unico efecto: en paths de error (raros) se hace trabajo DB extra, sin cambiar el output.
   const distinctSvcIds = [...new Set(procedures.map((p) => p.serviceTypeId))];
-  const { data: svcRows, error: svcErr } = await supabase
-    .from("service_types")
-    .select("id, display_name, duration_minutes, organization_id")
-    .in("id", distinctSvcIds);
-  if (svcErr) return { ...empty, fatal: { status: 500, error: "Error cargando servicios" } };
-  const svcById = new Map((svcRows ?? []).map((s: any) => [s.id, s]));
+  const [svcRes, docRes, skillRes] = await Promise.all([
+    supabase
+      .from("service_types")
+      .select("id, display_name, duration_minutes, organization_id")
+      .in("id", distinctSvcIds),
+    supabase
+      .from("doctors")
+      .select("id, name, prefix, user_id")
+      .eq("organization_id", organizationId)
+      .order("name", { ascending: true }),
+    supabase
+      .from("professional_services")
+      .select("doctor_id, service_type_id")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .in("service_type_id", distinctSvcIds),
+  ]);
+
+  // 1) Servicios + duracion (request o service_types).
+  if (svcRes.error) return { ...empty, fatal: { status: 500, error: "Error cargando servicios" } };
+  const svcById = new Map((svcRes.data ?? []).map((s: any) => [s.id, s]));
   for (const id of distinctSvcIds) {
     const s = svcById.get(id);
     if (!s || s.organization_id !== organizationId) {
@@ -799,22 +859,12 @@ export async function resolveVisitContext(
     }
   }
 
-  // Profesionales del org + skill matrix (fallback a todos si el servicio no tiene skills).
-  const { data: orgDoctors, error: docErr } = await supabase
-    .from("doctors")
-    .select("id, name, prefix, user_id")
-    .eq("organization_id", organizationId)
-    .order("name", { ascending: true });
-  if (docErr) return { ...empty, fatal: { status: 500, error: "Error cargando profesionales" } };
-  const allDoctors = (orgDoctors ?? []) as Array<any>;
+  // 2) Profesionales del org + skill matrix (fallback a todos si el servicio no tiene skills).
+  if (docRes.error) return { ...empty, fatal: { status: 500, error: "Error cargando profesionales" } };
+  const allDoctors = (docRes.data ?? []) as Array<any>;
   const docInfo = new Map(allDoctors.map((d) => [d.id, d]));
 
-  const { data: skillRows } = await supabase
-    .from("professional_services")
-    .select("doctor_id, service_type_id")
-    .eq("organization_id", organizationId)
-    .eq("is_active", true)
-    .in("service_type_id", distinctSvcIds);
+  const skillRows = skillRes.data;
   const skilledBySvc = new Map<string, string[]>();
   for (const s of skillRows ?? []) {
     const r = s as any;

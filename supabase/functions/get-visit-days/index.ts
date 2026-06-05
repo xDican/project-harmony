@@ -15,7 +15,7 @@ import {
   type ResolvedProcedure,
 } from "../_shared/availability.ts";
 
-const BUILD = "get-visit-days@2026-06-04_rediseno_fase0_v1";
+const BUILD = "get-visit-days@2026-06-05_par1";
 
 // Es a get-visit-slots lo que get-available-days es a get-available-slots: dado un
 // rango de dias (el week-strip de la UI), devuelve por dia si admite al menos un

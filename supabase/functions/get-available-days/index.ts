@@ -3,7 +3,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 import { enumerateSlots } from "../_shared/availability.ts";
 
-const BUILD = "get-available-days-v1.2.0";
+const BUILD = "get-available-days-v1.3.0_par1";
 const DEFAULT_TIMEZONE = "America/Tegucigalpa";
 
 const corsHeaders = {
