@@ -709,10 +709,14 @@ function ServiceConfigCard({
                     />
                     <Label
                       htmlFor={`${service.id}-${r.id}`}
-                      className="font-normal flex-1 cursor-pointer"
+                      className="font-normal flex-1 cursor-pointer inline-flex items-center gap-1.5 flex-wrap"
                     >
                       {r.display_name}
-                      <span className="text-muted-foreground ml-1.5 text-xs">
+                      <Badge variant="outline" className="font-normal text-[0.65rem]">
+                        {RESOURCE_TYPE_LABELS[r.resource_type as ResourceType] ??
+                          r.resource_type}
+                      </Badge>
+                      <span className="text-muted-foreground text-xs">
                         (cap. {r.quantity})
                       </span>
                     </Label>
