@@ -7,6 +7,51 @@
 
 ---
 
+## ⏭️ PRÓXIMA SESIÓN — Optimización tiempos de carga (calendario/horarios) — PLANIFICADO 5 Jun, NO arrancado
+
+**Plan completo:** `.claude/plans/optimizacion-tiempos-carga-disponibilidad.md`
+
+Diego siente que el calendario/horarios de "Nueva Cita" "toma bastante tiempo". Diagnóstico
+validado: `_shared/availability.ts` hace ~20 round-trips DB **en serie** (loops por doctor/
+servicio en `loadVisitDayState`/`loadVisitRangeState`, 3 queries en serie en
+`resolveVisitContext`, 2 en `loadCandidateRecipe`). Plan en 3 casos:
+- **#1 Paralelizar el motor con `Promise.all`** (behavior-preserving, output byte-idéntico) —
+  6 sub-pasos de menor→mayor riesgo (loadCandidateRecipe → get-visit-slots index →
+  getAvailableSlotsForDate → loadVisitDayState → loadVisitRangeState → resolveVisitContext).
+  **Empezar por aquí.** ~4-5h (1 sesión). La verificación A/B (fechas futuras → neutraliza
+  `DateTime.now()`, comparar JSON antes/después) es lo más caro y NO-negociable.
+- **#2 Logs de timing** (`Date.now()` + `BUILD` bump + campo `timingMs` debug-gated) — ~30-45
+  min, mismo deploy, da baseline y detecta si el *cold start* domina.
+- **#3 Caché React Query** en `useAppointmentComposer` (infra ya existe, nadie usa `useQuery`
+  aún) — opcional, decidir con números del #2. staleTime corto + invalidar tras agendar.
+  Verificado que el 409 de `create-appointment` evita doble-reserva → caché es seguro.
+
+Decisión Diego: documentar y parar (no arrancar para no quedarse sin tokens a media tarea).
+**Fuera de alcance #1:** loops propios de `bot-handler` (requieren E2E del bot) + dedupe de
+`get-available-days`.
+
+---
+
+## Sesión 5 Jun — cerrado
+- **Fase 4 rediseño Nueva Cita:** limpieza de código (removidos `VisitBooking.tsx` +
+  `combinedAvailability.ts` huérfanos), reagendar verificado intacto, `tsc` OK. Commit `2d38c58`.
+- **Bug badge Auto/Manual:** `ProfesionalSummary` ahora muestra "Manual" cuando hay override
+  del profesional (expone `suggestedDoctorId` en el chain). Commit `52fc666`.
+- **Badge tipo Equipo/Cabina** en editor de receta (`MotorConfigPanel`) — los equipos YA
+  estaban soportados end-to-end (resource_type + receta M2M); solo faltaba el badge. Commit `1024f13`.
+- **Reporte de navegación + prompt Stitch** (`docs/reporte-navegacion-plataforma.md` +
+  `docs/stitch-prompt-navegacion.md`): inventario de toda la plataforma para rediseñar la
+  navegación (sin commitear aún, decisión Diego). Hallazgo: **rutas huérfanas** — 4 stubs
+  muertos (`/admin/specialties`, `/admin/reports`, `/admin/files`, `/admin/settings` = solo
+  `<NotFound/>`), `/agenda-medico` (componente real sin link) y `/admin`→`AdminDashboard`
+  (sin link, posible reuso como hub de Administración). `/internal/activations` y
+  `/debug-whatsapp` son URL-only intencionales. Limpieza pendiente decisión Diego.
+- **Multi-servicio en el bot:** confirmado que el bot solo agenda 1 servicio (por diseño,
+  Fase 6 anti-scope-creep). El backend (get-visit-slots + create-visit) YA existe; falta solo
+  el flujo conversacional. DIFERIDO junto con NLP del bot (espera tener conversaciones a mano).
+
+---
+
 ## PRIORIDAD #1 — Motor de Agendamiento Multi-Recurso (arranca 2 Jun)
 
 **Plan completo:** `.claude/plans/motor-agendamiento-multirecurso.md`
