@@ -360,10 +360,21 @@ push → Diego revisa en Vercel desde el teléfono → siguiente. Desktop intact
   `RescheduleModal` (`isVisit`) solo se disparan con `visit_id` presente → las citas simples reagendan
   normal. Sin regresión.
 
-**PENDIENTE (Diego: "ajustes menores para más tarde", sin especificar aún) — solo QA en vivo, ya no código:**
-QA en vivo de los 3 paths (visit-engine ICP, single-doctor con cliente real, duration sin servicios) +
-OK visual de Diego en DESKTOP (todo el feedback fue mobile). Smoke de `get-visit-days` cuando se valide
-el strip. Estos requieren JWT/app logueada → los hace Diego.
+### QA EN VIVO COMPLETADO 5 Jun (Diego) — Fase 4 cerrada salvo 1 fix menor
+Diego pasó el QA de los 3 paths. **2 observaciones:**
+1. **Bug badge "Auto" — RESUELTO 5 Jun (`tsc` OK):** el badge ✨Auto del footer (`ProfesionalSummary`
+   en `NuevaCita.tsx`) se mostraba siempre en `visit-engine` sin reflejar el override manual del
+   profesional. Fix: se expone `suggestedDoctorId` en cada fila del `chain` (`useAppointmentComposer`)
+   y el componente compara `doctorId !== suggestedDoctorId` → badge "Manual" (gris) cuando hay override,
+   "Auto" (ámbar) cuando coincide con lo que sugirió el motor.
+2. **Multi-procedimiento con 1 solo médico — DIFERIDO (decisión Diego 5 Jun):** el path `single-doctor`
+   topa `maxItems=1` (no deja armar visita de varios procedimientos). El ICP multi-profesional NUNCA
+   cae en este path, así que no lo necesita; se difiere para no agregar un data-path nuevo
+   (single-doctor vía `get-visit-slots`) + su QA bajo feature freeze. Reabrir solo si aparece un cliente
+   de 1 solo médico que encadene procedimientos secuenciales (consulta+procedimiento back-to-back).
+
+**PENDIENTE menor:** OK visual de Diego en DESKTOP (todo el feedback fue mobile) + smoke de
+`get-visit-days` cuando se valide el strip. Requieren app logueada → los hace Diego.
 
 ---
 

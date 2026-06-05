@@ -53,6 +53,9 @@ export interface ComposerProcedure {
   end: string;   // HH:mm
   durationMinutes: number;
   doctorId: string | null;
+  /** Profesional que sugirió el motor (visit-engine). Igual a doctorId mientras no
+   *  haya override manual; sirve para distinguir "Auto" de "Manual" en la UI. */
+  suggestedDoctorId: string | null;
   /** Alternativas para cambiar el profesional (solo visit-engine; [] si fijo). */
   freeDoctorIds: string[];
 }
@@ -329,6 +332,7 @@ export function useAppointmentComposer() {
         end: p.end,
         durationMinutes: p.durationMinutes,
         doctorId: assignments[i] ?? p.suggestedDoctorId ?? null,
+        suggestedDoctorId: p.suggestedDoctorId ?? null,
         freeDoctorIds: p.freeDoctorIds,
       }));
     }
@@ -342,6 +346,7 @@ export function useAppointmentComposer() {
         end: addMinutesToHHMM(selectedStart, effectiveDuration),
         durationMinutes: effectiveDuration,
         doctorId: selectedDoctor?.id ?? null,
+        suggestedDoctorId: selectedDoctor?.id ?? null,
         freeDoctorIds: [],
       },
     ];

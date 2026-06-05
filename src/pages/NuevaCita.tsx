@@ -669,6 +669,8 @@ function ProfesionalSummary({
   const isAuto = c.path === 'visit-engine';
   const single = c.chain.length === 1;
   const canChange = c.chain.some((p) => p.freeDoctorIds.length > 1);
+  // ¿El usuario cambió manualmente algún profesional respecto al sugerido por el motor?
+  const isManual = c.chain.some((p) => p.suggestedDoctorId && p.doctorId !== p.suggestedDoctorId);
 
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -683,9 +685,15 @@ function ProfesionalSummary({
         )}
       </span>
       {isAuto && (
-        <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
-          <Sparkles className="h-3 w-3" /> Auto
-        </span>
+        isManual ? (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-600">
+            Manual
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
+            <Sparkles className="h-3 w-3" /> Auto
+          </span>
+        )
       )}
       {isAuto && (canChange || !single) && (
         <Popover>
