@@ -1,6 +1,6 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-3 commiteadas + **rediseño mobile completo basado en mockups de Stitch, en prod 4 Jun** — último commit 76baaa0): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive + hint del siguiente paso + spinner. SEGUIDO de un rediseño mobile extenso iterado con Diego sobre mockups de Stitch (todo en prod, `tsc` OK): bottom-sheet `Drawer` fullscreen para fecha/hora; `MonthGrid` colapsable (mes↔semana, "Expandir"); patrón "todo a la vista" por pasos con badges "Paso N"; paciente que colapsa a tarjeta-avatar (recordatorio integrado, sin chrome en mobile); `ServicePicker` estilo carrito (buscador + chips solo-nombre + cards en 1 línea + est. al lado del título); footer compacto (solo botón hasta elegir fecha/hora; profesional en 1 línea según 1 vs 2+; sin total estimado); Paso 3 unificado en una sola tarjeta tappable. Diego: "me gusta como está, quedan ajustes menores para más tarde".** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **PENDIENTE: Fase 4** (remover `VisitBooking.tsx` huérfano + verificar reagendar intacto + QA en vivo de los 3 paths, ojo `single-doctor` con cliente real y `duration` sin servicios). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-3 commiteadas + **rediseño mobile completo basado en mockups de Stitch, en prod 4 Jun** — último commit 76baaa0): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive + hint del siguiente paso + spinner. SEGUIDO de un rediseño mobile extenso iterado con Diego sobre mockups de Stitch (todo en prod, `tsc` OK): bottom-sheet `Drawer` fullscreen para fecha/hora; `MonthGrid` colapsable (mes↔semana, "Expandir"); patrón "todo a la vista" por pasos con badges "Paso N"; paciente que colapsa a tarjeta-avatar (recordatorio integrado, sin chrome en mobile); `ServicePicker` estilo carrito (buscador + chips solo-nombre + cards en 1 línea + est. al lado del título); footer compacto (solo botón hasta elegir fecha/hora; profesional en 1 línea según 1 vs 2+; sin total estimado); Paso 3 unificado en una sola tarjeta tappable. Diego: "me gusta como está, quedan ajustes menores para más tarde".** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **Fase 4 — limpieza de código CERRADA 5 Jun** (removidos `VisitBooking.tsx` + `combinedAvailability.ts` huérfanos; reagendar verificado intacto por el insert-split; `tsc` OK). **PENDIENTE solo QA en vivo** de los 3 paths (visit-engine ICP, `single-doctor` con cliente real, `duration` sin servicios) + OK visual desktop — lo hace Diego (requiere app logueada). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
@@ -347,10 +347,23 @@ push → Diego revisa en Vercel desde el teléfono → siguiente. Desktop intact
 - **Paso 3 unificado:** título "Fecha y hora" + badge "Paso 3" + valor/hint en UNA tarjeta tappable
   (antes header encima de un botón-tarjeta = borde dentro de borde). Chevron › sin elegir / lápiz ✏ elegido.
 
-**PENDIENTE (Diego: "ajustes menores para más tarde", sin especificar aún) + Fase 4 todavía abierta:**
-remover `VisitBooking.tsx` huérfano + verificar reagendar intacto por el insert-split + QA en vivo de los
-3 paths (visit-engine ICP, single-doctor con cliente real, duration sin servicios). Aún falta el OK visual
-de Diego en DESKTOP (todo el feedback fue mobile).
+### Fase 4 — limpieza de código CERRADA 5 Jun (`tsc` OK)
+- **Removido `src/components/VisitBooking.tsx`** (huérfano: la vista unificada lo absorbió, ya no se
+  importaba en ningún `.tsx`).
+- **Removido `src/lib/combinedAvailability.ts`** (muerto en cascada: tras quitar VisitBooking quedó sin
+  un solo importador — la nueva `NuevaCita`/`useAppointmentComposer` usan `getVisitSlots`/`getVisitDays`
+  server-side, no la combinación client-side de Fase 4). `tsc --noEmit` confirma 0 imports colgantes.
+- **Reagendar verificado intacto (revisión de código, no regresiona por el insert-split):** el
+  insert-split de `useAppointmentComposer.submit()` solo manda a `create-visit` (con `visit_id`) cuando
+  `path==='visit-engine' && chain.length>=2`; toda cita de 1 servicio va a `create-appointment` SIN
+  `visit_id`. El bloqueo de reagendar de `update-appointment` (409, líneas 170-176) y el mensaje de
+  `RescheduleModal` (`isVisit`) solo se disparan con `visit_id` presente → las citas simples reagendan
+  normal. Sin regresión.
+
+**PENDIENTE (Diego: "ajustes menores para más tarde", sin especificar aún) — solo QA en vivo, ya no código:**
+QA en vivo de los 3 paths (visit-engine ICP, single-doctor con cliente real, duration sin servicios) +
+OK visual de Diego en DESKTOP (todo el feedback fue mobile). Smoke de `get-visit-days` cuando se valide
+el strip. Estos requieren JWT/app logueada → los hace Diego.
 
 ---
 
