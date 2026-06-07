@@ -593,3 +593,50 @@ Diego creia que no estaba la data de equipos. Si esta (seccion A4 contestada). E
 **Estado mental al cierre 2 Jun:** Modelo conceptual y de datos del motor cerrado y validado contra datos reales. Diego pasa a `/modo-dev` cuando quiera para el spec tecnico. Prospeccion corre en paralelo.
 
 **Primera pregunta al retomar:** ¿avanzo el spec del motor en dev? ¿El secuenciador se mantuvo en estimacion o se inflo? ¿Hubo conversaciones de prospeccion que confirmen/refuten que la estructura de recursos generaliza?
+
+---
+
+## Sesion 7 Jun 2026 — Hueco de modelado cabina vs equipo (Riesgo #2 materializado)
+
+**Contexto entrante:** Motor completo (Fases 0-6) + Coexistence + rediseño UI Nueva Cita + optimizacion performance (calendario ICP 2430→820ms) todo en prod (3-6 Jun). Pendiente solo QA en vivo de Diego. Prospeccion en paralelo (#37 lista TGU) sin update visible.
+
+**Pregunta de Diego que destapo el hueco:** ¿las cabinas solo sirven para laser o para multiples procedimientos? ¿El equipo es fijo a la cabina o se mueve? Intuyo (N=1, no vi a nadie cargando equipos pesados en Skin Medic) que es fijo. "Tengo algo en mente que puede estar fallando en nuestra logica."
+
+**Hallazgo — su instinto es correcto, y la data lo confirma:**
+- El motor modela disponibilidad como **3 contadores independientes** (profesional + cabina<6 + equipo_tipo<cantidad). Esto solo es valido si el equipo es **portatil**. Si es **fijo** (cabina-laser = la maquina), el modelo **sobreestima disponibilidad** y promete citas imposibles (5 facials ocupan 5 cabinas, la libre no tiene laser, pero el contador dice "laser disponible"). = la fuga exacta que el motor existe para tapar.
+- **La data nunca lo valido:** cuestionario A4.5 ("¿cabina especifica?") = **sin respuesta**; A4.2 dio conteos (2 RF, 3 laser, 1 CO2, 1 frag) sin mapear equipo→cabina; Diego anoto que no entendia bien como operan. Extra: **7 maquinas / 6 cabinas** = al menos una cabina con 2 equipos (otra sobre-disponibilidad).
+- **Esto ES el Riesgo MEDIO #2 del 2 Jun materializandose:** modelo cerrado en piedra sobre un N=1 que ya esta muerto (Skin Medic).
+
+**Decision tomada:**
+1. **NO reconstruir sobre otra suposicion.** Diego va a averiguar la fisica real (¿maquinas fijas o moviles? ¿que cabina tiene que?) con Dulce/Mendoza o prospectos, idealmente 2-3 clinicas, ANTES de tocar codigo.
+2. Modelo correcto que generaliza a ambos mundos: **cabina = recurso atomico con capacidades instaladas**; procedimiento necesita cabina cuyas capacidades lo cubran. Generaliza a dental (sillas) y estetica chica. Fix acotado (capacidades por cabina + asignacion procedimiento→cabina), no reescritura del motor.
+3. Memoria durable actualizada en [[motor-agendamiento-es-producto]] (seccion "HUECO DE MODELADO ABIERTO").
+
+**Pendiente:**
+- [ ] **#46** Diego: averiguar fisica real de cabinas/equipos (fijo vs movil + mapeo equipo→cabina) con Dulce/Mendoza/prospectos, 2-3 clinicas para confirmar que generaliza
+- [ ] **#47** Verificar como computa hoy `_shared/availability.ts` (confirmar si el bug ya esta en prod vs solo nota conceptual) — antes de ajustar
+- [ ] Cuando #46 cierre: ajustar modelo de disponibilidad (capacidades por cabina)
+
+**Riesgo #2 (2 Jun) RE-CONFIRMADO y elevado a accionable:** la estructura de recursos no se valido fuera de Skin Medic. Es el mismo hueco. Mitigacion ahora concreta = #46.
+
+### Onboarding — playbook v1 acordado (7 Jun)
+
+Diego planteo el flujo de onboarding. Tras revision COO, 3 decisiones cerradas:
+
+1. **Coexistence = unico metodo de vinculacion de ahora en adelante.** La migracion destructiva (que mato a Skin Medic) NO vuelve como opcion. "Vincular" = QR de Coexistence, zero downtime. Ver [[coexistence-unico-metodo]].
+2. **Cutover limpio** (no doble-sistema): cargar citas futuras del sistema viejo a OC antes de activar, para que el motor tenga la foto completa y no doble-bookee una cabina. El doble-sistema dispara el "bug visible" que quema la oportunidad.
+3. **Presencial las 2 visitas, primeros 10 clientes.** Decision de Diego: lo presencial es el instrumento de investigacion de campo a N<10 (resolver #46, validar supuesto FB-logueado, confirmar generalizacion de recursos) + abre oportunidades. Remoto se gana el derecho despues (~50% menos costo: 1 visita + activacion remota), diferido post-10.
+
+Playbook completo (pre-visita checklist + visita 1 instalacion + semana 1 calibracion silenciosa + visita 2 activacion cutover) guardado en [[onboarding-playbook]].
+
+**Huecos que el playbook cierra (eran riesgos del plan original de Diego):**
+- "Vincular" ambiguo → forzado a Coexistence.
+- Doble-sistema → doble-booking de cabina → cutover limpio + carga de futuras.
+- "FB logueado en todas las clinicas" = supuesto no validado → checklist pre-visita.
+- Irse antes de confirmar el echo (`smb_message_echoes`) → "no irse hasta ver round-trip".
+- Creds por WhatsApp en texto plano → tipear directo + super-admin custodio.
+- "Mejorar NLP en 1 semana" → alcance realista = top 10 FAQs + prompts.
+
+**Tareas nuevas:**
+- [ ] **#48** Definir donde viven los emails `admin@NOMBRECLINICA` (¿alias Zoho?) + su 2FA, antes de escalar onboarding
+- [ ] **#49** Resolver el metodo de carga de citas futuras en cutover (manual con asistente vs import rapido si son muchas)
