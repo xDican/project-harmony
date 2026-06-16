@@ -68,6 +68,38 @@ interface ResourceConsumer {
   qty: number;
 }
 
+/**
+ * Pico de uso SIMULTANEO de un recurso dentro de [windowStartMs, windowEndMs).
+ * Sweep-line sobre los consumidores existentes: cuenta solo lo concurrente en cada
+ * instante, NO la suma de intervalos que tocan la ventana en momentos distintos
+ * (citas secuenciales / back-to-back no compiten por el recurso). Empates en el
+ * tiempo: las salidas (-) antes que las entradas (+) para que algo que TERMINA justo
+ * cuando otro EMPIEZA no se cuente como simultaneo. Reemplaza la suma ingenua que
+ * sobre-restringia disponibilidad (escondia slots validos).
+ */
+function peakResourceUsage(
+  consumers: ResourceConsumer[],
+  windowStartMs: number,
+  windowEndMs: number,
+): number {
+  const events: Array<{ ms: number; delta: number }> = [];
+  for (const c of consumers) {
+    if (c.startMs < windowEndMs && windowStartMs < c.endMs) {
+      const s = Math.max(c.startMs, windowStartMs);
+      const e = Math.min(c.endMs, windowEndMs);
+      if (s < e) {
+        events.push({ ms: s, delta: c.qty });
+        events.push({ ms: e, delta: -c.qty });
+      }
+    }
+  }
+  if (events.length === 0) return 0;
+  events.sort((a, b) => (a.ms - b.ms) || (a.delta - b.delta));
+  let cur = 0, peak = 0;
+  for (const ev of events) { cur += ev.delta; if (cur > peak) peak = cur; }
+  return peak;
+}
+
 /** Construye un DateTime naive combinando fecha + hora "HH:MM[:SS]". */
 function buildDateTime(date: string, time: string): DateTime {
   return DateTime.fromISO(`${date}T${time.substring(0, 5)}:00`);
@@ -379,11 +411,7 @@ export async function getAvailableSlotsForDate(
   const resourceOk = (slotStartMs: number, slotEndMs: number): boolean => {
     for (const r of recipe) {
       const consumers = consumersByResource.get(r.resourceId) || [];
-      let used = 0;
-      for (const c of consumers) {
-        if (slotStartMs < c.endMs && c.startMs < slotEndMs) used += c.qty;
-      }
-      if (used + r.requiredNow > r.capacity) return false;
+      if (peakResourceUsage(consumers, slotStartMs, slotEndMs) + r.requiredNow > r.capacity) return false;
     }
     return true;
   };
@@ -527,11 +555,7 @@ export function isResourceCapacityOk(
   if (!meta) return true;
   for (const r of meta.recipe) {
     const consumers = state.consumersByResource.get(r.resourceId) || [];
-    let used = 0;
-    for (const c of consumers) {
-      if (slotStartMs < c.endMs && c.startMs < footprintEndMs) used += c.qty;
-    }
-    if (used + r.requiredNow > r.capacity) return false;
+    if (peakResourceUsage(consumers, slotStartMs, footprintEndMs) + r.requiredNow > r.capacity) return false;
   }
   return true;
 }
