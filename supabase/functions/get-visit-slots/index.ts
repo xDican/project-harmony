@@ -12,7 +12,7 @@ import {
   resolveVisitContext,
 } from "../_shared/availability.ts";
 
-const BUILD = "get-visit-slots@2026-06-05_par1";
+const BUILD = "get-visit-slots@2026-06-16_peakcap";
 const MAX_SLOTS = 40; // cap de inicios devueltos (UX + payload)
 
 const reqSchema = z.object({
