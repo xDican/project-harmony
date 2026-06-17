@@ -4,6 +4,94 @@
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
+> **EN CURSO (15 Jun): E2E = ENSAYO DEL PLAYBOOK DE ONBOARDING COMPLETO** (con numero de repuesto via Coexistence). Ver seccion ▼ "CHECKPOINT 15 Jun" abajo. NO arrancado — quedo en research del plan de desconexion del numero.
+
+---
+
+## ▼ CHECKPOINT 17 Jun 2026 — P0 RESUELTO: outage de envíos salientes (Conflicting API keys)
+
+**Síntoma (Diego):** "envié un mensaje al bot de prueba pero no contesta". **Diagnóstico:** el bot RECIBÍA y procesaba (escribía `bot_conversation_logs`, bot-handler 200) pero NINGÚN saliente salía. Último saliente OK fue **10 Jun 18:08** — 7 días de outage TOTAL (bot, recordatorios 24h, confirmaciones de Guevara/Yeni — en silencio).
+
+**Causa raíz:** el proyecto migró a **JWT Signing Keys** (nuevo esquema de API keys). En runtime `SUPABASE_ANON_KEY`→`sb_publishable...`, `SUPABASE_SERVICE_ROLE_KEY`→`sb_secret...` (los legacy salen `DEPRECATED` en dashboard). Las edge functions se llamaban entre sí mandando `apikey: <anon>` **+** `Authorization: Bearer <service>` → el gateway nuevo rechaza con **401 "Conflicting API keys"** (llaves distintas) ANTES de correr la función (`function_id:null`, `exec 0` en logs). Por eso meta-webhook→bot-handler funcionaba (solo manda `x-internal-secret`, sin conflicto) pero meta-webhook→messaging-gateway moría.
+
+**Confirmación:** función diagnóstica temporal (`diag-auth`, ya borrada) replicó las llamadas con env reales: probe "full" (apikey+Authorization)→401 Conflicting; "solo Authorization"→400 OK; "solo x-internal-secret"→400 OK. Env confirmado: `SUPABASE_SERVICE_ROLE_KEY` empieza con `sb_secret`.
+
+**Fix:** quitado el header `apikey` de 13 call sites en 10 funciones (dejando `Authorization: Bearer ${serviceKey}` + `x-internal-secret`): meta-webhook (x4), send-reminders, send-reminder-followup, auto-cancel-unconfirmed, create-appointment, create-visit, inbox-send, process-media-async, send-whatsapp-message, bot-handler (handoff). Redeploy CLI de las 10.
+
+**⚠️ Lección:** el `supabase functions deploy` por CLI **voltea `verify_jwt` a `true`** si no se pasa `--no-verify-jwt` (config.toml no tiene `[functions.*]`). El primer batch dejó meta-webhook/bot-handler/crons en `true` (meta-webhook en true = Meta no puede llamarla → bot deja de recibir). Corregido: redeploy con `--no-verify-jwt` de las 8 que deben ser false. Verificado por curl. `create-appointment`/`create-visit` quedan en `true` (frontend con JWT).
+
+**VERIFICADO EN VIVO 17 Jun:** Diego mandó "Hola" → inbound received + **outbound bot_response `delivered`** (16:51). Cambios solo en prod (deploy), working tree con los edits SIN commitear aún.
+
+**PENDIENTE:** (1) commitear los cambios de las 10 funciones; (2) revisar si hay citas 10-17 Jun de Guevara/Yeni que quedaron sin recordatorio (impacto de negocio del outage).
+
+---
+
+## ▼ CHECKPOINT 16 Jun 2026 — E2E en curso + 2 fixes del motor
+
+E2E del playbook arrancado sobre org limpia **E2E-TEST** (`org_id 33e6cad8-2ceb-408b-a215-6ce72f0c70f3`, creada via wizard + activada). Motor sembrado por MCP (escenario ICP estetica: Dra + 2 tecnicas sin login, Cabina cap 2, Equipo Laser cap 1, 3 servicios con recetas + skill matrix). Plan: `.claude/plans/quiero-que-generes-un-enchanted-treehouse.md`. **Snapshot base: 814 citas reales** (el "776" estaba viejo). Cleanup script verificado en vivo (orden FK real, guarda = conteo citas ≠E2E). Supabase MCP **re-autenticado** (OAuth se vence cada sesion).
+
+**FIX #1 — Calendario por profesional (siembra).** Trap de config, NO bug de codigo. `calendar_doctors` = co-working: profesionales en el MISMO calendario comparten agenda y se bloquean entre si (`loadCoworkDoctorIds` + merge en `loadVisitDayState`). Para ICP multi-profesional cada uno necesita SU calendario; el paralelismo lo limitan los recursos, no la agenda. Memoria [[calendario-por-profesional-multirecurso]]. Implicacion playbook: al onboardear multi-profesional, 1 calendario por profesional (el wizard solo crea "Agenda principal").
+
+**FIX #2 — Bug de capacidad de recursos (DESPLEGADO A PROD 16 Jun).** Correctitud. Tanto `_shared/availability.ts` como el **trigger** `validate_appointment_resource_capacity` **SUMABAN** los consumidores que tocan la ventana en vez del **PICO concurrente** → sobre-contaban citas SECUENCIALES del mismo recurso (ej. limpieza 09-10 + laser 10-10:45 misma cabina) como simultaneas → escondian slots validos + rechazaban inserts validos (= fuga de oferta en clinica de alto volumen, lo contrario del value-prop). Fix: sweep-line de concurrencia maxima.
+- TS: nuevo helper `peakResourceUsage` reemplaza las 2 sumas (`getAvailableSlotsForDate` resourceOk + `isResourceCapacityOk`). Cubre get-visit-slots, get-visit-days, get-available-slots/days, bot-handler.
+- DB: migracion `20260616120000_motor_09_capacity_trigger_peak_concurrency.sql` (peak via puntos de evaluacion = inicio de ventana + inicios de citas internas). Aplicada via MCP.
+- **No-op para los 3 clientes reales** (0 recetas → rama nunca corre; output byte-identico). Solo cambia orgs multi-recurso.
+- Verificado: trigger A/B transaccional (09:00 cabina llena → bloquea OK; 09:30 secuencial → pasa OK, antes bloqueada); EF en prod (`get-visit-slots@2026-06-16_peakcap`) ahora ofrece 09:00. Deploy CLI de las 5 EFs OK.
+- **QA visual ACEPTADO por Diego** (16 Jun). Commit + push: rama `fix/motor-capacity-peak-concurrency` (`899f4d9`) en GitHub, PR sin abrir aun.
+
+**FASE 3 BLOQUEADA — el numero de repuesto de Diego YA esta vinculado a la plataforma** (ya es linea Cloud API, NO un numero limpio viviendo en WA Business App). Para ensayar Coexistence hay que **desconectarlo primero** (cooldown de reconexion 1-2 meses, Meta-side — ver research del 16 Jun arriba) o conseguir otro numero limpio. **Decision pendiente de Diego.** El resto del E2E (org limpia + motor + booking) quedo validado; solo falta la conexion real del numero + round-trip + bot service-first.
+
+**Cleanup E2E (Fase 4) PENDIENTE:** la org `33e6cad8...` sigue en prod con datos de prueba. Script de borrado listo en el plan (Apendice A, orden FK verificado + guarda de citas reales). Correr cuando se cierre el E2E. NO desconectar/borrar nada de clientes reales.
+
+---
+
+## ▼ CHECKPOINT 15 Jun 2026 — E2E onboarding playbook (RETOMAR AQUI)
+
+**Que pidio Diego:** un E2E "desde cero" = crear org + integrar numero + probar bot + agendar. Aclaro que quiere el **playbook de onboarding COMPLETO**, no solo el motor. = tareas estrategia #38/#39 (test Coexistence end-to-end con numero de repuesto ANTES de cliente real). Tiene **numero de repuesto fisico**.
+
+**Preocupacion raiz de Diego (el porque de toda la conversacion):** no llenar la BD de prod de basura con datos de prueba. Preocupacion valida — el E2E escribe en prod real (`soxrlxvivuplezssgssq`, misma BD con 776 citas de clientes reales).
+
+### Decisiones / hallazgos de la sesion
+
+**1. La "basura" tiene 3 capas, no 1:**
+| Capa | Que deja | Limpieza |
+|---|---|---|
+| BD (org, citas, logs) | Filas en prod | ✅ `DELETE` cascada por `organization_id` (yo lo armo, con guarda que verifique 776 citas reales intactas) |
+| **Numero en Meta (WABA)** | Numero registrado a Cloud API de OC | ⚠️ requiere desconexion explicita — ver hallazgo #3 |
+| Elegibilidad del numero | Nada, pero si no cumple → flujo destructivo | 🚧 gate previo |
+
+**2. GATE DE ELEGIBILIDAD: PASADO.** Diego confirmo que su numero de repuesto cumple las **4 condiciones** de Coexistence (corre en WA Business App, v2.24.17+, activo 7+ dias, pagina FB + Business Info completa). → el QR de Coexistence DEBERIA aparecer, no el flujo viejo destructivo. Ver [[coexistence-prerrequisitos-numero]].
+
+**3. PLAN DE DESCONEXION (lo que Diego pidio ayuda) — hallazgo de web research (PARCIAL, interrumpido):**
+- **La desconexion es LIMPIA y se hace DESDE la WA Business App**, NO desde nuestro lado: en el cel → WhatsApp Business App → Configuracion → Cuenta → Plataforma empresarial (Business Platform) → **Desconectar**. La app sigue 100% funcional despues (Coexistence es no-destructivo).
+- ⚠️ **NO desinstalar la app** (eso si desconecta y pierde datos). Solo el boton Desconectar dentro de Configuracion.
+- 🔴 **HALLAZGO CRITICO — COOLDOWN DE RECONEXION ~1-2 MESES:** una vez desconectado, el numero NO se puede reconectar a la API por **1-2 meses** (y debe estar activo en uso). Fuente: whautomate.com/whatsapp-coexistence. **Implicacion:** la limpieza Meta-side ES limpia (no deja basura pegada, la app sigue), PERO el numero queda "consumido" 1-2 meses si se desconecta. → DECISION PENDIENTE: ¿desconectar y perder el numero 1-2 meses, o dejarlo conectado como **2da linea de prueba semi-permanente**?
+- **PENDIENTE VERIFICAR (research quedo a medias, Diego interrumpio):** confirmar el cooldown exacto + requisitos de reconexion con fuente autoritativa. Iba a fetchear `support.wati.io/.../troubleshooting-whatsapp-coexistence-signup-process`. Fuentes ya vistas: whautomate (cooldown 1-2 meses + pasos desconexion), gohighlevel (boton desconectar, sin detalle), 360dialog docs.
+
+**4. Recomendacion del arquitecto (dada, no ejecutada):** secuenciar el E2E para que lo REVERSIBLE se valide primero (crear org + config + agendar en plataforma) y la conexion del numero (lo casi-irreversible por el cooldown) sea el ULTIMO paso, con el plan de desconexion ya cerrado. NO conectar el numero hasta decidir el punto #3.
+
+### Estado de herramientas
+- **Supabase MCP: OAuth INICIADO pero NO completado.** Diego no pego el callback URL. Para snapshot + cleanup hay que: llamar `mcp__plugin_supabase_supabase__authenticate` de nuevo (genera URL nueva), Diego autoriza, pega callback → `complete_authentication`. Alternativa: deploy/SQL via CLI `npx supabase` (auth cacheada de Diego) como en sesiones previas.
+
+### PROXIMOS PASOS (orden de ejecucion al retomar /modo-dev)
+
+1. **Cerrar decision del numero (#3):** ¿desconectar post-test (pierde 1-2 meses) o dejar como 2da linea de prueba? + terminar de verificar el cooldown exacto (fetch Wati interrumpido).
+2. **Autenticar Supabase MCP** (o usar CLI).
+3. **Snapshot pre-test:** contar filas por tabla en la org nueva ANTES de empezar + anotar `created_at` de inicio. Todo lo posterior = test borrable.
+4. **Armar script de cleanup:** `DELETE` cascada por `organization_id` de la org E2E, orden correcto de FKs (hijos primero: message_logs, bot_conversation_logs, appointments/visits, patients, whatsapp_lines, calendars/schedules, doctors, org_members, clinics, org), con **guarda de seguridad** (contar citas de orgs reales antes/despues → abortar si cambia). Mapear FKs reales primero (no asumir).
+5. **Ejecutar el playbook E2E** (ver [[onboarding-playbook]]):
+   - Pre-visita checklist: numero elegible ✓; FALTA confirmar sitio web en Business Portfolio + quien maneja el Meta Business del numero.
+   - Crear org "E2E-TEST" + Diego super-admin custodio (`admin@orioncare.app`) + admin-por-org.
+   - Cargar motor: servicios, profesionales, skills, **cabinas/equipos** — aprovechar para pensar el hueco #46 (cabina fija-vs-movil; aqui es config sintetica de Diego, no clinica real).
+   - **Bot OFF + transcription OFF** antes de escanear el QR (protege del history flood 5-15 min).
+   - Embedded Signup flavor Coexistence → escanear QR desde la WA Business App del numero de repuesto.
+   - Verificar **round-trip:** echo saliente (`smb_message_echoes`) + entrante de paciente aparecen en inbox OC.
+   - Probar bot service-first + agendar (valida motor end-to-end con org limpia, no la `c8b1c83b` sobada).
+   - **Cleanup:** correr script BD + ejecutar decision del numero (#1).
+
+### Contexto estrategico que enmarca esto (de sesion estrategia 15 Jun, cerrada hoy)
+- Build del motor CONGELADO hasta validar con clinica ICP real (#46 cabina/equipo). Este E2E NO es construir motor — es **validar el playbook de onboarding** + QA del motor sobre org limpia. Legitimo bajo el freeze.
+- El hueco #46 (cabina-vs-equipo: el motor modela 3 contadores independientes, solo valido si el equipo es portatil; si es fijo sobreestima disponibilidad) sigue ABIERTO y se resuelve en campo, no en codigo. Anotarlo si surge durante la carga del motor en el E2E.
 
 ---
 

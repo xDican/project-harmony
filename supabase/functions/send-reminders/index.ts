@@ -53,7 +53,6 @@ async function sendReminderMessage(params: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${params.serviceRoleKey}`,
         "x-internal-secret": params.internalSecret,
-        apikey: params.anonKey,
       },
       body: JSON.stringify({
         to: params.to,

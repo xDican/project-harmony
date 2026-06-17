@@ -884,7 +884,6 @@ async function sendIntentNotification(
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceKey}`,
           "x-internal-secret": internalSecret,
-          apikey: anonKey,
         },
         body: JSON.stringify({
           to: _patientPhone,
@@ -921,7 +920,6 @@ async function sendIntentNotification(
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceKey}`,
             "x-internal-secret": internalSecret,
-            apikey: anonKey,
           },
           body: JSON.stringify({
             to: normalizeToE164(doctorUser.phone),
@@ -954,7 +952,6 @@ async function sendIntentNotification(
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceKey}`,
           "x-internal-secret": internalSecret,
-          apikey: anonKey,
         },
         body: JSON.stringify({
           to: _patientPhone,
@@ -1046,7 +1043,6 @@ async function routeToBotHandler(
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
         "x-internal-secret": internalSecret,
-        apikey: anonKey,
       },
       body: JSON.stringify({
         to: fromPhone,

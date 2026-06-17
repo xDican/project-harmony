@@ -219,7 +219,6 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
         "x-internal-secret": internalSecret,
-        apikey: anonKey,
       },
       body: JSON.stringify(gatewayBody),
     });

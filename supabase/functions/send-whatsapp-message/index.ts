@@ -40,7 +40,6 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: req.headers.get("Authorization") || `Bearer ${supabaseServiceKey}`,
         "x-internal-secret": internalSecret,
-        apikey: supabaseAnonKey || "",
       },
       body,
     });

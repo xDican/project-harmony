@@ -3699,7 +3699,6 @@ async function notifyHandoffTarget(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${serviceRoleKey}`,
       'x-internal-secret': internalSecret,
-      'apikey': anonKey,
     },
     body: JSON.stringify({
       to: normalizedTarget,
