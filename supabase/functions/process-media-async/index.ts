@@ -289,7 +289,6 @@ async function invokeBotForTranscribedAudio(
         "Content-Type": "application/json",
         Authorization: `Bearer ${args.serviceKey}`,
         "x-internal-secret": internalSecret,
-        apikey: anonKey,
       },
       body: JSON.stringify({
         to: conv.patient_phone,

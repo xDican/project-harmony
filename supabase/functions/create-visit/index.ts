@@ -53,7 +53,6 @@ async function sendConfirmationViaGateway(params: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${params.serviceRoleKey}`,
         "x-internal-secret": params.internalSecret,
-        apikey: params.anonKey,
       },
       body: JSON.stringify({
         to: normalizeToE164(params.patientPhone),

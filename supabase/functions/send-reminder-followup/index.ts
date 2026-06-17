@@ -111,7 +111,6 @@ Deno.serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${supabaseServiceKey}`,
             "x-internal-secret": internalSecret,
-            apikey: supabaseAnonKey,
           },
           body: JSON.stringify({
             to: normalizeToE164(patient.phone),
