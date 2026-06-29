@@ -38,8 +38,13 @@ export function PageTracker() {
 
     // page_views aun no esta en los tipos generados (telemetria interna);
     // insert puntual sin tipar. No await: no debe bloquear la navegacion.
+    // OJO: el builder de supabase-js v2 es un *thenable* (tiene `.then`) pero
+    // NO tiene `.catch()` — usar `.catch` aqui lanza "catch is not a function"
+    // y tumba la app. Se traga el error con el 2do argumento de `.then`.
     void (supabase as unknown as {
-      from: (t: string) => { insert: (v: Record<string, unknown>) => Promise<unknown> };
+      from: (t: string) => {
+        insert: (v: Record<string, unknown>) => PromiseLike<unknown>;
+      };
     })
       .from('page_views')
       .insert({
@@ -49,7 +54,7 @@ export function PageTracker() {
         role: user.role,
       })
       // Swallow: el tracking nunca debe romper la app.
-      .catch(() => {});
+      .then(undefined, () => {});
   }, [pathname, user, organizationId]);
 
   return null;
