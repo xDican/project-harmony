@@ -9,6 +9,7 @@ import { UserProvider, useCurrentUser } from "./context/UserContext";
 import { InboxProvider } from "./context/InboxContext";
 import { CallProvider } from "./context/CallContext";
 import { IncomingCallOverlay } from "./components/calls/IncomingCallOverlay";
+import { PageTracker } from "./components/PageTracker";
 import { UserRole } from "./types/user";
 const MainLayout = lazy(() => import("./components/MainLayout"));
 import SuperAdminRoute from "./components/SuperAdminRoute";
@@ -170,6 +171,7 @@ const App = () => {
         <Sonner />
         <IncomingCallOverlay />
         <BrowserRouter>
+          <PageTracker />
           <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center">
               <p className="text-muted-foreground">Cargando...</p>
