@@ -8,6 +8,20 @@
 
 ---
 
+## ▼ CHECKPOINT 29 Jun 2026 — P0 RESUELTO: acceso a la plataforma roto (PageTracker `.catch`)
+
+**Síntoma (Diego):** "no puedo entrar a la plataforma". Consola: `TypeError: w.from(...).insert(...).catch is not a function` (x2 por StrictMode), `Uncaught`. La app no montaba.
+
+**Causa raíz:** `src/components/PageTracker.tsx` (introducido en `81f3612`, rama `feat/page-tracking-navegacion`) llamaba `.catch(() => {})` **directo sobre el builder** de `supabase.from('page_views').insert(...)`. El builder de supabase-js v2 es un *thenable*: tiene `.then()` pero **NO `.catch()`/`.finally()`**. Como `PageTracker` está montado global y corre en cada cambio de ruta, la excepción no atrapada tumbaba el render → bloqueo total de acceso.
+
+**Fix (commit `a37e043`, pusheado a la rama):** cambiar `.catch(() => {})` por `.then(undefined, () => {})` (el thenable sí soporta el 2º arg de `.then`). Comentario agregado para que no reincida. `tsc --noEmit` OK. Revisados los demás `.catch` del frontend: `useAppointmentComposer.ts:186` (`.then().catch()` → válido, `.then` devuelve Promise real) y `CallContext.tsx:646` (`res.json().catch()` → Promise real) NO son bugs. Tabla `page_views` existe en prod. **Para recuperar acceso hay que recompilar/redeploy** (el bundle viejo `index-BL-UPK4q.js` trae el código roto).
+
+**⚠️ Lección / deuda:** patrón peligroso = `.catch()` colgado de un PostgREST builder sin un `.then()` previo. Si vuelve a aparecer un insert/update/delete "fire-and-forget", usar `.then(undefined, onErr)` o `await` con try/catch, NUNCA `.catch()` solo.
+
+**Tarea paralela (no-dev, datos demo):** sembradas **106 citas demo + 30 pacientes** en julio 2026 en la org demo **OrionCare** (`c8b1c83b…`) para una presentación a un médico ("movimiento" todo el mes, ~4-5/día, 2 profesionales). Insertadas con `SET LOCAL session_replication_role = replica` (bypass del trigger webhook Make.com + capacidad). Todas `confirmada`/`cancelada` (NUNCA `agendada`: la org tiene `auto_cancel_enabled=true` → el cron las cancelaría y enviaría WhatsApp a números demo) + flags de recordatorio en `true` → ningún cron las toca, cero envíos. Tag de limpieza: `patients.notes='DEMO-JULIO-2026'`. Script de borrado en scratchpad (`cleanup-demo-julio.sql`): DELETE appointments→patients por el tag. **Pendiente: borrar después de la presentación.**
+
+---
+
 ## ▼ CHECKPOINT 17 Jun 2026 — P0 RESUELTO: outage de envíos salientes (Conflicting API keys)
 
 **Síntoma (Diego):** "envié un mensaje al bot de prueba pero no contesta". **Diagnóstico:** el bot RECIBÍA y procesaba (escribía `bot_conversation_logs`, bot-handler 200) pero NINGÚN saliente salía. Último saliente OK fue **10 Jun 18:08** — 7 días de outage TOTAL (bot, recordatorios 24h, confirmaciones de Guevara/Yeni — en silencio).
