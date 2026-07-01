@@ -63,6 +63,21 @@ interface MetaChangeValue {
   // celular llegan aqui como "echoes" (field='smb_message_echoes'). Misma forma que
   // MetaMessage pero con `to` (el paciente) y `from` = el negocio.
   message_echoes?: MetaMessage[];
+  // Coexistence: historial de chats inyectado tras el QR scan (si el negocio eligio
+  // compartirlo). Llega por field='history', CHUNKED (varios webhooks). Cada chunk
+  // trae metadata{phase,chunk_order,progress} + threads[] (uno por paciente).
+  history?: MetaHistoryObject[];
+}
+
+interface MetaHistoryThread {
+  /** Telefono del usuario/paciente = clave del thread. */
+  id: string;
+  messages?: MetaMessage[];
+}
+
+interface MetaHistoryObject {
+  metadata?: { phase?: number; chunk_order?: number; progress?: number };
+  threads?: MetaHistoryThread[];
 }
 
 interface MetaContact {
@@ -427,6 +442,142 @@ async function handleMessageEcho(
 
   await updateConversationOnOutbound(supabase, conversation.id);
   console.log("[meta-webhook] Echo (asistente desde celular) persisted. conv:", conversation.id, "msg:", echo.id);
+}
+
+/**
+ * Coexistence: importa el HISTORIAL de chats (field='history') que Meta inyecta
+ * tras el QR scan si el negocio eligio compartirlo. Llega CHUNKED (varios webhooks,
+ * cada uno con metadata{phase,chunk_order,progress} + threads[]).
+ *
+ * Cada mensaje historico se persiste en message_logs/conversations reusando los
+ * mismos helpers del flujo vivo:
+ *  - Direccion: from == numero del negocio → outbound (source='assistant', lo que
+ *    la asistente/doctora respondio); si no → inbound (source='patient').
+ *  - Idempotente por provider_message_id (no duplica si el mensaje ya existe).
+ *  - NO dispara bot / transcripcion / notificaciones, y NO reordena el inbox
+ *    (no updateConversationOn*), para no inflar unread_count con cientos de viejos.
+ *  - Preserva la cronologia real: post-patch de created_at = msg.timestamp (Meta lo
+ *    manda en segundos epoch), clave para analizar el flujo de la conversacion.
+ *  - Refresca el debounce del watchdog (touchHistoricalSync) para que el banner
+ *    "Sincronizando historial" se mantenga vivo hasta que dejen de llegar chunks.
+ */
+async function handleHistorySync(
+  supabase: ReturnType<typeof createClient>,
+  value: MetaChangeValue,
+  lineId?: string,
+  lineOrgId?: string,
+): Promise<void> {
+  if (!lineId || !lineOrgId) {
+    console.warn("[meta-webhook] history sin lineId/orgId — skip");
+    return;
+  }
+
+  // LOG CRUDO: la doc de Meta/360Dialog no es 100% precisa sobre el formato raw.
+  // Este log deja ver el payload EXACTO en la primera importacion real para ajustar.
+  console.log("[meta-webhook] HISTORY webhook raw value:", JSON.stringify(value).substring(0, 4000));
+
+  const businessPhone = normalizeToE164(value.metadata?.display_phone_number ?? "");
+  let persisted = 0;
+  let skipped = 0;
+
+  for (const chunk of value.history ?? []) {
+    const { phase, chunk_order, progress } = chunk.metadata ?? {};
+    console.log(`[meta-webhook] history chunk phase=${phase} order=${chunk_order} progress=${progress} threads=${chunk.threads?.length ?? 0}`);
+
+    for (const thread of chunk.threads ?? []) {
+      const patientPhone = normalizeToE164(thread.id ?? "");
+      if (!patientPhone) {
+        console.warn("[meta-webhook] history thread sin telefono — skip");
+        continue;
+      }
+
+      let patientId: string | undefined;
+      const { data: p } = await supabase
+        .from("patients")
+        .select("id")
+        .eq("phone", patientPhone)
+        .limit(1)
+        .maybeSingle();
+      patientId = p?.id;
+
+      const conversation = await getOrCreateConversation(supabase, {
+        whatsappLineId: lineId,
+        organizationId: lineOrgId,
+        patientPhone,
+        patientId: patientId ?? null,
+        initialStatus: "human_active",
+      });
+      if (!conversation) {
+        console.error("[meta-webhook] history: getOrCreateConversation null, skip thread:", patientPhone);
+        continue;
+      }
+
+      for (const msg of thread.messages ?? []) {
+        if (!msg.id) { skipped++; continue; }
+
+        // Idempotencia: no duplicar mensajes ya presentes (overlap con lo reciente).
+        const { data: existingLog } = await supabase
+          .from("message_logs")
+          .select("id")
+          .eq("provider_message_id", msg.id)
+          .maybeSingle();
+        if (existingLog) { skipped++; continue; }
+
+        const media = extractMediaFromMetaMessage(msg);
+        const body = extractMessageText(msg) || media.caption || null;
+        const fromPhone = normalizeToE164(msg.from ?? "");
+        const toPhone = normalizeToE164(msg.to ?? "");
+        const isOutbound = !!businessPhone && fromPhone === businessPhone;
+
+        if (isOutbound) {
+          await persistOutboundMessage(supabase, {
+            conversationId: conversation.id,
+            organizationId: lineOrgId,
+            whatsappLineId: lineId,
+            toPhone: toPhone || patientPhone,
+            fromPhone: fromPhone || businessPhone,
+            body,
+            source: "assistant",
+            messageType: media.messageType,
+            mediaUrl: media.mediaUrl,
+            mediaMime: media.mediaMime,
+            status: "sent",
+            providerMessageId: msg.id,
+            rawPayload: msg,
+          });
+        } else {
+          await persistInboundMessage(supabase, {
+            conversationId: conversation.id,
+            organizationId: lineOrgId,
+            whatsappLineId: lineId,
+            toPhone: toPhone || businessPhone,
+            fromPhone: fromPhone || patientPhone,
+            body,
+            providerMessageId: msg.id,
+            messageType: media.messageType,
+            mediaUrl: media.mediaUrl,
+            mediaMime: media.mediaMime,
+            patientId,
+            rawPayload: msg,
+          });
+        }
+
+        // Preservar cronologia real: created_at = timestamp del mensaje (epoch seg).
+        const tsSec = Number(msg.timestamp);
+        if (Number.isFinite(tsSec) && tsSec > 0) {
+          await supabase
+            .from("message_logs")
+            .update({ created_at: new Date(tsSec * 1000).toISOString() })
+            .eq("provider_message_id", msg.id);
+        }
+
+        persisted++;
+      }
+    }
+  }
+
+  await touchHistoricalSync(supabase, lineId);
+  console.log(`[meta-webhook] HISTORY sync: persisted=${persisted} skipped=${skipped} line=${lineId}`);
 }
 
 async function handleIncomingMessage(
@@ -1302,6 +1453,11 @@ Deno.serve(async (req) => {
           for (const echo of value.message_echoes) {
             tasks.push(handleMessageEcho(supabase, echo, activeLineId, activeLineOrgId, activeLineSyncInProgress));
           }
+        }
+
+        // Coexistence: historial de chats (field='history') inyectado tras el QR scan.
+        if (value.history && activeLineId && activeLineOrgId) {
+          tasks.push(handleHistorySync(supabase, value, activeLineId, activeLineOrgId));
         }
 
         if (value.statuses) {

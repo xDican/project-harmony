@@ -1,6 +1,7 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 30 Jun 2026 (cont.) — DESCUBRIMIENTO DE SEGMENTO. 3 leads de campo (Jensi itinerante; Capilar = champion 4-medicos, LEAD MAS CALIENTE, mensaje mañana 6pm; Montserrat expediente = mismatch) + gap analysis del codigo abren una tesis: el incumbente real NO es Dentalink, es **TimeTree** (7/10 medicos contactados lo usan) — gratis y mudo. **"Usa TimeTree" = filtro de ICP por conducta** (proxy de "situacion Wilmer", switching-cost ~0). Mercado = subarriendo de espacio clinico (Airbnb de cubiculos): compartir silla (el CUARTO limita → motor co-working) e itinerancia (el MEDICO limita → agregacion de calendarios) = 2 ejes del mismo mercado; OC ya respeta ambos, solo falta "bloqueo sin paciente" (hack placeholder = pilotear con 0 codigo). El motor co-working revive con este fit. Precio: NO bajar $40 (sesgo costo-marginal); reframe vs paciente-perdido/secretaria + mes gratis. RIESGO: teorizamos sobre 2 anecdotas → ir a CONTAR (mini-tarjeta 3 preguntas). Ver Sesion 30 Jun (cont.) al final. Detalle en [[timetree-incumbente-filtro-icp]].)
+> Ultima actualizacion: 1 Jul 2026 (LOOP DE WILMER DISPARADO + tiers Free/Pro + Dentalink descartado. Wilmer confirmo que comparte silla con **2 profesionales mas** (uno "poco" movimiento) + usa **TimeTree con una colega**; Diego le pitcheo "TimeTree + nuestra plataforma", le ENCANTO, dijo que hablaria con sus colegas esta semana para ver como lo pagan y unirse — free tier ya comunicado a Wilmer. **= el loop #71 disparandose SOLO/organico con nuestro N=1 feliz como semilla; silla-compartida pasa de N=1 a potencialmente N=3.** Modelo de tiers para combatir "todo o nada": **Free** = calendario compartido (reemplazo TimeTree) + **Pro $40** = recordatorios+bot; el free es la mercancia que TimeTree YA regala (no se regala valor), el valor pago queda intacto → guardas: (1) no anclar $40 contra free — vender vs paciente-perdido/secretaria; (2) free-como-motor-viral DEPENDE del self-service #73 (diferido) → piloto Wilmer = provision MANUAL. Filtro ICP mas afilado: **"usa TimeTree + otro calendario X"** (TimeTree solo reserva la silla, las citas propias van aparte = malabarea 2 apps = dolor agudo; el motor ya las une). "Por que no Dentalink": mercado ya voto (7/10 TimeTree no Dentalink → switching-cost ~0 xq RECHAZARON el PMS), trabajo distinto (expediente vs agenda+comunicacion), dental-only vs ICP vertical-agnostico, asume clinica de sede fija, terreno del competidor — **TimeTree Y Dentalink fallan en lo MISMO: no le hablan al paciente desde el numero del medico = nuestra cuña**. Capacidad: Diego durmio 4.5h por emocion → **mañana SOLO instalacion Grecia, Capilar reprogramada 2-3 dias** (decision de CAPACIDAD, no evitar-por-tesis; sin reloj financiero, +$15/mes). Ver Sesion 1 Jul al final.)
+> Update previo: 30 Jun 2026 (cont.) — DESCUBRIMIENTO DE SEGMENTO. 3 leads de campo (Jensi itinerante; Capilar = champion 4-medicos, LEAD MAS CALIENTE, mensaje mañana 6pm; Montserrat expediente = mismatch) + gap analysis del codigo abren una tesis: el incumbente real NO es Dentalink, es **TimeTree** (7/10 medicos contactados lo usan) — gratis y mudo. **"Usa TimeTree" = filtro de ICP por conducta** (proxy de "situacion Wilmer", switching-cost ~0). Mercado = subarriendo de espacio clinico (Airbnb de cubiculos): compartir silla (el CUARTO limita → motor co-working) e itinerancia (el MEDICO limita → agregacion de calendarios) = 2 ejes del mismo mercado; OC ya respeta ambos, solo falta "bloqueo sin paciente" (hack placeholder = pilotear con 0 codigo). El motor co-working revive con este fit. Precio: NO bajar $40 (sesgo costo-marginal); reframe vs paciente-perdido/secretaria + mes gratis. RIESGO: teorizamos sobre 2 anecdotas → ir a CONTAR (mini-tarjeta 3 preguntas). Ver Sesion 30 Jun (cont.) al final. Detalle en [[timetree-incumbente-filtro-icp]].)
 > Update previo: 30 Jun 2026 (CORRECCION DE DATOS + PRIMERA CACERIA ICP REAL. Tres hallazgos que mueven la estrategia: (1) El "Wilmer usa 10% / le da igual el bot" es FALSO — datos: 121 citas recurrentes, bot activo 245 logs/42 sesiones los 5 meses, recordatorios+confirmacion intensivos; lo que NO usa es la capa cara (inbox/calling/promos/motor multi-recurso). Wilmer ademas es DENTAL. (2) Cash flow real = +$15/mes, no -$30: unico costo operativo = Claude $20. (3) Diego salio a la calle 29 Jun (Edificio Artemisa + dentales) = primeras conversaciones ICP reales desde 1 Jun; el motor multi-recurso $150 NO salio ni una vez, el mercado vota SIMPLE + DENTAL. Decisiones: dental = beachhead candidato, regla "no feature vertical sin 3+ clientes pagando aparte de Wilmer", primer-mes-gratis = enganche, asistentes = puerta (ya no bloqueo). Reddit muerto como canal ICP (prediccion confirmada). Ver Sesion 30 Jun al final.)
 > Update previo: 27 Jun (RE-EXAMEN DE TESIS DE NEGOCIO. Diego cuestiona si el ICP clinica multi-recurso es demasiado complejo. Insight clave: Wilmer (unico cliente feliz, $35) usa ~10% de la plataforma (calendario+recordatorios), no le importa el bot — el pivote al motor $150 abandono la unica config validada. La ADQUISICION siempre fue el cuello de botella, no el producto; Wilmer llego a-pulso (canal menos escalable). 3 modelos: A vertical SaaS, B horizontal mismo-motor, C agencia/bespoke=TRAMPA solo. Decision: smoke test de demanda barato. Diego eligio regalar 1 landing page en Reddit; COO recomendo ad FB targeteado + hermana (hotel=ICP caliente) como canales superiores. Post de Reddit reescrito (gratis, sin venta, con calificacion). Resultados pendientes. Ver Sesion 27 Jun al final.)
 > Update previo: 15 Jun (semana muerta + reframe motor de crecimiento = caceria concierge, NO funnel de ads)
@@ -969,3 +970,82 @@ Discovery profundo de ~12 turnos que cristaliza el modelo. Lo nuevo y load-beari
 - [ ] **#67 (ampliada)** 5ta pregunta a la mini-tarjeta: ¿comparte otros TimeTree en otros edificios? ¿mismos o distintos medicos? (mide grado / super-spreader)
 
 **Detalle completo en memoria [[timetree-incumbente-filtro-icp]].**
+
+---
+
+## Sesion 1 Jul 2026 — Loop de Wilmer disparado + tiers Free/Pro + "¿por que no Dentalink?"
+
+**Contexto entrante:** dia siguiente de la sesion densa del 30 Jun (correccion de datos + reencuadre ICP a silla-compartida). Diego abrio descargando una conversacion real con Wilmer + su idea de tiers + una pregunta directa: ¿por que no Dentalink? Cerro pivotando a un E2E tecnico de Coexistence para de-risquear la instalacion de Grecia (paso a /modo-dev).
+
+### 1. EL LOOP SE DISPARO SOLO (lo mas importante de la sesion)
+
+Diego hablo con Wilmer. Datos nuevos de campo (N=1 con nombre):
+- **Wilmer comparte silla con 2 profesionales mas** (uno de "poco" movimiento, asumir < que Wilmer). Su edificio ES un cluster silla-compartida vivo de 3.
+- **Wilmer usa TimeTree con una colega** — nuestro unico cliente feliz vive la realidad "TimeTree + otra cosa".
+- Diego le pitcheo **"TimeTree + nuestra plataforma"** → le parecio **excelente**, lo suficiente para decir que **hablaria con sus colegas esta semana para ver como lo pagan** porque "si era algo importante para ellos en la clinica". **Free tier ya comunicado a Wilmer.**
+
+**Lectura COO:** esto es el **test #71 (loop manual) disparandose ORGANICO**, sin que Diego lo forzara. El champion recluta gratis (CAC de los companeros ≈ $0). Confirma de golpe: Wilmer ES el ICP silla-compartida, el candado de red es real, y el pitch "TimeTree + plataforma" convierte. Si un companero paga Pro → la tesis deja de ser N=1. **NO dejar enfriar** — el siguiente paso es facilitarle el reclutamiento (conectarlos gratis al calendario compartido). Wilmer lo maneja el/su gente esta semana; Diego solo espera y provisiona.
+
+### 2. Modelo de tiers Free / Pro (idea de Diego para combatir el "todo o nada")
+
+| Tier | Incluye | Costo marginal | Rol |
+|---|---|---|---|
+| **Free** | Calendario compartido (= reemplazo TimeTree) + une los 2 calendarios que hoy malabarean | ~$0 (Supabase free, sin WhatsApp) | Motor del loop: champion invita gratis, cero barrera |
+| **Pro $40** | Recordatorios + confirmaciones **desde su numero** + bot | Meta WhatsApp | Donde vive el valor y el precio; upsell por cabeza |
+
+**Aprobado con 2 guardas:**
+1. **No anclar el precio contra el free.** El free es la mercancia que TimeTree YA regala (no se regala valor). Vender "$40 vs perder un paciente / vs una secretaria", nunca "vs calendario gratis". NO bajar de $40 ([[pricing-costo-marginal]]).
+2. **El free-como-motor-viral depende del self-service (#73, diferido).** Para que el champion invite solo necesita el "crear/invitar" self-service que NO existe. Piloto Wilmer = **provision manual** (Diego los conecta por detras). El self-service se construye DESPUES de que un companero pague Pro. No prometer lo no construido (trampa Grecia).
+
+Esto ademas concreta el billing per-medico ([[modelo-ownership-multi-doctor]]): el workspace es gratis de unirse, cada medico paga $40 por Pro.
+
+### 3. Filtro ICP mas afilado: "usa TimeTree + otro calendario"
+
+Diego observo: TimeTree **solo reserva el espacio de la clinica (la silla)** → las citas propias las llevan **aparte** en otro calendario (Google, etc.). Son los 2 ejes del 30 Jun (la silla compartida + las citas del medico). **Malabarean 2 apps.** Alguien que juega TimeTree **+** Google siente el dolor mas agudo que quien solo usa TimeTree — y **el motor OC nativamente une los dos** (`availability.ts` agrega todos los `calendar_doctors`). Nuevo pitch del free: *"deja de malabarear TimeTree y tu Google, todo en uno"*. Nueva pregunta de calificacion (mini-tarjeta #67): **"¿ademas de TimeTree, en que llevas tus citas propias?"** → si contesta "otro calendario", es Wilmer confirmado.
+
+### 4. "¿Por que no Dentalink?" (pregunta directa de Diego — respondida)
+
+Por que el ICP no se va (ni lo mandamos) a Dentalink:
+1. **El mercado ya voto con los pies:** 7/10 usan TimeTree, NO Dentalink. Su switching-cost es ~0 *porque* rechazaron el PMS pesado. Venderles Dentalink = venderles lo que ya declinaron.
+2. **Trabajo distinto:** Dentalink = expediente clinico (guardar registros). Nosotros = agenda compartida + hablarle al paciente. El dolor del usuario de TimeTree no es "guardar expedientes". Es la trampa Montserrat.
+3. **Dentalink es dental; el ICP no.** El filtro "usa TimeTree" cruza especialidades (estetica, pediatria, itinerantes). Dentalink no puede servir a Jensi/Jacome.
+4. **Dentalink asume clinica de sede fija** (facturado a la clinica). El modelo silla-compartida/itinerante (cobro por medico, calendario que sigue al doctor) es arquitectonicamente ajeno.
+5. **Es el terreno del competidor** (profundidad clinica) donde decidimos NO pelear (30 Jun). Dentalink es debil en mobile ("no es mobile-friendly", cita de campo) y no le habla al paciente.
+
+**Foto que aclara todo:** TimeTree (gratis, mudo) Y Dentalink (pago, clinico) **fallan en lo mismo** — ninguno le habla al paciente desde el numero del medico. **Ese hueco es el producto.** No competimos con Dentalink; vendemos la capa que ninguno da. (Matiz: los que SI tienen Dentalink y se quejan del mobile son segmento distinto y mas dificil — no el beachhead.)
+
+### 5. Capacidad / energia — decision de agenda
+
+Diego durmio **4.5h** (1am–5:30am) por la emocion de que el producto "encaja". Mañana tenia instalacion Grecia **+** llamada Capilar. Sintio que Capilar "estaba un poco fuera" de la tesis silla-compartida y quiso evitar la llamada; el mismo lo nombro como funnel vision.
+
+**Diagnostico COO:** el instinto de evitar por tesis era el error (Capilar = champion de 4 medicos = ~$160/mes potencial; usa Notion = misma señal conductual que TimeTree, NO esta fuera; foco = calificar despues, no en vez de). PERO el problema real resulto ser **capacidad**, no tesis. Decision: **mañana SOLO instalacion Grecia; Capilar se reprograma 2-3 dias** (mantener caliente, no cancelar). Reprogramar ademas mejora la llamada (descansado + con hoja de prep para el esposo ing. ciberseguridad). Sin reloj financiero que apure (+$15/mes, cero burn). Mensaje de reprogramacion redactado (corto, sin pushiness). Recordatorio de bienestar dado: 1am-5:30am insostenible, horizonte 3 años, familia primero (regla #4).
+
+### Decisiones tomadas 1 Jul
+
+1. **Facilitar el loop de Wilmer** (no esperar pasivo): ofrecerle conectar gratis a sus 2 companeros de silla al calendario compartido (provision manual). Es #71 en vivo.
+2. **Adoptar el modelo Free/Pro** con las 2 guardas (no anclar precio; self-service diferido).
+3. **Agregar el filtro "usa TimeTree + otro calendario"** a la mini-tarjeta #67.
+4. **Dentalink = no-competencia** (categoria distinta); no pelear en profundidad clinica, cuña = hablarle al paciente + mobile + simple.
+5. **Instalacion Grecia mañana en solitario; Capilar reprogramada** (capacidad).
+
+### Tareas activas (post-1 Jul)
+
+- [ ] **#74** Facilitar loop Wilmer: conectar gratis a sus 2 companeros de silla (provision manual) cuando Wilmer confirme interes de ellos. Medir si alguno paga Pro (= #71 resuelto en vivo)
+- [ ] **#75** Enviar mensaje de reprogramacion a Capilar (redactado) + agendar 2-3 dias adelante
+- [ ] **#66 (vigente)** Hoja de prep de seguridad para la llamada Capilar (esposo ing. ciberseguridad) — hacerla ANTES de la llamada reprogramada, no hoy
+- [ ] **#76** Definir feature-por-feature que va en Free vs Pro (para no improvisar en la proxima venta) — pendiente, Diego difirio para cerrar primero E2E
+- [ ] **#67 (ampliada 2x)** mini-tarjeta ahora incluye: "¿ademas de TimeTree, en que llevas tus citas propias?"
+- Vigentes: #57-65 (pipeline dental: Jacome/Grecia/Lumina/CDH, plantilla-landing, referidos), #71-73 (loop manual / grado Alvarado / self-service diferido), #46, #51, #55
+
+### Riesgos activos (actualizado 1 Jul)
+
+1. **ALTO:** Diego quemandose por emocion (4.5h sueño) → riesgo de ejecucion en instalaciones/llamadas + insostenible con niño de 2 años. Mitigacion: 1 evento grande/dia, sin reloj financiero, ritmo > cramming.
+2. **ALTO (heredado):** velocidad de adquisicion = horas de Diego. El loop de Wilmer es la primera señal de un canal que compone (referidos CAC≈0) — si respira, cambia el techo.
+3. **MEDIO:** aflojar regla "no feature sin 3+ pagando" (link de pago Capilar, self-service free). Mitigacion: provision manual + libro de demanda.
+4. **MEDIO:** dejar enfriar el pipeline caliente (Capilar reprogramada, Lumina/CDH/Grecia) por capacidad. Mitigacion: reprogramar ≠ soltar; mensajes cortos de seguimiento.
+
+### Para retomar proxima sesion estrategia
+
+**Estado mental al cierre:** sesion corta y fuerte — el loop de Wilmer se disparo solo (la mejor señal en meses), el modelo Free/Pro quedo definido, Dentalink descartado como competencia. Diego paso a /modo-dev para un E2E de Coexistence (unlink/re-link de numero) que de-risquea la instalacion de Grecia. Capacidad es el riesgo #1 hoy (energia, no plata).
+
+**Primera pregunta al retomar:** ¿Hablo Wilmer con sus companeros — se anima alguno a pagar? ¿Como fue la instalacion de Grecia? ¿Se reprogramo Capilar y se hizo la hoja de prep? ¿Se cerro el detalle Free vs Pro (#76)? ¿El E2E de Coexistence paso limpio (unlink/re-link no rompe onboarding)?

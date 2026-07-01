@@ -8,6 +8,55 @@
 
 ---
 
+## ▼ CHECKPOINT 1 Jul 2026 — E2E Coexistence (link/unlink/relink) + GAP: importación de historial nunca funcionó
+
+**Contexto:** Diego hizo un E2E manual de Coexistence sobre su número de repuesto (línea **"Clinica Pinares" +504 9787-0752**, `meta_phone_number_id=1189949607527923`, en la org de PRUEBA OrionCare `c8b1c83b`) para de-risquear la instalación de Grecia (mañana 2 Jul). Desconectó desde WA Business App **y** desde el botón OC (`disconnect-whatsapp-line`), luego re-vinculó. Se verificó todo por SQL/logs vía MCP.
+
+### ✅ Lo que PASA (de-risquea el onboarding de Grecia)
+- **NO hay cooldown de 1-2 meses** para el ciclo corto de Coexistence: link→unlink→relink en minutos, sin bloqueo (refuta el claim de whautomate; ese cooldown, si existe, es del `/deregister` destructivo viejo, no de Coexistence).
+- **Re-link idempotente y limpio:** el hard-delete de `disconnect-whatsapp-line` borró la fila vieja (`f2c4d59d`) y el re-link creó UNA fila nueva (`15e3b11f`), mismo `phone_number_id`/WABA, sin duplicados. (`meta-embedded-signup` upsert por `(org, meta_phone_number_id)`; si la fila existe hace UPDATE, si no INSERT — ver §8 de la función.)
+- **Watchdog de sync OK:** `coexistence-sync-watchdog` (pg_cron jobid 12, cada 2 min, SQL puro) apagó `sync_in_progress` a los ~6 min (`UPDATE 1` a las 20:46). El banner "Sincronizando historial" es normal y se limpia solo en 5-7 min.
+- **Bot OK en la línea re-vinculada:** una vez `bot_enabled=true` + sync off, contestó el menú completo, `delivered` (20:48:43). Durante `sync_in_progress` el bot se suprime a propósito para mensajes >5 min viejos (gate en meta-webhook líneas ~465-471), pero un mensaje FRESCO sí se procesa.
+
+### ⚠️ GOTCHA #1 — `meta-embedded-signup` §8b desactiva TODAS las demás líneas de la org
+Al re-vincular Pinares (org `c8b1c83b`), el paso "deactivate all OTHER lines in this org" **apagó el Demo Bot** (`79bff173`, misma org test) → `is_active=false`. **El Demo Bot (línea verified de ventas, [[oncare-verified-demo]]) quedó CAÍDO.**
+- **ACCIÓN PENDIENTE:** reactivar → `UPDATE whatsapp_lines SET is_active=true WHERE id='79bff173-7ea7-4f6b-ad48-166a15f6fcff';` (Diego dijo "no te preocupes" pero sigue down — verificar).
+- **Lección:** NUNCA experimentar vinculación bajo una org compartida. Grecia mañana es segura porque va en **su propia org** (deactivate-others = no-op). El riesgo real del onboarding no es el cooldown, es correr el experimento bajo la org equivocada.
+
+### 🔴 GOTCHA #2 (el grande) — La importación de historial de Coexistence NUNCA funcionó
+Diego confirmó: el número test **tiene 6 chats** y marcó **"compartir historial"** en el QR. **NO entró ninguno.** Los logs de `meta-webhook` muestran **CERO POST** en la ventana de sync (20:41-20:46) — solo los mensajes de prueba manuales de Diego. → **Meta no envió el historial a nuestro webhook.**
+
+**Causa raíz (verificado contra doc Meta/360Dialog):** el historial de Coexistence NO llega como `messages` con timestamp viejo (suposición ORIGINAL del sprint, INCORRECTA). Llega por un **webhook `history` dedicado**, chunked. Dos gates apilados, ambos rotos:
+1. **Upstream:** la Meta App probablemente **no está suscrita al campo `history`** (chequear Dashboard → Webhooks → `whatsapp_business_account` → campo `history`). Opt-in de compartir historial estaba OK.
+2. **Código:** `meta-webhook` **no tiene handler para `history`** — `MetaChangeValue` (líneas 52-66) no declara el campo y el ruteo (líneas 1287-1328) solo procesa `messages`/`message_echoes`/`statuses`/`calls`. Aunque Meta lo mandara, se tira (200 OK, nadie persiste).
+
+**Lo que se "validó" en el sprint Coexistence fueron los echoes (salientes nuevos), NO el historial.** El import de historial es un gap latente que Diego destapó empíricamente.
+
+**Esquema del payload `history` (doc 360Dialog, para el build):** `changes[].field="history"`, `value.history[]` = array de objetos con `metadata{phase, chunk_order, progress}` + `threads[]`; cada thread = `{id: <telefono_usuario>, messages[]}`; cada message = `{from, to, id, timestamp, type, <type>:{...}, history_context:{status}}`. Chunked (varios webhooks; usar `progress`/`chunk_order` para orden y completitud). Confirmar formato RAW de Meta en developers.facebook.com antes de codear (360Dialog envuelve en su formato `event:history`).
+
+**NUEVA TAREA (2-4h, deliberada — NO hotfix):** construir handler `history` en meta-webhook → parsear threads/chunks, dedup por `message.id`, persistir a `conversations` + `message_logs` (marcar como históricos, sin disparar bot/notif). + verificar/activar suscripción al campo `history`. Legítimo bajo freeze (habilita playbook de onboarding + dataset de entrenamiento del bot). **Para Grecia mañana: el historial NO va a importar — NO prometerlo.** El onboarding en sí (bot + mensajes hacia adelante) funciona.
+
+### UPDATE 1 Jul (cont. noche) — handler construido + desplegado + investigación fase 0 del gap
+
+**Handler `history` CONSTRUIDO + EN PROD.** `meta-webhook/index.ts`: `handleHistorySync` (parsea `value.history[]` → threads → mensajes, direccion por `from`==numero-negocio, dedup por `provider_message_id`, persiste a `message_logs`/`conversations` reusando `getOrCreateConversation`/`persistInbound|OutboundMessage`, **preserva cronología real** post-patcheando `created_at`=`msg.timestamp`, NO dispara bot, refresca watchdog). Tipo `MetaChangeValue.history` declarado + ruteo wired. Loguea payload crudo (`HISTORY webhook raw value:`). Desplegado con `--no-verify-jwt`. E2E del link/relink validado (bot responde, watchdog apaga sync, sin cooldown, 1 fila limpia).
+
+**PERO el gap persiste: Meta NO entrega el webhook `history`** (0 POSTs tras múltiples re-links con share-history ON). Investigación fase 0 (plan `si-ya-se-hizo-tranquil-hopper.md`):
+- **Bump `meta-embedded-signup` v21→v24** (BUILD `@2026-07-01_v17_graphv24`) desplegado — alinea con meta-enable-calling. **NO confirmado como el fix** (evidencia débil: echoes de coexistence llegaban en v21).
+- **`GET /{waba}/subscribed_apps` NO expone `subscribed_fields`** (ni con `?fields=subscribed_fields` — verificado en vivo). Solo confirma el link app↔WABA. Los campos suscritos solo se leen a nivel APP (`GET /{app_id}/subscriptions`, requiere app-token) o en el Dashboard. **BUG LATENTE detectado: `meta-enable-calling` (~166-215) asume `app.subscribed_fields` → su chequeo de `calls` es un no-op silencioso** (siempre false). En `meta-embedded-signup` la verificación se limpió a un log crudo.
+- **Suspects vivos:** (a) `history` = trigger de una-vez por onboarding fresco; número test sobre-ciclado no re-dispara; (b) campo no entregando a nivel app; (c) opt-in share-history no registra en re-link. La versión (v21) quedó como suspect DÉBIL.
+- **Diagnósticos definitivos pendientes (sin más curls):** (1) **botón "Test" del campo `history`** en App Dashboard → aísla suscripción+routing del trigger; (2) **número FRESCO** (Grecia mañana = primer onboarding real).
+- **App id** = `1202458085291818`. **Para Grecia:** el onboarding funciona; el historial NO está garantizado — validar con su número fresco. El handler está listo para capturarlo apenas Meta lo mande.
+
+**✅ RESUELTO (1 Jul noche) — el webhook `history` SÍ entrega.** Diego puso el webhook en v24 + tildó el campo `history` + usó el botón "Test" del Dashboard. **El payload de muestra LLEGÓ al `meta-webhook`: POST 200 a las 16:28:51 (2 seg tras el envío de Meta).** → suscripción + routing + función confirmados en verde. NO persistió en DB porque el Test usa datos de muestra (número falso → no matchea línea real → gate del handler no dispara); es lo esperado. **Conclusión: el pipeline está listo.** La causa del gap era config upstream (v21 + campo sin togglear), ya corregida. **Validación final pendiente = onboarding FRESCO con share-history (Grecia mañana)** → el flood real debe caer y el handler persistir. Deuda menor: alinear resto de funciones v21→v24; endurecer/limpiar el chequeo `subscribed_fields` no-op de meta-enable-calling.
+
+### Notas menores
+- `bot_enabled=false` es el default de toda línea nueva (inbox-only). Para demo en vivo hay que prenderlo a mano.
+- **Inbox NO es multi-línea** — muestra solo una línea de la org; por eso no se ven los chats de otra línea desde la UI (limitación conocida, no bug).
+- **VERIFICAR (baja prio):** cron jobid 7 `send_reminders_daily_11am_tgu` mostró `apikey:'<ANON_KEY>'` (¿placeholder literal sin sustituir = 11am reminders rotos? jobid 8 de la tarde sí tiene key real). Confirmar si es redacción del MCP o bug real.
+- **Nota de negocio:** líneas de Ecoclinicas y Medilaser siguen `is_active=true` con bot en DB pese a estar marcados "perdido" 22 Jun — no confirmado que cancelaran.
+
+---
+
 ## ▼ CHECKPOINT 29 Jun 2026 — P0 RESUELTO: acceso a la plataforma roto (PageTracker `.catch`)
 
 **Síntoma (Diego):** "no puedo entrar a la plataforma". Consola: `TypeError: w.from(...).insert(...).catch is not a function` (x2 por StrictMode), `Uncaught`. La app no montaba.
