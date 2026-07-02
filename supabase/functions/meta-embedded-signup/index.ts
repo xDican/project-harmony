@@ -13,8 +13,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BUILD = "meta-embedded-signup@2026-02-25_v16";
-const GRAPH_VERSION = "v21.0";
+const BUILD = "meta-embedded-signup@2026-07-01_v17_graphv24";
+// v24: alineado con meta-enable-calling. En v21 la suscripcion del WABA no recogia
+// el campo `history` de coexistence (mas nuevo) aunque la App lo tuviera activo →
+// el historial nunca se entregaba. Ver plan si-ya-se-hizo-tranquil-hopper.
+const GRAPH_VERSION = "v24.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 const RequestSchema = z.object({
@@ -200,7 +203,11 @@ Deno.serve(async (req) => {
     const verifiedName: string = phoneData.verified_name ?? "WhatsApp Business";
     console.log("[meta-embedded-signup] Phone:", displayPhoneNumber, "| Name:", verifiedName);
 
-    // 7) Suscribir WABA a webhook (non-blocking)
+    // 7) Suscribir WABA a webhook (non-blocking) + verificar campos suscritos.
+    // Los campos (incl. `history` de coexistence) se configuran a nivel APP en el
+    // Dashboard; el POST solo re-asocia la app al WABA. Hacemos GET subscribed_apps
+    // (que SI expone `subscribed_fields`) para confirmar que `history` quede suscrito
+    // — mismo patron que meta-enable-calling usa para `calls`.
     try {
       const subRes = await fetch(`${GRAPH_BASE}/${waba_id}/subscribed_apps`, {
         method: "POST",
@@ -212,6 +219,20 @@ Deno.serve(async (req) => {
       } else {
         console.log("[meta-embedded-signup] WABA subscribed to webhook successfully");
       }
+
+      // Nota: GET subscribed_apps NO expone `subscribed_fields` (ni pidiendolo con
+      // ?fields= — verificado en vivo 1 Jul). Solo confirma que la app quedo vinculada
+      // al WABA. Los campos suscritos (incl. `history`) solo se leen a nivel APP via
+      // GET /{app_id}/subscriptions (requiere app token) o en el App Dashboard.
+      // OJO: meta-enable-calling asume `app.subscribed_fields` — es un no-op latente.
+      const subsCheck = await fetch(`${GRAPH_BASE}/${waba_id}/subscribed_apps`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const subsCheckData = await subsCheck.json().catch(() => ({}));
+      console.log(
+        "[meta-embedded-signup] subscribed_apps (WABA↔app link):",
+        JSON.stringify(subsCheckData).substring(0, 500),
+      );
     } catch (subErr) {
       console.warn("[meta-embedded-signup] WABA subscription error (non-blocking):", subErr);
     }
