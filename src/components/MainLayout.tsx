@@ -330,7 +330,7 @@ export default function MainLayout({
                   <h2 className="font-semibold text-foreground text-xl text-center">Menú</h2>
                 </div>
                 <OrgSwitcher />
-                <div className="mt-4 flex-1">
+                <div className="mt-4 flex-1 min-h-0 overflow-y-auto">
                   <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
                 </div>
                 {/* Footer with user email and logout */}
