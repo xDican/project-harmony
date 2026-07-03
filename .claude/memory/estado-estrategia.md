@@ -1131,10 +1131,12 @@ Detalle e IDs en [[orthos-demo-stacy]]; rollback de la linea demo en `~/.claude/
 
 ### Tareas activas (post-2 Jul tarde)
 
-- [ ] **#78** QA de las 4 escenas en UI (Diego): (1) cruce 2 ejes con "Ocupado"; (2) escena login-externo en telefono; (3) mensaje real al +504 9313-3496 → bot responde bajo Orthos + inbox; (4) page_views registrando
+- [ ] **#78** QA de las 4 escenas: **(1) cruce 2 ejes ✅ VERIFICADO 2 Jul via API contra get-available-slots** — el sillon de Cervantes (extraccion jue 9:30-10:40) le come a Molero los slots 9:30/10:00/10:30 con servicio, y reaparecen sin servicio (control negativo); la consulta de Stacy NO bloquea sillon. Motor resource-aware confirmado en prod. Pendientes en UI: (2) escena login-externo en telefono; (3) mensaje real al **+504 9787-0752 (linea Pinares reactivada — llevaba meses inactiva, PROBAR envio/recepcion antes del demo)** → bot responde bajo Orthos + inbox; (4) page_views registrando
 - [ ] **#79** Crear 1 paciente vivo con numero real de Diego (cita futura, flags en false) para el flujo real de recordatorio/confirmacion
-- [ ] **#80** Entregar acceso a Stacy (`stacyrecinos@orioncare.app` + password temporal) con mensaje corto — mandar en 24-48h mientras esta caliente
-- [ ] **#81** Post-piloto: restaurar linea Demo Bot a org OrionCare (SQL exacto en el plan file)
+- [x] **#80** ✅ Acceso ENTREGADO a Stacy el mismo 2 Jul (caliente, mismo dia de la conversacion). Ahora: observar `page_views` (¿entra? ¿navega? ¿crea citas?) y esperar su primera reaccion. NO hacer follow-up antes de 48-72h salvo que ella escriba.
+- [ ] **#84** Probar envio/recepcion real de la linea +504 9787-0752 (quedo SIN probar antes de entregar el acceso — si Stacy reporta que algo no manda mensajes, es lo primero a revisar)
+- [ ] **#85** Merge del fix mobile (scroll menu admin, branch feat/page-tracking-navegacion) a main — Stacy entra por celular y como admin ve ese submenu
+- [x] **#81** ✅ Linea Demo Bot REVERTIDA a org OrionCare el mismo 2 Jul (config original restaurada; sigue como herramienta de ventas). Orthos usa la linea Pinares +504 9787-0752 (reactivada, bot ON, handoff doctor)
 - [ ] **#82** Preguntas empiricas para Stacy: ¿tiene el add-on de recordatorios de Dentalink? ¿de que numero llegan? ¿que pasa cuando el paciente responde fuera del boton? + ¿cuantos sillones tiene? (qty del recurso)
 - [ ] **#83** Mensaje corto a CDH (se paso la visita) — no dejar enfriar >48h
 - [ ] **#67 (ampliada 3x)** mini-tarjeta: + "¿coordinas procedimientos con medicos externos? ¿cuantos?" y "¿como consultas su disponibilidad?"
@@ -1144,11 +1146,18 @@ Detalle e IDs en [[orthos-demo-stacy]]; rollback de la linea demo en `~/.claude/
 ### Riesgos activos (actualizado 2 Jul tarde)
 
 1. **ALTO (heredado):** velocidad de adquisicion = horas de Diego. Ahora hay 2 loops candidatos (Wilmer silla-compartida + Stacy clinica-hub) — ninguno probado con plata aun.
-2. **MEDIO (nuevo):** linea Demo Bot fuera de la org OrionCare mientras dure el piloto — sin herramienta de demo para otros leads. Mitigacion: rollback de 3 UPDATEs documentado.
+2. **MEDIO (nuevo):** la linea de Orthos (+504 9787-0752, ex-Pinares) llevaba meses inactiva — riesgo de que el lado Meta no funcione (webhook, templates, quality). Mitigacion: QA #78 escena 3 ANTES de mandar el acceso a Stacy. (El Demo Bot ya fue revertido a OrionCare y sigue disponible para otros demos.)
 3. **MEDIO:** teorizamos el modelo clinica-hub sobre N=1 (Stacy) — ir a CONTAR (mini-tarjeta #67 ampliada) antes de reorganizar pitch de calle.
 4. **MEDIO:** semana densa sin cerrar: Grecia en su cancha, CDH sin reprogramar, Lumina viernes, DKapilar sabado (prep #66 pendiente = viernes).
 5. **BAJO:** citas demo creadas SIN servicio no consumen sillon → si Stacy usa "cita rapida" la simulacion no luce. Mitigacion: guiarla al flujo con servicio.
 
 ### Para retomar proxima sesion
 
-**Primera pregunta al retomar:** ¿QA de Orthos paso (4 escenas)? ¿Se le mando el acceso a Stacy — abrio, navego (page_views), creo citas? ¿Lumina viernes cerro? ¿Prep DKapilar hecha antes del sabado y como salio la llamada? ¿CDH reprogramado? ¿Noticias de Wilmer/colegas (check-in lun-mar)?
+**Primera pregunta al retomar:** ¿Stacy entro — que dicen los `page_views` (navego, creo citas, cuanto tiempo)? ¿Escribio algo / pregunto por el medico externo (= trigger)? ¿La linea +504 9787-0752 probada (#84)? ¿Fix mobile mergeado a main (#85)? ¿Lumina viernes cerro? ¿Prep DKapilar (#66) hecha y como salio el sabado? ¿CDH reprogramado (#83)? ¿Noticias de Wilmer/colegas (check-in lun-mar, #74)?
+
+**Query util para medir a Stacy (page_views):**
+```sql
+SELECT page_path, COUNT(*) AS vistas, MIN(created_at) AS primera, MAX(created_at) AS ultima
+FROM page_views WHERE user_id='c56559ae-cfc8-482d-9134-92b096f7a98d'
+GROUP BY page_path ORDER BY MAX(created_at) DESC;
+```

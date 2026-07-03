@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,19 @@ export default function MainLayout({
       setAdminMenuOpen(true);
     }
   }, [isAdminRoute]);
+
+  // Al abrir el menu movil, posicionar el scroll sobre la opcion activa antes
+  // del primer paint (salto instantaneo, sin animacion visible para el usuario).
+  const navScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const raf = requestAnimationFrame(() => {
+      navScrollRef.current
+        ?.querySelector('[aria-current="page"]')
+        ?.scrollIntoView({ block: 'center' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mobileMenuOpen]);
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/login');
@@ -330,7 +343,7 @@ export default function MainLayout({
                   <h2 className="font-semibold text-foreground text-xl text-center">Menú</h2>
                 </div>
                 <OrgSwitcher />
-                <div className="mt-4 flex-1 min-h-0 overflow-y-auto">
+                <div ref={navScrollRef} className="mt-4 flex-1 min-h-0 overflow-y-auto">
                   <NavigationLinks onClick={() => setMobileMenuOpen(false)} />
                 </div>
                 {/* Footer with user email and logout */}

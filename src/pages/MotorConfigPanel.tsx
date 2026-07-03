@@ -19,6 +19,8 @@ import { Loader2, Plus, Pencil, Trash2, Cog, Box, Stethoscope, Wrench } from "lu
 import MainLayout from "@/components/MainLayout";
 import { useCurrentUser } from "@/context/UserContext";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import {
   loadMotorBootstrap,
   saveResource,
@@ -152,15 +154,15 @@ export default function MotorConfigPanel() {
           </Card>
         ) : boot ? (
           <Tabs defaultValue="recursos">
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto">
               <TabsTrigger value="recursos" className="gap-1.5">
-                <Box className="h-4 w-4" /> Recursos
+                <Box className="h-4 w-4 hidden sm:block" /> Recursos
               </TabsTrigger>
               <TabsTrigger value="servicios" className="gap-1.5">
-                <Wrench className="h-4 w-4" /> Servicios
+                <Wrench className="h-4 w-4 hidden sm:block" /> Servicios
               </TabsTrigger>
               <TabsTrigger value="profesionales" className="gap-1.5">
-                <Stethoscope className="h-4 w-4" /> Profesionales
+                <Stethoscope className="h-4 w-4 hidden sm:block" /> Profesionales
               </TabsTrigger>
             </TabsList>
 
@@ -208,6 +210,7 @@ function ResourcesTab({
   onChanged: () => Promise<void> | void;
 }) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ResourceRow | null>(null);
   const [name, setName] = useState("");
@@ -289,6 +292,34 @@ function ResourcesTab({
             control de capacidad (ej: 3 maquinas de laser = max 3 citas de laser
             en paralelo).
           </p>
+        ) : isMobile ? (
+          /* Vista card movil */
+          <div className="divide-y rounded-md border">
+            {resources.map((r) => (
+              <div
+                key={r.id}
+                className={cn("flex items-center gap-3 p-3", !r.is_active && "opacity-50")}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{r.display_name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-[0.65rem]">
+                      {RESOURCE_TYPE_LABELS[r.resource_type as ResourceType] ?? r.resource_type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">Cant: {r.quantity}</span>
+                  </div>
+                </div>
+                <Switch
+                  checked={r.is_active}
+                  disabled={togglingId === r.id}
+                  onCheckedChange={(v) => handleToggle(r, v)}
+                />
+                <Button variant="ghost" size="icon" onClick={() => openEdit(r)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
         ) : (
           <Table>
             <TableHeader>
@@ -435,7 +466,7 @@ function ServicesTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           Fuente de verdad del agendamiento (bot + plataforma). Todo servicio debe
           tener duracion.
@@ -443,7 +474,7 @@ function ServicesTab({
         <Button
           size="sm"
           onClick={() => { setNewName(""); setNewDuration(30); setAddOpen(true); }}
-          className="gap-1.5 shrink-0"
+          className="gap-1.5 shrink-0 self-start sm:self-auto"
         >
           <Plus className="h-4 w-4" /> Agregar servicio
         </Button>
@@ -701,7 +732,7 @@ function ServiceConfigCard({
               {resources.map((r) => {
                 const checked = r.id in selected;
                 return (
-                  <div key={r.id} className="flex items-center gap-3">
+                  <div key={r.id} className="flex flex-wrap items-center gap-3">
                     <Checkbox
                       id={`${service.id}-${r.id}`}
                       checked={checked}
