@@ -654,29 +654,11 @@ function ServiceConfigCard({
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="grid gap-3 sm:grid-cols-[1fr_150px] flex-1">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Nombre</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Duracion</Label>
-              <Select
-                value={duration != null ? String(duration) : undefined}
-                onValueChange={(v) => setDuration(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Elegir" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DURATION_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={String(d)}>{d} min</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-end justify-between gap-2">
+          <div className="space-y-1.5 flex-1 min-w-0">
+            <Label className="text-xs">Nombre</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <Button
             variant="ghost"
@@ -688,10 +670,26 @@ function ServiceConfigCard({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-3">
+      <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <div className="space-y-1.5">
-            <Label className="text-xs">Limpieza / buffer (min)</Label>
+            <Label className="text-xs">Duracion</Label>
+            <Select
+              value={duration != null ? String(duration) : undefined}
+              onValueChange={(v) => setDuration(Number(v))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Elegir" />
+              </SelectTrigger>
+              <SelectContent>
+                {DURATION_OPTIONS.map((d) => (
+                  <SelectItem key={d} value={String(d)}>{d} min</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Buffer (min)</Label>
             <Input
               type="number"
               min={0}
@@ -699,7 +697,7 @@ function ServiceConfigCard({
               onChange={(e) => setBuffer(Number(e.target.value))}
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs">Precio (opcional)</Label>
             <Input
               type="number"
@@ -710,15 +708,14 @@ function ServiceConfigCard({
               placeholder="—"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Requiere consulta previa</Label>
-            <div className="flex items-center h-10">
-              <Switch
-                checked={requiresConsult}
-                onCheckedChange={setRequiresConsult}
-              />
-            </div>
-          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+          <Label className="font-normal text-sm">Requiere consulta previa</Label>
+          <Switch
+            checked={requiresConsult}
+            onCheckedChange={setRequiresConsult}
+          />
         </div>
 
         <div className="space-y-2">
@@ -732,7 +729,7 @@ function ServiceConfigCard({
               {resources.map((r) => {
                 const checked = r.id in selected;
                 return (
-                  <div key={r.id} className="flex flex-wrap items-center gap-3">
+                  <div key={r.id} className="flex items-center gap-3">
                     <Checkbox
                       id={`${service.id}-${r.id}`}
                       checked={checked}
@@ -740,24 +737,26 @@ function ServiceConfigCard({
                     />
                     <Label
                       htmlFor={`${service.id}-${r.id}`}
-                      className="font-normal flex-1 cursor-pointer inline-flex items-center gap-1.5 flex-wrap"
+                      className="font-normal flex-1 min-w-0 cursor-pointer"
                     >
-                      {r.display_name}
-                      <Badge variant="outline" className="font-normal text-[0.65rem]">
-                        {RESOURCE_TYPE_LABELS[r.resource_type as ResourceType] ??
-                          r.resource_type}
-                      </Badge>
-                      <span className="text-muted-foreground text-xs">
-                        (cap. {r.quantity})
+                      <span className="block truncate">{r.display_name}</span>
+                      <span className="flex items-center gap-1.5 mt-0.5">
+                        <Badge variant="outline" className="font-normal text-[0.65rem]">
+                          {RESOURCE_TYPE_LABELS[r.resource_type as ResourceType] ??
+                            r.resource_type}
+                        </Badge>
+                        <span className="text-muted-foreground text-xs">
+                          cap. {r.quantity}
+                        </span>
                       </span>
                     </Label>
                     {checked && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <span className="text-xs text-muted-foreground">usa</span>
                         <Input
                           type="number"
                           min={1}
-                          className="w-16 h-8"
+                          className="w-14 h-8"
                           value={selected[r.id]}
                           onChange={(e) => setQty(r.id, Number(e.target.value))}
                         />
