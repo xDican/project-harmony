@@ -303,14 +303,14 @@ export default function BotFAQsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">FAQs del Bot</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">FAQs del Bot</h1>
+            <p className="text-muted-foreground text-sm md:text-base">
               Gestiona las preguntas frecuentes del bot de WhatsApp
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setTemplatePickerOpen(true)}>
               <BookOpen className="mr-2 h-4 w-4" />
               Desde catalogo
@@ -378,6 +378,44 @@ export default function BotFAQsPage() {
               </div>
             ) : (
               <>
+                {isMobile ? (
+                  /* Vista card movil */
+                  <div className="divide-y rounded-md border">
+                    {paginatedFaqs.map((faq) => (
+                      <div key={faq.id} className="p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium leading-snug">{faq.question}</p>
+                          <Badge variant={getScopeBadgeVariant(faq)} className="shrink-0">
+                            {getScopeLabel(faq)}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{faq.answer}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap gap-1 min-w-0">
+                            {faq.keywords?.slice(0, 3).map((keyword, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {keyword}
+                              </Badge>
+                            ))}
+                            {faq.keywords && faq.keywords.length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{faq.keywords.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="sm" onClick={() => openEditDialog(faq)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => openDeleteDialog(faq)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -443,6 +481,7 @@ export default function BotFAQsPage() {
                     ))}
                   </TableBody>
                 </Table>
+                )}
 
                 {totalPages > 1 && (
                   <div className="flex justify-center items-center gap-2 mt-4">

@@ -250,14 +250,14 @@ export default function WhatsAppLinesList() {
     <MainLayout>
       <div className="p-4 md:p-6 space-y-6">
         {/* Page Header */}
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-foreground mb-2">Lineas de WhatsApp</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-2">Lineas de WhatsApp</h1>
+            <p className="text-muted-foreground text-sm md:text-base">
               Administra las lineas de WhatsApp conectadas a tu organizacion.
             </p>
           </div>
-          <Button onClick={() => setConnectDialogOpen(true)} className="flex-shrink-0">
+          <Button onClick={() => setConnectDialogOpen(true)} className="flex-shrink-0 self-start">
             <Plus className="h-4 w-4 mr-2" />
             Conectar línea
           </Button>
