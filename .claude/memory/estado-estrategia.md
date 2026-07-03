@@ -1157,7 +1157,7 @@ Detalle e IDs en [[orthos-demo-stacy]]; rollback de la linea demo en `~/.claude/
 
 **Query util para medir a Stacy (page_views):**
 ```sql
-SELECT page_path, COUNT(*) AS vistas, MIN(created_at) AS primera, MAX(created_at) AS ultima
+SELECT path, COUNT(*) AS vistas, MIN(created_at) AS primera, MAX(created_at) AS ultima
 FROM page_views WHERE user_id='c56559ae-cfc8-482d-9134-92b096f7a98d'
-GROUP BY page_path ORDER BY MAX(created_at) DESC;
+GROUP BY path ORDER BY MAX(created_at) DESC;
 ```
