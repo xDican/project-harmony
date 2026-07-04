@@ -1,6 +1,7 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 2 Jul 2026 TARDE (CASO STACY RECINOS → modelo CLINICA-HUB + demo Orthos EJECUTADO. Grecia NO aparecio a la instalacion (2do no-show, ultimo mensaje enviado, pelota en su cancha). Lumina reagendo al VIERNES via el bot. CDH sin visitar. Hallazgo de campo mayor: Stacy Recinos paga Dentalink Y usa TimeTree para coordinar medicos externos (llamada telefonica por cada procedimiento) → pidio demo. Decisiones: unidad que paga = LA CLINICA (1 Pro) + medicos externos free (loop: el free empuja a sus otras clinicas); free = single-player ilimitado, pago = invitar + recordatorios; add-on $35/calendario MUERTO; $40 NO se baja; cuña vs Dentalink corregida (SI tiene recordatorios WhatsApp — cuña real = numero propio + conversacion + coordinacion externos); bot fuera del pitch (pero ON en demo Orthos). Demo Orthos configurado completo via SQL (sillon=RECURSO, linea Demo Bot movida — rollback documentado). Ver Sesion 2 Jul TARDE al final y [[orthos-demo-stacy]].)
+> Ultima actualizacion: 3 Jul 2026 (VIERNES — STACY FRIA + HALLAZGO CDA + PRECIO EN LA SALA. Stacy: page_views eran de Diego, ella probablemente nunca entro, 0 respuestas — leccion: acceso entregado ≠ demo hecha, el pitch entro por agenda/recordatorios y su dolor era coordinacion. Lumina planton. PATRON DE LA SEMANA: 4 leads muertos en el "2do toque" → regla nueva: TODO se cierra en la primera visita. Caceria 3 Jul: **Centro Dental Avanzado (CDA)** = 5 sedes, Dentalink, coordinan medicos por llamada/WhatsApp (sin TimeTree), **24h para cuadrar cita**, champion asistente-medico, REUNION CON EL JEFE LUNES 6 JUL. Auditoria de plataforma a fondo: lista para piloto 1 sede; 3 gaps no-prometer (sin push cita-nueva al medico, sin sync cross-org, agenda=lista del dia); OrgSwitcher multi-org YA existe → multi-sede = org-por-sede; rama 12 commits adelante de main (#85 urgente). PRECIO DECIDIDO: $150/sede, mes 1 gratis con metrica pactada (24h→minutos), dicho EN LA SALA tras calculadora a lapicero; escalera en el bolsillo ($40/medico si operacion chica). Kit completo en `docs/ventas/kit-cda-lunes.md`. Ver Sesion 3 Jul al final.)
+> Update previo: 2 Jul 2026 TARDE (CASO STACY RECINOS → modelo CLINICA-HUB + demo Orthos EJECUTADO. Grecia NO aparecio a la instalacion (2do no-show, ultimo mensaje enviado, pelota en su cancha). Lumina reagendo al VIERNES via el bot. CDH sin visitar. Hallazgo de campo mayor: Stacy Recinos paga Dentalink Y usa TimeTree para coordinar medicos externos (llamada telefonica por cada procedimiento) → pidio demo. Decisiones: unidad que paga = LA CLINICA (1 Pro) + medicos externos free (loop: el free empuja a sus otras clinicas); free = single-player ilimitado, pago = invitar + recordatorios; add-on $35/calendario MUERTO; $40 NO se baja; cuña vs Dentalink corregida (SI tiene recordatorios WhatsApp — cuña real = numero propio + conversacion + coordinacion externos); bot fuera del pitch (pero ON en demo Orthos). Demo Orthos configurado completo via SQL (sillon=RECURSO, linea Demo Bot movida — rollback documentado). Ver Sesion 2 Jul TARDE al final y [[orthos-demo-stacy]].)
 > Update previo: 2 Jul 2026 (INSTALACION GRECIA / SMILE DESIGN en marcha. Grecia no contesto confirmaciones (3 toques, regla: no 4to; silencio matutino ≠ no) → decision ir igual (15 min de distancia, asimetria clara). Durante el onboarding: org **Smile Design** creada (`40bd31f5-51b5-4abb-b448-5c81029dabd8`), Grecia = admin+doctora (`greciarodriguez@orioncare.app`); Diego llevo cuenta propia admin+doctor para preparar todo. **DKapilar (nombre correcto, antes "Capilar") reprogramada para SABADO** — mensaje enviado; hoja de prep seguridad #66 pendiente ANTES del sabado. Wilmer: cero contacto (loop respira solo, check-in natural lun-mar prox semana). Diego durmio bien → riesgo capacidad bajo. PENDIENTE CONFIRMAR: resultado final de la instalacion. Ver Sesion 2 Jul al final.)
 > Update previo: 1 Jul 2026 (LOOP DE WILMER DISPARADO + tiers Free/Pro + Dentalink descartado. Wilmer confirmo que comparte silla con **2 profesionales mas** (uno "poco" movimiento) + usa **TimeTree con una colega**; Diego le pitcheo "TimeTree + nuestra plataforma", le ENCANTO, dijo que hablaria con sus colegas esta semana para ver como lo pagan y unirse — free tier ya comunicado a Wilmer. **= el loop #71 disparandose SOLO/organico con nuestro N=1 feliz como semilla; silla-compartida pasa de N=1 a potencialmente N=3.** Modelo de tiers para combatir "todo o nada": **Free** = calendario compartido (reemplazo TimeTree) + **Pro $40** = recordatorios+bot; el free es la mercancia que TimeTree YA regala (no se regala valor), el valor pago queda intacto → guardas: (1) no anclar $40 contra free — vender vs paciente-perdido/secretaria; (2) free-como-motor-viral DEPENDE del self-service #73 (diferido) → piloto Wilmer = provision MANUAL. Filtro ICP mas afilado: **"usa TimeTree + otro calendario X"** (TimeTree solo reserva la silla, las citas propias van aparte = malabarea 2 apps = dolor agudo; el motor ya las une). "Por que no Dentalink": mercado ya voto (7/10 TimeTree no Dentalink → switching-cost ~0 xq RECHAZARON el PMS), trabajo distinto (expediente vs agenda+comunicacion), dental-only vs ICP vertical-agnostico, asume clinica de sede fija, terreno del competidor — **TimeTree Y Dentalink fallan en lo MISMO: no le hablan al paciente desde el numero del medico = nuestra cuña**. Capacidad: Diego durmio 4.5h por emocion → **mañana SOLO instalacion Grecia, Capilar reprogramada 2-3 dias** (decision de CAPACIDAD, no evitar-por-tesis; sin reloj financiero, +$15/mes). Ver Sesion 1 Jul al final.)
 > Update previo: 30 Jun 2026 (cont.) — DESCUBRIMIENTO DE SEGMENTO. 3 leads de campo (Jensi itinerante; Capilar = champion 4-medicos, LEAD MAS CALIENTE, mensaje mañana 6pm; Montserrat expediente = mismatch) + gap analysis del codigo abren una tesis: el incumbente real NO es Dentalink, es **TimeTree** (7/10 medicos contactados lo usan) — gratis y mudo. **"Usa TimeTree" = filtro de ICP por conducta** (proxy de "situacion Wilmer", switching-cost ~0). Mercado = subarriendo de espacio clinico (Airbnb de cubiculos): compartir silla (el CUARTO limita → motor co-working) e itinerancia (el MEDICO limita → agregacion de calendarios) = 2 ejes del mismo mercado; OC ya respeta ambos, solo falta "bloqueo sin paciente" (hack placeholder = pilotear con 0 codigo). El motor co-working revive con este fit. Precio: NO bajar $40 (sesgo costo-marginal); reframe vs paciente-perdido/secretaria + mes gratis. RIESGO: teorizamos sobre 2 anecdotas → ir a CONTAR (mini-tarjeta 3 preguntas). Ver Sesion 30 Jun (cont.) al final. Detalle en [[timetree-incumbente-filtro-icp]].)
@@ -21,7 +22,7 @@
 | MRR efectivo | **$35** (solo Guevara) |
 | Hito real Q2-Q3 2026 | $1,500/mes paz mental → faltan **$1,465** (8-10 clientes ICP) |
 | Cliente top | Guevara ($35 = 100% del MRR) — DENTAL, caso de estudio, NPS 9.5. **CORRECCION 30 Jun:** usa el CORE COMPLETO (calendario 121 citas + recordatorios + confirmacion + BOT 245 logs/42 sesiones, activo). NO usa la capa cara (inbox/calling/promos/motor). El "10%/le da igual el bot" era falso |
-| Pipeline | **Activo (campo 29 Jun):** Grecia/Smile Design (interesada), Lumina (vuelve mie), CDH (vuelve jue), Alvarado (futuro), Jacome (demo pendiente), +asistente 20 Jul. Lead pediatra "por verificar". Cluster DENTAL denso. Reddit muerto como canal ICP. |
+| Pipeline | **Actualizado 3 Jul:** 🔥 **CDA (Centro Dental Avanzado) — reunion con el jefe LUNES 6 Jul** (5 sedes, 24h para cuadrar cita, champion asistente-medico). DKapilar sabado. Wilmer loop (check-in lun-mar). FRIOS/MUERTOS esta semana: Stacy (0 respuestas, nunca entro), Grecia (2 no-shows), Lumina (planton 3 Jul), CDH (sin reprogramar). Descalificados 3 Jul: 2 clinicas sin medicos rotantes + Porsalud (sistema propio) = filtro funcionando. |
 | Ads | PAUSADOS — pero ad FB targeteado $20-30 recomendado como canal del smoke test |
 | Cash flow real | **+$15/mes** (CORREGIDO 30 Jun) — ingreso $35 Wilmer − $20 Claude (unico costo operativo real; free tiers Supabase/Vercel, fuera de Twilio). NO es −$30 |
 
@@ -1161,3 +1162,85 @@ SELECT path, COUNT(*) AS vistas, MIN(created_at) AS primera, MAX(created_at) AS 
 FROM page_views WHERE user_id='c56559ae-cfc8-482d-9134-92b096f7a98d'
 GROUP BY path ORDER BY MAX(created_at) DESC;
 ```
+
+---
+
+## Sesion 3 Jul 2026 (VIERNES) — Stacy fria, patron del "2do toque", hallazgo CDA + precio en la sala
+
+**Contexto entrante:** dia post-caceria. Lo primero fue medir a Stacy con page_views.
+
+### 1. Stacy — post-mortem (probablemente perdida)
+
+- **Los page_views eran de Diego**, no de ella: las citas del 3 Jul ("Dican", "Karen") las creo el probando la teoria TimeTree; la sesion del 2 Jul 5:41pm (6 min despues del seed, 6 paginas admin en 30s) = barrido de QA. Diego cree que ella nunca entro. **0 respuestas a los mensajes.**
+- **Diagnostico real (de Diego):** el pitch de entrada fue "agenda con recordatorios + TimeTree", pero el dolor que ELLA verbalizo era coordinacion con medicos externos. El acceso auto-explorable mostro la parte que no vende; la escena guiada (la que ella pidio al pedir demo) nunca ocurrio.
+- **Regla cultural de Diego (confirmada en campo):** el medico valora su tiempo — si no encajas A LA PRIMERA, no hay segunda oportunidad.
+- **LECCION PLAYBOOK: acceso entregado ≠ demo hecha. Nunca soltar credenciales sin la escena guiada agendada/ejecutada.**
+- Toque final opcional redactado (cerrar SU pedido: "le preparé el escenario de coordinación que me describió, 10 min cuando guste") — decision de Diego, no insistir.
+
+### 2. Patron de la semana — mortalidad del "2do toque" → REGLA NUEVA
+
+Grecia (2 no-shows), Lumina (planton 3 Jul, sin respuesta telefonica), CDH (visita perdida), Stacy (acceso sin demo) = **4 leads muertos/enfriados en el segundo toque**. Lo unico que avanzo fue lo que paso EN el momento (Wilmer emocionado en la conversacion; asistente CDA agendando al jefe ahi mismo).
+
+**REGLA OPERATIVA NUEVA: todo lo cerrable se cierra en la primera visita** — demo guiada en el momento (en su celular / con su caso), precio en la sala, fecha de instalacion agendada antes de salir. "Le mando el acceso" / "regreso otro dia" / "le traigo propuesta" NUNCA como plan A.
+
+### 3. Hallazgo CDA (Centro Dental Avanzado) — la bala del lunes
+
+- Red NACIONAL de 5 sedes (Xcala TGU piso 8, Blvd. Suyapa, SPS, Juticalpa, Catacamas). Hub de alto perfil.
+- **Tienen Dentalink** (ahi manejan citas) pero coordinan los medicos **por llamada/WhatsApp, SIN TimeTree** — un escalon PEOR que Stacy. **"Hasta 24 horas en cuadrar la cita con el paciente y medico"** = la cita de dolor mas dura y CUANTIFICADA de la tesis coordinacion (N=2 del DOLOR, no necesariamente del modelo hub).
+- Champion: asistente que ademas es medico (da consulta general). **Pidio que Diego regrese el LUNES para que el jefe lo vea.**
+- Flujo asumido por Diego (80%): paciente pregunta → llaman/msj al medico → paciente ESPERA hasta que haya respuesta → le avisan. Confirmar el lunes con pregunta inocente ("¿y mientras le responden, el paciente que hace?").
+- **Marco de proliferacion (correccion de Diego al COO):** es irrelevante si los medicos rotan solo en sedes propias o tambien en clinicas ajenas — la jugada es LA MISMA: la clinica paga, los medicos entran free = semillas. Asumir que SI estan en otras clinicas (base: 7/10 multi-clinica). El numero de medicos no decide nada (solo mide fertilidad del vivero — dato de oido, no filtro).
+- Guarda: **NO prometer cuenta-medico cross-clinica (#73 no construida)** — trampa Grecia.
+- Tambien 3 Jul: 2 clinicas descalificadas (sin medicos rotantes) + Porsalud (sistema propio) = mini-tarjeta funcionando; viernes de pago = ruido, no señal.
+
+### 4. Auditoria de plataforma a fondo (pedida por Diego: "¿estamos listos?")
+
+**Veredicto: LISTA para piloto de 1 sede con provision manual.** Detalle:
+
+LISTO Y PROBADO: motor resource-aware (QA 4 escenarios via API 2 Jul), **OrgSwitcher multi-org YA EXISTE en frontend** (usuario en N orgs cambia entre ellas → multi-sede se modela org-por-sede, medico rotante = 1 cuenta en varias orgs), Coexistence validado, templates completos, provisioning manual dominado (Orthos = 1 sesion via SQL).
+
+**3 GAPS QUE NO SE PROMETEN:**
+1. **Sin push de "cita nueva" al medico** — solo existe `reschedule_doctor` (le llega WhatsApp si el paciente pide reagendar). Cita nueva la ve al abrir su agenda. Decir "la ve en su app al instante", NO "le llega notificacion". Build ~1 dia si cliente pagando lo pide.
+2. **Sin sync automatico entre orgs/sedes** (#73) — mitigacion: bloques "Ocupado" manuales + OrgSwitcher para ver cada sede.
+3. **Agenda del medico = lista del dia** (sin vista mensual) — candidata #1 libro de demanda (rebote Stacy).
+
+DATO TECNICO CLAVE: `resources` es org-scoped (no clinic-scoped) → multi-sede dentro de UNA org romperia los sillones. Org-por-sede lo evita. `calendars`/`service_types`/`whatsapp_lines` SI son por clinic_id.
+
+**DRIFT DE RAMA (urgente):** `feat/page-tracking-navegacion` va **12 commits adelante de main** (PageTracker, fix outage edge functions, historial Coexistence, todo el polish mobile). page_views tiene datos de usuarios reales → **produccion aparentemente sirve la rama** — confirmar branch de prod en Vercel + merge #85 ANTES de instalar cliente nuevo.
+
+### 5. Pricing CDA — decidido
+
+- **$150/mes por sede** (tier multi-recurso existente — Xcala ES ese perfil; matiz honesto: $150 validado como aceptable-al-cierre con Skin Medic, NO como retenido — CDA seria la primera validacion de retencion del tier).
+- **Primer mes gratis** con metrica pactada en voz alta: tiempo-de-cuadre 24h → nuestro numero en 30 dias. El mes gratis convierte la decision del lunes en "probar gratis con metrica", no "pagar $150".
+- **El precio SE DICE EN LA SALA** (regla del 2do toque — propuesta escrita post-visita seria repetir el error Stacy), pero DESPUES de la calculadora a lapicero: A citas/semana × 1/20 que se enfria × ticket (se asume L.10K en voz alta, ellos corrigen — NO se pregunta el ticket) = fuga mensual vs $150 = "medio paciente recuperado lo paga".
+- Razonamiento: ya pagan Dentalink (linea presupuestaria existe), señal de seriedad ante jefe de red nacional, no canibalizar la escalera ($40 aqui destruiria el precio en todo el mercado).
+- **Escalera en el bolsillo:** si la calculadora revela operacion chica (2-3 medicos, poco volumen) → "$40 por medico" en la sala. La regla decide, no los nervios.
+- Expansion (NO ofrecer lunes): 5 sedes ≈ $600-750/mes = **~mitad del hito paz mental en UNA cuenta**. Se negocia con el dato del mes 1.
+- Cuentas de medicos gratis ilimitadas, explicito ("sus medicos no pagan nada") = las semillas.
+
+### 6. Entregable
+
+**`docs/ventas/kit-cda-lunes.md`** — secuencia de la visita, hoja calculadora imprimible, checklist de captura post-SI en 5 bloques (numero WhatsApp/lado Meta CRITICO incl. pregunta trampa "¿Dentalink manda recordatorios y desde que numero?"; personas; operacion/motor; baseline caso de estudio; acuerdos en-sala), gaps no-prometer, pendientes pre-lunes.
+
+### Tareas activas (post-3 Jul)
+
+- [ ] **#86** ✅ HECHO — Kit CDA en `docs/ventas/kit-cda-lunes.md` (imprimir hoja calculadora antes del lunes)
+- [ ] **#87** LUNES 6 Jul: reunion jefe CDA — ejecutar kit (cerrar en la sala: demo + calculadora + $150 + mes gratis + fecha instalacion)
+- [ ] **#85 (PRE-LUNES)** Merge rama → main + confirmar branch de prod en Vercel
+- [ ] **#84 (PRE-LUNES)** Probar envio/recepcion linea Orthos +504 9787-0752 (la demo del lunes la usa)
+- [ ] **#88** Decision Diego: toque final a Stacy (mensaje redactado, costo 0) o cerrar expediente
+- [ ] **#89** Decision Diego: Lumina — ¿mensaje corto o se da por perdida? CDH (#83) sigue sin reprogramar
+- [ ] **#74 (vigente)** Loop Wilmer: check-in natural lun-mar 6-7 Jul
+- Vigentes: #76 (Free vs Pro), #82 (preguntas Stacy — reciclar para CDA: estan en el kit), #57-65, #67-73, #77 (Grecia en su cancha)
+
+### Riesgos activos (actualizado 3 Jul)
+
+1. **ALTO:** el lunes CDA es UNA bala (regla no-segunda-oportunidad) con 2 dependencias tecnicas abiertas (#84 linea sin probar, #85 drift de rama). Mitigacion: resolver ambas antes del lunes.
+2. **ALTO (heredado):** velocidad de adquisicion = horas de Diego. La semana quemo 4 leads en el 2do toque — la regla "cerrar en la primera visita" es la respuesta estructural.
+3. **MEDIO:** teorizamos CDA sobre 1 conversacion con el asistente — el jefe puede tener otra agenda (¿por que pagan Dentalink Y toleran 24h? puede haber politica interna). Mitigacion: descubrimiento DENTRO de la reunion antes del precio.
+4. **MEDIO:** DKapilar sabado sin hoja de prep (#66 — Diego pidio no trabajarla hoy; queda bajo su control).
+5. **BAJO:** $150 tier sin validacion de retencion (Skin Medic murio a 48h por gap tecnico). El mes gratis + metrica mitiga.
+
+### Para retomar proxima sesion
+
+**Primera pregunta al retomar:** ¿Como salio la reunion del lunes con el jefe de CDA — se cerro en la sala? ¿Que trajo el checklist (numero WhatsApp, medicos, sillones, Dentalink-recordatorios)? ¿#84 y #85 se hicieron antes? ¿Como salio DKapilar el sabado? ¿Noticias organicas de Wilmer/colegas? ¿Decidio Diego el toque final a Stacy (#88) y que hacer con Lumina/CDH (#89)?
