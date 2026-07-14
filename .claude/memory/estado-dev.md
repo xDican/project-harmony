@@ -8,6 +8,29 @@
 
 ---
 
+## ▼ CHECKPOINT 14 Jul 2026 — Fix iPad + barrido de pendientes (casi todo se auto-resolvió)
+
+**Fix del día — diálogo "Crear nuevo paciente" tapado por teclado del iPad (commit `a6ceaae`, mergeado a main en PR #73):** en iPadOS el teclado virtual NO encoge el layout viewport, solo el visual → el `DialogContent` centrado (`top-[50%] translate-y-[-50%]`) queda detrás del teclado en landscape. Fix local en `NuevaCita.tsx`: `className="top-8 translate-y-0"` (anclado arriba). NO se tocó `ui/dialog.tsx` (habría movido todos los modales). QA visual en iPad pendiente; mientras, Diego presenta en vertical. Si reaparece en otro diálogo con inputs, mismo patrón.
+
+**Barrido de pendientes viejos (verificado por SQL/git 14 Jul):**
+- ✅ **Demo Bot (línea `79bff173`) ACTIVO y funcionando** — `is_active=true, bot_enabled=true`, respondió mensaje real hoy 6:07am TGU (status `read`). GOTCHA #1 del 1 Jul cerrado. La otra línea de la org test (`dd2cff9d`, +504 9529-1151) quedó inactiva — sin conflicto de inbox.
+- ✅ **Drift rama vs main RESUELTO** — PR #73 mergeado 14 Jul 8:03am; `origin/main` == rama (incluye fix PageTracker `a37e043` + fix iPad `a6ceaae`). La referencia "#85" que circulaba en memoria estaba desactualizada (los PRs reales fueron #67-73).
+- ✅ **Cron jobid 7 (11am) NO es bug** — el comando SÍ tiene el literal `'<ANON_KEY>'`, pero `message_logs` muestra reminder_24h saliendo a las 11am TGU a diario (verificado 23 Jun-13 Jul). Funciona porque `send-reminders` está `verify_jwt=false` (el header basura se ignora). NO tocar. Caveat: si esa función se redeployara sin `--no-verify-jwt`, este job muere.
+- ✅ **Datos demo julio inertes confirmados** — 106 citas (87 conf + 19 cancel) hasta 31 Jul; las 63 futuras tienen `reminder_3d_enabled=false` (aunque `reminder_3d_sent=false`, el enabled las protege) y 0 mensajes enviados jamás a esas citas. SE QUEDAN — la presentación de Diego al médico sigue pendiente (14 Jul).
+- **Decisión Diego 14 Jul: org E2E-TEST (`33e6cad8`) SE MANTIENE** (residuo mínimo: 8 citas, 1 paciente, 3 profesionales + config motor ICP sembrada). Se reusa cuando se retome el ensayo del playbook de onboarding. Script de cleanup sigue listo en el plan (Apéndice A).
+
+**Cierre de sesión — backlog revisado completo y DIFERIDO deliberadamente (decisión Diego):** con 1 solo cliente pagando y feliz, no vale la pena invertir en el backlog ahora (seguridad advisories, PWA, SuperAdminRoute, limpiezas). Se retoma en otra sesión cuando el negocio lo justifique. No insistir ([[no-insistir-pendientes-diferidos]]). Sin cambios en el orden del backlog — sigue como está listado abajo.
+
+---
+
+## ▼ CHECKPOINT 6 Jul 2026 — Bug encontrado en análisis de bot (Wilmer): hora libre en `booking_select_hour` no coincide con confirmación
+
+**Contexto:** análisis de bot_conversation_logs de Wilmer (modo-estrategia, no modo-dev — no se investigó el código, solo se detectó vía datos). **NO se toca hasta después del feature freeze / cuando encaje con otro trabajo del motor**, solo queda documentado.
+
+**Caso real (sesión `825312d1`, 30 Mar 17:03):** paciente en flujo de reagendar, en el paso `booking_select_hour` escribe **texto libre "9 am"** en vez de elegir el número de la lista de horarios. El resumen de confirmación que el bot muestra a continuación dice **12:00 PM** (no 9am). El paciente lo notó, volvió atrás, y esta vez usó el número de opción (`4`) → 9:30 AM correcto → confirmó bien. **Riesgo:** si el paciente no revisa el resumen con cuidado, puede terminar confirmando una cita a una hora que nunca pidió. Pendiente: leer el parsing de texto libre en el estado `booking_select_hour` (probablemente en `bot-handler` o el shared del motor) para confirmar causa exacta antes de decidir fix.
+
+---
+
 ## ▼ CHECKPOINT 1 Jul 2026 — E2E Coexistence (link/unlink/relink) + GAP: importación de historial nunca funcionó
 
 **Contexto:** Diego hizo un E2E manual de Coexistence sobre su número de repuesto (línea **"Clinica Pinares" +504 9787-0752**, `meta_phone_number_id=1189949607527923`, en la org de PRUEBA OrionCare `c8b1c83b`) para de-risquear la instalación de Grecia (mañana 2 Jul). Desconectó desde WA Business App **y** desde el botón OC (`disconnect-whatsapp-line`), luego re-vinculó. Se verificó todo por SQL/logs vía MCP.
@@ -20,7 +43,7 @@
 
 ### ⚠️ GOTCHA #1 — `meta-embedded-signup` §8b desactiva TODAS las demás líneas de la org
 Al re-vincular Pinares (org `c8b1c83b`), el paso "deactivate all OTHER lines in this org" **apagó el Demo Bot** (`79bff173`, misma org test) → `is_active=false`. **El Demo Bot (línea verified de ventas, [[oncare-verified-demo]]) quedó CAÍDO.**
-- **ACCIÓN PENDIENTE:** reactivar → `UPDATE whatsapp_lines SET is_active=true WHERE id='79bff173-7ea7-4f6b-ad48-166a15f6fcff';` (Diego dijo "no te preocupes" pero sigue down — verificar).
+- ~~**ACCIÓN PENDIENTE:** reactivar~~ ✅ RESUELTO — verificado 14 Jul: Demo Bot activo y respondiendo (ver checkpoint 14 Jul).
 - **Lección:** NUNCA experimentar vinculación bajo una org compartida. Grecia mañana es segura porque va en **su propia org** (deactivate-others = no-op). El riesgo real del onboarding no es el cooldown, es correr el experimento bajo la org equivocada.
 
 ### 🔴 GOTCHA #2 (el grande) — La importación de historial de Coexistence NUNCA funcionó
@@ -52,7 +75,7 @@ Diego confirmó: el número test **tiene 6 chats** y marcó **"compartir histori
 ### Notas menores
 - `bot_enabled=false` es el default de toda línea nueva (inbox-only). Para demo en vivo hay que prenderlo a mano.
 - **Inbox NO es multi-línea** — muestra solo una línea de la org; por eso no se ven los chats de otra línea desde la UI (limitación conocida, no bug).
-- **VERIFICAR (baja prio):** cron jobid 7 `send_reminders_daily_11am_tgu` mostró `apikey:'<ANON_KEY>'` (¿placeholder literal sin sustituir = 11am reminders rotos? jobid 8 de la tarde sí tiene key real). Confirmar si es redacción del MCP o bug real.
+- ~~**VERIFICAR (baja prio):** cron jobid 7~~ ✅ VERIFICADO 14 Jul: el placeholder es literal pero INOFENSIVO — los envíos de 11am funcionan a diario (ver checkpoint 14 Jul). No tocar.
 - **Nota de negocio:** líneas de Ecoclinicas y Medilaser siguen `is_active=true` con bot en DB pese a estar marcados "perdido" 22 Jun — no confirmado que cancelaran.
 
 ---
@@ -928,6 +951,9 @@ Meta WhatsApp NO acepta WebP en mensajes `image` (solo en `sticker`). Para outbo
 - [ ] `findPatientByPhone()` en bot-handler — deja de forzar +504
 - [ ] UI ingreso pacientes — validacion numeros extranjeros
 - Caso: Mirian Yanira Zelaya Carias (+14794030090, USA) — recibe recordatorios OK, bot no funciona. No urgente.
+
+### Polish UX
+- [ ] **PWA instalable (agregado 11 Jul, pedido por Diego):** `vite-plugin-pwa` + manifest (`display: standalone`, íconos, theme color) + service worker básico. Estimado ~2-4h. Efecto: ícono "OrionCare" en el teléfono de secretarias/doctores que abre el inbox fullscreen como app nativa (Android ofrece instalar solo/WebAPK; iOS manual vía Compartir→Agregar a inicio — en instalación presencial Diego hace los toques). Bonus ventas: "le instalo la app aquí mismo" en la demo. Cabe en el freeze (polish, no feature).
 
 ### Diferido Junio 2026+
 - FAQ auto-poblado (3 capas: onboarding data + templates por especialidad + deteccion gaps)
