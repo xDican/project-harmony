@@ -1,6 +1,12 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 2 Jul 2026 TARDE (CASO STACY RECINOS → modelo CLINICA-HUB + demo Orthos EJECUTADO. Grecia NO aparecio a la instalacion (2do no-show, ultimo mensaje enviado, pelota en su cancha). Lumina reagendo al VIERNES via el bot. CDH sin visitar. Hallazgo de campo mayor: Stacy Recinos paga Dentalink Y usa TimeTree para coordinar medicos externos (llamada telefonica por cada procedimiento) → pidio demo. Decisiones: unidad que paga = LA CLINICA (1 Pro) + medicos externos free (loop: el free empuja a sus otras clinicas); free = single-player ilimitado, pago = invitar + recordatorios; add-on $35/calendario MUERTO; $40 NO se baja; cuña vs Dentalink corregida (SI tiene recordatorios WhatsApp — cuña real = numero propio + conversacion + coordinacion externos); bot fuera del pitch (pero ON en demo Orthos). Demo Orthos configurado completo via SQL (sillon=RECURSO, linea Demo Bot movida — rollback documentado). Ver Sesion 2 Jul TARDE al final y [[orthos-demo-stacy]].)
+> Ultima actualizacion: 9 Jul 2026 NOCHE (3ra sesion del dia — **40% TEST DE WILMER EJECUTADO: rama A NO dispara** (P1 "estaria afectado... buscaria otra app" = algo-afectado bajo la rubrica; el PROBLEMA quedo validado como must-solve pero la DIFERENCIACION es tibia; veredicto del arbol EN SUSPENSO hasta #99). Loop colegas MUERTO (colega 1 plaza gobierno/pocas citas, colega 2 embarazo). **P2 dio el pitch cuantificado: "hasta 1 HORA del fin de semana mandando los recordatorios de la semana a mano"**. P3: ICP segun Wilmer = medico que trabaja SOLO en su consultorio; su silla-compartida es "situacion atipica" → filtro silla-compartida pierde soporte. P4: numeros extranjeros sin soporte → libro de demanda. Registro completo en `docs/ventas/guion-40-test.md`. DECISION: NO pivote — falsa dicotomia; **Experimento #1 con filtro P3 ES el test de pivote mas barato**; el test hair-on-fire real de Consultorio Familiar = si Yeni PAGA (preferencia revelada, pre-registrado: paga sin friccion = señal CVP positiva del gancho no-shows; se resiste = rama B). **ASSETS DEL EXPERIMENTO CONSTRUIDOS HOY:** (1) scraping doctoresdehonduras.com → `docs/ventas/leads/directorio-dhn-index.csv` (973) + `directorio-dhn-detalles.csv` (208: 148 dental, 21 derma, 39 pediatria; 45 dental-TGU confirmados, 43 con celular; solo 4 con web propia — universo invisible online, consistente con perfil-Wilmer); (2) `docs/ventas/guion-llamadas-experimento1.md` = flujo de llamada completo (exito = visita con fecha o descarte <3 min; P2a corregida: **el recordatorio manual ES el ladrillo, el planton es 2da sonda** — Wilmer con 3.1% no-show habria sido descartado por la pregunta de planton; rama con-secretaria = 2do escalon con pitch cita-rescatada+continuidad NUNCA "libere su tiempo" (costo hundido); censo por llamada: 3 mundos + PMS S/N; #1 SOLO dental, derma/pediatria = Experimento #2 en fila). Consultorio Familiar: acceso admin propio `admin@consultoriofamiliar.com`, secretaria = **Elena Pineda Carcamo +504 9782-5738**, linea clinica +504 9768-2454 como canal respaldo; hoja de llamada Yeni lista (cobro $35 primero SIN retroactivo, se DICE no se pregunta; Yeni pidio que Diego la llame pronto). Censo barberia: citas por WhatsApp + cero dolor + dolor real = mano de obra → NO ICP, confirma que conducta sola no califica. Ver Sesion 9 Jul NOCHE al final.)
+> Update previo: 9 Jul 2026 (JUEVES — LIBRO "THE EXPERIMENTATION MACHINE" LEIDO COMPLETO + diseño del primer experimento pre-registrado. Veredicto del libro aplicado a OrionCare: PMF nivel NASCENT; el hueco central es que NUNCA medimos si el CVP es hair-on-fire — el patron 1-cliente-por-canal es consistente con CVP tibio, no solo con canales sin empujar. Decision: NO pivotar aun; correr primero el **40% test de Sean Ellis** (+3 follow-ups Superhuman) con Wilmer y la secretaria de Consultorio Familiar — guion guardado en `docs/ventas/guion-40-test.md`, Diego agenda llamada ~10 Jul. **Arbol de decision PRE-ACORDADO** (A: pasa → Experimento #1; B: tibio en ambos → conversacion de pivote con datos; C: loop colegas avanzo → salta la fila). **Experimento #1 spec v2** (correccion de Diego: lista sucia mide la lista, no el pitch): 2 etapas — filtro de escritorio + calificacion conductual en primeros 60s de llamada ("¿quien lleva la agenda?"/"¿comparten consultorio?"); n=20 llamadas CALIFICADAS (~40-50 marcaciones); exito ≥3 visitas y ≥1 cierre; bonus = censo TAM real ("ir a CONTAR" pendiente desde 30 Jun). Hallazgo: `Investigar ICP.xlsx` tiene el **score INVERTIDO** para perfil-Wilmer (lista de era motor-$150: puntua alto ads/web/staff = problema ya resuelto; el ICP real es invisible online → listas IG mejor materia prima; torres = cardumen). Chequeo SQL Consultorio Familiar: VIVO — secretaria 17 views/4 dias (ultimo 8 Jul), ciclo completo conf→r24h→followup→auto-cancel funciono SOLO el 8 Jul, 12 citas futuras hasta 9 Sep; flags: 3 citas de agosto con hora de madrugada (probable error AM/PM de captura, corregir) y #95 facturacion MAS urgente (uso confirmado = conversacion segura). Ver Sesion 9 Jul al final.)
+> Update previo: 8 Jul 2026 (MIERCOLES — sesion sin decisiones de negocio nuevas: se redacto un post para r/SaaS pidiendo feedback externo sobre adquisicion, y ese ejercicio forzo a precisar 3 hechos historicos que quedan corregidos en memoria. (1) Medilaser $75/mes vino del canal ADS (no de un canal sin registrar) — otra ciudad, aparentaba multi-recurso; churn por combo: comunicacion pobre con el medico (poco tiempo), la asistente actuo como barrera en vez de apoyo, sin Coexistence activo, problema con su linea principal → pidieron el numero de vuelta y desaparecieron. (2) CDA murio por hallazgo real en la reunion/2da visita (solo ~5 especialistas externos, espera ≤24h, dolor no significativo — mismo patron que otras clinicas de planta de la caza del 4 Jul), NO por el malentendido inicial de que el jefe no vio la demo. (3) Skin Medic $150 confirmado consistente con el post-mortem ya guardado (falta de Coexistence en la migracion). **Hallazgo consolidado nuevo (el mas importante de la sesion): en 6 meses se cerraron 4 clientes pagos, UNO POR CADA CANAL PROBADO** (ads→Medilaser $75, llamadas frias→Wilmer $35 [unico activo], presencial→Skin Medic $150, WhatsApp frio→Ecoclinicas $35) — 3 de 4 con churn, y NINGUN canal tiene mas de 1 conversion, o sea ningun canal esta probado como repetible todavia. Post completo redactado (en scratchpad de sesion, no en el repo) — pendiente que Diego lo publique en r/SaaS y traiga los comentarios. Ver Sesion 8 Jul al final.)
+> Update previo: 6 Jul 2026 (LUNES — CDA MURIO (jefe sin interes, dolor delgado ~4 especialistas) + sesion completa de analisis de datos SQL sobre Wilmer y Consultorio Familiar. Hallazgo mayor: el pitch "no pierdas pacientes nuevos" NO tiene respaldo en ningun caso de estudio real — 94.5% de las citas de Wilmer las agenda el mismo manualmente, y las 7 que se autoagendaron via bot eran TODAS pacientes ya existentes, cero leads nuevos. ICP redefinido con 2 ganchos segun perfil: tiempo administrativo (Wilmer, pocos no-shows) vs reduccion real de no-shows (Consultorio Familiar, 19.6% auto-cancelado vs 3.1% de Wilmer). Comparacion N=2 confirma que el producto SI genera uso real en contextos distintos (no es solo timing/personalidad de Wilmer), pero el dolor que resuelve varia. 2 bugs tecnicos documentados (acentos rompen FAQ matching; texto libre en booking_select_hour da hora incorrecta) para post-freeze. Playbook de analisis de bot actualizado (gotcha de intent='confirm'). Ver Sesion 6 Jul al final.)
+> Update previo: 5 Jul 2026 (DOMINGO pre-CDA — WAR-GAMING COMPLETO + BASE RATE DE CAMPO. Fin de semana: DKapilar NO contesto (sabado), Stacy MIA, Lumina nunca abrio. Caza 4 Jul: 6 clinicas, **0 con dolor agudo de coordinacion** → clinica-hub = OPORTUNISTA (~1/10), pitch default de calle vuelve al CORE; insight Dental Integral: externos CON asistente propia = sin dolor (pregunta de validacion para CDA); leccion Dental Smart: recien-instalo-PMS = descalificador temporal + **Dentalink SI envia desde el numero de la clinica** (pregunta trampa del numero RETIRADA). REFRAME CDA: **cierre-en-el-momento — "el paciente no se va sin fecha"**; demo = escena de 60 segundos; metrica = referidos que salen con cita el mismo dia; calculadora → referidos × ticket especialista. Kit actualizado (5 cambios). Escenario B war-gamed completo: playbook 80/20 (top 2-3 especialistas) + calendario compartido solo-ocupado + circuito calendario con estimados; regla nueva: **medico viewer o switcher, NUNCA dual-maintainer**. #85 RESUELTO (codigo ya en main via PRs #67-72; rama solo 3 commits docs). Pendiente unico pre-lunes: #84 linea Orthos + imprimir calculadora. Ver Sesion 5 Jul al final.)
+> Update previo: 3 Jul 2026 (VIERNES — STACY FRIA + HALLAZGO CDA + PRECIO EN LA SALA. Stacy: page_views eran de Diego, ella probablemente nunca entro, 0 respuestas — leccion: acceso entregado ≠ demo hecha, el pitch entro por agenda/recordatorios y su dolor era coordinacion. Lumina planton. PATRON DE LA SEMANA: 4 leads muertos en el "2do toque" → regla nueva: TODO se cierra en la primera visita. Caceria 3 Jul: **Centro Dental Avanzado (CDA)** = 5 sedes, Dentalink, coordinan medicos por llamada/WhatsApp (sin TimeTree), **24h para cuadrar cita**, champion asistente-medico, REUNION CON EL JEFE LUNES 6 JUL. Auditoria de plataforma a fondo: lista para piloto 1 sede; 3 gaps no-prometer (sin push cita-nueva al medico, sin sync cross-org, agenda=lista del dia); OrgSwitcher multi-org YA existe → multi-sede = org-por-sede; rama 12 commits adelante de main (#85 urgente). PRECIO DECIDIDO: $150/sede, mes 1 gratis con metrica pactada (24h→minutos), dicho EN LA SALA tras calculadora a lapicero; escalera en el bolsillo ($40/medico si operacion chica). Kit completo en `docs/ventas/kit-cda-lunes.md`. Ver Sesion 3 Jul al final.)
+> Update previo: 2 Jul 2026 TARDE (CASO STACY RECINOS → modelo CLINICA-HUB + demo Orthos EJECUTADO. Grecia NO aparecio a la instalacion (2do no-show, ultimo mensaje enviado, pelota en su cancha). Lumina reagendo al VIERNES via el bot. CDH sin visitar. Hallazgo de campo mayor: Stacy Recinos paga Dentalink Y usa TimeTree para coordinar medicos externos (llamada telefonica por cada procedimiento) → pidio demo. Decisiones: unidad que paga = LA CLINICA (1 Pro) + medicos externos free (loop: el free empuja a sus otras clinicas); free = single-player ilimitado, pago = invitar + recordatorios; add-on $35/calendario MUERTO; $40 NO se baja; cuña vs Dentalink corregida (SI tiene recordatorios WhatsApp — cuña real = numero propio + conversacion + coordinacion externos); bot fuera del pitch (pero ON en demo Orthos). Demo Orthos configurado completo via SQL (sillon=RECURSO, linea Demo Bot movida — rollback documentado). Ver Sesion 2 Jul TARDE al final y [[orthos-demo-stacy]].)
 > Update previo: 2 Jul 2026 (INSTALACION GRECIA / SMILE DESIGN en marcha. Grecia no contesto confirmaciones (3 toques, regla: no 4to; silencio matutino ≠ no) → decision ir igual (15 min de distancia, asimetria clara). Durante el onboarding: org **Smile Design** creada (`40bd31f5-51b5-4abb-b448-5c81029dabd8`), Grecia = admin+doctora (`greciarodriguez@orioncare.app`); Diego llevo cuenta propia admin+doctor para preparar todo. **DKapilar (nombre correcto, antes "Capilar") reprogramada para SABADO** — mensaje enviado; hoja de prep seguridad #66 pendiente ANTES del sabado. Wilmer: cero contacto (loop respira solo, check-in natural lun-mar prox semana). Diego durmio bien → riesgo capacidad bajo. PENDIENTE CONFIRMAR: resultado final de la instalacion. Ver Sesion 2 Jul al final.)
 > Update previo: 1 Jul 2026 (LOOP DE WILMER DISPARADO + tiers Free/Pro + Dentalink descartado. Wilmer confirmo que comparte silla con **2 profesionales mas** (uno "poco" movimiento) + usa **TimeTree con una colega**; Diego le pitcheo "TimeTree + nuestra plataforma", le ENCANTO, dijo que hablaria con sus colegas esta semana para ver como lo pagan y unirse — free tier ya comunicado a Wilmer. **= el loop #71 disparandose SOLO/organico con nuestro N=1 feliz como semilla; silla-compartida pasa de N=1 a potencialmente N=3.** Modelo de tiers para combatir "todo o nada": **Free** = calendario compartido (reemplazo TimeTree) + **Pro $40** = recordatorios+bot; el free es la mercancia que TimeTree YA regala (no se regala valor), el valor pago queda intacto → guardas: (1) no anclar $40 contra free — vender vs paciente-perdido/secretaria; (2) free-como-motor-viral DEPENDE del self-service #73 (diferido) → piloto Wilmer = provision MANUAL. Filtro ICP mas afilado: **"usa TimeTree + otro calendario X"** (TimeTree solo reserva la silla, las citas propias van aparte = malabarea 2 apps = dolor agudo; el motor ya las une). "Por que no Dentalink": mercado ya voto (7/10 TimeTree no Dentalink → switching-cost ~0 xq RECHAZARON el PMS), trabajo distinto (expediente vs agenda+comunicacion), dental-only vs ICP vertical-agnostico, asume clinica de sede fija, terreno del competidor — **TimeTree Y Dentalink fallan en lo MISMO: no le hablan al paciente desde el numero del medico = nuestra cuña**. Capacidad: Diego durmio 4.5h por emocion → **mañana SOLO instalacion Grecia, Capilar reprogramada 2-3 dias** (decision de CAPACIDAD, no evitar-por-tesis; sin reloj financiero, +$15/mes). Ver Sesion 1 Jul al final.)
 > Update previo: 30 Jun 2026 (cont.) — DESCUBRIMIENTO DE SEGMENTO. 3 leads de campo (Jensi itinerante; Capilar = champion 4-medicos, LEAD MAS CALIENTE, mensaje mañana 6pm; Montserrat expediente = mismatch) + gap analysis del codigo abren una tesis: el incumbente real NO es Dentalink, es **TimeTree** (7/10 medicos contactados lo usan) — gratis y mudo. **"Usa TimeTree" = filtro de ICP por conducta** (proxy de "situacion Wilmer", switching-cost ~0). Mercado = subarriendo de espacio clinico (Airbnb de cubiculos): compartir silla (el CUARTO limita → motor co-working) e itinerancia (el MEDICO limita → agregacion de calendarios) = 2 ejes del mismo mercado; OC ya respeta ambos, solo falta "bloqueo sin paciente" (hack placeholder = pilotear con 0 codigo). El motor co-working revive con este fit. Precio: NO bajar $40 (sesgo costo-marginal); reframe vs paciente-perdido/secretaria + mes gratis. RIESGO: teorizamos sobre 2 anecdotas → ir a CONTAR (mini-tarjeta 3 preguntas). Ver Sesion 30 Jun (cont.) al final. Detalle en [[timetree-incumbente-filtro-icp]].)
@@ -16,12 +22,14 @@
 
 | Metrica | Valor |
 |---|---|
-| Clientes activos | **1** — Guevara $35 (ancla, unico activo). Yeni/David/Paredes marcados PERDIDOS 22 Jun; Skin Medic perdido 27 May |
-| MRR facturado | **$35** |
-| MRR efectivo | **$35** (solo Guevara) |
-| Hito real Q2-Q3 2026 | $1,500/mes paz mental → faltan **$1,465** (8-10 clientes ICP) |
-| Cliente top | Guevara ($35 = 100% del MRR) — DENTAL, caso de estudio, NPS 9.5. **CORRECCION 30 Jun:** usa el CORE COMPLETO (calendario 121 citas + recordatorios + confirmacion + BOT 245 logs/42 sesiones, activo). NO usa la capa cara (inbox/calling/promos/motor). El "10%/le da igual el bot" era falso |
-| Pipeline | **Activo (campo 29 Jun):** Grecia/Smile Design (interesada), Lumina (vuelve mie), CDH (vuelve jue), Alvarado (futuro), Jacome (demo pendiente), +asistente 20 Jul. Lead pediatra "por verificar". Cluster DENTAL denso. Reddit muerto como canal ICP. |
+| Clientes activos | **2** — Guevara $35 (ancla) + Yeni Ramos/Consultorio Familiar $35 (revivido 28 Jun; verificado 9 Jul: secretaria activa al 8 Jul, ciclo recordatorios→auto-cancel funcionando solo, 12 citas futuras hasta 9 Sep). Paredes/David marcados perdidos 22 Jun SIN VERIFICAR con logs (mismo falso-negativo que Yeni — pendiente revisar); Skin Medic perdido 27 May (confirmado) |
+| MRR facturado | **$70** ($35 + $35, facturacion Consultorio Familiar por confirmar) |
+| MRR efectivo | **$70** |
+| Hito real Q2-Q3 2026 | $1,500/mes paz mental → faltan **$1,430** (7-9 clientes ICP) |
+| Cliente top | Guevara ($35) — DENTAL, caso de estudio, NPS 9.5, usa el core completo. **CORRECCION 6 Jul:** el pitch "no pierdas pacientes nuevos" NO tiene respaldo — 94.5% de citas las agenda el mismo manualmente, los 7 autoagendados via bot eran TODOS pacientes ya existentes. Valor real = ahorro de tiempo administrativo, no captura de leads |
+| Pipeline | **Actualizado 6 Jul:** 💀 **CDA MUERTA** (dolor de coordinacion delgado — solo ~5 especialistas externos, espera ≤24h, no significativo; confirma base rate ~1/10 de la caza 4 Jul). MUERTOS/FRIOS: Stacy (MIA), Grecia (2 no-shows), Lumina, CDH, DKapilar (no contesto sabado). Unica candidata viva: **Dental Roque** (dolor-producto core verbalizado, caza 4 Jul) — sin visita agendada. ICP redefinido con 2 ganchos: tiempo administrativo (perfil Wilmer) o reduccion de no-shows (perfil Consultorio Familiar, 19.6% auto-cancelado). Wilmer loop silla-compartida: check-in aun pendiente. |
+| Canales — historial 6 meses (8 Jul) | **4 clientes cerrados, 1 por cada canal probado, ningun canal repetible aun:** ads→Medilaser $75 (churn), llamadas frias→Wilmer $35 (unico activo), presencial→Skin Medic $150 (churn), WhatsApp frio→Ecoclinicas $35 (churn por inactividad). Ver [[canales-adquisicion-sin-repetibilidad]]. |
+| Experimento #1 (9 Jul noche) | Assets LISTOS: cola cruda 208 perfiles (45 dental-TGU, 43 con celular) en `docs/ventas/leads/directorio-dhn-detalles.csv` + guion de llamada `docs/ventas/guion-llamadas-experimento1.md`. Bloqueado por: #99 (llamada Yeni congela cola), #100 (listas IG), #102 (quien marca). Congelado durante el experimento: cero ads, cero features |
 | Ads | PAUSADOS — pero ad FB targeteado $20-30 recomendado como canal del smoke test |
 | Cash flow real | **+$15/mes** (CORREGIDO 30 Jun) — ingreso $35 Wilmer − $20 Claude (unico costo operativo real; free tiers Supabase/Vercel, fuera de Twilio). NO es −$30 |
 
@@ -1135,7 +1143,7 @@ Detalle e IDs en [[orthos-demo-stacy]]; rollback de la linea demo en `~/.claude/
 - [ ] **#79** Crear 1 paciente vivo con numero real de Diego (cita futura, flags en false) para el flujo real de recordatorio/confirmacion
 - [x] **#80** ✅ Acceso ENTREGADO a Stacy el mismo 2 Jul (caliente, mismo dia de la conversacion). Ahora: observar `page_views` (¿entra? ¿navega? ¿crea citas?) y esperar su primera reaccion. NO hacer follow-up antes de 48-72h salvo que ella escriba.
 - [ ] **#84** Probar envio/recepcion real de la linea +504 9787-0752 (quedo SIN probar antes de entregar el acceso — si Stacy reporta que algo no manda mensajes, es lo primero a revisar)
-- [ ] **#85** Merge del fix mobile (scroll menu admin, branch feat/page-tracking-navegacion) a main — Stacy entra por celular y como admin ve ese submenu
+- [ ] **#85** Merge de `feat/page-tracking-navegacion` a main — la rama acumula **4 commits de polish mobile** (2-3 Jul): scroll del menu admin (53ad867), paginas admin mobile-friendly + autoscroll a opcion activa al abrir menu (b614777: WhatsApp Lines, Motor tabs/recursos card-view, Bot FAQs card-view), y card de servicio del Motor reestructurada (318798c). Stacy entra por celular como admin — validar preview Vercel y mergear. Typecheck+build verificados en cada commit.
 - [x] **#81** ✅ Linea Demo Bot REVERTIDA a org OrionCare el mismo 2 Jul (config original restaurada; sigue como herramienta de ventas). Orthos usa la linea Pinares +504 9787-0752 (reactivada, bot ON, handoff doctor)
 - [ ] **#82** Preguntas empiricas para Stacy: ¿tiene el add-on de recordatorios de Dentalink? ¿de que numero llegan? ¿que pasa cuando el paciente responde fuera del boton? + ¿cuantos sillones tiene? (qty del recurso)
 - [ ] **#83** Mensaje corto a CDH (se paso la visita) — no dejar enfriar >48h
@@ -1157,7 +1165,436 @@ Detalle e IDs en [[orthos-demo-stacy]]; rollback de la linea demo en `~/.claude/
 
 **Query util para medir a Stacy (page_views):**
 ```sql
-SELECT page_path, COUNT(*) AS vistas, MIN(created_at) AS primera, MAX(created_at) AS ultima
+SELECT path, COUNT(*) AS vistas, MIN(created_at) AS primera, MAX(created_at) AS ultima
 FROM page_views WHERE user_id='c56559ae-cfc8-482d-9134-92b096f7a98d'
-GROUP BY page_path ORDER BY MAX(created_at) DESC;
+GROUP BY path ORDER BY MAX(created_at) DESC;
 ```
+
+---
+
+## Sesion 3 Jul 2026 (VIERNES) — Stacy fria, patron del "2do toque", hallazgo CDA + precio en la sala
+
+**Contexto entrante:** dia post-caceria. Lo primero fue medir a Stacy con page_views.
+
+### 1. Stacy — post-mortem (probablemente perdida)
+
+- **Los page_views eran de Diego**, no de ella: las citas del 3 Jul ("Dican", "Karen") las creo el probando la teoria TimeTree; la sesion del 2 Jul 5:41pm (6 min despues del seed, 6 paginas admin en 30s) = barrido de QA. Diego cree que ella nunca entro. **0 respuestas a los mensajes.**
+- **Diagnostico real (de Diego):** el pitch de entrada fue "agenda con recordatorios + TimeTree", pero el dolor que ELLA verbalizo era coordinacion con medicos externos. El acceso auto-explorable mostro la parte que no vende; la escena guiada (la que ella pidio al pedir demo) nunca ocurrio.
+- **Regla cultural de Diego (confirmada en campo):** el medico valora su tiempo — si no encajas A LA PRIMERA, no hay segunda oportunidad.
+- **LECCION PLAYBOOK: acceso entregado ≠ demo hecha. Nunca soltar credenciales sin la escena guiada agendada/ejecutada.**
+- Toque final opcional redactado (cerrar SU pedido: "le preparé el escenario de coordinación que me describió, 10 min cuando guste") — decision de Diego, no insistir.
+
+### 2. Patron de la semana — mortalidad del "2do toque" → REGLA NUEVA
+
+Grecia (2 no-shows), Lumina (planton 3 Jul, sin respuesta telefonica), CDH (visita perdida), Stacy (acceso sin demo) = **4 leads muertos/enfriados en el segundo toque**. Lo unico que avanzo fue lo que paso EN el momento (Wilmer emocionado en la conversacion; asistente CDA agendando al jefe ahi mismo).
+
+**REGLA OPERATIVA NUEVA: todo lo cerrable se cierra en la primera visita** — demo guiada en el momento (en su celular / con su caso), precio en la sala, fecha de instalacion agendada antes de salir. "Le mando el acceso" / "regreso otro dia" / "le traigo propuesta" NUNCA como plan A.
+
+### 3. Hallazgo CDA (Centro Dental Avanzado) — la bala del lunes
+
+- Red NACIONAL de 5 sedes (Xcala TGU piso 8, Blvd. Suyapa, SPS, Juticalpa, Catacamas). Hub de alto perfil.
+- **Tienen Dentalink** (ahi manejan citas) pero coordinan los medicos **por llamada/WhatsApp, SIN TimeTree** — un escalon PEOR que Stacy. **"Hasta 24 horas en cuadrar la cita con el paciente y medico"** = la cita de dolor mas dura y CUANTIFICADA de la tesis coordinacion (N=2 del DOLOR, no necesariamente del modelo hub).
+- Champion: asistente que ademas es medico (da consulta general). **Pidio que Diego regrese el LUNES para que el jefe lo vea.**
+- Flujo asumido por Diego (80%): paciente pregunta → llaman/msj al medico → paciente ESPERA hasta que haya respuesta → le avisan. Confirmar el lunes con pregunta inocente ("¿y mientras le responden, el paciente que hace?").
+- **Marco de proliferacion (correccion de Diego al COO):** es irrelevante si los medicos rotan solo en sedes propias o tambien en clinicas ajenas — la jugada es LA MISMA: la clinica paga, los medicos entran free = semillas. Asumir que SI estan en otras clinicas (base: 7/10 multi-clinica). El numero de medicos no decide nada (solo mide fertilidad del vivero — dato de oido, no filtro).
+- Guarda: **NO prometer cuenta-medico cross-clinica (#73 no construida)** — trampa Grecia.
+- Tambien 3 Jul: 2 clinicas descalificadas (sin medicos rotantes) + Porsalud (sistema propio) = mini-tarjeta funcionando; viernes de pago = ruido, no señal.
+
+### 4. Auditoria de plataforma a fondo (pedida por Diego: "¿estamos listos?")
+
+**Veredicto: LISTA para piloto de 1 sede con provision manual.** Detalle:
+
+LISTO Y PROBADO: motor resource-aware (QA 4 escenarios via API 2 Jul), **OrgSwitcher multi-org YA EXISTE en frontend** (usuario en N orgs cambia entre ellas → multi-sede se modela org-por-sede, medico rotante = 1 cuenta en varias orgs), Coexistence validado, templates completos, provisioning manual dominado (Orthos = 1 sesion via SQL).
+
+**3 GAPS QUE NO SE PROMETEN:**
+1. **Sin push de "cita nueva" al medico** — solo existe `reschedule_doctor` (le llega WhatsApp si el paciente pide reagendar). Cita nueva la ve al abrir su agenda. Decir "la ve en su app al instante", NO "le llega notificacion". Build ~1 dia si cliente pagando lo pide.
+2. **Sin sync automatico entre orgs/sedes** (#73) — mitigacion: bloques "Ocupado" manuales + OrgSwitcher para ver cada sede.
+3. **Agenda del medico = lista del dia** (sin vista mensual) — candidata #1 libro de demanda (rebote Stacy).
+
+DATO TECNICO CLAVE: `resources` es org-scoped (no clinic-scoped) → multi-sede dentro de UNA org romperia los sillones. Org-por-sede lo evita. `calendars`/`service_types`/`whatsapp_lines` SI son por clinic_id.
+
+**DRIFT DE RAMA (urgente):** `feat/page-tracking-navegacion` va **12 commits adelante de main** (PageTracker, fix outage edge functions, historial Coexistence, todo el polish mobile). page_views tiene datos de usuarios reales → **produccion aparentemente sirve la rama** — confirmar branch de prod en Vercel + merge #85 ANTES de instalar cliente nuevo.
+
+### 5. Pricing CDA — decidido
+
+- **$150/mes por sede** (tier multi-recurso existente — Xcala ES ese perfil; matiz honesto: $150 validado como aceptable-al-cierre con Skin Medic, NO como retenido — CDA seria la primera validacion de retencion del tier).
+- **Primer mes gratis** con metrica pactada en voz alta: tiempo-de-cuadre 24h → nuestro numero en 30 dias. El mes gratis convierte la decision del lunes en "probar gratis con metrica", no "pagar $150".
+- **El precio SE DICE EN LA SALA** (regla del 2do toque — propuesta escrita post-visita seria repetir el error Stacy), pero DESPUES de la calculadora a lapicero: A citas/semana × 1/20 que se enfria × ticket (se asume L.10K en voz alta, ellos corrigen — NO se pregunta el ticket) = fuga mensual vs $150 = "medio paciente recuperado lo paga".
+- Razonamiento: ya pagan Dentalink (linea presupuestaria existe), señal de seriedad ante jefe de red nacional, no canibalizar la escalera ($40 aqui destruiria el precio en todo el mercado).
+- **Escalera en el bolsillo:** si la calculadora revela operacion chica (2-3 medicos, poco volumen) → "$40 por medico" en la sala. La regla decide, no los nervios.
+- Expansion (NO ofrecer lunes): 5 sedes ≈ $600-750/mes = **~mitad del hito paz mental en UNA cuenta**. Se negocia con el dato del mes 1.
+- Cuentas de medicos gratis ilimitadas, explicito ("sus medicos no pagan nada") = las semillas.
+
+### 6. Entregable
+
+**`docs/ventas/kit-cda-lunes.md`** — secuencia de la visita, hoja calculadora imprimible, checklist de captura post-SI en 5 bloques (numero WhatsApp/lado Meta CRITICO incl. pregunta trampa "¿Dentalink manda recordatorios y desde que numero?"; personas; operacion/motor; baseline caso de estudio; acuerdos en-sala), gaps no-prometer, pendientes pre-lunes.
+
+### Tareas activas (post-3 Jul)
+
+- [ ] **#86** ✅ HECHO — Kit CDA en `docs/ventas/kit-cda-lunes.md` (imprimir hoja calculadora antes del lunes)
+- [ ] **#87** LUNES 6 Jul: reunion jefe CDA — ejecutar kit (cerrar en la sala: demo + calculadora + $150 + mes gratis + fecha instalacion)
+- [ ] **#85 (PRE-LUNES)** Merge rama → main + confirmar branch de prod en Vercel
+- [ ] **#84 (PRE-LUNES)** Probar envio/recepcion linea Orthos +504 9787-0752 (la demo del lunes la usa)
+- [ ] **#88** Decision Diego: toque final a Stacy (mensaje redactado, costo 0) o cerrar expediente
+- [ ] **#89** Decision Diego: Lumina — ¿mensaje corto o se da por perdida? CDH (#83) sigue sin reprogramar
+- [ ] **#74 (vigente)** Loop Wilmer: check-in natural lun-mar 6-7 Jul
+- Vigentes: #76 (Free vs Pro), #82 (preguntas Stacy — reciclar para CDA: estan en el kit), #57-65, #67-73, #77 (Grecia en su cancha)
+
+### Riesgos activos (actualizado 3 Jul)
+
+1. **ALTO:** el lunes CDA es UNA bala (regla no-segunda-oportunidad) con 2 dependencias tecnicas abiertas (#84 linea sin probar, #85 drift de rama). Mitigacion: resolver ambas antes del lunes.
+2. **ALTO (heredado):** velocidad de adquisicion = horas de Diego. La semana quemo 4 leads en el 2do toque — la regla "cerrar en la primera visita" es la respuesta estructural.
+3. **MEDIO:** teorizamos CDA sobre 1 conversacion con el asistente — el jefe puede tener otra agenda (¿por que pagan Dentalink Y toleran 24h? puede haber politica interna). Mitigacion: descubrimiento DENTRO de la reunion antes del precio.
+4. **MEDIO:** DKapilar sabado sin hoja de prep (#66 — Diego pidio no trabajarla hoy; queda bajo su control).
+5. **BAJO:** $150 tier sin validacion de retencion (Skin Medic murio a 48h por gap tecnico). El mes gratis + metrica mitiga.
+
+### Para retomar proxima sesion
+
+**Primera pregunta al retomar:** ¿Como salio la reunion del lunes con el jefe de CDA — se cerro en la sala? ¿Que trajo el checklist (numero WhatsApp, medicos, sillones, Dentalink-recordatorios)? ¿#84 y #85 se hicieron antes? ¿Como salio DKapilar el sabado? ¿Noticias organicas de Wilmer/colegas? ¿Decidio Diego el toque final a Stacy (#88) y que hacer con Lumina/CDH (#89)?
+
+---
+
+## Sesion 5 Jul 2026 (DOMINGO) — Base rate de campo + war-gaming completo del piloto CDA
+
+**Contexto entrante:** T-1 dia a la reunion CDA. Fin de semana: DKapilar no contesto (sabado), Stacy MIA, Lumina nunca abrio la puerta.
+
+### 1. Base rate de campo — caza 4 Jul (6 clinicas) → clinica-hub = OPORTUNISTA
+
+| Clinica | Hallazgo |
+|---|---|
+| Dental Roque | Personal rota dias fijos; dolor = coordinar con el PACIENTE → pitch core. Unica con quimica/dolor-producto de las 6 |
+| Dental Integral | Externos SI, pero cada uno tiene asistente que responde rapido → **el dolor lo resuelve la capa humana** |
+| Dental Smart | Recien instalo Dentalink, mucho papel; pitcheado $150 → lo vio como "recordatorios que Dentalink ya trae" y no vio valor |
+| CDTM | Todos en piso, Dentalink. Descalificada |
+| Summit | Papel, tipo NewSkin (burocracia multi-sucursal = OUT conocido) |
+| Paper | Dolor = atraccion de clientes, no coordinacion. Fuera de ICP |
+
+**Conclusiones:**
+- **Base rate del dolor agudo de coordinacion: ~1 en 10** conversaciones de clinica (solo CDA en toda la muestra 3-4 Jul). Clinica-hub = cuenta oportunista, NO segmento. Con TAM TGU ~20 brutas → 2-3 cuentas maximo con ese perfil.
+- **Pitch default de calle vuelve al CORE** (paciente perdido + numero propio + confirmacion con consecuencia). Coordinacion = cuña SOLO cuando la mini-tarjeta detecta latencia.
+- **Insight Dental Integral (afila el filtro):** el dolor no es "trabaja con externos" — es **latencia de respuesta del lado del medico**. Externos CON asistente propia que responde = sin dolor. Filtro nuevo: "¿cuanto tardan en confirmar cita con un especialista externo?" — minutos = no hay venta.
+- **Lecciones Dental Smart:** (1) "acaba de instalar un PMS" = descalificador temporal (switching cost recien pagado; revisar en 6-12 meses); (2) contra Dentalink NUNCA abrir con recordatorios/citas; (3) **Dentalink SI puede enviar desde el telefono de la clinica** (correccion de Diego) → pregunta trampa del numero RETIRADA del pitch; el numero queda en checklist solo por conflicto de instalacion.
+
+### 2. Reframe del pitch CDA — cierre-en-el-momento (correccion de Diego al COO)
+
+Flujo real CDA: odontologa general revisa → decide especialista → buscan contactar al especialista → **el paciente se va a casa y entra el ciclo de perseguirlo**. El producto para CDA = **"el paciente no se va sin fecha"** — cerrar la cita del especialista EN el momento, con el paciente presente.
+
+- **Demo = escena de 60 segundos** (org Orthos): "su paciente esta en recepcion, la doctora dice 'necesita endodoncista'. Mire." → especialista → hueco real → cita → confirmacion al WhatsApp del paciente antes de levantarse. Todo lo demas es apendice.
+- **Metrica del mes gratis reformulada:** "referidos que salen con cita el mismo dia: hoy ~0% → nuestro numero en 30 dias" (la misma 24h→minutos contada desde el paciente).
+- **Calculadora reenfocada:** referidos a especialista/semana × 1/20 que se enfria × ticket ESPECIALISTA (endodoncia/implante, L.10K asumido en voz alta). Simulacion con 10 referidos/sem: fuga ~L.20K/mes = 5x el precio.
+- **Respuesta a "eso lo hace Dentalink / un calendario gratis":** ya tienen Dentalink y calendarios gratis existen hace 10 años — y tardan 24h; ver el hueco ≠ cerrar y DEFENDER la cita (recordatorios + confirmacion con consecuencia + reagenda). Frontera: "Dentalink es su expediente; nosotros la coordinacion y la conversacion. Conviven."
+- **Kit actualizado con 5 cambios** (apertura-pregunta, descubrimiento pre-precio, escena 60s, calculadora, seccion objecion 4.b + #85 marcado resuelto).
+- **Lista de descubrimiento de 18 preguntas** entregada en chat (Diego la estudia; NO integrada al kit por decision suya). Decisivas: (1) "¿el paciente sale con su cita puesta?" (apertura), (6) ventanas fijas vs flotante (decide modelo y promesa), (7) top 2-3 especialistas por referidos (piloto 80/20), (8) "¿en que llevan su agenda?" (decide mecanismo y si hay sync posible), (9) ¿asistente propia? (valida el 24h), (11) "¿ya intentaron resolverlo?" (mina anti-objecion).
+
+### 3. Escenario B war-gamed (flotante + medicos multi-clinica) — VENDIBLE con 0 codigo dia 1
+
+Simulacion de Diego: flotante, 2-3 especialistas concentran referidos, llevan agenda propia, mayoria SIN asistente (= el 24h es real y estructural), 10 referidos/sem, 5 sillones → tier $150 se sostiene, escalera innecesaria.
+
+**Playbook B (escalera de mecanismos, subir en orden):**
+0. **Achicar 80/20:** piloto con los 2-3 especialistas top, el resto sigue por llamada.
+1. **Calendario compartido solo-ocupado (0 codigo):** el medico comparte libre/ocupado de su GCal con la asistente (privacidad intacta — no ve otras clinicas). Asistente ve hueco → cierra en el momento. Metrica dura intacta.
+2. **Bloques semanales impuestos por el JEFE (0 codigo):** la palanca sobre los medicos es del jefe (el da los pacientes), no nuestra.
+3. **Tentativa + confirmacion WhatsApp (fallback):** reduce el ciclo, no lo elimina → promesa baja a suave + evaluar $40/medico.
+
+**REGLA NUEVA (de Diego, confirmada en war-gaming): medico = VIEWER o SWITCHER, NUNCA dual-maintainer.** Jamas pedirle registrar en dos calendarios. Clave que desarma el miedo al doble trabajo: hoy el medico YA anota en su GCal tras cada llamada de CDA — con nosotros hace EL MISMO gesto gatillado por un WhatsApp. Trabajo neto nuevo: cero.
+
+### 4. Circuito de calendarios — diseño completo con estimados (roadmap PRIVADO post-firma, NADA se promete en la sala)
+
+| Peldaño | Que | Costo | Gatillo |
+|---|---|---|---|
+| WhatsApp "cita nueva" al medico | Cierra el circuito manual (reusa infra reschedule_doctor) | ~1 dia | Firma. Se construye ANTES de instalacion (unico build pre-dia-1) |
+| Write-back OC→GCal | Citas CDA aparecen solas en su Google. **Fricción del medico → CERO** + protege la metrica (evita doble-compromiso por olvido) | ~2 dias | Fast-follow semana 1, apenas el lado Meta este asegurado |
+| Entrada GCal→OC | Horas ocupadas de su GCal = bloques en OC → motor solo ofrece huecos reales → **asistente <1 min en UNA pantalla** | ~2-3 dias | Solo con evidencia del piloto (vistazo manual duele / colisiones) |
+| Vista mensual / switcher | OC como su unico calendario (loop completo) | 1-2 sem | Solo con medicos activos pidiendolo |
+
+- **Arquitectura write-back: CUENTA DE SERVICIO** (medico comparte su calendario con correo de servicio OrionCare con permiso de edicion — 30 seg, asistido en onboarding). NO OAuth por medico (verificacion Google = semanas, tokens testing expiran 7 dias).
+- **TimeTree NO tiene API publica** → especialista en TimeTree = circuito manual permanente. La pregunta 8 del descubrimiento decide quien recibe sync.
+- Experiencia dia 1 honesta: asistente ~90 seg (vistazo a calendario compartido en pestaña al lado); <1 min garantizado llega con la entrada GCal→OC. La metrica pactada es "sale con cita el mismo dia", no segundos.
+- Decision de secuencia (COO, aceptada): NO cargar la ventana firma→instalacion con builds de growth — dia 1 minimo y a prueba de balas (leccion Skin Medic). Migracion de medicos NUNCA es proyecto: el switcher se gana con regalos (write-back), no se empuja.
+
+### 5. #85 RESUELTO — drift de rama era falso alarma
+
+`git fetch` 5 Jul: **el codigo ya esta en main via PRs #67-#72** (mergeados ~4 Jul). La rama `feat/page-tracking-navegacion` solo difiere en 3 commits de docs (estado-estrategia + kit CDA). Cero riesgo de drift para la demo. Push de los commits de docs: opcional, no bloquea.
+
+### Tareas activas (post-5 Jul)
+
+- [ ] **#84 (UNICO PRE-LUNES)** Probar envio/recepcion linea Orthos +504 9787-0752 + **imprimir hoja calculadora**
+- [ ] **#87** LUNES 6 Jul: reunion jefe CDA — ejecutar kit (apertura-pregunta → descubrimiento → escena 60s → calculadora → $150 + mes gratis → fecha)
+- [x] **#85** ✅ RESUELTO 5 Jul (codigo ya en main; quedan 3 commits docs, push opcional)
+- [ ] **#90** DKapilar no contesto sabado — decidir: ¿un toque mas o expediente cerrado? (patron 2do toque otra vez)
+- [ ] **#91** Dental Roque: unica de la caza con dolor-producto core — si se vuelve, es a CERRAR en esa visita (regla vigente)
+- [ ] **#88/#89** Stacy toque final / Lumina-CDH — sin decision de Diego, no insistir
+- [ ] **#74** Loop Wilmer: check-in natural lun-mar 6-7 Jul
+- Post-firma CDA (si hay SI): checklist de captura del kit → lado Meta del numero → provision org → WhatsApp cita-nueva (1d) → write-back GCal (2d)
+
+### Riesgos activos (actualizado 5 Jul)
+
+1. **MEDIO (bajo de ALTO):** dependencias tecnicas pre-CDA — #85 resuelto; queda solo #84 (linea Orthos, prueba de 2 min pendiente al cierre de sesion).
+2. **ALTO (heredado):** velocidad de adquisicion = horas de Diego. DKapilar se suma al patron del 2do toque (5 leads muertos/enfriados asi en 8 dias).
+3. **MEDIO:** teorizamos CDA sobre 1 conversacion — el descubrimiento del lunes (preguntas 6-9) decide modelo, mecanismo y promesa ANTES del precio. El war-gaming cubre todas las ramas.
+4. **MEDIO (nuevo):** sobre-diseño — la sesion invirtio horas en arquitectura de sync que UNA respuesta de la sala ("usan TimeTree"/"libreta") puede invalidar. Regla: ningun build post-firma arranca antes de tener las respuestas del descubrimiento.
+5. **BAJO:** $150 sin validacion de retencion (mitigado: mes gratis + metrica pactada + piloto 1 sede).
+
+### Para retomar proxima sesion
+
+**Primera pregunta:** ¿Como salio CDA — se cerro en la sala? ¿Que revelo el descubrimiento: (a) ¿ventanas fijas o flotante? (b) ¿quienes son los top 2-3 especialistas? (c) ¿agenda en Google/TimeTree/libreta? (d) ¿asistente propia? (e) ¿desde que numero manda Dentalink? ¿Se hizo #84 antes? ¿Se pacto metrica y fecha de instalacion? Luego: Wilmer (check-in), DKapilar (#90), Stacy/Lumina (#88/#89).
+
+---
+
+## Sesion 6 Jul 2026 (LUNES) — CDA murio + redefinicion completa del ICP con datos reales (Wilmer + Consultorio Familiar)
+
+**Contexto entrante:** dia de la reunion CDA. Resultado: MUERTA. El resto de la sesion fue analisis de datos (SQL via MCP Supabase) sobre los dos clientes activos para entender que ICP sostienen realmente los datos, no la teoria.
+
+### 1. CDA — muerta, confirma base rate ya visto
+
+Diego fue a la reunion pactada; el jefe no estaba (trabaja en otra ciudad). La asistente le menciono el proyecto al jefe de pasada — **sin la escena de 60s, sin calculadora, sin descubrimiento** — y el jefe no mostro interes. Dato duro que trajo Diego: son solo **~4 especialistas** esperando 24h, no una operacion grande. Diagnostico: no hubo pitch real (fue relato de segunda mano, no demo), Y el perfil (dolor de coordinacion delgado + Dentalink ya cubre recordatorios) confirma lo que la caza del 4 Jul ya habia mostrado — coordinacion = ~1/10, oportunista. **Puerta pasiva abierta (si el jefe pregunta, se responde), sin insistir.** Duda de Diego validada: "confirmacion" NO es cuna contra Dentalink (ya envia recordatorios/confirmaciones desde el numero de la clinica).
+
+### 2. Correccion del filtro ICP — Wilmer rompe su propio filtro
+
+Diego cuestiono el filtro que se armo en la sesion ("asistente saturada" + "silla compartida = dolor"): **Wilmer no tiene asistente (contesta el mismo) y el loop de silla-compartida lleva 5+ dias sin moverse** (si doliera de verdad, ya hubiera reclutado colegas). Filtro corregido a 2 preguntas: (1) ¿como agenda hoy? (papel/WhatsApp/TimeTree, no Dentalink comodo), (2) ¿se le pierden pacientes por no contestar a tiempo? — sin exigir asistente ni silla-compartida como requisito, solo como señales que suben probabilidad.
+
+### 3. Analisis completo de datos de Wilmer (bot + agenda) — la pregunta que rompio la tesis
+
+Auditoria via SQL (bot_conversation_logs, appointments, patients, message_logs, page_views) para Wilmer:
+- **258 logs de bot, 46 pacientes distintos.** Booking 26%, FAQ 19%, greeting 16%, navigation 11%, confirm 9%, completed 6%, handoff 5%.
+- **Bugs de FAQ encontrados:** (a) acentos rompen el match ("Dónde" no matchea keyword "donde" sin tilde) — silencio, no error, pasa inadvertido; (b) keyword generico "precio" secuestra FAQs especificas (blanqueamiento/restauraciones) dando **respuesta incorrecta**, peor que silencio; (c) gap real: no existe FAQ de "limpieza dental" (preguntada 3+ veces). Playbook actualizado (gotcha #1: `intent='confirm'` SI se loggea ahora, contradice nota de abril).
+- **Bug tecnico nuevo (anotado en estado-dev.md):** en `booking_select_hour`, si el paciente escribe la hora en texto libre ("9 am") en vez de elegir el numero de lista, la confirmacion mostro una hora distinta (12:00 PM). El paciente se autocorrigio esa vez, pero no todos lo notarian. Pendiente de investigar codigo (NO tocar por feature freeze).
+- **Reagendamiento:** 11 de 46 pacientes (24%) intento reagendar/cancelar alguna vez; solo 4-5 completaron el cambio 100% solos via bot.
+- **LA PREGUNTA CLAVE (de Diego): ¿los que se autoagendaron ya estaban en la BD o eran leads nuevos?** Resultado: **127 citas totales, pero solo 7 (5.5%) se completaron de punta a punta via bot** — el 94.5% las agenda Wilmer manualmente (via `/citas/nueva`, que visito 19 veces). Y de esas 7, **las 7 (100%) eran pacientes YA existentes** (antiguedad de dias a meses) — **cero leads nuevos autoagendandose de cero.**
+- **Esto invalida la premisa "paciente perdido por no contestar rapido"** como el dolor que Wilmer demuestra. Lo que SI sostiene el dato: Wilmer agenda presencial, el bot le ahorra **tiempo administrativo** (recordatorios + confirmacion de 121 citas historicas) + dan autoservicio ocasional a un puñado de recurrentes.
+- **Contradiccion encontrada con el pitch original:** el reporte de la llamada de venta a Wilmer (25 Mar, `docs/reporte-guevara-25mar*.md`) YA usaba el argumento "pacientes de noche que se hubieran perdido" — construido sobre una muestra de 3 citas (2 de noche) en un mes. Los 4 "pacientes del sitio web capturados" que reportaba esa llamada **no existen hoy como pacientes** — no hay forma de confirmar que se hubieran perdido sin el bot; nunca hubo contrafactual. Es decir: **el pitch actual de "no pierdas pacientes" nace de la misma anecdota que ahora reciclamos como tesis de ICP — razonamiento circular.**
+- **No-shows:** solo 4 de 127 (3.1%) auto-canceladas — tasa baja, sin baseline pre-bot para afirmar "redujimos no-shows".
+- **Hora de confirmacion:** 46% de las confirmaciones ocurre a las 11am hora Honduras — coincide con la hora fija del cron de recordatorios (`send_reminders_daily_11am_tgu`), NO es comportamiento espontaneo. Pero **27% confirma entre 7-8pm**, fuera de horario de atencion (8am-5pm) — esa si es evidencia real de valor 24/7.
+- **Recurrencia:** mediana 1.5 citas/paciente (mitad de los 61 pacientes solo tuvo 1 cita). El 20% (12 pacientes) con 4-7 citas muestra **rafagas de visitas seguidas en semanas** (patron de fase de tratamiento), no relacion cronica permanente. Los procedimientos tageados (solo 16% de citas, y casi todos de Jun-Jul cuando se lanzo el motor) muestran mayoria diagnostico/limpieza/extraccion — de una sola sesion, sin confirmar la hipotesis de tratamiento multi-sesion. Data quality: 2 de los 12 recurrentes tienen conteos inflados por cadenas de reagenda (misma cita movida, no visitas distintas) — util para no sobre-vender el caso de estudio, pero irrelevante para el ICP.
+
+### 4. Comparacion N=2 — Consultorio Familiar (Yeni) vs Wilmer
+
+Para responder "¿fue Wilmer solo timing + gusto personal?", se corrio el mismo analisis sobre el otro cliente activo:
+
+| Metrica | Wilmer (dental, solo) | Consultorio Familiar (con secretaria) |
+|---|---|---|
+| Citas totales | 127 (7 meses) | 46 |
+| Promedio citas/mes | ~18 | ~8 |
+| Auto-canceladas (no-show real) | 3.1% | **19.6%** |
+| Logs de bot | 258 | 251 (casi igual pese a menos citas) |
+| % logs = booking | 26% | **59%** |
+| % logs = FAQ | 19% | 1.6% |
+
+**Conclusion:** el producto SI genera uso real en un contexto bien distinto (clinica con secretaria + centro de diagnostico por imagen, no solo dentista sin asistente) — no es puro azar de personalidad de Wilmer (N=2, no N=1). Pero **el dolor que resuelve es distinto en cada caso**: Wilmer = ahorro de tiempo administrativo (pocos no-shows); Consultorio Familiar = **reduccion real de no-shows** (1 de cada 5 citas se auto-cancela — probablemente por ser citas de diagnostico/referido, vinculo mas debil que "tu doctor de siempre"). **El ICP tiene 2 ganchos de venta segun el perfil del prospecto, no uno universal.**
+
+Chequeo adicional: Consultorio Familiar NO parece enfriarse (otro falso-negativo de `last_sign_in_at`, igual que el 28 Jun) — la secretaria tiene `page_views` activos HOY mismo, aunque no crea citas nuevas ni manda mensajes manuales desde hace 10-12 dias (24 y 26 Jun respectivamente). Señal de bajo ritmo, no de abandono.
+
+### ICP redefinido (reemplaza el de la sesion 5 Jul)
+
+**Perfil:** clinica/consultorio pequeño (1-3 profesionales) con agenda manual (papel/WhatsApp/TimeTree, no Dentalink asentado), CON ALGUNO de estos dos dolores reales:
+1. **Tiempo administrativo** — el doctor/secretaria pierde horas mandando recordatorios/confirmaciones a mano (perfil Wilmer).
+2. **No-shows reales** — pacientes de paso/referidos/diagnostico que olvidan o no priorizan la cita (perfil Consultorio Familiar).
+
+**Explicitamente FUERA / no usar como pitch principal:**
+- "Se pierden pacientes NUEVOS por no contestar rapido" — sin evidencia en ningun caso de estudio propio.
+- Coordinacion con especialistas externos (clinica-hub) — ~1/10, oportunista (confirmado 2 veces: caza 4 Jul + CDA hoy).
+- Cadenas grandes con PMS pagado y jefe lejano (patron CDA/NewSkin) — no hay wedge.
+- Asistente saturada / silla-compartida como REQUISITO — son señales que suben probabilidad, no dolor en si (Wilmer no tiene ninguna de las dos).
+
+### Tareas activas (post-6 Jul)
+
+- [x] **#87** CDA ejecutada — MUERTA (jefe sin interes, dolor delgado). Puerta pasiva, sin insistir.
+- [ ] **#92** Decidir si Dental Roque se vuelve a visitar (unica con dolor-producto core de la caza del 4 Jul) — si se vuelve, es a CERRAR.
+- [ ] **#93** Bug `booking_select_hour` texto libre ("9am" → hora incorrecta en confirmacion) — documentado en estado-dev.md, NO tocar hasta post-freeze.
+- [ ] **#94** FAQs: normalizar acentos + prioridad de match + agregar FAQ limpieza dental — documentado, diferido a post-freeze.
+- [ ] **#74 (vigente)** Loop Wilmer: check-in aun pendiente (se desvio la sesion hacia analisis de datos).
+- [ ] **#90 (vigente)** DKapilar — decidir un toque mas o cerrar expediente.
+- [ ] **#88/#89 (vigente)** Stacy/Lumina/CDH — sin decision de Diego, no insistir.
+
+### Riesgos activos (actualizado 6 Jul)
+
+1. **ALTO:** pipeline sin ningun prospecto caliente tras la muerte de CDA — Dental Roque es la unica candidata viva, y no esta agendada visita.
+2. **MEDIO:** el pitch de venta actual ("no pierdas pacientes") no tiene respaldo en ninguno de los 2 casos de estudio reales — riesgo de venderle a un prospecto con una promesa que Wilmer/Yeni no demuestran. Usar en su lugar: tiempo administrativo (Wilmer) o reduccion de no-shows (Consultorio Familiar), segun el perfil.
+3. **MEDIO (heredado):** velocidad de adquisicion = horas de Diego. Racha de leads muertos en el "2do toque" sigue sin frenar (CDA es el ultimo de la lista).
+4. **BAJO:** 2 bugs tecnicos reales encontrados (acentos en FAQ, hora libre en booking) — no bloqueantes, documentados para cuando termine el freeze.
+
+### Para retomar proxima sesion
+
+**Primera pregunta:** ¿Diego hizo el check-in con Wilmer sobre sus colegas (loop silla-compartida, pendiente desde el 5 Jul)? ¿Alguna decision sobre Dental Roque (visitar de nuevo) o DKapilar (#90)? ¿Se uso el ICP de 2 ganchos (tiempo administrativo / no-shows) en algun prospecto nuevo?
+
+### Notas de cierre (mismo dia, post-analisis) — 2 pendientes para mañana
+
+**#95 — URGENTE, fuga de ingreso real:** Consultorio Familiar (Yeni) **NO se le esta cobrando.** Se habia marcado como PERDIDO/churn el 22 Jun junto con David (Ecoclinicas) — pero los datos de hoy confirman que SI esta activo (secretaria usando la plataforma a diario, `page_views` hasta hoy mismo). Osea: hay uso real sin monetizar. Revisar y decidir como facturar retroactivo/a partir de ahora. Ademas: **revisar David/Ecoclinicas con los mismos logs antes de asumir que tambien es churn** — mismo patron de falso negativo que ya se repitio 2 veces.
+
+**#96 — Lead nuevo fuera de ICP, evaluar mañana:** Diego conocio en la calle a **Evelia**, dueña de un negocio de renta de buses con contratos con empresas grandes (ej. Pepsi). Su esposo fundo y operaba el negocio, murio hace ~1 año. Ella dio a entender que podria necesitar ayuda. Dos lecturas de Diego, sin resolver: (a) necesita apoyo administrativo real (un "asistente" para el negocio, dolor genuino post-fallecimiento del esposo), o (b) no es un lead de negocio real (posible interes personal/no serio, o simplemente no hay necesidad real). **Fuera del ICP medico/dental por completo** (logistica/transporte, contratos corporativos — problema probablemente distinto a agendar citas por WhatsApp).
+
+**Desarrollo de la idea (misma sesion):** Diego considero la posibilidad de que ella lo contrate con salario para construir algo por dentro del negocio. **Bandera roja identificada:** esto es exactamente el "Modelo C: agencia/bespoke" que ya se rechazo como TRAMPA en la sesion del 27 Jun (re-examen de tesis) — consume las 4-5h/dia protegidas para OrionCare+familia, es tiempo-por-dinero (no escalable), y seria codigo bespoke para 1 cliente fuera de OrionCare. **Si Evelia ofrece empleo/consultoria, es una decision de vida/finanzas personal de Diego, separada de la estrategia de OrionCare — NO es diversificacion 2027 ni pipeline de ventas.**
+
+**Como Diego debe averiguar intenciones reales de Evelia (antes de asumir):** pregunta directa — "¿esta buscando una herramienta que ya exista, o a alguien que se sume al negocio?" + si menciona contratar, preguntar modalidad (tiempo parcial/proyecto/planta) + preguntar si ya tiene idea de presupuesto (revela madurez real de la necesidad).
+
+**Como medir la magnitud del negocio (una sola conversacion, 7 señales):** (1) cuantos buses tiene la flota, (2) cuantos contratos corporativos activos y desde hace cuanto, (3) formalidad (RTN/contratos escritos vs. todo de palabra), (4) como llevaba el esposo el control (Excel/cuaderno/todo en la cabeza — define el tamaño real del trabajo de "organizar"), (5) tiene alguien mas administrando o esta sola, (6) el negocio crecio/se mantuvo/se redujo en el ultimo año sin el, (7) pregunta directa: "¿cuantos buses y con cuantas empresas trabaja hoy?".
+
+**Decision de si Diego deberia trabajar con ella (aparte de medir el negocio):** depende de 4 preguntas propias — cuantas horas/semana pide realmente (salen de las horas ya comprometidas a OrionCare+familia, no de la nada), cuanto pagaria (cifra concreta, no idea vaga), si es el tipo de trabajo que sabe hacer bien (sistema de agenda/contratos = cercano; logistica de flota/mantenimiento = negocio nuevo que aprender), y que le costaria a OrionCare decir que si. **La pregunta que mas pesa: cada hora aqui es una hora que no sale para cerrar clientes o hacer crecer OrionCare.**
+
+No construir nada aun. Evaluar mañana con lo que Diego averigue.
+
+---
+
+## Sesion 8 Jul 2026 (MIERCOLES) — Post r/SaaS + reconstruccion del historial real de canales de adquisicion
+
+**Contexto entrante:** sin agenda de decisiones — Diego pidio redactar un post para r/SaaS pidiendo feedback externo honesto sobre adquisicion (COO no habia resuelto el pipeline vacio post-CDA, asi que la idea es crowdsourcing gratis en vez de mas teoria interna). El ejercicio de escribir el post con "todo el contexto posible" obligo a reconstruir con precision de donde vino cada cliente historico — trabajo que nunca se habia hecho explicito en memoria.
+
+### Hallazgo principal: 4 clientes en 6 meses, 1 por canal, cero canales probados como repetibles
+
+| Canal | Cliente | Resultado |
+|---|---|---|
+| Ads (Meta, corrio ~2 meses en paralelo a un pivot de mensaje) | Medilaser $75/mes | Churn — ver detalle abajo |
+| Llamadas frias a un listado | Wilmer $35/mes | **Unico activo hoy** (7 meses, NPS 9.5) |
+| Presencial / puerta a puerta | Skin Medic $150/mes | Churn en 48h — ver [[skin-medic-perdido]] (ya documentado, confirmado consistente hoy) |
+| Mensajes en frio por WhatsApp | Ecoclinicas $35/mes | Churn por inactividad ("sin movimiento") |
+
+**Por que importa:** cada canal convirtio exactamente 1 vez. Eso es indistinguible entre "cada canal funciona a una tasa baja que no se ha empujado lo suficiente" y "las 4 conversiones fueron anecdota/suerte y ningun canal esta realmente validado". Con n=1 por canal, cualquier decision de "doblar apuesta en X canal" hoy seria sobre-ajuste a ruido. Memoria nueva creada: [[canales-adquisicion-sin-repetibilidad]].
+
+### Correccion — Medilaser $75/mes (antes solo se sabia "perdido 22 Jun, desconectada, Kener sin contestar")
+
+Vino de **ads**, durante un tramo en que el mensaje/ICP estaba pivotando (targeting inconsistente). Cliente en otra ciudad (SPS), aparentaba ser multi-recurso. Causas de churn, todas compuestas: (1) comunicacion pobre con la doctora — poco tiempo disponible; (2) la asistente actuo mas como barrera/gatekeeper que como aliada; (3) sin WhatsApp Coexistence activo en ese momento; (4) tuvieron un problema con su linea principal, pidieron recuperar el numero que habian integrado, y luego desaparecieron. Dificil aislar la causa raiz — combo de comunicacion + producto + operacion.
+
+### Correccion — CDA (muerte del lunes 6 Jul)
+
+La version guardada el 6 Jul decia "el jefe no estaba, se entero de oidas por la asistente, sin interes." Diego corrige: la causa real es que **en la (segunda) visita se confirmo que el dolor era delgado** — solo coordinan con ~5 especialistas externos, espera de hasta 24h para compartir agenda, no es lo bastante frecuente/costoso como para disparar una compra. Mismo patron que otras clinicas de la caza del 4 Jul, donde la mayoria del personal trabaja en planta (sin necesidad real de coordinacion externa). No fue un fallo de ejecucion de la visita — fue diligencia que revelo que el segmento no calificaba.
+
+### Correccion — Skin Medic $150/mes
+
+Confirmado que el post-mortem ya guardado ([[skin-medic-perdido]]) es correcto y completo: fallo tecnico/operativo (sin Coexistence, cierre-reapertura de cuenta, dia perdido de operacion, cuenta bloqueada por Meta por falta de sitio web verificado), no un problema de precio o desinteres. Sin cambios a esa memoria.
+
+### Entregable
+
+Post completo para r/SaaS redactado (titulo + cuerpo con desglose canal-por-canal, los 2 deals que murieron con las causas reales, y 5 preguntas especificas). Vive en el scratchpad de esta sesion (no en el repo, es contenido efimero de una vez). **Pendiente: Diego publica y trae los comentarios a una proxima sesion para que el COO los procese.**
+
+### Tareas activas (post-8 Jul)
+
+- [ ] **#97** Diego publica el post en r/SaaS y trae resultados/comentarios a la proxima sesion de estrategia.
+- [ ] **#95 (vigente, sin resolver)** Consultorio Familiar sigue sin facturarse pese a uso real confirmado — fuga de ingreso pendiente.
+- [ ] **#92/#90/#88/#89 (vigentes)** Dental Roque, DKapilar, Stacy/Lumina/CDH — sin decision nueva de Diego esta sesion.
+
+### Para retomar proxima sesion
+
+**Primera pregunta:** ¿Diego publico el post en r/SaaS? ¿Que comentarios llegaron — hay una senal real sobre que canal doblar o el consenso es "necesitas mas data"? Ademas, retomar lo que quedo pendiente del 6 Jul: check-in Wilmer (loop silla-compartida), decision Dental Roque, y la fuga de ingreso de Consultorio Familiar (#95).
+
+---
+
+## Sesion 9 Jul 2026 (JUEVES) — Libro leido + diseño del primer experimento pre-registrado
+
+**Contexto entrante:** Diego pidio leer completo "The Experimentation Machine" (Bussgang, PDF en `docs/Libros/`) y responder: ¿sigue aplicable? ¿nuestro proyecto tiene futuro? ¿pivotamos?
+
+### Veredicto del libro aplicado a OrionCare
+
+1. **El libro sigue 100% aplicable** — metodos atemporales, solo las menciones de herramientas envejecieron. La parte "10x founder con IA" ya la ejecutamos mejor que sus casos. CAVEAT: escrito para VC-backed con mercados $25-50M+; filtrar todo lo de valuaciones/TAM/fundraising — la maquinaria de experimentacion SI aplica directo. Frameworks completos en [[libro-experimentation-machine]] (memoria actualizada hoy).
+2. **HUNCH aplicado:** U (usage) verde n=2; N (NPS 9.5) verde n=1; C churn historico 75% pero causas operativas corregidas; LTV:CAC incalculable; **H (hair-on-fire) NUNCA MEDIDO — el hueco central.** Nivel PMF: **Nascent** (1 de 4).
+3. **Insight clave:** "1 cliente por canal, ninguno repetible" tiene 2 explicaciones y asumiamos la equivocada. El libro: si el problema quema, el cliente intenta apagarse el fuego con un ladrillo — conversiones raquiticas parejas en 4 canales distintos es mas consistente con **CVP tibio** (problema de CVP) que con canales mal ejecutados (problema de GTM). Falsificable y barato de probar.
+4. **NO pivotamos todavia** — falta el experimento que discrimina. Pivotar hoy = sobre-ajustar a ruido (coherente con conclusion del 8 Jul).
+
+### Decision 1 — 40% test (Sean Ellis + follow-ups Superhuman) con clientes activos
+
+- Guion completo en **`docs/ventas/guion-40-test.md`** (enlazado en `docs/ventas/index.md`). Version A = Wilmer (incluye check-in loop colegas); Version B = secretaria Consultorio Familiar (incluye facturacion #95 + correccion citas madrugada).
+- Provenance: P1 = test de Sean Ellis (benchmark 100+ startups, umbral 40% "muy decepcionado"); P2-P4 = las 3 follow-ups de Rahul Vohra/Superhuman (beneficio→pitch, persona→targeting, mejora→libro de demanda). Adaptaciones Honduras: llamada no encuesta, salida digna en P1 (sesgo cortesia), "solo una cosa" en P2, perfil-no-nombre en P3, permiso-para-criticar en P4.
+- **Diego agenda la llamada ~10 Jul.**
+
+### Decision 2 — Arbol de decision PRE-ACORDADO (no se cambia despues de oir respuestas)
+
+- **A. Pasa el test** → pitch = frase textual de Wilmer; filtro = su P3; disparar Experimento #1.
+- **B. Tibio en AMBOS** → CVP nice-to-have incluso en el mejor caso → conversacion de pivote CON datos (otro WHO u otro WHAT).
+- **C. Loop colegas avanzo** → salta la fila: visita esa semana, cerrar-en-primera-visita, mes 1 gratis.
+
+### Decision 3 — Experimento #1 spec v2 (llamadas frias pre-registradas)
+
+**Correccion de Diego al diseño v1:** las listas son heterogeneas (medicos de IG, tamaño desconocido) → lista sucia mide la LISTA, no el pitch; 0 cierres seria ininterpretable. Rediseño en 2 etapas:
+
+1. **Etapa escritorio (Claude):** descarte grueso via Maps/IG/web — cadenas, hospitales, recepcion 3+, multi-sucursal-burocracia, recien-instalo-PMS.
+2. **Calificacion en primeros 60s de llamada** (conductual, NUNCA volumen): "¿quien les lleva la agenda?" + "¿comparten consultorio?" (+ TimeTree si Wilmer lo confirma). Califica → pitch; no califica → registrar perfil. **Bonus: censo TAM real** (el "ir a CONTAR" pendiente desde 30 Jun).
+
+Parametros: **n=20 CALIFICADAS** (~40-50 marcaciones), 3-4 sem, exito ≥3 visitas y ≥1 cierre → escalar n=50 + replicar SPS; fracaso 0-1 visitas → conversacion de segmento con datos. Diego calibra llamadas 1-5, Warhol toma 6-20 (pendiente confirmar). Congelado durante el experimento: cero ads (atribucion limpia), cero features. Matematica de contexto: si valida ~5% cierre → 7-9 clientes ICP restantes = ~150-180 llamadas en 4-6 meses; el loop silla-compartida mejora esa matematica si convierte.
+
+### Hallazgo — score INVERTIDO en `Investigar ICP.xlsx`
+
+Lista de la era motor-$150 (research Gemini): ~12-14 candidatos (5 torres + 7 clinicas). Puntua ALTO exactamente lo que hoy NO es ICP (ads/web optimizada/staff exclusivo/premium = problema ya resuelto; CDA score 5 y ya murio). **El perfil-Wilmer es invisible online** — cuanto mas facil encontrar la clinica en internet, menos probable que sea ICP. Consecuencias: (1) re-scorear lo existente con criterio nuevo (torres SUBEN: 40 consultorios chicos = cardumen perfil-Wilmer, puerta = asistente); (2) las listas de IG de Diego son mejor materia prima. **Matiz registrado:** "situacion de Wilmer" ≠ "medico independiente" — el parecido es CONDUCTUAL (agenda el mismo + comparte silla); independiente generico sigue FUERA salvo excepcion champion no-pagado (addendum 9 Jul), y la pregunta calificadora la detecta sola.
+
+### Chequeo SQL — Consultorio Familiar VIVO (org `a182a362-62e4-45f4-84c7-f76c0735390c`)
+
+- **Acceso:** secretaria (`yenimelissa_22+secretaria@`) 17 page views en 4 dias distintos 1-8 Jul, ultimo 8 Jul 7:12pm. Unica usuaria (consistente: ella opera, Yeni no entra).
+- **Recordatorios funcionando de punta a punta SOLOS:** cita del 8 Jul recorrio conf → r24h (leido) → followup sin-confirmar (leido) → sin confirmacion → **auto-cancelada + slot liberado + template entregado**. Confirmacion-con-consecuencia operando en produccion sin intervencion.
+- **Pipeline: 12 citas futuras** (15 Jul → 9 Sep). Bache de mensajes 27 Jun–7 Jul (secretaria siguio entrando; huele a semana floja de la clinica) reactivado el 8 Jul (8 out, 3 in, 1 cita nueva, 1 sesion bot).
+- **Flag 1:** 3 citas de agosto con hora de MADRUGADA (01:00, 02:15, 02:30 — 10/11/12 Ago) = probable error de captura AM/PM de la secretaria; si no se corrige, recordatorios saldran con hora absurda. Corregir via llamada #99 o soporte.
+- **Flag 2:** #95 facturacion mas urgente que nunca — uso diario + ciclo de valor completo + 12 citas futuras = la conversacion de cobro es SEGURA (no existe el "es que no lo usamos").
+
+### Addendum 9 Jul (2da sesion del dia) — Asimetria pre-registrada del 40% test
+
+Diego cuestiono si el test aplica igual a ambos clientes. Correccion PRE-REGISTRADA (antes de cualquier llamada, por lo tanto valida — la regla congela el arbol DESPUES de oir respuestas): **el test que decide es el de Wilmer** (unico caso usuario=pagador, 7 meses de uso); la llamada a la secretaria de Consultorio Familiar se reencuadra como **discovery+cobro** (primario: facturacion #95 + correccion AM/PM; secundario: discovery del gancho no-shows; el 40% va de yapa al final como señal de retencion del champion, NO veredicto de CVP — ella ni eligio ni paga, y el uso consistente lleva ~10 dias). Arbol ajustado en `docs/ventas/guion-40-test.md`: rama A se dispara aunque la secretaria salga tibia; rama B requiere tibio en ambos; rama B' nueva (Wilmer tibio + secretaria entusiasta = analizar si el CVP real es el gancho no-shows, sin pivotar mecanicamente). Dato operativo del dia: Wilmer con 2 citas hoy (11:30 y 14:00, ambas confirmadas) — tarde despejada despues de 2:30 PM si quiere llamar hoy.
+
+### Tareas activas (post-9 Jul)
+
+- [ ] **#98** Diego agenda y ejecuta llamada 40% test con Wilmer (~10 Jul) — guion version A. Dictar respuestas a Claude para registro.
+- [ ] **#99** Llamada secretaria Consultorio Familiar (misma semana) — guion version B REENCUADRADA: discovery+cobro primero (facturacion #95 + citas madrugada), 40% de yapa al final.
+- [ ] **#100** Diego pasa a Claude las listas de IG + estado real del G-Sheet (¿sigue vivo o los Excel son la fuente?).
+- [ ] **#101** Claude: dedupe + re-score + descarte grueso → cola depurada de llamadas (bloqueada por #100; filtro final espera P3 de Wilmer).
+- [ ] **#102** Decision pendiente de Diego: ¿Warhol toma la cadencia de llamadas 6-20?
+- [ ] **#97 (vigente)** Post r/SaaS — publicar y traer comentarios.
+- [ ] **#92 (vigente)** Dental Roque sin decision.
+
+### Para retomar proxima sesion
+
+**Primera pregunta:** ¿se hizo la llamada a Wilmer? → registrar respuestas textuales en `docs/ventas/guion-40-test.md` y leer el arbol: rama A dispara Experimento #1 (necesito #100 para armar la cola), rama B espera el dato de la secretaria antes de concluir, rama C = visita al colega esa semana. NO cambiar los umbrales pre-registrados despues de oir las respuestas.
+
+---
+
+## Sesion 9 Jul 2026 NOCHE (3ra del dia) — 40% test Wilmer ejecutado + assets completos del Experimento #1
+
+**Contexto entrante:** Diego trajo las respuestas de Wilmer la misma tarde.
+
+### 1. 40% test Wilmer — resultado y lectura (registro completo en `docs/ventas/guion-40-test.md`)
+
+- **Loop colegas MUERTO:** colega 1 "interesado pero no prioridad" (plaza de gobierno, casi no atiende consultorio = pocas citas = poco dolor); colega 2 enfocada en su embarazo. Rama C descartada. Colega 1 = puerta pasiva.
+- **P1: "estaria afectado... terminaria buscando otra app que haga lo mismo"** → bajo la rubrica pre-registrada = ALGO afectado, **rama A NO dispara**. Matiz registrado: la dependencia es del JOB (no volveria a mandar recordatorios a mano — problema must-solve), lo tibio es la DIFERENCIACION (sustituible). Para el ICP hondureño el sustituto es teorico (no usan nada), pero eso se discute con n≥2.
+- **P2 (el pitch):** los recordatorios — "hasta 1 hora los fines de semana enviando los recordatorios de la semana". Cuadra con sus datos: viernes = dia pico (28 de 114 citas), sabado trabaja solo tarde → los recordatorios se comian su unico espacio libre. Señal extra: su esposa se siente "extraña" sin visibilidad de la clinica pero confian en la app.
+- **P3 (targeting):** "medico que trabaja solo en su consultorio, igual que el" — y descalifico su propia silla-compartida como "atipica". Tension con regla 30 Jun (independiente FUERA) resuelta via filtro conductual: "¿quien manda los recordatorios?" — el requisito silla-compartida pierde soporte.
+- **P4 (friccion):** no soporta numeros extranjeros (esos recordatorios los manda a mano) → libro de demanda, congelado durante experimento.
+- **Veredicto del arbol: EN SUSPENSO hasta #99** (rama B exige tibio en AMBOS). NO se cambiaron umbrales post-hoc.
+
+### 2. Decision — NO pivote; el experimento ES el test de pivote
+
+Diego pregunto si pushear llamadas o buscar pivote (predice que Elena saldra tibia y se quejara del inbox). Respuesta COO: (a) la tibieza de Elena YA esta descontada (pre-registro: su 40% es yapa, ella ni elige ni paga); (b) el test real de esa cuenta = **si Yeni paga** (preferencia revelada > declarada; pre-registrado ANTES de la llamada: paga sin friccion = señal CVP positiva del gancho no-shows / se resiste = rama B con mas peso); (c) falsa dicotomia: un pivote hoy apuntaria a "solo-doctor + recordatorios" (P3 de Wilmer) — exactamente lo que el Experimento #1 prueba con el filtro nuevo. Jerarquia de evidencia a esta escala: paga > usa > refiere > contesta encuestas (el 40% con n=2 es entrevista de profundidad, no estadistica; el test estadistico real es el Experimento #1 porque mide comportamiento a n=20).
+
+### 3. Consultorio Familiar — datos frescos + acceso + hoja de llamada Yeni
+
+- **VIVA:** Elena (secretaria) entro HOY (5 de ultimos 9 dias); 12 citas futuras 15 Jul→9 Sep; ~9-10 citas/mes estable; auto-cancel historico 10/47 = 21% (el gancho); bache de mensajes 27 Jun-7 Jul reactivado el 8.
+- **Flags operativos para la llamada:** (a) 3 citas madrugada agosto — Patricia Solorzano 10 Ago 02:30 (¡confirmacion YA enviada con hora absurda!), Thaily 11 Ago 01:00, Sarita 12 Ago 02:15; patron AM/PM repetido en 3 fechas de captura distintas → corregir CON Elena, no en silencio; plazo hasta ~9 Ago. (b) Sorayda Martinez 15 Jul 10:30 sin NINGUNA confirmacion enviada — vigilar que el r24h salga el 14 Jul. (c) Flag tecnico menor: 3 citas con confirmation_message_sent=false pero template entregado/leido en mayo (inconsistencia de flag, no de entrega) → deuda post-freeze.
+- **Acceso y contacto (pregunta de Diego resuelta):** cuenta admin propia `admin@consultoriofamiliar.com` (ultimo login 29 Jun, del revival; password en Chrome PM; respaldo = super-admin). Secretaria = **Elena Pineda Carcamo, +504 9782-5738** (tabla secretaries, dato de marzo). Canal garantizado: WhatsApp a la linea de la clinica +504 9768-2454 cae en el inbox que Elena lee a diario.
+- **Hoja de llamada Yeni (Yeni pidio que la llame pronto):** (1) recap de valor 30s con numeros (12 citas futuras, 1 de cada 5 rescatada); (2) precio SE DICE: $35/mes, SIN retroactivo (el hueco fue error nuestro), arrancar julio, concesion unica = agosto a cambio de algo; (3) logistica EN la llamada (metodo, recibo/CAI +impuesto, dia de pago, fecha del primer pago — sin fecha no se cerro); (4) discovery no-shows (que pasa cuando no llegan / como se enteraban antes — QUE pasa, nunca CUANTO pierde); (5) P2/P3 adaptadas; (6) avisar correccion citas madrugada como servicio; (7) confirmar Elena como contacto. NO ofrecer meses gratis; NO abrir tema inbox-vs-WhatsApp (si ella lo trae: "cuenteme mas", sin defender).
+
+### 4. Assets del Experimento #1 construidos (Etapa 1 casi completa)
+
+- **Scraping doctoresdehonduras.com** (directorio gratuito que Diego recordo como fuente original): `docs/ventas/leads/directorio-dhn-index.csv` = 973 medicos (id/nombre/especialidad — NUNCA volver al listado) + `directorio-dhn-detalles.csv` = 208 perfiles detalle (cluster dental COMPLETO 148 + dermatologia 21 + pediatria general 39; limpiados 3 falsos positivos ortopedia/capilar; agregados 5 pediatras con etiqueta distinta). **45 dental-TGU confirmados, 43 con celular** — cubre las ~40-50 marcaciones solo con dental. 35 solo-fijo MARCADOS no borrados (Diego decide mañana). Ciudad es piso no techo (131 sin ciudad declarada; `direccion_raw` ayuda). **Solo 4 de 208 con web propia** → universo invisible online = materia prima correcta.
+- **Matiz "invisible online" corregido por Diego:** Wilmer TIENE web. El identificador no es "sin web" — es **el camino de contacto**: reserva online/PMS = descarte; "llamenos" a fijo/equipo = probable descarte; web-tarjeta con celular/wa.me directo = CONFIRMA perfil-Wilmer (el que contesta es el doctor). Wilmer = caso de calibracion.
+- **`docs/ventas/guion-llamadas-experimento1.md` creado** (flujo completo, enlazado en index.md con advertencia de que los buyer personas viejos del index usan el pitch invalidado): regla madre = visita con fecha o descarte <3 min, demo SOLO presencial; apertura 20s; calificacion 60-90s; pitch 30s = frase de Wilmer + 2 opciones concretas de fecha; precio si preguntan: $40 + mes 1 gratis + Meta aparte, sin negociar; retiradas (mandeme-info = UNA contraoferta y NO perseguir — los leads mueren en el 2do toque; lo-pienso = "me dice con confianza" + una fecha tentativa; minuto 4 sin fecha = fin); registro obligatorio post-llamada.
+- **3 correcciones de Diego al guion (las 3 mejoraron el diseño):**
+  1. **"¿El planton existe?"** → casi NO en paciente fiel (Wilmer 3.1%, barberia "rara vez") — pero hay trampa de supervivencia: no hay plantones PORQUE alguien los previene a mano. **El recordatorio manual ES el ladrillo.** P2a corregida: "¿les recuerdan las citas o la gente llega solita?" → recuerda-a-mano = gancho TIEMPO (califica); llega-solita → sonda planton = gancho NO-SHOWS (califica) o censo. Con la pregunta vieja habriamos descartado a Wilmer.
+  2. **Rama con-secretaria:** NO descalifica pero es 2do escalon (gancho sin preferencia revelada hasta que Yeni pague). Pitch al pagador: cita-rescatada + control/continuidad — NUNCA "libere el tiempo de su secretaria" (costo hundido, no vende) ni sonar a reemplazo (leccion Medilaser); en la visita ELLA presente y ganada primero.
+  3. **¿Dentalink? ¿otras especialidades?** → PMS no se asume, se pregunta (registro "usa PMS S/N" por llamada = tasa real de penetracion); Experimento #1 = SOLO dental (prueba social del pitch es un dentista + una variable a la vez); derma/pediatria ya scrapeadas = **Experimento #2 en fila**, dispara solo si el censo dental muestra saturacion Dentalink.
+- **Censo por llamada: 3 mundos** — (a) recuerda-a-mano, (b) no-recuerda-y-no-pasa-nada, (c) no-recuerda-y-hay-plantones. Si el mundo (b) domina, el TAM real es chico y ESO seria insumo de pivote con datos. Censo barberia de hoy: citas por WhatsApp, cero dolor, dolor real = mano de obra → NO ICP (conducta sola no basta).
+
+### Datos Wilmer adicionales (para el caso de estudio y contacto)
+
+- Cancelaciones: 12 manuales (9.2%) + 4 auto-cancel (3.1%) + 4 reagendar de 130 citas ≈ 15% total; dic-feb sin status usados (subestima historico).
+- Dias: viernes pico (28), lunes-miercoles ~18-20, jueves flojo (15), sabado solo tarde (14), domingo cero. **Ventana para contactarlo: jueves por la tarde.**
+
+### Tareas activas (post-9 Jul noche)
+
+- [ ] **#99 (LA QUE DECIDE):** llamada a Yeni — cobro #95 + operativo (citas madrugada, Sorayda 14 Jul) + discovery. Yeni pidio a Diego que la llame pronto. Su resultado lee la rama B/B' del arbol Y congela la cola.
+- [ ] **#100 (Diego):** pasar listas de IG + estado del G-Sheet para dedupe.
+- [ ] **#101 (Claude, avanzada):** scraping HECHO; falta dedupe con IG/Excel + cola final ordenada (solo-doctor arriba, con-secretaria 2do escalon) → se congela post-#99.
+- [ ] **Diego mañana:** revisar `directorio-dhn-detalles.csv` y decidir sobre los 35 solo-fijo.
+- [ ] **#102 (Diego):** ¿quien marca las 20 llamadas — el, Warhol, o mixto? Sin cadencia sostenible el experimento no existe.
+- [ ] **#97 (vigente):** post r/SaaS.
+- [ ] **#92 (vigente):** Dental Roque sin decision.
+- [ ] Libro de demanda: numeros extranjeros (P4 Wilmer) — mencionado 1 vez, no insistir.
+
+### Para retomar proxima sesion
+
+**Primera pregunta:** ¿se hizo la llamada a Yeni (#99)? → registrar textuales (precio, fecha de primer pago, discovery no-shows) y leer el arbol completo: Wilmer algo-afectado + Yeni paga = seguir con Experimento #1 sin pivote; Wilmer algo-afectado + Yeni NO paga + Elena tibia = rama B, conversacion de pivote con TODOS los datos. Segundo: ¿decision sobre los 35 solo-fijo del CSV? ¿Listas de IG (#100)? ¿Quien marca (#102)? Con eso congelo la cola y arrancan las llamadas.
+
+---
