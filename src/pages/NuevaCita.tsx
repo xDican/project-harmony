@@ -350,7 +350,9 @@ export default function NuevaCita() {
 
       {/* Crear paciente */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        {/* Anclado arriba (no centrado): en iPad el teclado virtual tapa la mitad
+            inferior del viewport y un modal centrado queda detrás del teclado. */}
+        <DialogContent className="top-8 translate-y-0">
           <DialogHeader>
             <DialogTitle>Crear nuevo paciente</DialogTitle>
             <DialogDescription>Ingresa los datos del paciente para agregarlo al sistema.</DialogDescription>
