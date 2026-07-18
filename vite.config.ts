@@ -14,6 +14,23 @@ export default defineConfig(({ mode }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'OrionCare',
+        short_name: 'OrionCare',
+        description: 'Sistema de gestión de citas médicas',
+        lang: 'es',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        theme_color: '#6366f1',
+        background_color: '#f9fafb',
+        icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
       },
