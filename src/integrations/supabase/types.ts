@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -758,6 +758,51 @@ export type Database = {
           },
         ]
       }
+      doctor_schedule_exceptions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          doctor_id: string
+          end_at: string
+          id: string
+          reason: string | null
+          start_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          doctor_id: string
+          end_at: string
+          id?: string
+          reason?: string | null
+          start_at: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          doctor_id?: string
+          end_at?: string
+          id?: string
+          reason?: string | null
+          start_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_schedule_exceptions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doctor_schedule_exceptions_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       doctor_schedules: {
         Row: {
           calendar_id: string | null
@@ -1179,6 +1224,41 @@ export type Database = {
           trial_ends_at?: string | null
         }
         Relationships: []
+      }
+      page_views: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string | null
+          path: string
+          role: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id?: string | null
+          path: string
+          role?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string | null
+          path?: string
+          role?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_views_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       patients: {
         Row: {
@@ -1999,6 +2079,21 @@ export type Database = {
       }
     }
     Functions: {
+      create_visit_appointments: {
+        Args: { p_procedures: Json; p_visit_id?: string }
+        Returns: {
+          appointment_at: string
+          date: string
+          doctor_id: string
+          duration_minutes: number
+          id: string
+          seq: number
+          service_type: string
+          service_type_id: string
+          time: string
+          visit_id: string
+        }[]
+      }
       current_app_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]

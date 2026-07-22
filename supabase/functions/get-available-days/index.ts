@@ -1,7 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
-import { enumerateSlots } from "../_shared/availability.ts";
+import {
+  enumerateSlots,
+  loadSchedulesAllDows,
+  loadCoworkDoctorIds,
+  loadScheduleExceptions,
+} from "../_shared/availability.ts";
 
 const BUILD = "get-available-days-v1.3.0_par1";
 const DEFAULT_TIMEZONE = "America/Tegucigalpa";
@@ -181,71 +186,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 6) Query A: Fetch schedules — primary: calendar_schedules, fallback: doctor_schedules
+    // 6) Horarios: delega a _shared/availability.ts (loadSchedulesAllDows) — misma
+    // logica (calendar_schedules primero, fallback doctor_schedules) que antes vivia
+    // duplicada aqui. Fase 2 del bloqueador de horario: esta era la 4ta copia del
+    // motor que no delegaba (ver plan de la sesion).
     let allSchedules: ScheduleRow[] = [];
-
-    if (calendarId) {
-      // Specific calendar requested
-      const { data, error } = await supabase
-        .from("calendar_schedules")
-        .select("day_of_week, start_time, end_time")
-        .eq("calendar_id", calendarId);
-
-      if (error) {
-        console.error("[get-available-days] Error fetching calendar_schedules:", error);
-        return json(500, {
-          ok: false,
-          error: "Error al obtener horarios del calendario",
-          details: error.message,
-          build: BUILD,
-        });
-      }
-      allSchedules = (data || []) as ScheduleRow[];
-    } else {
-      // No calendarId — aggregate from all active calendars for this doctor
-      const { data: calDoctors, error: cdError } = await supabase
-        .from("calendar_doctors")
-        .select("calendar_id")
-        .eq("doctor_id", doctorId)
-        .eq("is_active", true);
-
-      if (cdError) {
-        console.error("[get-available-days] Error fetching calendar_doctors:", cdError);
-      }
-
-      if (calDoctors && calDoctors.length > 0) {
-        const calendarIds = calDoctors.map((cd: any) => cd.calendar_id);
-        const { data, error } = await supabase
-          .from("calendar_schedules")
-          .select("day_of_week, start_time, end_time")
-          .in("calendar_id", calendarIds);
-
-        if (error) {
-          console.error("[get-available-days] Error fetching calendar_schedules:", error);
-        } else {
-          allSchedules = (data || []) as ScheduleRow[];
-        }
-      }
-    }
-
-    // Fallback to doctor_schedules if no calendar_schedules found
-    if (allSchedules.length === 0) {
-      console.log("[get-available-days] No calendar_schedules, falling back to doctor_schedules");
-      const { data, error } = await supabase
-        .from("doctor_schedules")
-        .select("day_of_week, start_time, end_time")
-        .eq("doctor_id", doctorId);
-
-      if (error) {
-        console.error("[get-available-days] Error fetching doctor_schedules:", error);
-        return json(500, {
-          ok: false,
-          error: "Error al obtener horarios del doctor",
-          details: error.message,
-          build: BUILD,
-        });
-      }
-      allSchedules = (data || []) as ScheduleRow[];
+    try {
+      allSchedules = (await loadSchedulesAllDows(supabase, doctorId, calendarId)) as ScheduleRow[];
+    } catch (error) {
+      console.error("[get-available-days] Error fetching schedules:", error);
+      return json(500, {
+        ok: false,
+        error: "Error al obtener horarios del doctor",
+        details: error instanceof Error ? error.message : String(error),
+        build: BUILD,
+      });
     }
 
     // Create schedule map: day_of_week -> ScheduleRow[] (supports multi-calendar)
@@ -264,39 +219,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 7) Query B: Obtener citas — co-work: check ALL doctors on the same calendar(s)
-    let appointmentDoctorIds: string[] = [doctorId];
-
-    if (calendarId) {
-      // Specific calendar: get all doctors on this calendar
-      const { data: calDocRows } = await supabase
-        .from("calendar_doctors")
-        .select("doctor_id")
-        .eq("calendar_id", calendarId)
-        .eq("is_active", true);
-      if (calDocRows && calDocRows.length > 0) {
-        appointmentDoctorIds = [...new Set(calDocRows.map((r: any) => r.doctor_id))];
-      }
-    } else if (allSchedules.length > 0) {
-      // No specific calendar — use all calendars the doctor belongs to
-      const { data: calDocs } = await supabase
-        .from("calendar_doctors")
-        .select("calendar_id")
-        .eq("doctor_id", doctorId)
-        .eq("is_active", true);
-
-      if (calDocs && calDocs.length > 0) {
-        const calIds = calDocs.map((cd: any) => cd.calendar_id);
-        const { data: allCalDocs } = await supabase
-          .from("calendar_doctors")
-          .select("doctor_id")
-          .in("calendar_id", calIds)
-          .eq("is_active", true);
-        if (allCalDocs && allCalDocs.length > 0) {
-          appointmentDoctorIds = [...new Set(allCalDocs.map((r: any) => r.doctor_id))];
-        }
-      }
-    }
+    // 7) Co-working — delega a _shared/availability.ts (loadCoworkDoctorIds),
+    // misma logica (todos los doctores activos del/los calendario(s) relevante(s)).
+    const appointmentDoctorIds = await loadCoworkDoctorIds(supabase, doctorId, calendarId);
 
     if (debug) {
       console.log("[get-available-days] Co-work doctor IDs:", appointmentDoctorIds.length);
@@ -349,6 +274,18 @@ Deno.serve(async (req) => {
       appointmentsByDate.get(dateKey)!.push(apt as AppointmentRow);
     }
 
+    // 8b) Bloqueos personales del doctor (fase 2 del bloqueador de horario) —
+    // se cargan una vez para todo el mes, igual que loadVisitRangeState. Son
+    // personales: SOLO del doctorId pedido, nunca de los co-workers.
+    const lastDayOfMonthInclusive = monthEnd.minus({ days: 1 }).toFormat("yyyy-MM-dd");
+    const scheduleExceptionsByDoctor = await loadScheduleExceptions(
+      supabase,
+      [doctorId],
+      monthStartDate,
+      lastDayOfMonthInclusive,
+    );
+    const doctorScheduleExceptions = scheduleExceptionsByDoctor.get(doctorId) ?? [];
+
     // 9) Procesar cada día del mes — canFit via el motor unico (enumerateSlots).
     // Mata la divergencia: "hay dia disponible" = "hay un slot ofrecible" (mismo
     // algoritmo que el hour-view), no el viejo gap-based. Datos ya batcheados →
@@ -367,12 +304,18 @@ Deno.serve(async (req) => {
       }
 
       // Intervalos ocupados NAIVE (sin zona) para ser consistente con enumerateSlots.
+      // Incluye citas del dia + bloqueos personales del doctor (sin filtrar por
+      // fecha — el overlap check es puramente por ms, un bloqueo que no toca este
+      // dia simplemente nunca solapa un slot de este dia).
       const dayAppointments = appointmentsByDate.get(date) || [];
-      const occupiedIntervals = dayAppointments.map((apt) => {
-        const aptStart = DateTime.fromISO(`${apt.date}T${apt.time.substring(0, 5)}:00`);
-        const aptEnd = aptStart.plus({ minutes: apt.duration_minutes ?? 60 });
-        return { startMs: aptStart.toMillis(), endMs: aptEnd.toMillis() };
-      });
+      const occupiedIntervals = [
+        ...dayAppointments.map((apt) => {
+          const aptStart = DateTime.fromISO(`${apt.date}T${apt.time.substring(0, 5)}:00`);
+          const aptEnd = aptStart.plus({ minutes: apt.duration_minutes ?? 60 });
+          return { startMs: aptStart.toMillis(), endMs: aptEnd.toMillis() };
+        }),
+        ...doctorScheduleExceptions,
+      ];
 
       const slots = enumerateSlots(
         date,

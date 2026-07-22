@@ -30,6 +30,7 @@ const UsersList = lazy(() => import("./pages/UsersList"));
 const CreateUserPage = lazy(() => import("./pages/CreateUserPage"));
 const EditUserPage = lazy(() => import("./pages/EditUserPage"));
 const DoctorSchedulePage = lazy(() => import("./pages/DoctorSchedulePage"));
+const DoctorScheduleExceptionsPage = lazy(() => import("./pages/DoctorScheduleExceptionsPage"));
 const AppointmentsReport = lazy(() => import("./pages/AppointmentsReport"));
 const PatientDetail = lazy(() => import("./pages/PatientDetail"));
 const ConfiguracionMedico = lazy(() => import("./pages/ConfiguracionMedico"));
@@ -311,6 +312,11 @@ const App = () => {
             <Route path="/admin/doctors/:doctorId/schedule" element={
               <RoleBasedRoute allowedRoles={['admin', 'doctor']}>
                 <DoctorSchedulePage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/admin/doctors/:doctorId/bloqueos" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
+                <DoctorScheduleExceptionsPage />
               </RoleBasedRoute>
             } />
             <Route path="/admin/reports/appointments" element={

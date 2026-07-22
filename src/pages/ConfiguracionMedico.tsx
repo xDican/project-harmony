@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUser } from '@/context/UserContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, User, MessageSquare, MessageCircle, MessageSquareReply, Sparkles, ChevronRight } from 'lucide-react';
+import { Calendar, CalendarOff, User, MessageSquare, MessageCircle, MessageSquareReply, Sparkles, ChevronRight } from 'lucide-react';
 
 /**
  * ConfiguracionMedico - Settings page for independent doctors (iOS style)
@@ -40,6 +40,21 @@ export default function ConfiguracionMedico() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium">Horarios de Atención</p>
                 <p className="text-sm text-muted-foreground">Configura tus horarios semanales</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+            </button>
+          )}
+
+          {/* Bloqueos de horario (Fase 3 del bloqueador de horario, origen: Wilmer) */}
+          {user?.doctorId && (
+            <button
+              onClick={() => navigate(`/admin/doctors/${user.doctorId}/bloqueos`)}
+              className="w-full flex items-center gap-3 p-4 hover:bg-accent/50 transition-colors text-left"
+            >
+              <CalendarOff className="h-5 w-5 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">Bloqueos de horario</p>
+                <p className="text-sm text-muted-foreground">Bloquea horas o días en los que no atiendes</p>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
             </button>

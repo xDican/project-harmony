@@ -1,6 +1,12 @@
 # Estado Estrategia — OrionCare
 
-> Ultima actualizacion: 9 Jul 2026 NOCHE (3ra sesion del dia — **40% TEST DE WILMER EJECUTADO: rama A NO dispara** (P1 "estaria afectado... buscaria otra app" = algo-afectado bajo la rubrica; el PROBLEMA quedo validado como must-solve pero la DIFERENCIACION es tibia; veredicto del arbol EN SUSPENSO hasta #99). Loop colegas MUERTO (colega 1 plaza gobierno/pocas citas, colega 2 embarazo). **P2 dio el pitch cuantificado: "hasta 1 HORA del fin de semana mandando los recordatorios de la semana a mano"**. P3: ICP segun Wilmer = medico que trabaja SOLO en su consultorio; su silla-compartida es "situacion atipica" → filtro silla-compartida pierde soporte. P4: numeros extranjeros sin soporte → libro de demanda. Registro completo en `docs/ventas/guion-40-test.md`. DECISION: NO pivote — falsa dicotomia; **Experimento #1 con filtro P3 ES el test de pivote mas barato**; el test hair-on-fire real de Consultorio Familiar = si Yeni PAGA (preferencia revelada, pre-registrado: paga sin friccion = señal CVP positiva del gancho no-shows; se resiste = rama B). **ASSETS DEL EXPERIMENTO CONSTRUIDOS HOY:** (1) scraping doctoresdehonduras.com → `docs/ventas/leads/directorio-dhn-index.csv` (973) + `directorio-dhn-detalles.csv` (208: 148 dental, 21 derma, 39 pediatria; 45 dental-TGU confirmados, 43 con celular; solo 4 con web propia — universo invisible online, consistente con perfil-Wilmer); (2) `docs/ventas/guion-llamadas-experimento1.md` = flujo de llamada completo (exito = visita con fecha o descarte <3 min; P2a corregida: **el recordatorio manual ES el ladrillo, el planton es 2da sonda** — Wilmer con 3.1% no-show habria sido descartado por la pregunta de planton; rama con-secretaria = 2do escalon con pitch cita-rescatada+continuidad NUNCA "libere su tiempo" (costo hundido); censo por llamada: 3 mundos + PMS S/N; #1 SOLO dental, derma/pediatria = Experimento #2 en fila). Consultorio Familiar: acceso admin propio `admin@consultoriofamiliar.com`, secretaria = **Elena Pineda Carcamo +504 9782-5738**, linea clinica +504 9768-2454 como canal respaldo; hoja de llamada Yeni lista (cobro $35 primero SIN retroactivo, se DICE no se pregunta; Yeni pidio que Diego la llame pronto). Censo barberia: citas por WhatsApp + cero dolor + dolor real = mano de obra → NO ICP, confirma que conducta sola no califica. Ver Sesion 9 Jul NOCHE al final.)
+> Ultima actualizacion: 22 Jul 2026 (MIERCOLES — **INSTALACION HANOY CONFIRMADA EXITOSA**: uso real verificado por SQL el mismo dia 22 (sesion espontanea sin empuje, 4 citas creadas, 3 pacientes cargados, paginas mas visitadas agenda-semanal/citas-nueva/inbox/pacientes). Plantillas de mensajes en espera de aprobacion Meta, bot OFF segun plan (1 semana de calibracion). **Hallazgos nuevos de la instalacion:** (1) Hanoy Y su novio (bienes raices independiente) advirtieron explicitamente sobre "bots malos" — el novio pide piloto de calificacion de leads para su rubro PERO condicionado a ver primero que el bot de Hanoy no se sienta como bot barato; watch-item para diversificacion Oct 2026, NO perseguir ahora (choca con [[icp-individual-fuera]], costo $0 esperar). (2) Hanoy lleva su plan de pago de inquilinos en Word — señal debil (N=2 informal con anecdota Grecia, no cliente) que refuerza [[sistema-facturacion]], no cruza umbral de 3 clientes. (3) **Wilmer reporto problema real: pacientes agendan en horas donde el tiene compromisos personales, sin forma de bloquearlas** — Diego correctamente descarto un "servicio especial" ad-hoc por insalubre para el producto; es gap generico de bloqueo/excepciones de horario, ya anotado como diferible desde Skin Medic (22 May), ahora lo pide el cliente ancla. (4) **Vista mensual pedida por Hanoy + UNIMED** (prospecto perdido, feedback igual valido) + Diego cree que Wilmer tambien la querria — mismo gap que "vista combinada multi-calendario" de mayo, ahora especifico a "tipo TimeTree por mes". **Correccion al test de precio de inquilinos:** ventana bajada de 60 a 30 dias (Diego: van a hablar con cada medico individualmente antes de integrarlo, no es autoservicio pasivo; estrategia = hacer la experiencia de Hanoy "bella" para que ella empuje organicamente, peor caso quedan en Free hasta que quieran subir) — ademas el resultado YA NO es señal organica pura porque Diego confirma que "hara fuerza" en la venta; detalle en [[tesis-unidad-venta-instalacion]]. **DECISION: foco tecnico inmediato = bloqueador de horario + vista mensual + calibracion del bot (1 semana)** — sesion continua en /modo-dev para planificar orden de desarrollo. Ver Sesion 22 Jul al final.)
+> Ultima actualizacion: 18 Jul 2026 (SABADO — **HANOY CERRADA: $15+ISV+Meta aparte, mes 1 gratis, INSTALACION MARTES 21 JUL PM** (cierre en primera visita + mes gratis aplicados; 3er cliente activo, primer caso real dueña-hub). Sonda clave resuelta: cobra por HORA al medico con cobro DIARIO → gancho no-show MUERTO para ella, VIVO para sus **3 inquilinos** (ellos pagan la hora del cubiculo aunque el paciente no llegue) = cuña del upsell futuro, no gastarla ahora. Valor mes 1 a demostrar: recordatorios propios automatizados + administrar leads de su publicidad (ella paga y maneja sus ads = primer caso real del uso "administrar leads"). **Debate de pricing → tesis emergente: la unidad de venta es la INSTALACION, no el medico** — cierres reales de julio a $11.5-15/medico via hub (UNIMED, Hanoy); $40 medico-solo tiene N=0 (Wilmer entro a $35); el funnel muere en DOLOR no en precio (solo 1 prospecto en 45 dias objeto precio; Hanoy dudo hasta con $15). Regla: precio bajo/medico SOLO donde CAC≈0 (dentro de hub); $40 frio se mantiene hasta n=20; fallback pre-registrado $25-30 si calificados-en-dolor objetan precio; $15 frio FUERA del menu (CAC founder-led no lo financia). **Test de precio pre-registrado con inquilinos:** Free = app completa sin restricciones (su agenda, sus pacientes) EXCEPTO mensajes; Pro $15 = recordatorios/bot con LINEA PROPIA (la linea de Hanoy es SOLO de ella — decision Diego; placeholder-sin-paciente DESCARTADO); umbral 60 dias: ≥1/3 toma Pro = señal viva, 0/3 = teoria precio-barrera muerta (usaron todo a diario y ni $15 los movio). **Verificaciones criticas pre-martes (modo-dev lunes):** (a) scoping crons/bot por doctor — NADA sale por la linea de Hanoy para citas de inquilinos (revisar `whatsapp_line_doctors`); (b) visibilidad pacientes/citas entre medicos independientes en la misma org; (c) 4 condiciones Coexistence del numero + website en portfolio; (d) ✅ **PWA minimo HECHO EL MISMO SABADO** (PR #74 mergeado a main + QA aprobado por Diego en Android e iPhone; el martes solo queda instalar el icono en el celular de Hanoy) — su "quisiera que fuera un app" quedo respondido en horas. UNIMED: Omar Diaz reporta atraso, respuesta LUNES 20 — bandera: el lenguaje paso de logistica a decision; plan 2 ramas (si→fecha+primer pago EN la llamada; evasiva→deadline digno UNICO y soltar). #99 Yeni sin contacto. Confirmafy $12 mencionado por Diego, no por leads → tratamiento AgendaPro: fantasma de pricing hasta aparecer en campo. Ver Sesion 18 Jul al final.)
+> Update previo: 14 Jul 2026 (MARTES — **VISITA KAREN EJECUTADA: no-cierre digno → NURTURE con trigger** (pidio precio POR ESCRITO — legitimo, no "lo analizare": su dolor es FUTURO, arma flujo agencia-de-marketing→leads→administrarlos y aun no contrata la agencia; hay OTRO software cortejandola → precio escrito debe salir HOY: $40 + Meta aparte + gancho "cuando arranques con la agencia, mes 1 gratis y te monto todo"). Censo: 114 seguidores IG, poco flujo confirmado. Si algun dia cierra = primer caso de uso real "administrar leads de ads". **Fruto mayor de la visita: referida Dra. Hanoy Medina** — dueña de clinica que SUBARRIENDA cubiculo por hora (tesis Airbnb-de-cubiculos, lado dueño), arrendatarios agendan directo self-service en TimeTree, sus recordatorios propios a mano; **CITA SABADO 18 JUL**. Sesion mato 2 teorias en 24h (malabareo 2-apps = tibio, ya probado por 40% test Wilmer; horas-no-registradas = muerta porque reservar ES anotar) → sabado va SIN teoria de turno, con 4 sondas pre-registradas (la clave: ¿cobra hora apartada o consulta REALIZADA? — si es por consulta, el no-show del paciente del arrendatario le cuesta L400+ A ELLA = unico gancho $40 vivo; ademas: choques TimeTree sin bloqueo, recepcionista-invisible, facturacion-por-confianza). Regla: NO pitchear Free contra TimeTree que le funciona. Hanoy NO cuenta para umbral Experimento #1 (referida). Lead: `docs/ventas/leads/LEAD-008-medina.md`. Flag metodologico: usamos seguidores IG como proxy de volumen y nuestra propia tesis dice que el ICP es invisible online — estimar en voz alta, no descartar por redes. UNIMED: amarre SIGUE pendiente = riesgo #1. #99 Yeni sigue sin hacerse. Ver Sesion 14 Jul al final.)
+> Update previo: 13 Jul 2026 TARDE (LUNES, 2da parte — **UNIMED: inbound cerrado en precio $11.5 × 20 medicos = $230/mes, la cuenta mas grande de la historia**. Clinica grande, 20 medicos, sistema propio (desarrollo interno) para expedientes/registros; ellos ya descartaron construir recordatorios "por costos" (build-vs-buy resuelto a nuestro favor = BATNA debil de ellos). Negociacion: Diego $20 → ellos $8 → cierre $11.5 los primeros 20, SIN mes gratis; leccion de proceso registrada en [[pricing-costo-marginal]] (piso $300 nunca se confirmo pre-llamada). **Modelo operativo resuelto: usaran OrionCare ESPECIFICAMENTE PARA AGENDAR** (su sistema = expedientes; separacion limpia, NO doble captura), **recepcion CENTRALIZADA** opera (pocas personas a entrenar, dueño natural del inbox), integracion "interesante pero no necesaria" = **CERO desarrollo** (estimado API archivado en el lead: ~8-12h si algun dia la piden; create/update-appointment ya hacen el 80%). Falta la LLAMADA DE AMARRE: fecha de arranque + primer pago + Meta aparte + medico 21+ al mismo $11.5 + nombre de la lider de recepcion + horarios en planilla. NO registrar como cliente hasta esa llamada. Lead completo: `docs/ventas/leads/LEAD-007-unimed.md`. Señal estrategica: institucion con equipo dev propio compro exactamente UNA cosa = recordatorios → 3ra confirmacion independiente del CVP core. Ademas hoy: arbol de llamadas rediseñado como arbol literal (mismo link artifact) + objecion "apps baratas/AgendaPro" agregada con la cuña (numero propio + slot liberado, $40 no se negocia); analisis AgendaPro: no aparecio en el censo batch 1 → fantasma de pricing, no competidor real (tope 50 msgs/mes queda corto justo donde empieza el dolor). Ver Sesion 13 Jul (cont.) al final.)
+> Update previo: 13 Jul 2026 (LUNES — **EXPERIMENTO #1 BATCH 1 EJECUTADO**: Diego hizo 28 marcaciones el sabado 11 Jul SIN esperar #99 (decision correcta — la accion le gano al proceso; el "congelar cola" era salvaguarda, no bloqueo). Funnel: 28 marcaciones → ~9 contactos reales → 3 vivos → **1 visita agendada (Dra. Karen Murillo, MARTES 14 Jul)**. Registro completo en `docs/ventas/registro-llamadas-experimento1.md` + kit de visita en `docs/ventas/kit-visita-karen-murillo.md`. **Censo de campo: la mayoria de los contactados maneja su agenda A MANO y ELLOS MISMOS, sin software** — tesis "ICP invisible online / sin PMS" CONFIRMADA; PMS detectados: Dentalink ×1, ex-Dentalink insatisfecho ×1 ("engorroso"), Zendy ×1. Karen = bandera amarilla (sola, sin software, PERO poco flujo + "no tardaba mucho" + pacientes confirman en 2-3h → dolor bajo probable) → visita reencuadrada como discovery+censo+practica de demo, cierre solo si aparece gancho, descarte digno pre-autorizado. **Filtro ICP gana 3ra pata: volumen suficiente para que duela (~10+ citas/mes; Wilmer 15-20 = calibracion del dolor-tiempo)** — no se pregunta, se estima. Predicciones de Diego PRE-registradas: "Yeni no siente dolor" (test = si PAGA, no lo que declare). Umbral del experimento va 25-30% ejecutado, ritmo BUENO (1 visita con solo ~9 contactos). NO concluir pivote a mitad de experimento. Ver Sesion 13 Jul al final.)
+> Update previo: 11 Jul 2026 (VIERNES — sesion corta de preparacion del Experimento #1, sin decisiones de negocio nuevas. Diego esta limpiando la lista de llamadas. Asset nuevo: **arbol de decision visual de la llamada fria** en `docs/ventas/arbol-llamadas-experimento1.html` (artifact publicado: https://claude.ai/code/artifact/f336fdc5-3452-4f4f-8d5c-ddbaaab37755) — 100% derivado del guion pre-registrado del 9 Jul, cero reglas nuevas; codigo de color por veredicto (verde califica / ambar bifurca-2do escalon / rojo descarte-censo), frases habladas en italica, ramas explicitas para "contesta la asistente" y "tengo secretaria". #99 (llamada Yeni) SIGUE sin hacerse = arbol de decision del experimento sigue EN SUSPENSO y la cola sin congelar. Ver Sesion 11 Jul al final.)
+> Update previo: 9 Jul 2026 NOCHE (3ra sesion del dia — **40% TEST DE WILMER EJECUTADO: rama A NO dispara** (P1 "estaria afectado... buscaria otra app" = algo-afectado bajo la rubrica; el PROBLEMA quedo validado como must-solve pero la DIFERENCIACION es tibia; veredicto del arbol EN SUSPENSO hasta #99). Loop colegas MUERTO (colega 1 plaza gobierno/pocas citas, colega 2 embarazo). **P2 dio el pitch cuantificado: "hasta 1 HORA del fin de semana mandando los recordatorios de la semana a mano"**. P3: ICP segun Wilmer = medico que trabaja SOLO en su consultorio; su silla-compartida es "situacion atipica" → filtro silla-compartida pierde soporte. P4: numeros extranjeros sin soporte → libro de demanda. Registro completo en `docs/ventas/guion-40-test.md`. DECISION: NO pivote — falsa dicotomia; **Experimento #1 con filtro P3 ES el test de pivote mas barato**; el test hair-on-fire real de Consultorio Familiar = si Yeni PAGA (preferencia revelada, pre-registrado: paga sin friccion = señal CVP positiva del gancho no-shows; se resiste = rama B). **ASSETS DEL EXPERIMENTO CONSTRUIDOS HOY:** (1) scraping doctoresdehonduras.com → `docs/ventas/leads/directorio-dhn-index.csv` (973) + `directorio-dhn-detalles.csv` (208: 148 dental, 21 derma, 39 pediatria; 45 dental-TGU confirmados, 43 con celular; solo 4 con web propia — universo invisible online, consistente con perfil-Wilmer); (2) `docs/ventas/guion-llamadas-experimento1.md` = flujo de llamada completo (exito = visita con fecha o descarte <3 min; P2a corregida: **el recordatorio manual ES el ladrillo, el planton es 2da sonda** — Wilmer con 3.1% no-show habria sido descartado por la pregunta de planton; rama con-secretaria = 2do escalon con pitch cita-rescatada+continuidad NUNCA "libere su tiempo" (costo hundido); censo por llamada: 3 mundos + PMS S/N; #1 SOLO dental, derma/pediatria = Experimento #2 en fila). Consultorio Familiar: acceso admin propio `admin@consultoriofamiliar.com`, secretaria = **Elena Pineda Carcamo +504 9782-5738**, linea clinica +504 9768-2454 como canal respaldo; hoja de llamada Yeni lista (cobro $35 primero SIN retroactivo, se DICE no se pregunta; Yeni pidio que Diego la llame pronto). Censo barberia: citas por WhatsApp + cero dolor + dolor real = mano de obra → NO ICP, confirma que conducta sola no califica. Ver Sesion 9 Jul NOCHE al final.)
 > Update previo: 9 Jul 2026 (JUEVES — LIBRO "THE EXPERIMENTATION MACHINE" LEIDO COMPLETO + diseño del primer experimento pre-registrado. Veredicto del libro aplicado a OrionCare: PMF nivel NASCENT; el hueco central es que NUNCA medimos si el CVP es hair-on-fire — el patron 1-cliente-por-canal es consistente con CVP tibio, no solo con canales sin empujar. Decision: NO pivotar aun; correr primero el **40% test de Sean Ellis** (+3 follow-ups Superhuman) con Wilmer y la secretaria de Consultorio Familiar — guion guardado en `docs/ventas/guion-40-test.md`, Diego agenda llamada ~10 Jul. **Arbol de decision PRE-ACORDADO** (A: pasa → Experimento #1; B: tibio en ambos → conversacion de pivote con datos; C: loop colegas avanzo → salta la fila). **Experimento #1 spec v2** (correccion de Diego: lista sucia mide la lista, no el pitch): 2 etapas — filtro de escritorio + calificacion conductual en primeros 60s de llamada ("¿quien lleva la agenda?"/"¿comparten consultorio?"); n=20 llamadas CALIFICADAS (~40-50 marcaciones); exito ≥3 visitas y ≥1 cierre; bonus = censo TAM real ("ir a CONTAR" pendiente desde 30 Jun). Hallazgo: `Investigar ICP.xlsx` tiene el **score INVERTIDO** para perfil-Wilmer (lista de era motor-$150: puntua alto ads/web/staff = problema ya resuelto; el ICP real es invisible online → listas IG mejor materia prima; torres = cardumen). Chequeo SQL Consultorio Familiar: VIVO — secretaria 17 views/4 dias (ultimo 8 Jul), ciclo completo conf→r24h→followup→auto-cancel funciono SOLO el 8 Jul, 12 citas futuras hasta 9 Sep; flags: 3 citas de agosto con hora de madrugada (probable error AM/PM de captura, corregir) y #95 facturacion MAS urgente (uso confirmado = conversacion segura). Ver Sesion 9 Jul al final.)
 > Update previo: 8 Jul 2026 (MIERCOLES — sesion sin decisiones de negocio nuevas: se redacto un post para r/SaaS pidiendo feedback externo sobre adquisicion, y ese ejercicio forzo a precisar 3 hechos historicos que quedan corregidos en memoria. (1) Medilaser $75/mes vino del canal ADS (no de un canal sin registrar) — otra ciudad, aparentaba multi-recurso; churn por combo: comunicacion pobre con el medico (poco tiempo), la asistente actuo como barrera en vez de apoyo, sin Coexistence activo, problema con su linea principal → pidieron el numero de vuelta y desaparecieron. (2) CDA murio por hallazgo real en la reunion/2da visita (solo ~5 especialistas externos, espera ≤24h, dolor no significativo — mismo patron que otras clinicas de planta de la caza del 4 Jul), NO por el malentendido inicial de que el jefe no vio la demo. (3) Skin Medic $150 confirmado consistente con el post-mortem ya guardado (falta de Coexistence en la migracion). **Hallazgo consolidado nuevo (el mas importante de la sesion): en 6 meses se cerraron 4 clientes pagos, UNO POR CADA CANAL PROBADO** (ads→Medilaser $75, llamadas frias→Wilmer $35 [unico activo], presencial→Skin Medic $150, WhatsApp frio→Ecoclinicas $35) — 3 de 4 con churn, y NINGUN canal tiene mas de 1 conversion, o sea ningun canal esta probado como repetible todavia. Post completo redactado (en scratchpad de sesion, no en el repo) — pendiente que Diego lo publique en r/SaaS y traiga los comentarios. Ver Sesion 8 Jul al final.)
 > Update previo: 6 Jul 2026 (LUNES — CDA MURIO (jefe sin interes, dolor delgado ~4 especialistas) + sesion completa de analisis de datos SQL sobre Wilmer y Consultorio Familiar. Hallazgo mayor: el pitch "no pierdas pacientes nuevos" NO tiene respaldo en ningun caso de estudio real — 94.5% de las citas de Wilmer las agenda el mismo manualmente, y las 7 que se autoagendaron via bot eran TODAS pacientes ya existentes, cero leads nuevos. ICP redefinido con 2 ganchos segun perfil: tiempo administrativo (Wilmer, pocos no-shows) vs reduccion real de no-shows (Consultorio Familiar, 19.6% auto-cancelado vs 3.1% de Wilmer). Comparacion N=2 confirma que el producto SI genera uso real en contextos distintos (no es solo timing/personalidad de Wilmer), pero el dolor que resuelve varia. 2 bugs tecnicos documentados (acentos rompen FAQ matching; texto libre en booking_select_hour da hora incorrecta) para post-freeze. Playbook de analisis de bot actualizado (gotcha de intent='confirm'). Ver Sesion 6 Jul al final.)
@@ -22,16 +28,17 @@
 
 | Metrica | Valor |
 |---|---|
-| Clientes activos | **2** — Guevara $35 (ancla) + Yeni Ramos/Consultorio Familiar $35 (revivido 28 Jun; verificado 9 Jul: secretaria activa al 8 Jul, ciclo recordatorios→auto-cancel funcionando solo, 12 citas futuras hasta 9 Sep). Paredes/David marcados perdidos 22 Jun SIN VERIFICAR con logs (mismo falso-negativo que Yeni — pendiente revisar); Skin Medic perdido 27 May (confirmado) |
-| MRR facturado | **$70** ($35 + $35, facturacion Consultorio Familiar por confirmar) |
+| Clientes activos | **3** — Guevara $35 (ancla) + **Hanoy Medina $15** (cerrada 18 Jul: $15+ISV+Meta aparte, mes 1 gratis → factura desde ~21 Ago; instalacion 21 Jul PM; 3 inquilinos en tier Free) + Yeni Ramos/Consultorio Familiar $35 (revivido 28 Jun; verificado 9 Jul: secretaria activa al 8 Jul, ciclo recordatorios→auto-cancel funcionando solo, 12 citas futuras hasta 9 Sep). Paredes/David marcados perdidos 22 Jun SIN VERIFICAR con logs (mismo falso-negativo que Yeni — pendiente revisar); Skin Medic perdido 27 May (confirmado) |
+| MRR facturado | **$70** hoy ($35 + $35, facturacion Consultorio Familiar por confirmar); **$85 desde ~21 Ago** cuando Hanoy termine su mes gratis |
 | MRR efectivo | **$70** |
-| Hito real Q2-Q3 2026 | $1,500/mes paz mental → faltan **$1,430** (7-9 clientes ICP) |
+| Hito real Q2-Q3 2026 | $1,500/mes paz mental → faltan **$1,415** (con Hanoy); **$1,185 si UNIMED amarra el lunes** |
 | Cliente top | Guevara ($35) — DENTAL, caso de estudio, NPS 9.5, usa el core completo. **CORRECCION 6 Jul:** el pitch "no pierdas pacientes nuevos" NO tiene respaldo — 94.5% de citas las agenda el mismo manualmente, los 7 autoagendados via bot eran TODOS pacientes ya existentes. Valor real = ahorro de tiempo administrativo, no captura de leads |
-| Pipeline | **Actualizado 6 Jul:** 💀 **CDA MUERTA** (dolor de coordinacion delgado — solo ~5 especialistas externos, espera ≤24h, no significativo; confirma base rate ~1/10 de la caza 4 Jul). MUERTOS/FRIOS: Stacy (MIA), Grecia (2 no-shows), Lumina, CDH, DKapilar (no contesto sabado). Unica candidata viva: **Dental Roque** (dolor-producto core verbalizado, caza 4 Jul) — sin visita agendada. ICP redefinido con 2 ganchos: tiempo administrativo (perfil Wilmer) o reduccion de no-shows (perfil Consultorio Familiar, 19.6% auto-cancelado). Wilmer loop silla-compartida: check-in aun pendiente. |
+| Pipeline | **Actualizado 18 Jul:** 🔥 **UNIMED $230/mes — respuesta LUNES 20 Jul** (Omar Diaz reporto atraso; bandera: "la respuesta" suena a decision pendiente, no logistica; plan 2 ramas pre-acordado). Karen Murillo en NURTURE (trigger: contrata su agencia de marketing). Inquilinos Hanoy ×3 = upsell futuro Pro $15 (test pre-registrado, no tocar hasta que usen el Free). **Previo 6 Jul:** 💀 **CDA MUERTA** (dolor de coordinacion delgado — solo ~5 especialistas externos, espera ≤24h, no significativo; confirma base rate ~1/10 de la caza 4 Jul). MUERTOS/FRIOS: Stacy (MIA), Grecia (2 no-shows), Lumina, CDH, DKapilar (no contesto sabado). Unica candidata viva: **Dental Roque** (dolor-producto core verbalizado, caza 4 Jul) — sin visita agendada. ICP redefinido con 2 ganchos: tiempo administrativo (perfil Wilmer) o reduccion de no-shows (perfil Consultorio Familiar, 19.6% auto-cancelado). Wilmer loop silla-compartida: check-in aun pendiente. |
 | Canales — historial 6 meses (8 Jul) | **4 clientes cerrados, 1 por cada canal probado, ningun canal repetible aun:** ads→Medilaser $75 (churn), llamadas frias→Wilmer $35 (unico activo), presencial→Skin Medic $150 (churn), WhatsApp frio→Ecoclinicas $35 (churn por inactividad). Ver [[canales-adquisicion-sin-repetibilidad]]. |
-| Experimento #1 (9 Jul noche) | Assets LISTOS: cola cruda 208 perfiles (45 dental-TGU, 43 con celular) en `docs/ventas/leads/directorio-dhn-detalles.csv` + guion de llamada `docs/ventas/guion-llamadas-experimento1.md`. Bloqueado por: #99 (llamada Yeni congela cola), #100 (listas IG), #102 (quien marca). Congelado durante el experimento: cero ads, cero features |
+| Experimento #1 (14 Jul) | **EN MARCHA — batch 1 ejecutado + visita #1 hecha:** 28 marcaciones → ~9 contactos → 3 vivos → 1 visita (Karen Murillo 14 Jul: **no-cierre digno → NURTURE**, trigger = cuando contrate su agencia de marketing; precio por escrito sale HOY). Bonus fuera de umbral: **referida Hanoy Medina, cita SAB 18 JUL** (`docs/ventas/leads/LEAD-008-medina.md`). Registro: `docs/ventas/registro-llamadas-experimento1.md`. Umbral (≥3 visitas + ≥1 cierre / n=20 calificadas) sigue vivo, ~25-30% ejecutado, ritmo BUENO. Quedan ~15-17 dental-TGU en CSV + reintentos + Chinchilla re-cola + listas IG (#100). Correcciones batch 2: filtro escritorio ANTES (7/28 quemadas en "clinica grande") + censo 3 mundos. Congelado durante el experimento: cero ads, cero features |
 | Ads | PAUSADOS — pero ad FB targeteado $20-30 recomendado como canal del smoke test |
-| Cash flow real | **+$15/mes** (CORREGIDO 30 Jun) — ingreso $35 Wilmer − $20 Claude (unico costo operativo real; free tiers Supabase/Vercel, fuera de Twilio). NO es −$30 |
+| Cash flow real | **+$15 a +$50/mes** — Wilmer $35 seguro + Yeni $35 (facturacion por confirmar) − $20 Claude (unico costo operativo). Hanoy suma +$15 desde ~21 Ago |
+| Hanoy — uso real (22 Jul) | **CONFIRMADO activo, sesion espontanea sin empuje:** 4 citas creadas, 3 pacientes cargados. Paginas top: agenda-semanal (10), citas/nueva (8), inbox (6), pacientes (4), agenda-secretaria (4). Bot OFF segun plan (calibracion 1 semana) |
 
 ## Pivot 18 May — Centro de Atencion (resumen)
 
@@ -1596,5 +1603,322 @@ Diego pregunto si pushear llamadas o buscar pivote (predice que Elena saldra tib
 ### Para retomar proxima sesion
 
 **Primera pregunta:** ¿se hizo la llamada a Yeni (#99)? → registrar textuales (precio, fecha de primer pago, discovery no-shows) y leer el arbol completo: Wilmer algo-afectado + Yeni paga = seguir con Experimento #1 sin pivote; Wilmer algo-afectado + Yeni NO paga + Elena tibia = rama B, conversacion de pivote con TODOS los datos. Segundo: ¿decision sobre los 35 solo-fijo del CSV? ¿Listas de IG (#100)? ¿Quien marca (#102)? Con eso congelo la cola y arrancan las llamadas.
+
+---
+
+## Sesion 11 Jul 2026 (VIERNES) — Arbol visual de la llamada fria (preparacion Experimento #1)
+
+**Contexto entrante:** Diego limpiando la lista de llamadas. Pidio un arbol de decisiones visual para la llamada: ¿que pasa si el medico dice que tiene asistente? ¿que pasa si contesta la asistente?
+
+### Entregable unico de la sesion
+
+**Arbol de decision visual de la llamada** — `docs/ventas/arbol-llamadas-experimento1.html` (versionado en el repo junto al guion) + artifact publicado para verlo en el celular durante las llamadas o imprimirlo: https://claude.ai/code/artifact/f336fdc5-3452-4f4f-8d5c-ddbaaab37755
+
+- **Cero reglas nuevas** — es el guion pre-registrado del 9 Jul (`guion-llamadas-experimento1.md`) convertido a formato escaneable: pasos 0-4, codigo de color por veredicto (verde CALIFICA / ambar BIFURCA-2do escalon / rojo DESCARTE-censo), frases que se DICEN en italica serif separadas de las decisiones.
+- Las 2 preguntas de Diego ya estaban resueltas en el guion y quedaron como ramas explicitas: (1) "tengo asistente" NO descalifica — bifurca con "¿ella les escribe uno por uno?" → a-mano = CALIFICA 2do escalon (pitch al pagador: cita-rescatada + control/continuidad; NUNCA "libere su tiempo" ni sonar a reemplazo); (2) contesta la asistente → pedir al doctor UNA vez, si no esta seguir con ELLA (misma calificacion, puede ser champion).
+- Si el guion cambia tras las llamadas de calibracion 1-5, se actualiza el HTML y se republica al mismo link.
+
+### Sin cambios de estado
+
+- **#99 (llamada Yeni) sigue SIN hacerse** — sigue siendo LA QUE DECIDE: veredicto del arbol 40% en suspenso, cola de llamadas sin congelar, fuga de ingreso #95 abierta. Hoy viernes: si no sale hoy, se pierde otra semana.
+- #100 (listas IG), #102 (quien marca), #97 (post r/SaaS), #92 (Dental Roque) — sin novedad. Diego avanzando en la limpieza del CSV (decision 35 solo-fijo pendiente de confirmar).
+
+### Para retomar proxima sesion
+
+**Primera pregunta: ¿se hizo la llamada a Yeni (#99)?** (identica a la del 9 Jul — nada la desbloqueo esta sesion). Segundo: ¿como quedo la limpieza de la lista — decision sobre los 35 solo-fijo, listas IG (#100)? Con lista limpia + #99 leida, congelo la cola final (solo-doctor arriba, con-secretaria 2do escalon) y arrancan las llamadas con el arbol en mano.
+
+---
+
+## Sesion 13 Jul 2026 (LUNES) — Batch 1 del Experimento #1 registrado + reencuadre visita Karen
+
+**Contexto entrante:** Diego ejecuto las llamadas el SABADO 11 Jul sin esperar #99. Correccion COO registrada: fue la decision correcta — "congelar la cola" era salvaguarda de pre-registro contra invertir 3-4 semanas a ciegas, no un bloqueo; Diego lo comprimio en un sabado. #99 ya NO desbloquea nada, pero sigue valiendo sola (fuga $35 + señal paga/no-paga del arbol).
+
+### 1. Batch 1 — funnel y registro
+
+- **28 marcaciones** (dental TGU, del CSV): 12 sin contacto (VN/no contesta/1 sin registro), 7 descarte "clinica grande", ~9 contactos reales → 6 descartes en llamada + **3 vivos**: **Karen Murillo (VISITA martes 14 Jul)**, Luis Molina (3ra llamada lun 13, ultima, meta = fecha), Anderson Palma (ex-Dentalink "engorroso", pidio info → se le envio la web = toque debil; queda UNA contraoferta de fecha y soltar).
+- Registro completo lead-por-lead: **`docs/ventas/registro-llamadas-experimento1.md`** (incluye lecciones batch 1 y proximas acciones).
+- **Vs umbral pre-registrado** (≥3 visitas + ≥1 cierre / n=20 calificadas): ~25-30% ejecutado; 1 visita con ~9 contactos = ritmo BUENO, dentro de rango para validar.
+- **Lecciones batch 2:** (a) correr el filtro de escritorio ANTES de marcar (25% de marcaciones quemadas en clinicas grandes); (b) capturar censo 3 mundos + PMS S/N en cada llamada; (c) "mandeme info" = UNA contraoferta de visita, nunca enviar la web y esperar; (d) VN casi nunca devuelve — reintentos en horario distinto, max 3.
+- Chinchilla (sin registro, probablemente saltada) → re-cola. Quedan ~15-17 dental-TGU con celular + reintentos + listas IG (#100 sigue pendiente).
+
+### 2. Censo de campo — hallazgo estrategico
+
+- **La mayoria de los medicos contactados manejan sus citas de forma MANUAL (sin software) y ELLOS MISMOS** (salvo los atendidos por asistente) → perfil-Wilmer es la conducta MAYORITARIA del universo; tesis "ICP invisible online / sin PMS" del 9 Jul confirmada en campo.
+- PMS detectados: Dentalink activo ×1 (Florencia Andino), ex-Dentalink insatisfecho ×1 (Anderson Palma — municion de pitch), **Zendy ×1** (Octavio Zelaya — 2da aparicion de Zendy).
+- **Lo que falta discriminar (batch 2):** de los que manejan a mano, ¿mandan RECORDATORIOS a mano (mundo a = gancho tiempo) o no mandan nada y no pasa nada (mundo b = sin dolor)? Esa pregunta separa mercado real de censo. Pre-registro vigente: si mundo (b) domina → TAM chico = insumo de pivote CON datos, pero NO concluir a mitad de experimento.
+
+### 3. Karen Murillo — reencuadre de la visita (martes 14 Jul)
+
+- Datos pre-visita: sola, sin software, **poco flujo** (autodeclarado), "no tardaba mucho" enviando recordatorios, pacientes confirman en 2-3h → **ambos ganchos lucen debiles** (tiempo: su ladrillo es barato y funciona; no-shows: pacientes obedientes). Probabilidad de cierre BAJA.
+- **Reencuadre:** visita = discovery + censo + practica de demo (1ra visita del experimento); cierre SOLO si aparece gancho; **descarte digno pre-autorizado** (no comprar churn futuro por cerrar). Sonda abierta recomendada: "¿que es lo que mas tiempo le roba en el consultorio?" — que ELLA nombre el dolor; si nombra "conseguir pacientes" se registra pero NO se vende (pitch sin respaldo, 6 Jul). Observar sin preguntar: sala de espera, agenda fisica. Kit completo: **`docs/ventas/kit-visita-karen-murillo.md`**.
+- Especulacion de genero (mujeres mas organizadas) DESCARTADA del analisis: n=1, infalsificable; el filtro es conducta, no demografia.
+
+### 4. Umbral de volumen — 3ra pata del filtro ICP (formalizada)
+
+Wilmer (15-20 pacientes/mes) = caso de calibracion del dolor-tiempo (1h de fin de semana). Debajo de ~10 citas/mes el gancho tiempo se evapora matematicamente. **Filtro ICP conductual completo: (1) agenda el mismo + (2) recuerda a mano + (3) volumen suficiente para que duela.** El volumen NUNCA se pregunta — se estima en voz alta y que corrija.
+
+### 5. Predicciones de Diego PRE-registradas (antes de las llamadas de mañana)
+
+- "Yeni no siente dolor" (poco volumen + asistente). Contrapunto COO registrado: el dolor de esa cuenta lo carga la OPERACION (21% citas rescatadas, Elena a diario, ciclo corre solo) — por eso el test es **si PAGA, no lo que declare**. Paga sin friccion = valor revelado; se resiste = rama B con todo su peso. La llamada va IGUAL (15 min, informacion decisiva en ambas direcciones).
+- Antecedente: tambien predijo "Elena saldra tibia" (9 Jul). Ambas predicciones quedan congeladas pre-llamada.
+
+### Tareas activas (post-13 Jul)
+
+- [ ] **HOY lun 13:** Luis Molina 3ra llamada (ULTIMA; meta = fecha de visita; min 4 sin fecha = soltar) + Anderson Palma UNA contraoferta de fecha (si esquiva, soltar).
+- [ ] **HOY/mañana:** vigilar que el r24h de Sorayda Martinez (cita 15 Jul 10:30) salga — flag del 9 Jul sin confirmacion enviada.
+- [ ] **MAÑANA mar 14:** VISITA KAREN MURILLO (kit en mano, reencuadrada discovery+censo) + **#99 llamada Yeni** (si el dia satura → miercoles AM, no mas alla; hoja de llamada del 9 Jul vigente).
+- [ ] **Batch 2:** filtro escritorio sobre ~15-17 restantes + reintentos (max 3) + Chinchilla + censo 3 mundos obligatorio. #100 (listas IG) y #102 (quien marca) siguen abiertas.
+- [ ] **#97 (vigente):** post r/SaaS. **#92 (vigente):** Dental Roque sin decision.
+
+### Para retomar proxima sesion
+
+**Primera pregunta: ¿como salieron Karen (visita) y Yeni (#99)?** Registrar textuales de ambas en `registro-llamadas-experimento1.md` y `guion-40-test.md` respectivamente, y leer: (a) mundo censal de Karen + cierre/descarte; (b) Yeni paga → Experimento #1 sigue sin pivote / no paga → rama B con datos completos. Segundo: resultados Molina y Palma (hoy lunes). Tercero: avance batch 2 y si Warhol toma llamadas (#102). NO leer veredicto de pivote hasta completar n=20 calificadas.
+
+---
+
+## Sesion 13 Jul 2026 (cont., TARDE) — UNIMED: inbound cerrado en precio + arbol literal + AgendaPro
+
+### 1. UNIMED — LEAD-007, cerrado en precio $230/mes (detalle completo en `docs/ventas/leads/LEAD-007-unimed.md`)
+
+- **Origen:** INBOUND — contacto viejo de Diego; ELLOS llamaron para que presente al administrador general. Clinica grande, **20 medicos** con plan de crecer, sistema PROPIO (equipo dev interno) que cubre todo EXCEPTO recordatorios. Dato clave: ya habian evaluado construirlo y lo descartaron **"por costos"** → build-vs-buy resuelto, BATNA de ellos debil.
+- **Negociacion (misma tarde):** Diego $20/medico → contraoferta $8 → $15 → $10 → $12 → $11 → **cierre $11.5 × primeros 20 = $230/mes, SIN mes gratis**. Seria la cuenta mas grande de la historia (> Skin Medic $150) y llevaria MRR a ~$300 (20% del hito paz mental). Leccion de proceso en [[pricing-costo-marginal]] (piso se escribe ANTES de la llamada; concesiones chicas; precio 21+ se amarra en el cierre). Defensa valida de Diego aceptada por el COO: solo recordatorios, sin bot, sin horas suyas post-setup → en dolares-por-hora-Diego probablemente el mejor cliente firmado.
+- **Modelo operativo RESUELTO en discovery posterior (preguntas de Diego a Omar):** (a) usaran **OrionCare especificamente para AGENDAR** — su sistema queda para expedientes/registros = separacion limpia de dominios, NO doble captura, el mejor de los 3 escenarios; (b) integracion "interesante pero NO necesaria" → **CERO desarrollo** (regla: la API no se construye hasta necesidad real; estimado archivado: v0 ~8-12h — create-appointment/update-appointment ya hacen el 80%, faltaria api_keys + upsert paciente por celular + idempotencia + GET polling; v1 webhooks +4-6h); (c) **recepcion CENTRALIZADA** agenda → pocas personas a entrenar, dueño natural del inbox, un solo punto de contacto operativo (anti-Medilaser estructural).
+- **Señal estrategica:** una institucion CON equipo dev compro exactamente UNA cosa: recordatorios. 3ra confirmacion independiente del CVP core (P2 Wilmer + ciclo Consultorio Familiar + voto con presupuesto de Unimed). Alimenta el pitch del Experimento #1.
+- **PENDIENTE — llamada de amarre (sin esto NO es cliente):** fecha de arranque + primer pago; Meta aparte explicito; medico 21+ = mismo $11.5 (el descuento por volumen YA se dio); nombre de la lider de recepcion (champion operativa, ganarla PRIMERO en la instalacion); horarios de los 20 medicos en planilla; Business Verification (RTN, 5-15 dias) en el cronograma. Recomendacion COO: rollout por fases (3-5 medicos primero, facturando los 20 desde dia 1).
+
+### 2. Arbol de llamadas rediseñado como arbol literal
+
+- `docs/ventas/arbol-llamadas-experimento1.html` reescrito: tronco vertical con nodos-paso (0→1→2→3→A/B→registro) + ramas con lineas de codo reales coloreadas por veredicto + saltos entre nodos con mini-badges. Republicado al MISMO link del artifact. Contenido pre-registrado intacto.
+- 2 adiciones acordadas: objecion **"hay apps mas baratas"** con la cuña (desde SU numero + slot liberado; $40 no se negocia) y registro PMS ampliado a "S/N + cual (Dentalink, Zendy, AgendaPro...)".
+
+### 3. AgendaPro — analisis de amenaza (pregunta de Diego)
+
+- Veredicto: **fantasma de pricing, no competidor real** — no aparecio en el censo batch 1 (el mercado tampoco compra a $20; el cuello es dolor, no precio). Relevante solo como sustituibilidad/objecion (P1 de Wilmer). Cuña concreta: numero propio + conversacion bidireccional + confirmacion-con-consecuencia + su tope de ~50 msgs/mes queda corto justo en el volumen donde empieza el dolor (Wilmer: 20-25 citas × 2-3 msgs = 40-75/mes). Si aparece 1 vez en n=20 → tratarlo como competidor; si no, cero tiempo adicional.
+- Gancho al pagador-CON-asistente clarificado (razonamiento de Diego validado): tiempo NO vende (ya lo compro con el salario de ella = costo hundido); se vende **cita rescatada (plata) + control/continuidad** — dato: Consultorio Familiar TIENE secretaria y aun asi 21% no confirmaba. Doble audiencia: pagador compra, asistente veta.
+
+### Tareas activas (post-13 Jul tarde)
+
+- [ ] **Unimed — llamada de amarre** (lista completa arriba). Hasta entonces NO es cliente, NO actualizar dashboard.
+- [ ] **MAÑANA mar 14:** VISITA KAREN MURILLO (kit: `kit-visita-karen-murillo.md`, reencuadrada discovery+censo) + **#99 Yeni** (fuga $35 + señal paga/no-paga; miercoles AM como maximo).
+- [ ] **Hoy/pendiente confirmar:** resultados Molina (3ra llamada, ultima) y Palma (una contraoferta).
+- [ ] Batch 2 Experimento #1: filtro escritorio antes de marcar + censo 3 mundos + PMS S/N+cual. #100 (listas IG), #102 (quien marca), #97 (r/SaaS), #92 (Dental Roque) sin novedad.
+
+### Para retomar proxima sesion
+
+**Primera pregunta: ¿como salieron Karen y Yeni?** (leen el experimento y el arbol del 40%). **Segunda: ¿hubo llamada de amarre con Unimed?** — si hay fecha + primer pago, Unimed pasa a cliente: actualizar dashboard (MRR ~$300), clientes-estado, y diseñar onboarding institucional (recepcion centralizada, rollout por fases, Business Verification). Tercera: Molina/Palma y avance batch 2. Guardia anti-distraccion: Unimed NO reemplaza el Experimento #1 — el experimento sigue hasta n=20 aunque Unimed firme.
+
+---
+
+## Sesion 14 Jul 2026 (MARTES) — Visita Karen ejecutada + referida Hanoy Medina
+
+**Contexto entrante:** dia de la visita pre-registrada a Karen Murillo (visita #1 del Experimento #1, reencuadrada 13 Jul como discovery+censo+practica).
+
+### 1. Karen Murillo — no-cierre digno → NURTURE con trigger
+
+- **Su proyecto:** flujo nuevo en diseño — empresa de marketing le trae leads → ella los administra. Vio plataforma + bot, intereso, **pidio precio POR ESCRITO** para analizar costos e integracion.
+- **Lectura COO:** NO es el clasico "lo analizare" — su dolor es FUTURO, aguas arriba del nuestro (aun no tiene leads que administrar; la agencia seria su PRIMER contacto con marketing). Peticion legitima de quien arma estructura de costos → **nurture con trigger = cuando contrate la agencia**, no muerto ni cierre fallido. La regla cerrar-en-primera-visita aplica cuando el dolor existe HOY.
+- **Competencia:** otra empresa de software tambien la corteja; fuimos primeros → **precio escrito debe salir HOY** (3-4 lineas: $40/mes, Meta aparte, gancho "cuando arranques con la agencia, mes 1 gratis y yo te monto todo" = ancla en su flujo futuro sin regalar nada; NO bajar de $40).
+- Censo: 114 seguidores IG, poco flujo confirmado en sala; invierte en redes justamente por falta de volumen. Si algun dia cierra = primer caso de uso real "administrar leads de ads" (el pitch sin respaldo del 6 Jul) — N=0, no mueve nada.
+- Detalle completo en `docs/ventas/registro-llamadas-experimento1.md` (seccion Visita #1).
+
+### 2. Hanoy Medina — LEAD-008, cita SABADO 18 JUL (fruto mayor de la visita)
+
+- Referida por Karen. Dueña de clinica que **subarrienda cubiculo por hora** a otros medicos (tesis Airbnb-de-cubiculos del 30 Jun, lado DUEÑO). Arrendatarios **agendan directo self-service en TimeTree**; sus recordatorios propios a mano por WhatsApp; ~300 seguidores IG. Cobro ~L400/consulta general segun entendio Diego — **ambiguo hora-apartada vs consulta-realizada**.
+- **Ejercicio de la sesion — 3 teorias muertas en 24h, cero datos de ella:** (a) malabareo 2-apps = tibio (40% test Wilmer ya lo probo — nadie paga $480/año por incomodidad); (b) horas-no-registradas = muerta (reservar ES anotar, el registro esta completo por diseño); (c) TimeTree le FUNCIONA → **no pitchear Free contra TimeTree** (peor posicion de venta: reemplazar algo gratis que funciona).
+- **4 sondas pre-registradas para el sabado** (curiosidad, no pitch — detalle en `docs/ventas/leads/LEAD-008-medina.md`): (1) **¿cobra hora apartada o consulta REALIZADA?** — LA CLAVE: si es por consulta, el no-show del paciente del arrendatario le cuesta L400+ A ELLA = unico gancho $40 vivo (recordatorios + confirmacion-con-consecuencia); (2) choques/ediciones en TimeTree (calendario compartido ≠ motor de reservas: no bloquea, sin rastro); (3) recepcionista-invisible (¿los pacientes de los otros medicos le escriben a ELLA?); (4) facturacion-por-confianza (TimeTree registra reservas, no asistencia → factura sobre auto-reporte). Ocupacion del cubiculo = su lucro cesante real pero NO lo resolvemos — registrar, no prometer.
+- Ramas: gancho dispara → cerrar EN LA SALA ($40 + mes gratis + fecha); nada dispara → descarte digno + censo + relacion viva (sus arrendatarios = puerta futura; semilla tier Free). Expectativa honesta: cierre BAJA.
+- Hanoy NO cuenta para el umbral del Experimento #1 (referida, no llamada fria calificada); SI suma censo.
+
+### 3. Flag metodologico registrado
+
+Usamos seguidores de Instagram como proxy de volumen (Karen 114, Hanoy 300) y **nuestra propia tesis dice que el ICP es invisible online** (censo batch 1). Doctora de referidos = invisible en redes con flujo real posible. Regla: volumen se estima EN VOZ ALTA en la conversacion y que corrija — nunca descartar por redes.
+
+### Tareas activas (post-14 Jul)
+
+- [ ] **HOY:** mensaje a Karen con precio por escrito ($40 + Meta aparte + gancho mes-gratis-al-arrancar-agencia). 10 minutos.
+- [ ] **UNIMED — llamada de amarre: SIGUE PENDIENTE = RIESGO #1** ($230/mes enfriandose; los deals mueren en el 2do toque). Lista completa en LEAD-007.
+- [ ] **#99 Yeni: SIGUE sin hacerse** (fuga $35 + señal paga/no-paga; era "miercoles AM como maximo").
+- [ ] **SABADO 18 Jul:** visita Hanoy Medina con las 4 sondas (LEAD-008 en mano).
+- [ ] Batch 2 Experimento #1 + resultados Molina/Palma (sin confirmar) + #100/#102/#97/#92 sin novedad.
+
+### Para retomar proxima sesion
+
+**Primera: ¿salio el amarre de UNIMED?** (sigue siendo lo mas grande sobre la mesa). **Segunda: ¿se mando el precio a Karen y se hizo #99 Yeni?** **Tercera: ¿como salio Hanoy el sabado?** — leer contra las 4 sondas: cual disparo (si alguna), cobro hora-vs-consulta, y cerrar/descartar segun rama pre-registrada. Cuarta: Molina/Palma y batch 2. El experimento sigue hasta n=20 — ni UNIMED ni Hanoy lo reemplazan.
+
+---
+
+## Sesion 21 Jul 2026 (MARTES) — UNIMED se suelta + T-horas para instalacion Hanoy
+
+**Contexto entrante:** dia de instalacion Hanoy (tarde/noche). UNIMED sin respuesta desde el lunes prometido.
+
+### 1. UNIMED — Diego decide soltar, sin mas seguimiento
+
+- Cero contacto desde "el lunes sera la respuesta" (18 Jul). Diego: seguir insistiendo se siente como hostigar, no tiene esperanzas de que cierre. Reencuadre propio (validado por COO): la relacion con UNIMED ya genero valor real sin necesidad de que cierren — Nov-Dic 2025 (feedback de deficiencias del producto) precedio a Wilmer dias despues; la negociacion de Jul 2026 (feedback de precio alto) precedio directamente al modelo hub $11.5-15/medico que cerro a Hanoy. Patron: UNIMED funciona como fuente de feedback de mercado gratuito, no solo como prospecto — ver [[unimed-feedback-sin-cierre]].
+- **Pendiente de decidir (no cerrado en esta sesion):** enviar 1 mensaje unico de cierre digno ("para reservar los 20 cupos a $11.5 necesito arranque esta semana") vs silencio total. Diego se inclina a silencio total; COO registra que el mensaje unico no es hostigar, es cierre limpio — decision final de Diego.
+
+### 2. Hanoy — instalacion de hoy en riesgo, solo 1 de 4 verificaciones lista
+
+- **Landing:** en ajustes (unica de las 4 verificaciones criticas del 18 Jul con avance).
+- **Sin hacer:** scoping de mensajes por doctor (`whatsapp_line_doctors` en crons/bot), visibilidad entre medicos independientes, org Hanoy en DB (1 cubiculo + 4 calendarios).
+- **Decision tomada:** Diego entra a modo-dev AHORA (antes de la instalacion de esta tarde/noche) a verificar el scoping. Si no alcanza el tiempo, fallback pre-acordado: instalar SOLO Hanoy hoy (sin los 3 inquilinos Free), diferir el Free multi-medico hasta verificar.
+
+### Tareas activas (post-21 Jul)
+
+- [ ] Verificar scoping `whatsapp_line_doctors` en modo-dev (en curso, esta sesion)
+- [ ] Decidir mensaje unico UNIMED vs silencio total
+- [ ] Instalacion Hanoy esta tarde/noche — completa o fallback solo-Hanoy segun resultado del scoping
+- [ ] Landing Hanoy — terminar ajustes antes de la instalacion
+
+---
+
+## Sesion 18 Jul 2026 (SABADO) — Hanoy cerrada $15 + tesis unidad-de-venta + test de precio pre-registrado
+
+**Contexto entrante:** dia de la visita a Hanoy Medina (LEAD-008). UNIMED sin amarre desde el 13; Yeni sin contacto.
+
+### 1. Hanoy Medina — CERRADA (3er cliente activo, primer caso dueña-hub)
+
+- **Terminos:** $15/mes + ISV + mensajes Meta aparte. **Mes 1 gratis** (gancho aplicado cuando quiso diferir por gastos de cierre de mes). **Instalacion MARTES 21 Jul por la tarde/noche.** Pendiente: mandarle listado de configuracion (borrador entregado en sesion: nombre/logo, horarios+servicios, lista de inquilinos con dias/horas, confirmar WA Business App + quien maneja su pagina FB).
+- **Sondas resueltas:** cobra por HORA al medico, cobro DIARIO (ella prefiere ese modelo — siente que el inquilino percibe menos carga que un monto mensual grande). → Gancho no-show MUERTO para ella; VIVO para inquilinos (pagan la hora aunque el paciente no llegue) = cuña del upsell, NO gastarla ahora. Administra su propia publicidad (paga ads y los maneja ella) → **primer caso real del uso "administrar leads de ads"**.
+- **Valor mes 1 a demostrar (para que el $15 sobreviva al mes 2):** (a) recordatorios propios automatizados (hoy a mano), (b) leads de su publicidad administrados en la plataforma. Reporte con numeros al cierre del mes gratis.
+- Pidio "que fuera un app" (→ PWA aprobado) y "bloquear fechas" (se resuelve en instalacion).
+
+### 2. Debate de pricing — la pregunta de Diego: "¿no cerramos por el precio?"
+
+- **Respuesta COO: no es la causa raiz.** El funnel muere en DOLOR, no en precio: de todos los muertos de 45 dias (CDA, Stacy, Grecia, Lumina, DKapilar, batch 1) solo UN prospecto objeto el precio. Hanoy dudo hasta con $15 → la barrera no era el delta $40→$15. Cuando el dolor existe, se paga (UNIMED $230, Wilmer 6+ meses, Skin Medic acepto $150).
+- **La media verdad de Diego (importante): nadie del segmento medico-solo ha pagado $40 jamas.** Los 2 cierres de julio son $11.5-15/medico VIA INSTALACION multi-medico. → **Tesis emergente: la unidad de venta es la INSTALACION ($100-250), no el medico ($40).** El CAC founder-led (~15-20h por instalacion: playbook 2 visitas + calibracion) no financia venta fria a $15 (LTV ~$90 con churn historico). Precio bajo por medico SOLO donde CAC≈0 (dentro de un hub ya instalado).
+- **Reglas que quedan:** $40 frio se mantiene hasta n=20 del Experimento #1 (no contaminar a mitad). Fallback pre-registrado: si calificados-EN-DOLOR objetan precio al cierre del experimento → batch a $25-30 (punto mas bajo donde el CAC frio cierra). $15 frio FUERA del menu. Dentalink/$60-con-odontograma NO es competencia (el mercado que los rechazo es nuestro mercado — 7/10 TimeTree); Confirmafy $12 = mencionado por Diego, no por leads → tratamiento AgendaPro (fantasma de pricing hasta aparecer en campo). Contrafactual Skin Medic ("un agente lo hubiera salvado") = infalsable, post-mortem dice Coexistence; no estrategizar sobre fantasmas.
+
+### 3. Test de precio pre-registrado — inquilinos de Hanoy (N=3)
+
+- **Diseño (correccion de Diego sobre propuesta COO):** Free = **app completa sin restricciones** — cada inquilino maneja SU agenda y SUS pacientes — EXCEPTO mensajes (recordatorios/bot). Pro $15/medico = mensajes **con LINEA PROPIA** (la linea de Hanoy es SOLO de ella; placeholder-sin-paciente DESCARTADO como absurdo — correcto, el producto completo en manos hace el test mas fuerte). Upsell Pro = una sesion de onboarding Coexistence por inquilino (adquisicion caliente CAC≈0, Meta por cuenta de ellos, cuña "tu numero" intacta).
+- **Umbral (60 dias post-instalacion):** ≥1/3 toma Pro = señal viva del loop hub + reabre discusion de precio frio con datos. 0/3 = teoria "precio-barrera" MUERTA (usaron todo a diario, el no-show les cuesta la hora, y ni $15 los movio) → dolor confirmado como la barrera. Costo del test: $0 y cero horas.
+- Techo honesto del piloto: $15 + 3×$15 = **$60/mes max** — es laboratorio, no negocio; el premio es el playbook dueña-hub replicable (tesis Airbnb-de-cubiculos) y el test de precio.
+
+### 4. Verificaciones tecnicas criticas ANTES del martes (modo-dev, lunes)
+
+1. **Scoping de mensajes por doctor** — si inquilinos cargan pacientes/citas reales en la org, ni el cron de recordatorios ni el bot pueden disparar por la linea de Hanoy para citas ajenas. Revisar como gatean `whatsapp_line_doctors` los crons y el bot. **Sin esto verificado NO se instala el Free multi-medico.**
+2. **Visibilidad entre medicos independientes** — que ve un user doctor-role de pacientes/citas de otros (pacientes pertenecen a la org; Hanoy + inquilinos = negocios independientes compartiendo org).
+3. **4 condiciones Coexistence** del numero de Hanoy + **website en Business Portfolio** (leccion Skin Medic: landing YA si no tiene — aprobacion Meta tarda dias).
+4. **PWA scope minimo** (manifest + iconos + standalone; SIN push — eso es feature, libro de demanda): 2-4h lunes, para instalar el icono en su celular el martes.
+
+### 5. UNIMED y resto
+
+- Omar Diaz: "tuvieron un atraso, el lunes sera la respuesta". **Bandera: lenguaje paso de logistica a decision.** Plan 2 ramas lunes: SI → fecha de arranque + primer pago EN esa llamada (no un toque mas); evasiva → UN deadline digno ("para reservar los 20 cupos al precio acordado necesito arranque esta semana") y soltar. No convertir $230 en nurture eterno.
+- #99 Yeni: intento fallido, sigue pendiente (fuga $35 + señal paga/no-paga).
+- Karen: precio por escrito — estado sin reportar (mencionado 2 veces, no volver a insistir hasta que Diego lo traiga).
+
+### 6. Censo pre-instalacion Hanoy (respuestas del sabado) + plan del fin de semana
+
+- **WA Business App ✓** y "conectada a Meta" (ella hace su publicidad — probable click-to-WhatsApp desde su pagina) + **pagina FB ✓** → 2 de las 4 condiciones Coexistence listas; el numero tiene actividad real (7+ dias sobra) y ella **ya tiene SU Business Portfolio propio** (modelo correcto, [[business-portfolio-aislado]]). Martes: en Embedded Signup **seleccionar SU portfolio existente**, no crear uno nuevo; recordarle actualizar la app antes del martes.
+- **SIN sitio web → LANDING = unico bloqueador real, corre contra reloj** (leccion Skin Medic: Meta tarda dias). Plan: apenas mande nombre+logo+direccion+servicios → Claude arma landing 1-pagina en subdominio orioncare.app (Vercel, $0, 1-2h) → DOMINGO llamada guiada de 10 min para que ELLA agregue la URL a su Business Info (Configuracion del negocio → Informacion) + verificar nombre/direccion/telefono completos.
+- **1 solo cubiculo compartido entre TODOS los medicos** (incluida Hanoy) → config minima: **1 recurso (cubiculo) + 4 calendarios profesionales**; toda cita de cualquiera bloquea el cubiculo = el reemplazo de TimeTree ES el bloqueo cruzado (calendario, no mensajes → no toca la restriccion de linea). Su "bloquear fechas" = bloquear horas del recurso.
+- **Bonus estrategico:** sus ads con boton a WhatsApp → al vincular el numero, los leads de su publicidad caen directo al inbox = el caso "administrar leads de ads" se demuestra solo desde semana 1; el reporte del mes gratis se escribe solo.
+- Mensaje con el listado completo ENVIADO el sabado (10 preguntas + hora del martes + celular a mano + citas futuras para cargar).
+
+### Tareas activas (post-18 Jul)
+
+- [x] ✅ **PWA minimo — ENTREGADO Y EN PROD el mismo sabado 18** (PR #74 mergeado, QA aprobado Android + iPhone).
+- [ ] **EN ESPERA de Hanoy (reloj de Meta):** landing apenas mande nombre+logo (mensaje con el listado YA enviado) → deploy subdominio → llamada guiada para meter URL en su Business Info. Si manda domingo, se arma domingo.
+- [ ] **LUNES 20:** UNIMED — la respuesta (2 ramas pre-acordadas). Lo mas grande sobre la mesa.
+- [ ] **LUNES 20:** modo-dev — scoping linea-por-doctor + visibilidad entre medicos + org en DB (1 cubiculo + 4 calendarios). Arrancar desde main actualizado (repo quedo en rama feat/pwa-minimo, ya mergeada).
+- [ ] **LUNES 20:** reintento #99 Yeni.
+- [ ] **MARTES 21 PM:** instalacion Hanoy — seleccionar SU portfolio en Embedded Signup, bot OFF + transcription OFF primera hora, cargar citas futuras, round-trip del echo antes de irse, mandato del canal de reserva como parte del trato, icono PWA instalado en su celular.
+- [ ] Batch 2 Experimento #1 sigue en fila (a $40, con filtro volumen); Molina/Palma sin confirmar.
+
+### Para retomar proxima sesion
+
+**Primera: ¿que dijo UNIMED el lunes?** (rama si/evasiva — leer contra el plan pre-acordado). **Segunda: ¿pasaron las verificaciones tecnicas?** — en especial el scoping de linea por doctor; si no existe, decidir si es fix-habilitador minimo o se instala solo-Hanoy el martes y el Free de inquilinos espera. **Tercera: ¿como salio la instalacion de Hanoy?** (echo round-trip visto, mandato de canal negociado, PWA instalada). Cuarta: #99 Yeni y batch 2. El Experimento #1 sigue a $40 hasta n=20; el test de inquilinos corre en paralelo sin tocarlo.
+
+---
+
+## Sesion 21 Jul 2026 (MARTES, cont. NOCHE) — Acuerdo de servicio universal + hallazgo FOMO + instalacion Hanoy en curso
+
+**Contexto entrante:** landing de Hanoy confirmada lista (`https://dra-hanoy-medina.vercel.app/`), UNIMED soltado sin mas seguimiento (decision de la sesion anterior, reafirmada hoy — Diego: "ellos se tienen que comunicar conmigo, ya saben que existo"). Diego arranca la instalacion de Hanoy en vivo.
+
+### 1. Acuerdo de servicio — plantilla universal creada (activo de ventas nuevo)
+
+Diego pidio un "contrato" para Hanoy; se convirtio, por correccion iterativa de Diego, en una **plantilla universal reusable para todo cliente futuro** — NO contrato legal, estilo "politicas de la empresa" en tono de **usted**. Archivos: `docs/ventas/plantilla-acuerdo-servicio.md` (fuente editable) + `.html`/`.pdf` (version final formateada, logo OrionCare, 1 pagina, cierre "Gracias por confiar en OrionCare. Gracias por confiar en nosotros. — Dican" en vez de pie de pagina).
+
+**Reglas de contenido que quedaron fijas (aplican a cualquier documento cliente futuro):**
+- **Sin precio ni desglose de features.** El precio se acuerda de palabra en el cierre; cada feature listada (calendario compartido, "seguimiento", bandeja de mensajes) invita a preguntar "¿y esto que es?" en vez de dar confianza — Diego lo verbalizo explicito: "eso causa preguntas". Ver [[client-doc-copywriting]].
+- **Cero contexto interno del negocio** (por que existe Coexistence, que paso con Skin Medic/Medilaser) — el cliente no necesita ni debe saber esa historia.
+- **Sin tamaño de equipo ni promesas de tiempo de respuesta** ("somos pocos", "24 horas") — resta seriedad.
+- **Documento verdaderamente universal — cero campos que llenar por cliente.** El link de landing de cada quien se manda aparte en el chat, nunca dentro del documento. Orden final: datos seguros → numero de WhatsApp → ayuda → cancelacion → landing al final.
+
+**Landing page como regalo — friccion deliberada:** Diego decidio que la landing se regala a TODO cliente que cierra (no antes del cierre — el experimento de Reddit ya probo que regalar pre-compromiso atrae freeloaders, no ICP). El parrafo de la landing en el documento nombra a proposito "codigo fuente", "alojar", "dominio", "mantenimiento tecnico" — palabras tecnicas que generan friccion real en un medico sin cultura web, para empujar hacia el paquete pagado de hosting+alojamiento (a precio aparte, no metido en la cuota base — mismo sesgo de siempre en [[pricing-costo-marginal]]). Diego fue explicito: "quiero causar fatiga ahi... que digan mejor hagalo usted".
+
+### 2. Hallazgo estrategico: hipotesis FOMO vs dolor real (SIN VALIDAR, no rediseñar pitch todavia)
+
+Diego, revisando todas sus reuniones de campo: **nadie le ha dicho que pierde tiempo o pacientes** — volumen bajo (~10 mensajes/dia "es mucho"), y quien contesta tarde son un par de mensajes en la noche, no una crisis. Hipotesis nueva de Diego: **la compra puede ser por FOMO/estatus** ("verse profesional", "no quedarse atras") en vez de dolor cuantificado — y que hay una señal visual real ("se nota" el medico que genera plata vs el que no).
+
+**Encaja con datos ya existentes:** el 40% test de Wilmer dio resultado "tibio" (no hair-on-fire) — consistente con compra por status, no por dolor agudo. Wilmer agenda 94.5% de sus citas el mismo a mano y casi no usa la plataforma, pero esta feliz — mismo patron.
+
+**Decision:** NO rediseñar el pitch a mitad del Experimento #1 (sigue a n=20). Accion barata acordada: en las proximas llamadas/visitas, anotar si el interes suena a dolor ("pierdo tiempo/pacientes") o a FOMO ("otros ya lo tienen", "quiero verme profesional") — data real antes de decidir si el mensaje cambia. Ver [[hipotesis-fomo-vs-dolor]].
+
+### 3. Instalacion Hanoy — en curso, checklist ejecutandose en vivo
+
+- ✅ Landing confirmada en produccion.
+- ✅ Especialidad "Cirujano Dentista" YA EXISTIA en la tabla `specialties` (cubre a Hanoy sin cambios); subespecialidades dentales (Ortodoncia, Endodoncia, etc.) con SQL preparado, no urgente, para cuando dental crezca como vertical.
+- ✅ Usuario admin+doctor de Hanoy creado (`hanoymedina@orioncare.app`) siguiendo el patron 1-fila-org_members ([[admin-doctor-role-pattern]]).
+- 🔜 Verificando sitio web en Business Info de Meta (`business.facebook.com/settings/info`) antes de escanear el QR de Coexistence.
+- 🔜 Pendiente: motor (recurso+calendario+servicios) si no esta cargado, bot OFF + transcripcion OFF, vinculacion Coexistence, round-trip del echo, cargar citas futuras, icono PWA, mandar PDF+link landing.
+- **Recordatorio vigente de modo-dev (21 Jul):** instalar HOY solo la cuenta de Hanoy, SIN los 3 inquilinos — el gate `messaging_enabled` por doctor no existe aun.
+
+### 4. Blocker tecnico nuevo (no bloqueante para hoy)
+
+Intento de autenticar el MCP de Supabase fallo: `{"message":"Unrecognized client_id"}` en el OAuth de Supabase — problema de configuracion del plugin, no arreglable reintentando. Fallback usado toda la sesion: Diego corre el SQL directo en Supabase Studio. Documentado en estado-dev.md como deuda tecnica menor.
+
+### Tareas activas (post-21 Jul noche)
+
+- [ ] Terminar instalacion Hanoy esta noche (checklist arriba)
+- [ ] Correr SQL de subespecialidades dentales cuando haya tiempo (no urgente)
+- [ ] Arreglar auth del Supabase MCP (`Unrecognized client_id`) — no urgente, workaround vigente
+- [ ] Empezar a anotar dolor-vs-FOMO en proximas llamadas/visitas (barato, sin tocar el experimento)
+- [ ] Humanizacion del bot de Hanoy como plantilla reusable — pendiente, post-instalacion (idea de Diego, ligar a [[humanizacion-bot]])
+- [ ] Testear paquete de hosting+mantenimiento de landing con los proximos 2-3 clientes que cierren, precio aparte
+
+### Para retomar proxima sesion
+
+**Primera: ¿como termino la instalacion de Hanoy?** (Coexistence vinculado, round-trip visto, citas futuras cargadas, PWA instalada, PDF+landing enviados). **Segunda:** ¿algun dato dolor-vs-FOMO de esta semana? **Tercera:** ¿se probo el paquete de hosting con algun cliente nuevo?
+
+---
+
+## Sesion 22 Jul 2026 (MIERCOLES) — Instalacion Hanoy confirmada + 3 focos tecnicos definidos
+
+**Contexto entrante:** Diego confirma que la instalacion de Hanoy (anoche, 21 Jul) fue un exito total, sin problemas. Se pidio verificar uso real via SQL.
+
+### 1. Uso real de Hanoy — verificado por SQL (Supabase MCP autentico esta vez)
+
+Sesion nueva y espontanea hoy (sin que Diego la empujara) ademas de la noche de instalacion: 4 citas creadas, 3 pacientes cargados. Paginas mas usadas: agenda-semanal, citas/nueva, inbox, pacientes, agenda-secretaria. Bot sigue OFF (plan: activar en ~1 semana tras calibracion). Plantillas de WhatsApp en espera de aprobacion Meta.
+
+### 2. Hallazgos de la instalacion (4 items nuevos)
+
+1. **Advertencia "bot bueno" — Hanoy y su novio por separado.** Ambos dijeron, sin que se les preguntara, que "la mayoria de los bots son malos y se nota" — condicion implicita para que confien mas en el producto.
+2. **Novio de Hanoy = bienes raices independiente**, pidio piloto de bot calificador de leads para su rubro, PERO el mismo puso la condicion de ver primero que el bot de Hanoy no se sienta "bot barato". Choca con [[icp-individual-fuera]] (independiente, no clinica) — decision: watch-item, NO perseguir ahora, candidato natural para [[diversificacion-2027]] (piloto Oct 2026), costo de esperar = $0.
+3. **Hanoy lleva el plan de pago de sus inquilinos en Word.** Señal debil (N=2 informal, incluye anecdota de Grecia que ni es clienta) que refuerza el diseño ya listo de [[sistema-facturacion]] — no cruza el umbral de 3 clientes pagando, solo se anota.
+4. **Wilmer llamo con un problema real:** pacientes agendan en horas donde el tiene compromisos personales, sin forma de bloquear esos horarios. Diego evaluo y descarto un "servicio especial" ad-hoc por insalubre para el producto (acertado — es el tipo de personalizacion que la regla 80/20 prohibe). Es el mismo gap generico "bloqueo de horario/excepciones" anotado como diferible desde Skin Medic (22 May 2026), ahora lo pide el cliente ancla.
+
+### 3. Vista mensual — 2-3 señales convergentes
+
+Hanoy y UNIMED (aunque UNIMED se solto como cliente, el feedback de campo sigue siendo valido) pidieron vista mensual tipo TimeTree; Diego cree que Wilmer tambien la querria. Es el mismo gap de "vista combinada multi-calendario" de mayo, ahora mas especifico. Agnostico al rubro, no aplica la regla de "3+ clientes para feature vertical".
+
+### 4. Correccion al test de precio de inquilinos (30 dias, no 60)
+
+Diego corrigio la ventana del test pre-registrado con los 3 inquilinos de Hanoy: **30 dias en vez de 60** (razon: van a hablar con cada medico individualmente antes de integrarlo a la plataforma, no es autoservicio pasivo puro — no hace falta esperar tanto para leer la señal). Estrategia declarada: hacer la experiencia de Hanoy "algo bello" para que ELLA empuje organicamente a sus inquilinos; peor caso, se quedan en Free hasta que les llegue su momento de querer el Pro $15. **Nota metodologica que se mantiene:** el resultado a 30 dias YA NO es señal organica pura — Diego confirmo que "hara fuerza" en la venta con cada medico, hay que leerlo como conversion-con-empuje, no espontanea. Detalle completo en [[tesis-unidad-venta-instalacion]] (actualizado).
+
+### 5. Decision de foco tecnico
+
+**Los 3 items priorizados para desarrollo, en este orden declarado por Diego:** (1) bloqueador de horario/excepciones (Wilmer, urgente por ser el ancla), (2) vista mensual (Hanoy + UNIMED + Wilmer probable), (3) calibracion del bot (compromiso ya existente a 1 semana, ahora con mas peso por las advertencias de Hanoy/novio). Sesion continua en `/modo-dev` para planificar el orden real de construccion.
+
+### Tareas activas (post-22 Jul)
+
+- [ ] Planificar en modo-dev: bloqueador de horario, vista mensual, calibracion bot — orden y alcance
+- [ ] Calibracion del bot de Hanoy dentro de la semana comprometida (impacto ahora doble: ella + posible piloto novio)
+- [ ] Seguir sin perseguir el piloto bienes raices — esperar a que el bot de Hanoy este calibrado
+- [ ] Monitorear si Hanoy sube foto/logo pendientes y avanza con plantillas Meta
+
+### Para retomar proxima sesion
+
+**Primera:** ¿como salio la planificacion tecnica de modo-dev? **Segunda:** ¿algun avance en calibracion del bot? **Tercera:** ¿Hanoy o el novio volvieron a mencionar el piloto de bienes raices?
 
 ---
