@@ -1,10 +1,130 @@
 # Estado Desarrollo — OrionCare
 
-> Ultima actualizacion: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-3 commiteadas + **rediseño mobile completo basado en mockups de Stitch, en prod 4 Jun** — último commit 76baaa0): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive + hint del siguiente paso + spinner. SEGUIDO de un rediseño mobile extenso iterado con Diego sobre mockups de Stitch (todo en prod, `tsc` OK): bottom-sheet `Drawer` fullscreen para fecha/hora; `MonthGrid` colapsable (mes↔semana, "Expandir"); patrón "todo a la vista" por pasos con badges "Paso N"; paciente que colapsa a tarjeta-avatar (recordatorio integrado, sin chrome en mobile); `ServicePicker` estilo carrito (buscador + chips solo-nombre + cards en 1 línea + est. al lado del título); footer compacto (solo botón hasta elegir fecha/hora; profesional en 1 línea según 1 vs 2+; sin total estimado); Paso 3 unificado en una sola tarjeta tappable. Diego: "me gusta como está, quedan ajustes menores para más tarde".** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **Fase 4 — limpieza de código CERRADA 5 Jun** (removidos `VisitBooking.tsx` + `combinedAvailability.ts` huérfanos; reagendar verificado intacto por el insert-split; `tsc` OK). **PENDIENTE solo QA en vivo** de los 3 paths (visit-engine ICP, `single-doctor` con cliente real, `duration` sin servicios) + OK visual desktop — lo hace Diego (requiere app logueada). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
+> Ultima actualizacion: 22 Jul 2026 (MIERCOLES — **Fase 2 del "bloqueador de horario" ENTREGADA Y VERIFICADA EN VIVO** (Fase 1 schema/RLS + Fase 2 motor/hook, ver checkpoint ▼ "22 Jul 2026 — Fase 2" abajo). Hallazgo de la sesion: `get-available-days` NO delegaba a `_shared/availability.ts` (4ta copia duplicada) — refactorizado a pedido de Diego para que delegue como las otras 3. Prueba en vivo con datos reales de Wilmer: bloqueo creado → dia se marca sin cupo (`canFit:false`); bloqueo borrado → vuelve a `canFit:true`. Sin commits todavia (Diego pidio commitear todo junto al final del feature completo). Pendiente: Fase 3 (UI) y Fase 4 (verificacion con roles admin/secretary/doctor + aislamiento entre doctores de una misma org). Origen: Wilmer reporto que pacientes agendan en horas donde el tiene compromisos personales.)
+> Update previo: 4 Jun 2026 (EN CURSO = **Rediseño UI "Nueva Cita" (vista única)**. **FASES 0-3 ENTREGADAS** (Fases 0-3 commiteadas + **rediseño mobile completo basado en mockups de Stitch, en prod 4 Jun** — último commit 76baaa0): Fase 0 `get-visit-days` (calendario resource-aware, desplegada) + resolver compartido en get-visit-slots; Fase 1 hook `useAppointmentComposer` (3 paths visit-engine/single-doctor/duration + insert-split + ventana de mes); Fase 2 UI app-shell 2-col + `MonthGrid` (calendario mensual con tachado) + footer Auto + overlay de carga + horarios sin scroll; **Fase 3 (4 Jun): footer responsive + hint del siguiente paso + spinner. SEGUIDO de un rediseño mobile extenso iterado con Diego sobre mockups de Stitch (todo en prod, `tsc` OK): bottom-sheet `Drawer` fullscreen para fecha/hora; `MonthGrid` colapsable (mes↔semana, "Expandir"); patrón "todo a la vista" por pasos con badges "Paso N"; paciente que colapsa a tarjeta-avatar (recordatorio integrado, sin chrome en mobile); `ServicePicker` estilo carrito (buscador + chips solo-nombre + cards en 1 línea + est. al lado del título); footer compacto (solo botón hasta elegir fecha/hora; profesional en 1 línea según 1 vs 2+; sin total estimado); Paso 3 unificado en una sola tarjeta tappable. Diego: "me gusta como está, quedan ajustes menores para más tarde".** Plan: `.claude/plans/rediseno-nueva-cita-ui.md` + ajustes en `.claude/plans/ok-mejor-ajustemos-2-dazzling-hare.md`. **Fase 4 — limpieza de código CERRADA 5 Jun** (removidos `VisitBooking.tsx` + `combinedAvailability.ts` huérfanos; reagendar verificado intacto por el insert-split; `tsc` OK). **PENDIENTE solo QA en vivo** de los 3 paths (visit-engine ICP, `single-doctor` con cliente real, `duration` sin servicios) + OK visual desktop — lo hace Diego (requiere app logueada). Verificación técnica pendiente: smoke formal de agendar visita (get-visit-slots tuvo refactor behavior-preserving del resolver). **DIFERIDO (no implementar por ahora):** optimización de performance de disponibilidad (paralelizar queries secuenciales en `_shared/availability.ts` con Promise.all → 2-3x + caché React Query en el hook) y la identidad teal/Geist ("solo layout"). El MOTOR (Fases 0-6 del motor multi-recurso) sigue COMPLETO y en prod; ese rediseño es la capa UI de la Nueva Cita. MCP Supabase disponible. Ver [[motor-agendamiento-es-producto]].)
 > Historico sprints + bugs resueltos en `estado-dev-historial.md`
 > Plan motor multi-recurso: `.claude/plans/motor-agendamiento-multirecurso.md`
 > Plan Coexistence (entregado): `.claude/plans/trabajemos-en-el-coexistence-jaunty-toast.md`
 > **EN CURSO (15 Jun): E2E = ENSAYO DEL PLAYBOOK DE ONBOARDING COMPLETO** (con numero de repuesto via Coexistence). Ver seccion ▼ "CHECKPOINT 15 Jun" abajo. NO arrancado — quedo en research del plan de desconexion del numero.
+
+---
+
+## ▼ CHECKPOINT 22 Jul 2026 — Bloqueador de horario, Fase 2 (motor + capa de datos) ENTREGADA Y VERIFICADA
+
+**Contexto:** continuacion de Fase 1 (mismo dia). Objetivo: hacer que `doctor_schedule_exceptions` realmente excluya slots del motor de disponibilidad, y construir el hook de datos para la UI de Fase 3.
+
+**Hallazgo que cambio el alcance:** al mapear donde se arman los "intervalos ocupados", aparecieron 4 puntos (no 3): `getAvailableSlotsForDate`, `loadVisitDayState`, `loadVisitRangeState` (los 3 en `_shared/availability.ts`) y **`get-available-days/index.ts`**, que NO delegaba al shared (solo importaba `enumerateSlots`) — tenia su propia copia inline de carga de horarios y de intervalos ocupados. Es la funcion que sirve el tachado del calendario mensual para orgs simples, **la de Wilmer incluida** (el caso que origino el feature). Se le pregunto a Diego si parchear la 4ta copia o refactorizarla para que delegue como las otras 3 — eligio el refactor completo.
+
+**Backend — `_shared/availability.ts`:**
+- Nuevo helper `loadScheduleExceptions(supabase, doctorIds, rangeStartDate, rangeEndDate)` — trae bloqueos de `doctor_schedule_exceptions` que se solapan con el rango (ambos extremos inclusivos), agrupados por doctor.
+- **Detalle critico de correctitud:** `start_at`/`end_at` son `timestamptz` reales, pero TODO el resto del motor construye tiempos "naive" (sin zona, via `buildDateTime(date, time)` interpretados bajo la zona del proceso Deno). Comparar ms de un timestamptz real contra ms naive se habria desalineado silenciosamente por el offset Honduras↔proceso. Se agrego `naiveMsFromInstant()`: reinterpreta el instante real en hora Honduras y lo re-construye via `buildDateTime` para caer en el mismo espacio numerico que el resto del archivo. Sin este paso el feature habria "funcionado" en dev sin errores pero bloqueado las horas equivocadas en produccion — bug silencioso exactamente del tipo que el flujo de Fase 0 (BD→hook→UI) busca prevenir.
+- Las excepciones son **personales**: se cargan solo para el doctorId cuyo slot se calcula, nunca para sus co-workers (a diferencia de las citas, que si ocupan el recurso/cubiculo compartido) — importante para el caso hub (Hanoy).
+- Integrado en los 3 puntos existentes + `get-available-days` (ver abajo). `loadSchedulesAllDows` gano un parametro opcional `calendarId` (ya lo tenia `loadSchedules`) para que el refactor de `get-available-days` pudiera reusarlo sin perder la variante "calendario especifico".
+
+**Backend — refactor `get-available-days/index.ts`:** reemplazadas sus 2 copias inline (carga de horarios, resolucion de co-working) por `loadSchedulesAllDows`/`loadCoworkDoctorIds` del shared. Antes de tocar nada se verifico en BD si el edge case de comportamiento distinto (doctor con `calendar_doctors` pero cero `calendar_schedules`) existe en produccion: **si existe (2 filas)**, pero ambos son doctores de PRUEBA en una org de prueba ("OrionCareEditado") y ambos tienen tambien 0 `doctor_schedules` — se probo matematicamente que la divergencia es inerte (el dia ya se marca `working:false` antes de que la resolucion de co-working importe). Refactor confirmado seguro para todos los casos reales.
+
+**Frontend:** `src/lib/doctorScheduleExceptionsApi.ts` (listExceptions, checkConflicts, createException, deleteException — patron real de `promotionsApi.ts`) + `src/hooks/useDoctorScheduleExceptions.ts` (patron real de `usePromotions.ts`, useState+useCallback+useEffect). `createException` corre `checkConflicts` ANTES del insert (camino principal de UX con lista legible de citas); el trigger de Fase 1 queda como red de seguridad atomica para condiciones de carrera genuinas.
+
+**Deploy:** 5 funciones via CLI (`npx supabase functions deploy <fn> --project-ref soxrlxvivuplezssgssq`, con `--no-verify-jwt` donde correspondia): `get-available-slots` (verify_jwt=true, sin cambio), `get-visit-slots` (true, sin cambio), `get-visit-days` (false, preservado), `get-available-days` (false, preservado), `bot-handler` (false, preservado — redeploy necesario porque bundlea `_shared/availability.ts`). Verificado con `list_edge_functions` que ningun flag `verify_jwt` cambio sin querer (leccion del outage de 17 Jun).
+
+**Verificacion en vivo (datos reales de Wilmer, sin dejar basura):**
+1. `get-available-days` para agosto 2026 → `2026-08-03` (lunes, sin citas): `working:true, canFit:true`.
+2. INSERT real de un bloqueo cubriendo todo el 3 de agosto (zona Honduras) → mismo dia ahora `working:true, canFit:false`.
+3. DELETE del bloqueo → dia vuelve exactamente a `canFit:true`. Tabla confirmada en 0 filas al cierre.
+4. `get-visit-slots`/`get-visit-days` (motor multi-recurso) NO se probaron end-to-end en esta sesion (requieren JWT de usuario real / payload de servicios mas complejo) — su logica comparte el mismo helper `loadScheduleExceptions` ya probado y fue revisada linea por linea, pero queda como verificacion pendiente de campo cuando se pruebe con una org multi-recurso real (ej. Hanoy).
+
+**Tareas activas (post Fase 2):**
+- [ ] Fase 3: UI para crear/ver/borrar bloqueos (Diego pidio cuidar la UX del rango — "desde una hora especifica hasta semanas", experiencia smooth)
+- [ ] Fase 4: verificar como admin/secretary/doctor + aislamiento cruzado entre doctores de una misma org (caso hub)
+- [ ] Verificacion de campo pendiente: `get-visit-slots`/`get-visit-days` con una org multi-recurso real
+- [ ] Commit pendiente — Diego pidio commitear todo junto al cerrar el feature completo, no por fase
+- [ ] Al final: levantar server local para QA de Diego (pedido explicito de la sesion)
+
+---
+
+## ▼ CHECKPOINT 22 Jul 2026 — Bloqueador de horario, Fase 1 (schema+RLS+trigger) ENTREGADA
+
+**Contexto:** Wilmer (cliente ancla) reportó que pacientes agendan en horas donde tiene compromisos personales, sin forma de bloquearlas. Primer feature nuevo desde que se cerró el feature freeze — y primero en seguir el flujo de desarrollo formalizado hoy en `CLAUDE.md` (Fase 0 Define → Fase 1 Schema/RLS → Fase 2 Datos → Fase 3 UI → Fase 4 Verificación), adaptado del framework de Aurora PMS (otro proyecto propio) a los patrones reales de este repo.
+
+**Fase 0 (definición, cerrada en conversación con Diego):** el bloqueo es un rango continuo `start_at`/`end_at` (de horas a semanas), NO recurrente. Doctor gestiona el suyo; admin/secretary gestionan cualquiera de su org; un doctor nunca toca el de otro doctor de la misma org (aislamiento — relevante para hubs tipo Hanoy). Si hay citas `agendada`/`confirmada` solapadas, la creación se RECHAZA (no se cancela nada automático). Sin edición (se borra y se crea de nuevo). Fuera de alcance: recurrencia, notificación automática al paciente, y la integración con el motor de disponibilidad (Fase 2).
+
+**Verificado antes de diseñar:** Wilmer NO usa el motor multi-recurso (0 recursos, 1 calendario, org simple) — el bloqueador debe funcionar igual para orgs multi-recurso (Hanoy) pero no toca el trigger de capacidad de recursos (eje independiente). Confirmado que `bot-handler` ya NO duplica el algoritmo de slots — su `getAvailableSlotsForDate` local es un wrapper que delega 100% a `computeAvailableSlots` de `_shared/availability.ts` (import aliased línea 21, delegación línea 3934) — un solo punto de integración en Fase 2, no dos.
+
+**Fase 1 — entregada y verificada en prod:**
+- Migración `supabase/migrations/20260722120000_add_doctor_schedule_exceptions.sql`, aplicada vía MCP.
+- Tabla `doctor_schedule_exceptions`: `doctor_id`, `start_at`/`end_at` (timestamptz), `reason` opcional, `created_by` (solo auditoría), `created_at`. `CHECK (end_at > start_at)`. Sin `organization_id` propia (resuelve vía `doctor_id → doctors.organization_id`, igual que `doctor_schedules`). Sin `updated_at`/UPDATE policy — inmutabilidad real a nivel DB (se borra y se crea, no se edita).
+- RLS (SELECT/INSERT/DELETE): mirror del patrón real de `appointments` (admin/secretary org-wide vía `get_user_organizations`, doctor restringido a `doctor_id = current_doctor_id()`) — **NO** el patrón más restrictivo de `doctor_schedules` (que solo permite gestionar a `admin`). Decisión explícita de Diego, documentada para que no se lea como inconsistencia accidental.
+- Trigger `BEFORE INSERT` (`validate_doctor_schedule_exception_conflicts`, mismo estilo que `validate_appointment_resource_capacity` del motor): rechaza con `RAISE EXCEPTION 'DOCTOR_SCHEDULE_CONFLICT: ...'` si hay citas activas solapadas. Probado en transacciones con ROLLBACK sobre datos reales de Wilmer: caso con solape → rechazado correctamente; caso sin solape → insertado correctamente. Tabla queda en 0 filas (sin basura de test).
+- Defensa doble documentada para Fase 2: el trigger es la red de seguridad atómica; el hook debe hacer un pre-chequeo de lectura (join a `patients`) ANTES del insert para mostrarle al usuario la lista legible de citas en conflicto (el trigger solo devuelve UUIDs).
+- Advisors de seguridad: 0 ERRORs nuevos. Sí aparece un WARN nuevo (`validate_doctor_schedule_exception_conflicts` ejecutable por `anon`/`authenticated` vía RPC) — **mismo WARN preexistente que ya tiene** `validate_appointment_resource_capacity` (funciones-trigger de este estilo siempre lo generan; llamarlas fuera de un trigger real falla porque referencian `NEW`, es inofensivo). No es una regresión nueva, es la clase de warning ya aceptada para este patrón.
+- Types regenerados (`generate_typescript_types` vía MCP) y escritos a `src/integrations/supabase/types.ts`. `npx tsc --noEmit` limpio.
+- Plan completo (contexto, verificación contra código real, DDL, justificación de cada decisión no trivial) en `C:\Users\dican\.claude\plans\happy-weaving-puffin.md`.
+
+**Pendiente (próxima sesión):**
+- Fase 2: hook + pre-chequeo de conflictos legible + wiring del filtro de exclusión en `_shared/availability.ts` (los puntos reales a tocar: `getAvailableSlotsForDate`, `loadVisitDayState`, `loadVisitRangeState`, `loadSchedulesAllDows` — todos consumen `loadSchedules()`/ventanas por día, ahí es donde restar las excepciones).
+- Fase 3: UI para crear/ver/borrar bloqueos (Diego pidió explícitamente cuidar la UX — "que sea una experiencia smooth" para elegir desde una hora específica hasta semanas).
+- Fase 4: verificar como admin y como `secretary`/`doctor`; probar aislamiento cruzado entre doctores de una misma org (caso hub).
+- Después/en paralelo: vista mensual (Hanoy + UNIMED + Wilmer probable) — reutiliza `MonthGrid` (`src/components/MonthGrid.tsx`), agenda principal vive en `AgendaSemanal.tsx` + `useWeeklyAgenda.ts`.
+
+---
+
+## ▼ CHECKPOINT 21 Jul 2026 (NOCHE) — Instalación Hanoy: specialties, admin+doctor, MCP Supabase roto
+
+**Specialties:** tabla `specialties` ya tenía "Cirujano Dentista" (cubre odontología general — Hanoy queda resuelta sin cambios). Faltan subespecialidades dentales (Ortodoncia, Endodoncia, Periodoncia, Odontopediatría, Cirugía Oral y Maxilofacial, Prostodoncia, Implantología, Odontología Estética) — SQL con `WHERE NOT EXISTS` preparado y entregado a Diego, no urgente, no corrido aún.
+
+**Usuario admin+doctor de Hanoy creado:** `hanoymedina@orioncare.app`, siguiendo el patrón documentado en `[[admin-doctor-role-pattern]]` — creado como doctor desde la UI (dispara `create-user-with-role`), luego upgrade a admin vía `UPDATE org_members`/`UPDATE user_roles` (nunca 2 filas separadas).
+
+**Blocker nuevo: Supabase MCP no autentica.** `mcp__plugin_supabase_supabase__authenticate` devuelve una URL de OAuth que Meta... digo Supabase rechaza con `{"message":"Unrecognized client_id"}` — problema de configuración del client_id del plugin contra el OAuth server de Supabase, no algo que se arregle reintentando ni desde este lado. Mientras tanto, todo el trabajo de DB de la sesión se hizo dándole el SQL a Diego para correr directo en Supabase Studio (funciona bien, solo más manual). Revisar la config del plugin en otra sesión si se quiere acceso directo a futuro.
+
+---
+
+## ▼ CHECKPOINT 21 Jul 2026 — Scoping de mensajería por doctor: gap CONFIRMADO, fallback solo-Hanoy hoy
+
+**Contexto:** verificación urgente pre-instalación Hanoy (hoy 21 Jul tarde/noche, org con 4 médicos: ella + 3 inquilinos Free).
+
+**Hallazgo (confirmado leyendo código, no solo memoria):** ni `send-reminders`, ni `send-reminder-followup`, ni `auto-cancel-unconfirmed` filtran por doctor — los 3 solo gatean a nivel `organization_id` (`messaging_enabled` / `auto_cancel_enabled` son columnas de `organizations`, no de `doctors`). `messaging-gateway.getActiveLine()` (línea 99-123) resuelve la línea de WhatsApp únicamente por `organization_id` — toma "la línea activa de la org", sin noción de doctor. `whatsapp_line_doctors` existe pero solo la usa `bot-handler` para el menú del bot y `calendar_id`, nunca los crons de salida. **No existe ningún flag de mensajería a nivel doctor en el schema.** Conclusión: si hoy se cargan los 3 inquilinos con pacientes/citas reales, mañana el cron de recordatorios dispara mensajes por el número de Hanoy para sus citas — el riesgo exacto que se quería evitar.
+
+**Decisión tomada:** instalar HOY solo la cuenta de Hanoy (sin los 3 inquilinos). Cero código bajo presión de reloj.
+
+**Arquitectura evaluada para el fix (Diego preguntó explícitamente):**
+- ❌ **Org separada por médico + calendario compartido entre orgs** — INCORRECTA. El cubículo compartido de Hanoy solo funciona porque el motor multi-recurso reserva DENTRO de una org (mismo patrón Orthos/Skin Medic). Separar en orgs obligaría a inventar "reserva de recurso compartido entre orgs" = reconstruir el problema de TimeTree dentro del propio producto. Descartada.
+- 🔜 **Línea de WhatsApp separada por doctor dentro de la MISMA org** — dirección correcta a futuro (el schema ya lo insinúa: `whatsapp_line_doctors` dice "una línea sirve N doctores"), pero es de más alcance que lo que hace falta ahora (implica número propio del inquilino + extender `getActiveLine()` para resolver por doctor + Coexistence por línea). Se construye SOLO si algún inquilino sube a Pro con línea propia (test de precio a 60 días, aún N=0) — no antes.
+- ✅ **Fix correcto para AHORA: gate `messaging_enabled` por doctor** (Free = false, Pro/single-doctor legacy = true por default). Resuelve el 100% del riesgo de los 3 inquilinos sin tocar arquitectura de líneas.
+
+### Backlog — Tarea pendiente (próxima sesión de dev, NO urgente, no bloquea nada)
+
+**Gate `messaging_enabled` por doctor — estimado ~1.5-2h:**
+1. Migración: columna `messaging_enabled BOOLEAN DEFAULT true` en `doctors` (default true preserva comportamiento de clientes actuales — Wilmer, Yeni, etc.) — ~15 min
+2. Gate en los 3 crons: filtrar `appointments` por `doctors.messaging_enabled = true` (embedded filter vía PostgREST, mismo patrón repetido 3 veces) — ~45-60 min
+3. Defensa doble en `messaging-gateway`: mismo patrón que el kill switch de `organizations.messaging_enabled` que ya existe (línea ~281-317), ahora a nivel doctor — ~15-20 min
+4. Deploy 4 functions (`--no-verify-jwt`) + QA: verificar que Wilmer/Yeni siguen recibiendo recordatorios normal (regresión) y que un doctor de prueba con el flag en `false` no recibe nada — ~20-30 min
+
+**Relacionado:** mismo hueco que la tarea pendiente **#16 `doctor_subscriptions`** (anotada desde 21 May) — este caso (Hanoy) es la razón real para construirlo. Al construir el gate, cargar los 3 inquilinos con `messaging_enabled = false` explícito.
+
+**Trigger para retomar:** cuando Diego quiera activar el Free multi-médico completo para los inquilinos de Hanoy (no antes del gate).
+
+---
+
+## ▼ CHECKPOINT 18 Jul 2026 — PWA mínimo ENTREGADO (PR #74) + pendientes críticos del lunes para instalación Hanoy
+
+**Contexto:** Hanoy Medina cerrada en modo-estrategia ($15, instalación MARTES 21 Jul PM); pidió "que fuera un app" → se reactivó el PWA (estaba en diferidos) con alcance mínimo.
+
+**PWA mínimo HECHO (rama `feat/pwa-minimo`, commit `dc17d9b`, PR #74 abierto a main):**
+- Hallazgo: `vite-plugin-pwa` YA estaba activo (commit `eae0514`, perf/cache, `autoUpdate`) — solo faltaba la capa instalable.
+- Cambios: `manifest` completo en el bloque `VitePWA` (standalone, es, theme #6366f1/bg #f9fafb, 3 íconos) + íconos generados del `Logo OrionCare.png` 1024px (192/512 any, 512 maskable con logo al 80% sobre blanco, apple-touch-icon 180 — script System.Drawing en scratchpad, cero deps nuevas) + `index.html` (theme-color, apple-touch-icon, lang es).
+- Verificado: `tsc` OK, build OK, `dist/manifest.webmanifest` correcto con íconos + link inyectado + registerSW; SW precachea los PNG solos (globPatterns ya incluía png).
+- ✅ **PR #74 MERGEADO el mismo 18 Jul (20:17 UTC) → prod Vercel. QA APROBADO por Diego en AMBOS dispositivos (Android + iPhone) el mismo día** — se instala como app con logo y abre standalone. CERRADO; el martes solo queda instalar el ícono en el celular de Hanoy.
+- FUERA de alcance (deliberado): push notifications (= "avisar al médico de cita nueva", libro de demanda junio), offline custom.
+
+**⚠️ Deuda nueva anotada:** con SW activo, TODO diagnóstico de P0 frontend (tipo 29 Jun bundle viejo) debe incluir "desregistrar SW / hard reload" — el SW puede servir bundle cacheado post-redeploy; `autoUpdate` mitiga, no elimina.
+
+**PENDIENTES CRÍTICOS LUNES 20 (pre-instalación Hanoy, ver estado-estrategia Sesión 18 Jul):**
+1. **Scoping de mensajes por doctor** — la org Hanoy tendrá 4 médicos (ella + 3 inquilinos Free con app completa: sus pacientes/citas reales) pero SOLO las citas de Hanoy pueden disparar mensajes por su línea. Verificar cómo gatean `whatsapp_line_doctors` los crons (send-reminders, auto-cancel, followup) y el bot. **Sin esto verificado NO se activa el Free multi-médico el martes** (fallback: instalar solo-Hanoy, inquilinos después).
+2. **Visibilidad entre médicos independientes** — qué ve un user doctor-role de pacientes/citas ajenos (pacientes pertenecen a la org; son negocios independientes).
+3. **Org Hanoy en DB** — patrón Orthos: 1 recurso (cubículo compartido por TODOS) + 4 calendarios profesionales (1 por médico, [[calendario-por-profesional-multirecurso]]) + admin+doctora 1 fila + super-admin custodio.
+4. **Landing de Hanoy** (no tiene sitio web) — **EN ESPERA de que mande nombre/logo (listado ya enviado 18 Jul)**; apenas llegue: armar + deploy subdominio orioncare.app + URL a su Business Info (reloj de Meta corriendo — si manda domingo, se arma domingo).
+
+**Nota de repo al cierre:** working tree quedo parado en `feat/pwa-minimo` (ya mergeada a main). Proxima sesion: `git checkout main && git pull` antes de trabajar.
 
 ---
 

@@ -37,11 +37,73 @@ const toastVariants = cva(
   },
 );
 
+// Duracion real de los toasts de esta app: 10s, con pausa mientras el mouse
+// esta encima (no debe desaparecer aunque pasen los 10s) y una gracia de 2s
+// desde que el mouse sale SI el tiempo ya se habia cumplido mientras estaba en
+// pausa. El `duration` nativo de Radix (pausa=congela remaining, resume=sigue
+// contando el remaining) no da esa gracia fija de 2s — resolveria a ~0 y
+// cerraria casi instantaneo. Por eso el timer se maneja a mano aqui; el
+// `duration` que se le pasa a Radix es solo un respaldo enorme para que su
+// propio timer interno nunca dispare primero.
+const TOAST_DURATION_MS = 10_000;
+const TOAST_HOVER_GRACE_MS = 2_000;
+const RADIX_DURATION_FALLBACK_MS = 1_000_000; // ~16min, nunca deberia dispararse
+
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
-  return <ToastPrimitives.Root ref={ref} className={cn(toastVariants({ variant }), className)} {...props} />;
+>(({ className, variant, duration, onOpenChange, onMouseEnter, onMouseLeave, ...props }, ref) => {
+  // `duration` se saca de `props` (no se le pasa nunca a Radix) para que este
+  // timer manual sea la unica fuente de verdad — default 10s, pero cualquier
+  // llamado a toast({ duration: N }) lo puede acortar/alargar (ej. 5s para
+  // "Bloqueo creado").
+  const initialDuration = duration ?? TOAST_DURATION_MS;
+  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const startedAtRef = React.useRef<number>(Date.now());
+  const remainingRef = React.useRef<number>(initialDuration);
+
+  const clearTimer = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  };
+
+  const startTimer = React.useCallback(
+    (ms: number) => {
+      clearTimer();
+      startedAtRef.current = Date.now();
+      remainingRef.current = ms;
+      timerRef.current = setTimeout(() => onOpenChange?.(false), ms);
+    },
+    [onOpenChange],
+  );
+
+  React.useEffect(() => {
+    startTimer(initialDuration);
+    return clearTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLElement>) => {
+    remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAtRef.current));
+    clearTimer();
+    onMouseEnter?.(e);
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLElement>) => {
+    startTimer(remainingRef.current > 0 ? remainingRef.current : TOAST_HOVER_GRACE_MS);
+    onMouseLeave?.(e);
+  };
+
+  return (
+    <ToastPrimitives.Root
+      ref={ref}
+      duration={RADIX_DURATION_FALLBACK_MS}
+      onOpenChange={onOpenChange}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={cn(toastVariants({ variant }), className)}
+      {...props}
+    />
+  );
 });
 Toast.displayName = ToastPrimitives.Root.displayName;
 
@@ -67,7 +129,10 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity group-hover:opacity-100 group-[.destructive]:text-red-300 hover:text-foreground group-[.destructive]:hover:text-red-50 focus:opacity-100 focus:outline-none focus:ring-2 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      // Siempre visible (no solo con :hover) — en touch/mobile el hover no
+      // dispara de forma confiable y el boton de cierre manual quedaba oculto
+      // hasta el primer tap. opacity-70 en reposo, 100 al pasar el mouse/enfocar.
+      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-70 transition-opacity group-[.destructive]:text-red-300 hover:text-foreground hover:opacity-100 group-[.destructive]:hover:text-red-50 focus:opacity-100 focus:outline-none focus:ring-2 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
       className,
     )}
     toast-close=""

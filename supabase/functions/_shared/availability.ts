@@ -254,6 +254,58 @@ export async function loadCoworkDoctorIds(
 }
 
 /**
+ * Convierte un timestamptz real (doctor_schedule_exceptions.start_at/end_at) al
+ * mismo espacio "naive" de milisegundos que usa el resto de este archivo (ver
+ * comentario de cabecera: slots/citas se construyen via buildDateTime desde
+ * columnas date+time locales, sin zona). Sin esta conversion, comparar el ms de
+ * un timestamptz real contra el ms naive de un slot se desalinearia por el
+ * offset entre la zona del proceso Deno y America/Tegucigalpa.
+ */
+function naiveMsFromInstant(iso: string): number {
+  const honduras = DateTime.fromISO(iso).setZone(AVAILABILITY_TIMEZONE);
+  return buildDateTime(honduras.toFormat("yyyy-MM-dd"), honduras.toFormat("HH:mm:ss")).toMillis();
+}
+
+/**
+ * Bloqueos puntuales de doctor (doctor_schedule_exceptions) que se solapan con
+ * [rangeStartDate, rangeEndDate] (ambos inclusivos, YYYY-MM-DD). Personales:
+ * solo se cargan para los doctorIds pedidos, NUNCA para co-workers (a diferencia
+ * de las citas, que si ocupan el recurso compartido) — bloquear el calendario
+ * propio no debe afectar la disponibilidad de otro doctor que comparte cubiculo.
+ * Mismo shape que OccupiedInterval para reusar el overlap check ya existente en
+ * enumerateSlots/isDoctorFree.
+ */
+export async function loadScheduleExceptions(
+  supabase: SupabaseClient,
+  doctorIds: string[],
+  rangeStartDate: string,
+  rangeEndDate: string,
+): Promise<Map<string, OccupiedInterval[]>> {
+  const result = new Map<string, OccupiedInterval[]>();
+  if (doctorIds.length === 0) return result;
+
+  const rangeStartIso = DateTime.fromISO(rangeStartDate, { zone: AVAILABILITY_TIMEZONE })
+    .startOf("day").toISO();
+  const rangeEndIso = DateTime.fromISO(rangeEndDate, { zone: AVAILABILITY_TIMEZONE })
+    .plus({ days: 1 }).startOf("day").toISO();
+
+  const { data } = await supabase
+    .from("doctor_schedule_exceptions")
+    .select("doctor_id, start_at, end_at")
+    .in("doctor_id", doctorIds)
+    .lt("start_at", rangeEndIso!)
+    .gt("end_at", rangeStartIso!);
+
+  for (const row of (data || []) as any[]) {
+    const interval = { startMs: naiveMsFromInstant(row.start_at), endMs: naiveMsFromInstant(row.end_at) };
+    if (!result.has(row.doctor_id)) result.set(row.doctor_id, []);
+    result.get(row.doctor_id)!.push(interval);
+  }
+
+  return result;
+}
+
+/**
  * Carga el buffer del servicio candidato y su receta (recursos requeridos con
  * capacidad). Solo recursos activos cuentan (igual que el trigger Fase 0).
  */
@@ -353,12 +405,15 @@ export async function getAvailableSlotsForDate(
 
   const resourceAware = !!(serviceTypeId && organizationId);
 
-  // Dos cadenas INDEPENDIENTES (cada una secuencial internamente) en paralelo:
+  // Tres cadenas INDEPENDIENTES (cada una secuencial internamente) en paralelo:
   //  A) receta+buffer del candidato → consumo de recursos (solo resource-aware).
   //  B) doctores co-working → sus citas del dia (footprint profesional). En modo
   //     resource-aware aplica el buffer del servicio de cada cita; en base, duracion
   //     cruda (= 2A). El orden del array no importa (overlap via .some()).
-  const [recipeChain, occupiedIntervals] = await Promise.all([
+  //  C) bloqueos personales del doctor (doctor_schedule_exceptions) — SOLO del
+  //     doctorId pedido, nunca de los co-workers (bloquear el propio calendario
+  //     no debe afectar la disponibilidad de otro doctor que comparte cubiculo).
+  const [recipeChain, occupiedIntervals, scheduleExceptionsByDoctor] = await Promise.all([
     (async (): Promise<{
       candidateBuffer: number;
       recipe: RecipeItem[];
@@ -404,8 +459,10 @@ export async function getAvailableSlotsForDate(
         return { startMs: start.toMillis(), endMs: end.toMillis() };
       });
     })(),
+    loadScheduleExceptions(supabase, [doctorId], date, date),
   ]);
   const { candidateBuffer, recipe, consumersByResource } = recipeChain;
+  const combinedOccupied = [...occupiedIntervals, ...(scheduleExceptionsByDoctor.get(doctorId) ?? [])];
 
   // Predicado de capacidad de recursos (solo en modo resource-aware; recipe vacia → siempre ok)
   const resourceOk = (slotStartMs: number, slotEndMs: number): boolean => {
@@ -416,7 +473,7 @@ export async function getAvailableSlotsForDate(
     return true;
   };
 
-  return enumerateSlots(date, schedules, occupiedIntervals, durationMinutes, slotGranularity, {
+  return enumerateSlots(date, schedules, combinedOccupied, durationMinutes, slotGranularity, {
     candidateBuffer,
     resourceOk: recipe.length > 0 ? resourceOk : undefined,
   });
@@ -492,9 +549,10 @@ export async function loadVisitDayState(
     for (const r of loaded.recipe) recipeResourceIds.add(r.resourceId);
   }
 
-  // Nivel 1: citas externas del dia (footprint) + consumo de recursos, en paralelo
-  // (ambas dependen solo de los Sets ya construidos arriba).
-  const [apptsRes, consumersByResource] = await Promise.all([
+  // Nivel 1: citas externas del dia (footprint) + consumo de recursos + bloqueos
+  // personales de doctor, en paralelo (las tres dependen solo de los Sets ya
+  // construidos arriba).
+  const [apptsRes, consumersByResource, scheduleExceptionsByDoctor] = await Promise.all([
     allCoworkIds.size > 0
       ? supabase
           .from("appointments")
@@ -504,6 +562,7 @@ export async function loadVisitDayState(
           .not("status", "in", CANCELLED_STATUSES)
       : Promise.resolve({ data: [] as any[] }),
     loadResourceConsumers(supabase, organizationId, date, [...recipeResourceIds]),
+    loadScheduleExceptions(supabase, doctorIds, date, date),
   ]);
 
   const occByDoctorRaw = new Map<string, OccupiedInterval[]>();
@@ -523,6 +582,9 @@ export async function loadVisitDayState(
       const arr = occByDoctorRaw.get(cw);
       if (arr) merged.push(...arr);
     }
+    // Bloqueos personales: SOLO del propio docId, nunca de sus co-workers.
+    const exceptions = scheduleExceptionsByDoctor.get(docId);
+    if (exceptions) merged.push(...exceptions);
     occupiedByDoctor.set(docId, merged);
   }
 
@@ -629,21 +691,30 @@ interface ScheduleDowRow {
 export async function loadSchedulesAllDows(
   supabase: SupabaseClient,
   doctorId: string,
+  calendarId?: string,
 ): Promise<ScheduleDowRow[]> {
   let rows: ScheduleDowRow[] = [];
 
-  const { data: calDoctors } = await supabase
-    .from("calendar_doctors")
-    .select("calendar_id")
-    .eq("doctor_id", doctorId)
-    .eq("is_active", true);
-  if (calDoctors && calDoctors.length > 0) {
-    const calIds = calDoctors.map((cd: any) => cd.calendar_id);
+  if (calendarId) {
     const { data } = await supabase
       .from("calendar_schedules")
       .select("day_of_week, start_time, end_time")
-      .in("calendar_id", calIds);
+      .eq("calendar_id", calendarId);
     rows = (data || []) as ScheduleDowRow[];
+  } else {
+    const { data: calDoctors } = await supabase
+      .from("calendar_doctors")
+      .select("calendar_id")
+      .eq("doctor_id", doctorId)
+      .eq("is_active", true);
+    if (calDoctors && calDoctors.length > 0) {
+      const calIds = calDoctors.map((cd: any) => cd.calendar_id);
+      const { data } = await supabase
+        .from("calendar_schedules")
+        .select("day_of_week, start_time, end_time")
+        .in("calendar_id", calIds);
+      rows = (data || []) as ScheduleDowRow[];
+    }
   }
 
   if (rows.length === 0) {
@@ -715,10 +786,11 @@ export async function loadVisitRangeState(
   const minDate = sorted[0];
   const maxDate = sorted[sorted.length - 1];
 
-  // Nivel 1: las 2 queries de rango (citas externas + consumo de recursos) en
-  // paralelo. Guards preservados: si el Set esta vacio NO se construye la query
-  // (Promise.resolve({data:[]})), identico al camino serial.
-  const [apptsRes, dayApptsRes] = await Promise.all([
+  // Nivel 1: las 2 queries de rango (citas externas + consumo de recursos) mas
+  // los bloqueos personales de doctor, en paralelo. Guards preservados: si el
+  // Set esta vacio NO se construye la query (Promise.resolve({data:[]})),
+  // identico al camino serial.
+  const [apptsRes, dayApptsRes, scheduleExceptionsByDoctor] = await Promise.all([
     allCoworkIds.size > 0
       ? supabase
           .from("appointments")
@@ -738,6 +810,7 @@ export async function loadVisitRangeState(
           .not("status", "in", CANCELLED_STATUSES)
           .not("service_type_id", "is", null)
       : Promise.resolve({ data: [] as any[] }),
+    loadScheduleExceptions(supabase, doctorIds, minDate, maxDate),
   ]);
 
   // Citas externas (footprint = duracion + buffer del servicio) de los co-workers, por fecha.
@@ -798,6 +871,12 @@ export async function loadVisitRangeState(
         const arr = occForDate.get(cw);
         if (arr) merged.push(...arr);
       }
+      // Bloqueos personales del rango completo: SOLO del propio docId, nunca de
+      // co-workers. Seguro anexarlos sin filtrar por fecha — el overlap check de
+      // isDoctorFree es puramente por ms, una excepcion que no toca esta fecha
+      // simplemente nunca solapa un slot de esta fecha.
+      const exceptions = scheduleExceptionsByDoctor.get(docId);
+      if (exceptions) merged.push(...exceptions);
       occupiedByDoctor.set(docId, merged);
     }
 

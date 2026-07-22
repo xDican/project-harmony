@@ -40,6 +40,7 @@ const getPageTitle = (pathname: string): string => {
   if (pathname.startsWith('/pacientes/')) return 'Detalle Paciente';
   if (pathname.startsWith('/admin/users/')) return 'Editar Usuario';
   if (pathname.startsWith('/admin/doctors/') && pathname.includes('/schedule')) return 'Horarios';
+  if (pathname.startsWith('/admin/doctors/') && pathname.includes('/bloqueos')) return 'Bloqueos de Horario';
   if (pathname.startsWith('/configuracion/')) return 'Configuración';
   return 'Agenda Semanal';
 };
