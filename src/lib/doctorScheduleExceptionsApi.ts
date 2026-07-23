@@ -88,6 +88,48 @@ export async function checkConflicts(
     }));
 }
 
+/** Instante UTC -> dia calendario Honduras ('yyyy-MM-dd'), offset fijo -06:00
+ *  (sin horario de verano, mismo criterio que toHondurasISO en
+ *  NewScheduleExceptionModal.tsx). Correcto sin importar la zona horaria del
+ *  navegador que ejecuta el codigo. */
+function hondurasDateStr(isoInstant: string): string {
+  const ms = new Date(isoInstant).getTime() - 6 * 60 * 60 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * Dias de un mes (Honduras) que ya tienen al menos 1 cita activa del doctor.
+ * Se usa en el modo "bloquear dia completo" del modal para deshabilitar esos
+ * dias en el calendario ANTES de que el usuario intente el bloqueo — evitar
+ * que tenga que "adivinar" y toparse con el error de conflicto recien al
+ * confirmar. Distinto de `getAvailableDays` (que mide "cabe una cita nueva de
+ * 30 min", relevante solo para el modo "por horas").
+ */
+export async function getDaysWithAppointments(
+  doctorId: string,
+  monthStart: string, // 'yyyy-MM-dd', primer dia del mes visible
+  monthEnd: string, // 'yyyy-MM-dd', primer dia del mes siguiente (exclusivo)
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("appointment_at")
+    .eq("doctor_id", doctorId)
+    .not("status", "in", CANCELLED_STATUSES_FILTER)
+    .not("appointment_at", "is", null)
+    .gte("appointment_at", `${monthStart}T00:00:00-06:00`)
+    .lt("appointment_at", `${monthEnd}T00:00:00-06:00`);
+
+  if (error) {
+    throw new Error(`No se pudo verificar citas del mes: ${error.message}`);
+  }
+
+  const days = new Set<string>();
+  for (const apt of data ?? []) {
+    if (apt.appointment_at) days.add(hondurasDateStr(apt.appointment_at));
+  }
+  return days;
+}
+
 export type CreateExceptionResult =
   | { success: true; exception: DoctorScheduleException }
   | { success: false; conflicts?: ConflictingAppointment[]; error: string };

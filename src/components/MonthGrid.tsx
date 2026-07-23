@@ -20,6 +20,7 @@ export default function MonthGrid({
   days,
   daysMap,
   selectedDate,
+  rangeEnd,
   onSelect,
   canGoPrev,
   onPrev,
@@ -31,6 +32,12 @@ export default function MonthGrid({
   days: Date[];
   daysMap: Record<string, { working: boolean; canFit: boolean }>;
   selectedDate?: Date;
+  /** Selector de rango (bloqueo de dia completo): fin del rango, con
+   *  `selectedDate` como inicio. Dias estrictamente entre ambos se resaltan
+   *  como "en rango". Opcional y retrocompatible — sin este prop el
+   *  componente se comporta exactamente igual que antes (seleccion de un
+   *  solo dia), como ya lo usan NuevaCita.tsx y el modo "por horas". */
+  rangeEnd?: Date;
   onSelect: (date: Date) => void;
   canGoPrev: boolean;
   onPrev: () => void;
@@ -162,7 +169,10 @@ export default function MonthGrid({
               {days.map((date) => {
                 const ds = format(date, 'yyyy-MM-dd');
                 const unavailable = isUnavailable(date);
-                const selected = selectedDate && format(selectedDate, 'yyyy-MM-dd') === ds;
+                const isRangeStart = selectedDate && format(selectedDate, 'yyyy-MM-dd') === ds;
+                const isRangeEnd = rangeEnd && format(rangeEnd, 'yyyy-MM-dd') === ds;
+                const selected = isRangeStart || isRangeEnd;
+                const isBetween = !!(selectedDate && rangeEnd && date > selectedDate && date < rangeEnd);
                 return (
                   <button
                     key={ds}
@@ -174,9 +184,11 @@ export default function MonthGrid({
                       'disabled:cursor-not-allowed',
                       selected
                         ? 'border-primary bg-primary text-primary-foreground'
-                        : unavailable
-                          ? 'border-transparent text-muted-foreground/50 line-through'
-                          : 'hover:bg-accent',
+                        : isBetween
+                          ? 'border-transparent bg-primary/15 text-foreground'
+                          : unavailable
+                            ? 'border-transparent text-muted-foreground/50 line-through'
+                            : 'hover:bg-accent',
                     )}
                   >
                     {format(date, 'd')}
