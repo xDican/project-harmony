@@ -308,6 +308,32 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
   if (offered.length > 0 && !fromChat) {
     const idx = matchOfferedSlot(messageText, offered, deps);
     if (idx !== null) return await acceptSlot(args, ctx, offered[idx]);
+
+    // (b2) Pidió una hora ESPECÍFICA que no está entre las 2-3 ofrecidas (solo
+    // ofrecemos un subconjunto natural, no la lista completa del día) — antes
+    // de asumir que no hay espacio, verificar contra la disponibilidad REAL
+    // completa. Bug real cazado en QA 24 Jul: pidió Ultrasonido jueves 10 AM,
+    // el bot repitió las mismas 3 horas ofrecidas sin chequear el resto del
+    // día — la hora SÍ estaba libre en el motor real, solo no era una de las
+    // "representativas" elegidas para la oferta inicial.
+    const requestedTime = deps.parseTimeHint(messageText);
+    if (requestedTime && session.context.selectedDate) {
+      const fullDaySlots = await fetchSlotsForDate(args, session.context.selectedDate);
+      if (fullDaySlots.includes(requestedTime)) {
+        return await acceptSlot(args, ctx, requestedTime);
+      }
+      if (fullDaySlots.length > 0) {
+        // Genuinamente no disponible esa hora — re-ofrecer priorizando
+        // cercanía a lo pedido, con mensaje determinista (no depende del LLM
+        // para no arriesgar que "invente" que sí hay espacio).
+        const picked = pickSlots(fullDaySlots, null, requestedTime);
+        session.context.sdrOfferedSlots = picked;
+        const formatted = picked.map(formatTimeForTemplate);
+        const msg = `A las ${formatTimeForTemplate(requestedTime)} no tengo espacio ese día, pero sí tengo ${formatted.join(" o ")}. ¿Le sirve alguna?`;
+        pushHistory(session, messageText, msg);
+        return { message: msg, requiresInput: true, nextState: "sdr_booking", sessionComplete: false, showMenuHint: false };
+      }
+    }
   }
 
   // (c) Entender el mensaje con LLM (con los slots ofrecidos en el prompt si existen).
@@ -489,8 +515,25 @@ function matchOfferedSlot(input: string, offered: string[], deps: SdrDeps): numb
   return fuzzy;
 }
 
-/** 2-3 slots: filtrados por franja si la hay; si no, inicio/medio/fin del día. */
-function pickSlots(slots: string[], period: "morning" | "afternoon" | null): string[] {
+function timeToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * 2-3 slots a ofrecer. Con `preferredTime` (el paciente pidió una hora exacta
+ * que resultó no estar libre): los 3 MÁS CERCANOS a esa hora, en orden
+ * cronológico. Sin preferencia: filtrados por franja si la hay, si no
+ * inicio/medio/fin del día.
+ */
+function pickSlots(slots: string[], period: "morning" | "afternoon" | null, preferredTime?: string): string[] {
+  if (preferredTime) {
+    const target = timeToMinutes(preferredTime);
+    return [...slots]
+      .sort((a, b) => Math.abs(timeToMinutes(a) - target) - Math.abs(timeToMinutes(b) - target))
+      .slice(0, 3)
+      .sort();
+  }
   let pool = slots;
   if (period === "morning") pool = slots.filter((s) => s < "12:00");
   if (period === "afternoon") pool = slots.filter((s) => s >= "12:00");
