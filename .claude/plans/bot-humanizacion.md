@@ -589,8 +589,28 @@ Resultados de cada medición se anotan al final de este plan (sección "Bitácor
 | Yeni/CF | 5 | 40% | 100% |
 | Ecoclinicas | 2 | 0% | — |
 
-## Post Sprint 1 (pendiente)
+## Post Sprint 1 (medido 24 Jul 2026 — ventana últimos 60 días)
 
-## Post Sprint 2 (pendiente)
+> Medición tardía: se corrió el 24 Jul en vez de a los 14 días del deploy (11 May).
+> Caveat: no es comparación perfecta contra baseline — Medilaser y Ecoclinicas ya no están,
+> el mix de pacientes cambió. Aún así la señal es clara.
 
-## Post Sprint 3 (pendiente)
+| Cliente | Sesiones | Éxito | Baseline Abr |
+|---|---|---|---|
+| Dr. Wilmer Guevara | 25 | **80.0%** | 0% |
+| Yeni/CF | 19 | 52.6% | 40% |
+| Orthos (demo) | 3 | 66.7% | — |
+| Dra. Hanoy Medina | 3 | 66.7% | — |
+| **Agregado clientes reales** | **50** | **68%** | **28.4%** |
+
+- Opciones inválidas: ~4% de mensajes (baseline 22%). Meta <10% ✓
+- **Meta de éxito agregado >50% SUPERADA solo con Sprint 1.**
+
+## Post Sprint 2 (no ejecutado)
+
+## Post Sprint 3 (no ejecutado)
+
+> Sprints 2 y 3 nunca se ejecutaron (desplazados por Centro de Atención, motor multi-recurso
+> y Coexistence). 24 Jul 2026: sus items (parser de fechas naturales, aliases de servicios,
+> onboarding de vocabulario) quedan absorbidos u obsoletos por el proyecto "bot SDR híbrido"
+> (capa LLM-NLU) — no ejecutar como estaban planeados.
