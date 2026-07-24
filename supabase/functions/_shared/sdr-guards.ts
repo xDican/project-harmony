@@ -31,7 +31,8 @@ const MONEY_RE = /(?:\bL(?:ps)?\.?\s*|\blempiras?\s+)(\d[\d.,]*)/gi;
 
 /**
  * Toda cifra con marca de moneda en el reply debe existir como precio público.
- * `allowedPrices` = precios de service_types con price_is_public=true.
+ * `allowedPrices` = precios de service_types donde !requires_prior_consult
+ * (derivado, no la columna price_is_public — ver SdrService en sdr-prompt.ts).
  */
 export function checkPriceGuard(reply: string, allowedPrices: number[]): GuardResult {
   const allowed = new Set(allowedPrices.map((p) => Math.round(p)));

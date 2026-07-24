@@ -69,7 +69,15 @@ export interface SdrService {
   id: string;
   name: string;
   price: number | null;
-  priceIsPublic: boolean;
+  /**
+   * "¿Se puede cotizar sin evaluación previa?" — derivado de requires_prior_consult,
+   * NUNCA de service_types.price_is_public (columna redundante desde 24 Jul: si el
+   * servicio requiere consulta previa, el precio real depende de lo que el médico
+   * decida en esa cita — no hay caso real en la plataforma donde un precio cargado
+   * deba ocultarse SIN requerir consulta previa, ni viceversa. Confirmado con Diego
+   * contra los datos reales de las 3 orgs configuradas ese día — cero excepciones).
+   */
+  requiresPriorConsult: boolean;
   durationMinutes: number | null;
 }
 
@@ -243,7 +251,7 @@ export async function buildSdrContext(
     supabase.from("organizations").select("name").eq("id", line.organization_id).single(),
     supabase
       .from("service_types")
-      .select("id, display_name, price, price_is_public, duration_minutes")
+      .select("id, display_name, price, requires_prior_consult, duration_minutes")
       .eq("organization_id", line.organization_id)
       .eq("is_active", true)
       .order("display_order", { ascending: true }),
@@ -297,7 +305,7 @@ export async function buildSdrContext(
       id: s.id,
       name: s.display_name,
       price: s.price ?? null,
-      priceIsPublic: s.price_is_public ?? false,
+      requiresPriorConsult: s.requires_prior_consult ?? false,
       durationMinutes: s.duration_minutes ?? null,
     })),
     faqs: finalFaqs,
@@ -310,7 +318,7 @@ function catalogBlock(services: SdrService[]): string {
   if (services.length === 0) return "(la clínica aún no configuró servicios)";
   return services
     .map((s) => {
-      const price = s.priceIsPublic && s.price != null
+      const price = !s.requiresPriorConsult && s.price != null
         ? `precio L${s.price}`
         : "precio: se determina en la cita de evaluación (NO dar cifras)";
       return `- ${s.name} [id: ${s.id}] — ${price}`;

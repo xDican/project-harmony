@@ -491,7 +491,7 @@ async function getSdrCtx(args: SdrArgs): Promise<SdrContext | null> {
 }
 
 function publicPrices(ctx: SdrContext): number[] {
-  return ctx.services.filter((s) => s.priceIsPublic && s.price != null).map((s) => Number(s.price));
+  return ctx.services.filter((s) => !s.requiresPriorConsult && s.price != null).map((s) => Number(s.price));
 }
 
 /** Devuelve el service_type COMPLETO (lineServiceTypes) para el booking clásico. */
