@@ -26,7 +26,7 @@ function formatRange(startAt: string, endAt: string): string {
   const end = new Date(endAt);
   const sameDay = start.toDateString() === end.toDateString();
   if (sameDay) {
-    return `${format(start, "d 'de' MMMM yyyy", { locale: es })}, ${format(start, 'HH:mm')} – ${format(end, 'HH:mm')}`;
+    return `${format(start, "d 'de' MMMM yyyy", { locale: es })}, ${format(start, 'h:mm a', { locale: es })} – ${format(end, 'h:mm a', { locale: es })}`;
   }
   return `${format(start, "d MMM yyyy", { locale: es })} – ${format(end, "d MMM yyyy", { locale: es })}`;
 }

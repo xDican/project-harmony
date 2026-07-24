@@ -419,7 +419,7 @@ export default function NewScheduleExceptionModal({
           <ul className="list-disc pl-4">
             {conflicts.map((c) => (
               <li key={c.id}>
-                {c.patientName} — {format(new Date(c.appointmentAt), "d MMM, HH:mm", { locale: es })}
+                {c.patientName} — {format(new Date(c.appointmentAt), "d MMM, h:mm a", { locale: es })}
               </li>
             ))}
           </ul>

@@ -17,6 +17,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn, formatPhoneForDisplay } from '@/lib/utils';
+import { formatTimeTo12Hour } from '@/lib/dateUtils';
 
 interface AppointmentReport {
   id: string;
@@ -430,7 +431,7 @@ export default function AppointmentsReport() {
                           return paginatedAppointmentsDesktop.map((appointment) => (
                           <TableRow key={appointment.id}>
                             <TableCell>{formatDate(appointment.date)}</TableCell>
-                            <TableCell>{appointment.time}</TableCell>
+                            <TableCell>{formatTimeTo12Hour(appointment.time)}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Stethoscope className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -505,7 +506,7 @@ function AppointmentReportCard({ appointment, formatDate }: AppointmentReportCar
       {/* Line 1: Date, Time and Status */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-base font-bold text-foreground">
-          {formatDate(appointment.date)} • {appointment.time}
+          {formatDate(appointment.date)} • {formatTimeTo12Hour(appointment.time)}
         </span>
         <StatusBadge status={appointment.status} />
       </div>
