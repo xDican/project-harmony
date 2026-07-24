@@ -127,6 +127,62 @@ function filterStructuredDomainFaqs(
   return kept;
 }
 
+/**
+ * Segunda capa, complementaria a la de arriba: cruce de CONTENIDO contra el
+ * catálogo real. El filtro de dominio solo mira palabras clave en la PREGUNTA
+ * ("precio", "horario"...) — se le escapa una FAQ como "¿Cual es el
+ * blanquemiento?" (sin esas palabras) cuya RESPUESTA cotiza un tratamiento que
+ * no existe en el catálogo de esa org. Auditoría 24 Jul confirmó el patrón en
+ * 2 orgs reales (demo + Dr. Wilmer Guevara — cliente pagando).
+ *
+ * Heurística agnóstica al rubro: el "vocabulario" de tratamientos se construye
+ * de los nombres REALES de servicios de TODA la plataforma (no una lista fija
+ * hardcodeada), excluyendo palabras genéricas de categoría. Si una FAQ
+ * menciona un término que SÍ es un tratamiento conocido en la plataforma pero
+ * NO está en el catálogo de ESTA org → se excluye. Es heurística, no perfecta
+ * (por eso loguea qué excluyó — auditable, no silencioso).
+ */
+const GENERIC_CATALOG_WORDS = new Set([
+  "general", "dental", "medica", "especialista", "especialistas",
+  "valoracion", "servicio", "servicios", "cita", "citas", "tratamiento",
+  "tratamientos", "consulta", "consultas", "procedimiento", "procedimientos",
+  "examen", "examenes", "laboratorio", "ocupado", "clinica",
+]);
+
+// Rango de marcas diacríticas combinantes (U+0300-U+036F) tras NFD — mismo
+// criterio de "quitar acentos" que ya usa parseDateHint en bot-handler/index.ts.
+function stripAccentsLower(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/** Palabras distintivas (≥5 letras, sin genéricas) de un nombre de servicio. */
+function significantTerms(name: string): string[] {
+  return stripAccentsLower(name)
+    .split(/[^a-z]+/)
+    .filter((w) => w.length >= 5 && !GENERIC_CATALOG_WORDS.has(w));
+}
+
+function filterOrphanServiceFaqs(
+  faqs: { question: string; answer: string }[],
+  orgTerms: Set<string>,
+  globalVocab: Set<string>,
+  organizationId: string,
+): { question: string; answer: string }[] {
+  const kept: { question: string; answer: string }[] = [];
+  for (const f of faqs) {
+    const words = stripAccentsLower(`${f.question} ${f.answer}`)
+      .split(/[^a-z]+/)
+      .filter((w) => w.length >= 5);
+    const orphan = words.find((w) => globalVocab.has(w) && !orgTerms.has(w));
+    if (orphan) {
+      console.warn(`[sdr-prompt] FAQ excluida del prompt (menciona '${orphan}', tratamiento conocido en la plataforma pero AUSENTE del catálogo de esta org) org=${organizationId}: "${f.question}"`);
+      continue;
+    }
+    kept.push(f);
+  }
+  return kept;
+}
+
 const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 /** Orden de lectura natural (lunes→domingo) para agrupar días consecutivos. day_of_week: 0=domingo..6=sábado (mismo criterio que doctor_schedules). */
 const DIA_ORDEN = [1, 2, 3, 4, 5, 6, 0];
@@ -183,7 +239,7 @@ export async function buildSdrContext(
     return null;
   }
 
-  const [{ data: org }, { data: services }, { data: faqs }, { data: doctors }] = await Promise.all([
+  const [{ data: org }, { data: services }, { data: faqs }, { data: doctors }, { data: allServiceNames }] = await Promise.all([
     supabase.from("organizations").select("name").eq("id", line.organization_id).single(),
     supabase
       .from("service_types")
@@ -201,9 +257,23 @@ export async function buildSdrContext(
       .from("doctors")
       .select("id, name, prefix, specialties(name)")
       .eq("organization_id", line.organization_id),
+    // Vocabulario de tratamientos de TODA la plataforma (no solo esta org) —
+    // necesario para el filtro de FAQs huérfanas de abajo.
+    supabase.from("service_types").select("display_name").eq("is_active", true),
   ]);
 
   const rawFaqs = (faqs ?? []).map((f: any) => ({ question: f.question, answer: f.answer }));
+
+  const globalVocab = new Set<string>();
+  for (const s of allServiceNames ?? []) {
+    for (const t of significantTerms(s.display_name)) globalVocab.add(t);
+  }
+  const orgTerms = new Set<string>();
+  for (const s of services ?? []) {
+    for (const t of significantTerms(s.display_name)) orgTerms.add(t);
+  }
+  const domainFiltered = filterStructuredDomainFaqs(rawFaqs, line.organization_id);
+  const finalFaqs = filterOrphanServiceFaqs(domainFiltered, orgTerms, globalVocab, line.organization_id);
 
   // Mismo resolutor que usa el motor real (calendar_schedules → fallback
   // doctor_schedules, ScheduleDowRow por doctor) — así el bloque de horario del
@@ -230,7 +300,7 @@ export async function buildSdrContext(
       priceIsPublic: s.price_is_public ?? false,
       durationMinutes: s.duration_minutes ?? null,
     })),
-    faqs: filterStructuredDomainFaqs(rawFaqs, line.organization_id),
+    faqs: finalFaqs,
     doctors: doctorsWithSchedule,
   };
 }
