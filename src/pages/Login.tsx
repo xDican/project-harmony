@@ -19,7 +19,7 @@ export default function Login() {
   // Prefetch: while user types credentials, download the page they'll need after login
   useEffect(() => {
     const timer = setTimeout(() => {
-      import('./AgendaSemanal');
+      import('./Calendario');
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
@@ -45,7 +45,7 @@ export default function Login() {
         description: `Usuario: ${user.email}`,
         duration: 4000,
       });
-      navigate('/agenda-semanal', { replace: true });
+      navigate('/calendario', { replace: true });
     }
   }, [user, userLoading, isNewUser, onboardingStatus, navigate]);
 

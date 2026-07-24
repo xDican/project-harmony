@@ -10,7 +10,7 @@ interface SuperAdminRouteProps {
 /**
  * SuperAdminRoute - Protects routes that require superadmin access.
  * Verifies user is in superadmin_whitelist via RPC call.
- * Regular admins and other roles are redirected to /agenda-semanal.
+ * Regular admins and other roles are redirected to /calendario.
  */
 export default function SuperAdminRoute({ children }: SuperAdminRouteProps) {
   const { user, loading } = useCurrentUser();
@@ -37,7 +37,7 @@ export default function SuperAdminRoute({ children }: SuperAdminRouteProps) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (!isSuperadmin) return <Navigate to="/agenda-semanal" replace />;
+  if (!isSuperadmin) return <Navigate to="/calendario" replace />;
 
   return <>{children}</>;
 }

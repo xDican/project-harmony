@@ -51,7 +51,7 @@ export default function StepSchedule() {
         if (step === 'clinic') navigate('/onboarding/clinic', { replace: true });
         else if (step === 'doctor') navigate('/onboarding/doctor', { replace: true });
         else if (step === 'summary') navigate('/onboarding/summary', { replace: true });
-        else if (step === 'complete') navigate('/agenda-semanal', { replace: true });
+        else if (step === 'complete') navigate('/calendario', { replace: true });
       })
       .catch(() => {})
       .finally(() => setChecking(false));

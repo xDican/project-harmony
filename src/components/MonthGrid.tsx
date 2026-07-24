@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { format, getDay, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
@@ -6,6 +7,15 @@ import { cn } from '@/lib/utils';
 import { getLocalToday } from '@/lib/dateUtils';
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+/** Clases de borde/fondo/texto de un cuadro de día según su estado (prioridad: seleccionado > en-rango > no-disponible > hoy > default). */
+function dayVariantClass(selected: boolean, isBetween: boolean, unavailable: boolean, isToday: boolean): string {
+  if (selected) return 'border-primary bg-primary text-primary-foreground';
+  if (isBetween) return 'border-transparent bg-primary/15 text-foreground';
+  if (unavailable) return 'border-transparent text-muted-foreground/50 line-through';
+  if (isToday) return 'border-primary text-primary hover:bg-accent';
+  return 'hover:bg-accent';
+}
 
 /**
  * MonthGrid — selector de fecha (rediseño Nueva Cita). Grilla mensual de 7 columnas
@@ -21,12 +31,17 @@ export default function MonthGrid({
   daysMap,
   selectedDate,
   rangeEnd,
+  markedDays,
+  disablePast = true,
   onSelect,
   canGoPrev,
   onPrev,
   onNext,
   isLoading,
   collapsible,
+  headerExtra,
+  swipeable,
+  largeDays,
 }: {
   monthAnchor: Date;
   days: Date[];
@@ -38,22 +53,78 @@ export default function MonthGrid({
    *  componente se comporta exactamente igual que antes (seleccion de un
    *  solo dia), como ya lo usan NuevaCita.tsx y el modo "por horas". */
   rangeEnd?: Date;
+  /** Dias 'yyyy-MM-dd' que muestran un punto indicador debajo del numero
+   *  (ej. "este dia tiene citas") — puramente visual, no afecta si el dia
+   *  es clickeable. Usado por la vista mensual de agenda. */
+  markedDays?: Set<string>;
+  /** Si es false, los dias pasados NO se deshabilitan — para vistas de solo
+   *  lectura (ej. agenda mensual, donde tiene sentido ver dias pasados) a
+   *  diferencia del booking (NuevaCita, bloqueador de horario), que siempre
+   *  los bloquea. Default true = comportamiento actual, sin cambios. */
+  disablePast?: boolean;
   onSelect: (date: Date) => void;
   canGoPrev: boolean;
   onPrev: () => void;
   onNext: () => void;
   isLoading?: boolean;
   collapsible?: boolean;
+  /** Nodo opcional que se renderiza al final del header (modo no-colapsado),
+   *  a la derecha del boton "mes siguiente" — ej. el boton "Hoy" de la
+   *  agenda mensual. Opcional y retrocompatible: sin este prop el header se
+   *  ve exactamente igual que antes. No aparece en modo `collapsed`. */
+  headerExtra?: ReactNode;
+  /** Habilita swipe horizontal (touch) sobre la grilla de dias para navegar
+   *  entre meses (onPrev/onNext). Opcional, default false — sin cambio de
+   *  comportamiento para quien no lo pase. Solo aplica en modo no-colapsado. */
+  swipeable?: boolean;
+  /** Cuadros de día más grandes (alto y tipografía) — usado por la agenda
+   *  mensual, que tiene espacio vertical de sobra. Opcional, default false
+   *  = tamaño actual (h-10), sin cambios para NuevaCita/bloqueador de horario. */
+  largeDays?: boolean;
 }) {
   const today = getLocalToday();
   const leadingBlanks = days.length ? getDay(days[0]) : 0;
   const [expanded, setExpanded] = useState(false);
 
+  // Swipe horizontal (mes anterior/siguiente) — solo si `swipeable`.
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchHandledRef = useRef(false);
+  const SWIPE_MIN_DISTANCE = 50;
+  const SWIPE_MAX_ANGLE_RATIO = 0.5;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!swipeable || isLoading) return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    touchHandledRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!swipeable || isLoading || !touchStartRef.current || touchHandledRef.current) return;
+    const t = e.touches[0];
+    const deltaX = t.clientX - touchStartRef.current.x;
+    const deltaY = t.clientY - touchStartRef.current.y;
+    if (Math.abs(deltaX) > SWIPE_MIN_DISTANCE && Math.abs(deltaY) < Math.abs(deltaX) * SWIPE_MAX_ANGLE_RATIO) {
+      touchHandledRef.current = true;
+      if (deltaX > 0) {
+        if (canGoPrev) onPrev();
+      } else {
+        onNext();
+      }
+      touchStartRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+    touchHandledRef.current = false;
+  };
+
   // Modo colapsable: con un día elegido se ve solo su semana; "Expandir" → mes.
   const collapsed = !!collapsible && !!selectedDate && !expanded;
 
   const isUnavailable = (date: Date): boolean => {
-    if (date < today) return true;
+    if (disablePast && date < today) return true;
     const info = daysMap[format(date, 'yyyy-MM-dd')];
     if (!info) return false; // sin dato aún → seleccionable (la verdad llega al abrir)
     return !info.working || !info.canFit;
@@ -100,7 +171,7 @@ export default function MonthGrid({
               <button
                 type="button"
                 onClick={onPrev}
-                disabled={!canGoPrev}
+                disabled={!canGoPrev || isLoading}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Mes anterior"
               >
@@ -110,14 +181,18 @@ export default function MonthGrid({
                 {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                 {format(monthAnchor, 'LLLL yyyy', { locale: es })}
               </span>
-              <button
-                type="button"
-                onClick={onNext}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent"
-                aria-label="Mes siguiente"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onNext}
+                  disabled={isLoading}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Mes siguiente"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                {headerExtra}
+              </div>
             </>
           )}
         </div>
@@ -162,7 +237,12 @@ export default function MonthGrid({
               ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-1.5">
+            <div
+              className={cn('grid grid-cols-7', largeDays ? 'gap-2' : 'gap-1.5')}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               {Array.from({ length: leadingBlanks }).map((_, i) => (
                 <div key={`blank-${i}`} />
               ))}
@@ -173,6 +253,8 @@ export default function MonthGrid({
                 const isRangeEnd = rangeEnd && format(rangeEnd, 'yyyy-MM-dd') === ds;
                 const selected = isRangeStart || isRangeEnd;
                 const isBetween = !!(selectedDate && rangeEnd && date > selectedDate && date < rangeEnd);
+                const marked = markedDays?.has(ds);
+                const isToday = isSameDay(date, today);
                 return (
                   <button
                     key={ds}
@@ -180,18 +262,22 @@ export default function MonthGrid({
                     disabled={unavailable}
                     onClick={() => handleSelect(date)}
                     className={cn(
-                      'flex h-10 items-center justify-center rounded-lg border text-sm font-medium transition-colors',
+                      'relative flex items-center justify-center rounded-lg border font-medium transition-colors',
+                      largeDays ? 'h-20 text-lg' : 'h-10 text-sm',
                       'disabled:cursor-not-allowed',
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : isBetween
-                          ? 'border-transparent bg-primary/15 text-foreground'
-                          : unavailable
-                            ? 'border-transparent text-muted-foreground/50 line-through'
-                            : 'hover:bg-accent',
+                      dayVariantClass(selected, isBetween, unavailable, isToday),
                     )}
                   >
                     {format(date, 'd')}
+                    {marked && (
+                      <span
+                        className={cn(
+                          'absolute rounded-full',
+                          largeDays ? 'bottom-2 h-1.5 w-1.5' : 'bottom-1 h-1 w-1',
+                          selected ? 'bg-primary-foreground' : 'bg-primary',
+                        )}
+                      />
+                    )}
                   </button>
                 );
               })}

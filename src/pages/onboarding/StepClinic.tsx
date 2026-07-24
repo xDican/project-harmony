@@ -26,7 +26,7 @@ export default function StepClinic() {
         if (step === 'doctor') navigate('/onboarding/doctor', { replace: true });
         else if (step === 'schedule') navigate('/onboarding/schedule', { replace: true });
         else if (step === 'summary') navigate('/onboarding/summary', { replace: true });
-        else if (step === 'complete') navigate('/agenda-semanal', { replace: true });
+        else if (step === 'complete') navigate('/calendario', { replace: true });
       })
       .catch(() => {
         // Proceed — user may legitimately be at start
