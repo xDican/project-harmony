@@ -245,9 +245,24 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   const passiveIntent = ["ack", "rechazo", "futuro", "humano", "gestion_cita"].includes(out.intent);
   const wantsBooking = !passiveIntent &&
     (out.intent === "agendar" || !!out.booking?.date_text || !!out.booking?.chosen_time);
-  if (wantsBooking && resolveServiceForBooking(session, ctx, serviceId)) {
-    await updateLeadStage(args, out.lead_stage, serviceId);
-    return await handleSdrBooking(args, out);
+  if (wantsBooking) {
+    const svc = resolveServiceForBooking(session, ctx, serviceId);
+    if (svc) {
+      await updateLeadStage(args, out.lead_stage, serviceId);
+      return await handleSdrBooking(args, out);
+    }
+    // Quiere agendar/preguntó disponibilidad pero el servicio es AMBIGUO (org
+    // con 2+ tratamientos, ninguno identificado aún) — sin esto, el turno caía
+    // en silencio a solo repetir la respuesta del LLM sin agendar nada (bug
+    // real cazado en QA 24 Jul: "¿tiene espacio el sábado?" antes de decir el
+    // tratamiento). Preguntar explícito en vez de confiar en el reply del LLM.
+    const list = ctx.services.map((s) => `• ${s.name}`).join("\n");
+    const msg = ctx.services.length > 1
+      ? `¡Con gusto! ¿Para qué tratamiento le gustaría agendar su cita?\n\n${list}`
+      : "¡Con gusto! ¿Para qué tratamiento le gustaría agendar su cita?";
+    await updateLeadStage(args, out.lead_stage, null);
+    pushHistory(session, messageText, msg);
+    return { message: msg, requiresInput: true, nextState: "sdr_chat", sessionComplete: false, showMenuHint: false };
   }
 
   await updateLeadStage(args, out.lead_stage, serviceId);

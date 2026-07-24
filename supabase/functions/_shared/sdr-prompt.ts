@@ -13,6 +13,9 @@
 
 // deno-lint-ignore-file no-explicit-any
 
+import { formatTimeForTemplate } from "./datetime.ts";
+import { loadSchedulesAllDows } from "./availability.ts";
+
 export const SDR_INTENTS = [
   "saludo", // CTA del ad / saludo sin pregunta concreta
   "precio", // pregunta cuánto cuesta algo
@@ -70,6 +73,13 @@ export interface SdrService {
   durationMinutes: number | null;
 }
 
+export interface SdrDoctorInfo {
+  name: string;
+  specialty: string | null;
+  /** Patrón semanal recurrente formateado ("Lunes a martes: 8:00 AM a 5:00 PM") o null si no hay horario configurado. */
+  schedule: string | null;
+}
+
 export interface SdrContext {
   organizationId: string;
   organizationName: string;
@@ -77,6 +87,81 @@ export interface SdrContext {
   greeting: string | null;
   services: SdrService[];
   faqs: { question: string; answer: string }[];
+  /** Profesionales activos con su horario recurrente real (fuente: doctor_schedules). */
+  doctors: SdrDoctorInfo[];
+}
+
+/**
+ * Dominios donde YA existe una tabla que el sistema usa activamente como
+ * fuente de verdad — el SDR debe ignorar cualquier FAQ que los toque, sin
+ * importar qué diga, para que un dato desactualizado nunca contradiga la
+ * plataforma real. Hallazgo 24 Jul 2026: FAQ de horario decía "lunes a
+ * viernes" mientras el horario real (doctor_schedules) era lunes-martes
+ * solamente — y Ecoclinicas tenía 2 FAQs de horario CONTRADICTORIAS entre sí.
+ * Auditoría completa de bot_faqs (todas las orgs) confirmó 3 dominios de riesgo:
+ * horario (doctor_schedules), precio (service_types — ya tenía guard reactivo,
+ * esto lo hace preventivo) y especialidad/nombres de doctor (doctors+specialties).
+ * Ubicación, formas de pago y políticas generales NO tienen tabla real detrás
+ * en la práctica (clinics.address casi siempre NULL) — esas SÍ siguen siendo FAQ.
+ */
+const STRUCTURED_DOMAIN_PATTERNS: { domain: string; re: RegExp }[] = [
+  { domain: "horario", re: /horario|hora de atenci[oó]n|atienden.*(lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo)|qu[ée] d[ií]as.*atienden/i },
+  { domain: "precio", re: /precio|costo|cu[aá]nto (cuesta|vale)|cu[aá]l es el (costo|precio)/i },
+  { domain: "especialidad", re: /especialidad|son (dermat[oó]logas?|pediatras?|odont[oó]logas?|especialistas)|qui[eé]n(es)? (es|son) (el|la|los|las) doctor/i },
+];
+
+/** Filtra FAQs que dupliquen un dominio con tabla real. Loguea qué excluyó (auditable, no silencioso). */
+function filterStructuredDomainFaqs(
+  faqs: { question: string; answer: string }[],
+  organizationId: string,
+): { question: string; answer: string }[] {
+  const kept: { question: string; answer: string }[] = [];
+  for (const f of faqs) {
+    const hit = STRUCTURED_DOMAIN_PATTERNS.find((p) => p.re.test(f.question));
+    if (hit) {
+      console.warn(`[sdr-prompt] FAQ excluida del prompt (dominio '${hit.domain}' ya tiene fuente estructurada) org=${organizationId}: "${f.question}"`);
+      continue;
+    }
+    kept.push(f);
+  }
+  return kept;
+}
+
+const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+/** Orden de lectura natural (lunes→domingo) para agrupar días consecutivos. day_of_week: 0=domingo..6=sábado (mismo criterio que doctor_schedules). */
+const DIA_ORDEN = [1, 2, 3, 4, 5, 6, 0];
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** "Lunes a martes: 8:00 AM a 5:00 PM\nSábado: 9:00 AM a 12:00 PM" — agrupa días consecutivos con mismo horario. */
+function formatWeeklySchedule(rows: { day_of_week: number; start_time: string; end_time: string }[]): string | null {
+  if (rows.length === 0) return null;
+  const byDay = new Map<number, { start: string; end: string }>();
+  for (const r of rows) byDay.set(r.day_of_week, { start: r.start_time, end: r.end_time });
+
+  const groups: { days: number[]; start: string; end: string }[] = [];
+  for (const d of DIA_ORDEN) {
+    const sch = byDay.get(d);
+    if (!sch) continue;
+    const last = groups[groups.length - 1];
+    const lastDay = last?.days[last.days.length - 1];
+    const isConsecutive = last && lastDay !== undefined &&
+      DIA_ORDEN[DIA_ORDEN.indexOf(lastDay) + 1] === d;
+    if (last && isConsecutive && last.start === sch.start && last.end === sch.end) {
+      last.days.push(d);
+    } else {
+      groups.push({ days: [d], start: sch.start, end: sch.end });
+    }
+  }
+
+  return groups.map((g) => {
+    const label = g.days.length === 1
+      ? capitalize(DIAS_SEMANA[g.days[0]])
+      : `${capitalize(DIAS_SEMANA[g.days[0]])} a ${DIAS_SEMANA[g.days[g.days.length - 1]]}`;
+    return `${label}: ${formatTimeForTemplate(g.start)} a ${formatTimeForTemplate(g.end)}`;
+  }).join("\n");
 }
 
 /**
@@ -98,7 +183,7 @@ export async function buildSdrContext(
     return null;
   }
 
-  const [{ data: org }, { data: services }, { data: faqs }] = await Promise.all([
+  const [{ data: org }, { data: services }, { data: faqs }, { data: doctors }] = await Promise.all([
     supabase.from("organizations").select("name").eq("id", line.organization_id).single(),
     supabase
       .from("service_types")
@@ -112,7 +197,26 @@ export async function buildSdrContext(
       .eq("organization_id", line.organization_id)
       .eq("is_active", true)
       .order("display_order", { ascending: true }),
+    supabase
+      .from("doctors")
+      .select("id, name, prefix, specialties(name)")
+      .eq("organization_id", line.organization_id),
   ]);
+
+  const rawFaqs = (faqs ?? []).map((f: any) => ({ question: f.question, answer: f.answer }));
+
+  // Mismo resolutor que usa el motor real (calendar_schedules → fallback
+  // doctor_schedules, ScheduleDowRow por doctor) — así el bloque de horario del
+  // prompt NUNCA puede divergir de lo que el flujo de agendamiento va a encontrar
+  // (hallazgo 24 Jul: doctor_schedules solo no bastaba, el demo tenía horario
+  // real en calendar_schedules incluyendo sábado).
+  const doctorsWithSchedule = await Promise.all(
+    (doctors ?? []).map(async (d: any) => ({
+      name: d.prefix ? `${d.prefix} ${d.name}` : d.name,
+      specialty: d.specialties?.name ?? null,
+      schedule: formatWeeklySchedule(await loadSchedulesAllDows(supabase, d.id)),
+    })),
+  );
 
   return {
     organizationId: line.organization_id,
@@ -126,7 +230,8 @@ export async function buildSdrContext(
       priceIsPublic: s.price_is_public ?? false,
       durationMinutes: s.duration_minutes ?? null,
     })),
-    faqs: (faqs ?? []).map((f: any) => ({ question: f.question, answer: f.answer })),
+    faqs: filterStructuredDomainFaqs(rawFaqs, line.organization_id),
+    doctors: doctorsWithSchedule,
   };
 }
 
@@ -146,6 +251,16 @@ function catalogBlock(services: SdrService[]): string {
 function faqBlock(faqs: { question: string; answer: string }[]): string {
   if (faqs.length === 0) return "(sin preguntas frecuentes configuradas)";
   return faqs.map((f) => `P: ${f.question}\nR: ${f.answer}`).join("\n\n");
+}
+
+/** Horario real por profesional — fuente que SIEMPRE gana sobre cualquier FAQ. */
+function scheduleBlock(doctors: SdrDoctorInfo[]): string {
+  if (doctors.length === 0) return "(sin profesionales configurados)";
+  return doctors.map((d) => {
+    const spec = d.specialty ? ` — ${d.specialty}` : "";
+    const sched = d.schedule ?? "horario aún no configurado en la plataforma";
+    return `- ${d.name}${spec}\n  Horario: ${sched}`;
+  }).join("\n\n");
 }
 
 export interface SdrPromptOptions {
@@ -202,15 +317,21 @@ Estos son los ÚNICOS horarios que podés mencionar. Si el paciente pide otro, o
 
 ## Agendamiento (cómo manejar fechas y horarios)
 - Vos NUNCA inventás ni calculás horarios — la plataforma te da los horarios reales cuando toca ofrecerlos.
+- **Distinción importante:**
+  - Pregunta GENERAL de horario ("¿qué días atienden?", "¿cuál es su horario?") → respondé con el bloque "Horario real de atención" de abajo. intent="logistica".
+  - Pregunta de disponibilidad de un DÍA CONCRETO ("¿tiene cupo el jueves?", "¿hay espacio el sábado?", "¿puedo ir mañana?") → NUNCA la respondas vos con prosa, aunque te parezca obvia por el horario general. Tratala SIEMPRE como intent="agendar" con booking.date_text = esa expresión — la plataforma consulta la agenda real (incluye bloqueos/excepciones que vos no ves) y te da el resultado exacto para que lo redactes el próximo turno.
 - Cuando el paciente exprese CUÁNDO quiere su cita, copiá su expresión textual en booking.date_text ("mañana", "el viernes", "3 de agosto") y la franja en booking.period ("morning"/"afternoon") si la dijo. No la conviertas a fecha.
 - Cuando el paciente elija una hora de las ofrecidas, ponela en booking.chosen_time.
 - Ofrecé máximo 2-3 horarios por mensaje, como lo haría una persona.
 ${slotsBlock}
 
+## Horario real de atención (fuente: agenda del sistema — SIEMPRE gana sobre cualquier FAQ o suposición)
+${scheduleBlock(ctx.doctors)}
+
 ## Catálogo de servicios (única fuente de precios)
 ${catalogBlock(ctx.services)}
 
-## Preguntas frecuentes de la clínica (respondé con esta información, sin inventar)
+## Preguntas frecuentes de la clínica (respondé con esta información, sin inventar; NUNCA la uses para horarios ni precios — para eso usá los bloques de arriba)
 ${faqBlock(ctx.faqs)}
 
 ## Formato de salida
