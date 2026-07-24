@@ -401,7 +401,7 @@ async function handleBotMessage(
       parseDateHint, parseTimeHint, fuzzyMatchOption, resolveServiceAndContinue,
       getCombinedSlotsForDate, getAvailableSlotsForDate, getDoctorLoadForDate,
       pickLeastLoaded, lineCalendarForDoctor, firstActiveCalendarId,
-      handleHandoffToSecretary, handleGreeting,
+      handleHandoffToSecretary, handleGreeting, handleBookingConfirm, detectIntent,
     },
   });
   if (sdrResponse) {

@@ -75,6 +75,8 @@ export interface SdrDeps {
   firstActiveCalendarId: (supabase: Any, doctorId: string) => Promise<string | null>;
   handleHandoffToSecretary: (lineId: string, phone: string, organizationId: string, supabase: Any, handoffLabels: Any, context: Any, sessionId: string) => Promise<Any>;
   handleGreeting: (session: Any, organizationId: string, supabase: Any, handoffLabels: Any, messageText: string) => Promise<Any>;
+  handleBookingConfirm: (input: string, session: Any, organizationId: string, supabase: Any, handoffLabels: Any) => Promise<Any>;
+  detectIntent: (text: string) => { intent: string; confidence: string };
 }
 
 interface SdrArgs {
@@ -104,11 +106,48 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
   const inSdrState = state === "sdr_chat" || state === "sdr_booking";
   const isEntryState = state === "greeting" || state === "main_menu" ||
     state === "completed" || state === "expired";
-  if (!inSdrState && !isEntryState) return null;
+  const isSdrConfirm = state === "booking_confirm" && session.context.sdrActive === true;
+  if (!inSdrState && !isEntryState && !isSdrConfirm) return null;
 
   const trimmed = messageText.trim();
   // Números puros en estados de menú = navegación clásica (coexistencia total).
   if (isEntryState && /^\d+$/.test(trimmed)) return null;
+
+  // booking_confirm en sesión SDR: entender texto libre sin romper el clásico.
+  if (isSdrConfirm) {
+    const lower = trimmed.toLowerCase();
+    const classicMatch = /^[123]$/.test(trimmed) ||
+      /\bs[ií]\b|confirm|cambiar|cancelar|canselar/.test(lower);
+    if (classicMatch) return null; // el handler clásico ya lo entiende
+    const di = args.deps.detectIntent(messageText);
+    if (di.intent === "confirm") {
+      return await args.deps.handleBookingConfirm("si", session, organizationId, supabase, args.handoffLabels);
+    }
+    if (di.intent === "cancel") {
+      return await args.deps.handleBookingConfirm("cancelar", session, organizationId, supabase, args.handoffLabels);
+    }
+    // Pregunta/otro a mitad de confirmación → responder y re-preguntar (LLM).
+    if (!(await underLlmBudget(session, organizationId, supabase))) return null;
+    return await handleSdrConfirmQuestion(args);
+  }
+
+  // Sesión terminada que revive (ej. "gracias" post-cita): limpiar contexto de
+  // booking, historial e interés. Sin esto, el historial le filtra al LLM datos
+  // viejos ("lunes") y un simple "gracias" re-dispara agendamiento (visto en QA).
+  if (state === "completed" || state === "expired") {
+    const justBooked = !!session.context.selectedTime;
+    clearBookingContext(session);
+    delete session.context.sdrHistory;
+    delete session.context.sdrInterestServiceId;
+    if (justBooked) {
+      // Nota sintética (no se envía): el LLM sabe que la cita quedó, sin
+      // arrastrar fechas/horas que puedan re-disparar un agendamiento.
+      session.context.sdrHistory = [{
+        role: "assistant",
+        content: "(La cita del paciente acaba de quedar agendada y confirmada. Si solo agradece o se despide, respondé breve y cálido — sin ofrecer agendar de nuevo.)",
+      }];
+    }
+  }
 
   if (!(await underLlmBudget(session, organizationId, supabase))) {
     console.warn("[sdr] LLM budget exceeded for org", organizationId, "— falling back to classic flow");
@@ -123,6 +162,40 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
     console.error("[sdr] Unexpected error, falling back to classic flow:", e);
     return null;
   }
+}
+
+/** Limpia todo rastro de un agendamiento previo (anti cita duplicada). */
+function clearBookingContext(session: Any): void {
+  delete session.context.sdrBookingSetup;
+  delete session.context.sdrOfferedSlots;
+  delete session.context.sdrOfferedDayLabel;
+  delete session.context.selectedDate;
+  delete session.context.selectedTime;
+  delete session.context.availableSlots;
+  delete session.context.combinedSlotDoctors;
+}
+
+/** Pregunta del paciente a mitad de booking_confirm: responder + re-preguntar. */
+async function handleSdrConfirmQuestion(args: SdrArgs): Promise<SdrBotResponse | null> {
+  const { session, messageText } = args;
+  const ctx = await getSdrCtx(args);
+  if (!ctx) return null;
+
+  const pending = `${session.context.selectedServiceType ?? "su cita"} — ${session.context.sdrOfferedDayLabel ?? session.context.selectedDate} a las ${formatTimeForTemplate(session.context.selectedTime ?? "")}`;
+  const system = buildSdrSystemPrompt(ctx);
+  const messages = [...historyOf(session), {
+    role: "user" as const,
+    content: `${messageText}\n\n[PLATAFORMA] El paciente está a UN PASO de confirmar esta cita: ${pending}. Respondé su mensaje y terminá preguntando de nuevo, con naturalidad, si le confirmás la cita.`,
+  }];
+  const out = await callSdrLLM(args, system, messages);
+  if (!out) return null;
+
+  const price = checkPriceGuard(out.reply, publicPrices(ctx));
+  const time = checkTimeGuard(out.reply, [session.context.selectedTime].filter(Boolean));
+  if (!price.ok || !time.ok) return null; // clásico re-pregunta (feo pero seguro)
+
+  pushHistory(session, messageText, out.reply);
+  return { message: out.reply, requiresInput: true, nextState: "booking_confirm", sessionComplete: false, showMenuHint: false };
 }
 
 // ============================================================================
@@ -165,11 +238,15 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   }
 
   // Quiere agendar (o ya dio fecha/hora) y hay servicio identificable → booking.
+  // Los intents pasivos (ack/rechazo/futuro/humano) JAMÁS disparan booking aunque
+  // el LLM arrastre datos de booking del historial (fix: "gracias" post-cita
+  // re-ofrecía confirmar la misma cita → riesgo de duplicado).
   const serviceId = out.service_id ?? session.context.sdrInterestServiceId ?? null;
-  const wantsBooking = out.intent === "agendar" || !!out.booking?.date_text || !!out.booking?.chosen_time;
+  const passiveIntent = ["ack", "rechazo", "futuro", "humano", "gestion_cita"].includes(out.intent);
+  const wantsBooking = !passiveIntent &&
+    (out.intent === "agendar" || !!out.booking?.date_text || !!out.booking?.chosen_time);
   if (wantsBooking && resolveServiceForBooking(session, ctx, serviceId)) {
     await updateLeadStage(args, out.lead_stage, serviceId);
-    pushHistory(session, messageText, "(iniciando agendamiento)");
     return await handleSdrBooking(args, out);
   }
 
