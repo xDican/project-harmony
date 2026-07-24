@@ -25,7 +25,7 @@ export default function StepSummary() {
         if (step === 'clinic') navigate('/onboarding/clinic', { replace: true });
         else if (step === 'doctor') navigate('/onboarding/doctor', { replace: true });
         else if (step === 'schedule') navigate('/onboarding/schedule', { replace: true });
-        else if (step === 'complete') navigate('/agenda-semanal', { replace: true });
+        else if (step === 'complete') navigate('/calendario', { replace: true });
         else if (onboarding_status === 'ready_to_activate') setAlreadyRequested(true);
       })
       .catch(() => {})

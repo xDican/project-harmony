@@ -92,12 +92,19 @@ function filterPastIfToday(date: Date, times: string[]): string[] {
   return times.filter((t) => timeStringToMinutes(t) > nowMin);
 }
 
-export function useAppointmentComposer() {
+export function useAppointmentComposer(initialDate?: Date) {
   const { user, isDoctorView, organizationId } = useCurrentUser();
   const { singleDoctor, isSingleDoctorOrg } = useSingleDoctor();
 
   // --- Catálogo de servicios del org ---
   const [catalog, setCatalog] = useState<OrgServiceType[]>([]);
+  // Arranca en `true`: mientras no sepamos si el org tiene servicios, `catalog`
+  // vale [] indistintamente de "todavía cargando" vs "de verdad no tiene" — sin
+  // este flag, `hasServices` caía a `false` durante el fetch y el path se
+  // resolvía a 'duration' por medio segundo (mostrando el selector de
+  // profesional/duración en vez de "Servicios a realizar" hasta que el fetch
+  // resolvía). Ver uso en `requiresDoctorSelection` abajo.
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const hasServices = catalog.length > 0;
 
   // --- Path derivado (ver doc del hook) ---
@@ -111,8 +118,9 @@ export function useAppointmentComposer() {
 
   // ¿La UI debe mostrar un selector de profesional? Solo en el path 'duration' de
   // orgs multi-doctor sin servicios (en single-doctor/visit-engine el profesional
-  // se auto-rellena o lo asigna el motor).
-  const requiresDoctorSelection = path === 'duration' && !isDoctorView && !isSingleDoctorOrg;
+  // se auto-rellena o lo asigna el motor). `!isLoadingCatalog` evita mostrarlo
+  // de forma prematura mientras el catálogo todavía no resolvió.
+  const requiresDoctorSelection = path === 'duration' && !isLoadingCatalog && !isDoctorView && !isSingleDoctorOrg;
 
   // --- Selección base ---
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -123,13 +131,13 @@ export function useAppointmentComposer() {
   const [reminder3dEnabled, setReminder3dEnabled] = useState(false);
 
   // --- Mes mostrado en la grilla de fechas ---
-  const [monthAnchor, setMonthAnchor] = useState<Date>(() => startOfMonth(getLocalToday()));
+  const [monthAnchor, setMonthAnchor] = useState<Date>(() => startOfMonth(initialDate ?? getLocalToday()));
   const [daysMap, setDaysMap] = useState<Record<string, { working: boolean; canFit: boolean }>>({});
   const [isLoadingDays, setIsLoadingDays] = useState(false);
   const [daysError, setDaysError] = useState<string | null>(null);
 
   // --- Fecha + slots ---
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>();
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => initialDate ?? getLocalToday());
   const [starts, setStarts] = useState<string[]>([]);
   const [visitSlots, setVisitSlots] = useState<VisitSlot[]>([]);
   const [doctorsDict, setDoctorsDict] = useState<Record<string, VisitDoctorInfo>>({});
@@ -153,13 +161,18 @@ export function useAppointmentComposer() {
 
   // ----- Carga del catálogo -----
   useEffect(() => {
-    if (!organizationId) return;
+    if (!organizationId) {
+      setIsLoadingCatalog(false);
+      return;
+    }
+    setIsLoadingCatalog(true);
     listActiveServiceTypesForOrg(organizationId)
       .then(setCatalog)
       .catch((e) => {
         console.error('[composer] Error cargando servicios:', e);
         setCatalog([]);
-      });
+      })
+      .finally(() => setIsLoadingCatalog(false));
   }, [organizationId]);
 
   // ----- Auto-fill del profesional (doctor logueado / org de 1 doctor) -----
@@ -504,6 +517,7 @@ export function useAppointmentComposer() {
     createPatientForBooking,
     // servicios
     catalog,
+    isLoadingCatalog,
     items,
     addService,
     removeService,

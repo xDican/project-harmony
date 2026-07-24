@@ -16,7 +16,7 @@ import { usePromotionsExpiringSoon } from '@/hooks/usePromotionsExpiringSoon';
 const routeTitles: Record<string, string> = {
   '/agenda-secretaria': 'Agenda de Hoy',
   '/agenda-medico': 'Agenda Médica',
-  '/agenda-semanal': 'Agenda Semanal',
+  '/calendario': 'Calendario',
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
   '/configuracion': 'Configuración',
@@ -42,7 +42,7 @@ const getPageTitle = (pathname: string): string => {
   if (pathname.startsWith('/admin/doctors/') && pathname.includes('/schedule')) return 'Horarios';
   if (pathname.startsWith('/admin/doctors/') && pathname.includes('/bloqueos')) return 'Bloqueos de Horario';
   if (pathname.startsWith('/configuracion/')) return 'Configuración';
-  return 'Agenda Semanal';
+  return 'Calendario';
 };
 interface MainLayoutProps {
   children: ReactNode;
@@ -127,8 +127,8 @@ export default function MainLayout({
         icon: InboxIcon,
         badge: inboxUnread
       }, {
-        to: '/agenda-semanal',
-        label: 'Agenda Semanal',
+        to: '/calendario',
+        label: 'Calendario',
         icon: CalendarDays
       }, {
         to: '/agenda-secretaria',
@@ -153,8 +153,8 @@ export default function MainLayout({
     // Admin-doctor in Vista Médico: show doctor nav
     if (isAdminDoctor && adminView === 'doctor') {
       items.push({
-        to: '/agenda-semanal',
-        label: 'Agenda Semanal',
+        to: '/calendario',
+        label: 'Calendario',
         icon: CalendarDays
       }, {
         to: '/citas/nueva',
@@ -171,7 +171,7 @@ export default function MainLayout({
       });
     }
 
-    // Admin (not in doctor view): Bandeja, Agenda Semanal primero, Agenda de Hoy, Nueva Cita, Pacientes
+    // Admin (not in doctor view): Bandeja, Calendario primero, Agenda de Hoy, Nueva Cita, Pacientes
     if (isAdmin && !(isAdminDoctor && adminView === 'doctor')) {
       items.push({
         to: '/inbox',
@@ -179,8 +179,8 @@ export default function MainLayout({
         icon: InboxIcon,
         badge: inboxUnread
       }, {
-        to: '/agenda-semanal',
-        label: 'Agenda Semanal',
+        to: '/calendario',
+        label: 'Calendario',
         icon: CalendarDays
       }, {
         to: '/agenda-secretaria',
@@ -205,8 +205,8 @@ export default function MainLayout({
     // Doctor (independent, not admin)
     if (isDoctor && !isAdmin) {
       items.push({
-        to: '/agenda-semanal',
-        label: 'Agenda Semanal',
+        to: '/calendario',
+        label: 'Calendario',
         icon: CalendarDays
       }, {
         to: '/citas/nueva',

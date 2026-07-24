@@ -24,7 +24,7 @@ const AgendaSecretaria = lazy(() => import("./pages/AgendaSecretaria"));
 const NuevaCita = lazy(() => import("./pages/NuevaCita"));
 const Pacientes = lazy(() => import("./pages/Pacientes"));
 const AgendaMedico = lazy(() => import("./pages/AgendaMedico"));
-const AgendaSemanal = lazy(() => import("./pages/AgendaSemanal"));
+const Calendario = lazy(() => import("./pages/Calendario"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const UsersList = lazy(() => import("./pages/UsersList"));
 const CreateUserPage = lazy(() => import("./pages/CreateUserPage"));
@@ -96,8 +96,8 @@ const App = () => {
 
     // Check if user's role is in the allowed roles
     if (!allowedRoles.includes(user.role)) {
-      // Redirect all users to agenda semanal
-      return <Navigate to="/agenda-semanal" replace />;
+      // Redirect all users to calendario
+      return <Navigate to="/calendario" replace />;
     }
 
     return <>{children}</>;
@@ -105,7 +105,7 @@ const App = () => {
 
   /**
    * OnboardingRoute - Requires auth but not an established org.
-   * Redirects to /login if unauthenticated, to /agenda-semanal if org is already active.
+   * Redirects to /login if unauthenticated, to /calendario if org is already active.
    */
   function OnboardingRoute({ children }: { children: React.ReactNode }) {
     const { user, loading, isNewUser, onboardingStatus } = useCurrentUser();
@@ -125,7 +125,7 @@ const App = () => {
 
     // Already fully active — send to the app
     if (onboardingStatus === 'active') {
-      return <Navigate to="/agenda-semanal" replace />;
+      return <Navigate to="/calendario" replace />;
     }
 
     return <>{children}</>;
@@ -160,7 +160,7 @@ const App = () => {
       return <Navigate to="/onboarding/clinic" replace />;
     }
 
-    return <Navigate to="/agenda-semanal" replace />;
+    return <Navigate to="/calendario" replace />;
   }
 
   return (
@@ -282,9 +282,9 @@ const App = () => {
                 <AgendaMedico />
               </RoleBasedRoute>
             } />
-            <Route path="/agenda-semanal" element={
+            <Route path="/calendario" element={
               <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
-                <AgendaSemanal />
+                <Calendario />
               </RoleBasedRoute>
             } />
             
