@@ -22,6 +22,8 @@ import {
   getOrCreateConversation,
   updateConversationOnInbound,
   updateConversationOnOutbound,
+  silenceForPhysicalReply,
+  checkAndExpireBotSilence,
 } from "../_shared/conversations.ts";
 import {
   persistInboundMessage,
@@ -404,14 +406,17 @@ async function handleMessageEcho(
     .maybeSingle();
   patientId = p?.id;
 
-  // Conversacion nueva (la asistente inicio desde el celular) → human_active.
-  // Si ya existe, conserva su status.
+  // Sin initialStatus explicito (default bot_active) — el silencio real (hasta
+  // medianoche de HOY, o preservar un takeover manual si ya existia) lo decide
+  // silenceForPhysicalReply() mas abajo, con el MISMO criterio sin importar si
+  // la conversacion es nueva o ya existia (24 Jul 2026: antes, una conversacion
+  // EXISTENTE simplemente "conservaba su status" y el bot seguia respondiendo
+  // encima del humano que ya contesto desde el celular fisico).
   const conversation = await getOrCreateConversation(supabase, {
     whatsappLineId: lineId,
     organizationId: lineOrgId,
     patientPhone,
     patientId: patientId ?? null,
-    initialStatus: "human_active",
   });
   if (!conversation) {
     console.error("[meta-webhook] Echo: getOrCreateConversation null, skip:", echo.id);
@@ -441,7 +446,11 @@ async function handleMessageEcho(
   }
 
   await updateConversationOnOutbound(supabase, conversation.id);
-  console.log("[meta-webhook] Echo (asistente desde celular) persisted. conv:", conversation.id, "msg:", echo.id);
+  const silenced = await silenceForPhysicalReply(supabase, conversation);
+  console.log(
+    "[meta-webhook] Echo (asistente desde celular) persisted. conv:", conversation.id, "msg:", echo.id,
+    silenced ? "— bot silenciado hasta medianoche HN" : "— takeover manual preservado (sin cambio)",
+  );
 }
 
 /**
@@ -740,8 +749,12 @@ async function handleIncomingMessage(
         }).catch((e) => console.error("[meta-webhook] dispatchProcessMediaAsync failed:", e));
       }
 
-      // Bot dual mode: si la asistente tomo la conversacion, el bot calla
-      if (conversation.status === "human_active") {
+      // Bot dual mode: si la asistente tomo la conversacion, el bot calla.
+      // Si el silencio fue AUTOMATICO (Coexistence: respondio desde el celular
+      // fisico) y ya paso medianoche del dia en que se disparo, se reactiva aqui
+      // mismo antes de decidir — sin cron, sin esperar un ciclo extra.
+      const effectiveStatus = await checkAndExpireBotSilence(supabase, conversation);
+      if (effectiveStatus === "human_active") {
         console.log("[meta-webhook] Bot silenced — human_active. conv:", conversation.id, "phone:", fromPhone);
         return;
       }

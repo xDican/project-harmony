@@ -12,6 +12,7 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
 export type ConversationStatus =
   | "bot_active"
@@ -31,6 +32,13 @@ export interface Conversation {
   last_message_at: string;
   last_inbound_at: string | null;
   unread_count: number;
+  /**
+   * Fin de la ventana de silencio AUTOMATICO (Coexistence: humano respondio
+   * desde el telefono fisico). NULL = sin silencio automatico activo, o el
+   * human_active actual es un takeover MANUAL indefinido desde el inbox
+   * (nunca auto-expira). Ver silenceForPhysicalReply/checkAndExpireBotSilence.
+   */
+  bot_silenced_until: string | null;
 }
 
 /**
@@ -58,7 +66,7 @@ export async function getOrCreateConversation(
   const { data: existing, error: selErr } = await supabase
     .from("conversations")
     .select(
-      "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count",
+      "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count, bot_silenced_until",
     )
     .eq("whatsapp_line_id", args.whatsappLineId)
     .eq("patient_phone", args.patientPhone)
@@ -98,7 +106,7 @@ export async function getOrCreateConversation(
       status: args.initialStatus ?? "bot_active",
     })
     .select(
-      "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count",
+      "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count, bot_silenced_until",
     )
     .single();
 
@@ -108,7 +116,7 @@ export async function getOrCreateConversation(
       const { data: raced } = await supabase
         .from("conversations")
         .select(
-          "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count",
+          "id, organization_id, whatsapp_line_id, patient_phone, patient_id, patient_name, status, assigned_to, last_message_at, last_inbound_at, unread_count, bot_silenced_until",
         )
         .eq("whatsapp_line_id", args.whatsappLineId)
         .eq("patient_phone", args.patientPhone)
@@ -220,4 +228,65 @@ export async function markConversationRead(
   if (error) {
     console.warn("[conversations] markConversationRead failed:", error.message);
   }
+}
+
+/**
+ * Coexistence (24 Jul 2026): el negocio respondio desde la WhatsApp Business
+ * App del celular (echo) — silencia el bot hasta medianoche de HOY (Honduras)
+ * para que no le conteste encima al humano que ya esta atendiendo.
+ *
+ * NO pisa un takeover MANUAL indefinido hecho desde el inbox (status ya
+ * human_active CON bot_silenced_until=null) — ese sigue sin auto-expirar,
+ * tal como pediria alguien que tomo la conversacion a proposito y no quiere
+ * que el bot vuelva solo. Ver checkAndExpireBotSilence() para el otro lado
+ * (expirar y reactivar) en la puerta de entrada del webhook.
+ *
+ * Retorna true si aplico el silencio, false si preservo un takeover manual.
+ */
+export async function silenceForPhysicalReply(
+  supabase: SupabaseClient,
+  conversation: Conversation,
+): Promise<boolean> {
+  if (conversation.status === "human_active" && conversation.bot_silenced_until === null) {
+    return false; // takeover manual indefinido desde el inbox — no tocar
+  }
+  const endOfDayHn = DateTime.now().setZone("America/Tegucigalpa").endOf("day");
+  const { error } = await supabase
+    .from("conversations")
+    .update({ status: "human_active", bot_silenced_until: endOfDayHn.toUTC().toISO() })
+    .eq("id", conversation.id);
+  if (error) {
+    console.warn("[conversations] silenceForPhysicalReply failed:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Puerta de entrada del webhook: si la conversacion esta human_active por un
+ * silencio AUTOMATICO (bot_silenced_until no-null) y ya vencio, la reactiva
+ * (status=bot_active, bot_silenced_until=null) y devuelve 'bot_active' para
+ * que el gating de esta misma request ya trate al bot como activo — sin
+ * necesitar un cron ni esperar al proximo mensaje para notar el cambio.
+ * Un takeover manual (bot_silenced_until=null) nunca entra por esta rama.
+ */
+export async function checkAndExpireBotSilence(
+  supabase: SupabaseClient,
+  conversation: Conversation,
+): Promise<ConversationStatus> {
+  if (conversation.status !== "human_active" || !conversation.bot_silenced_until) {
+    return conversation.status;
+  }
+  if (new Date(conversation.bot_silenced_until).getTime() > Date.now()) {
+    return conversation.status; // silencio automatico todavia vigente
+  }
+  const { error } = await supabase
+    .from("conversations")
+    .update({ status: "bot_active", bot_silenced_until: null })
+    .eq("id", conversation.id);
+  if (error) {
+    console.warn("[conversations] checkAndExpireBotSilence update failed:", error.message);
+    return conversation.status; // fallo el update — no asumir reactivado
+  }
+  return "bot_active";
 }

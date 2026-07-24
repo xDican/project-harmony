@@ -723,6 +723,7 @@ export type Database = {
       conversations: {
         Row: {
           assigned_to: string | null
+          bot_silenced_until: string | null
           created_at: string
           id: string
           interest_service_type_id: string | null
@@ -744,6 +745,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          bot_silenced_until?: string | null
           created_at?: string
           id?: string
           interest_service_type_id?: string | null
@@ -765,6 +767,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          bot_silenced_until?: string | null
           created_at?: string
           id?: string
           interest_service_type_id?: string | null
