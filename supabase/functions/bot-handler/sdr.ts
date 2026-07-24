@@ -14,6 +14,16 @@
  *   = el flujo clásico de menús responde. El bot NUNCA queda mudo.
  * - La cita se crea por el camino clásico (booking_confirm → createAppointment
  *   WithPatient): validación de slot, paciente, ask_name — sin cambios.
+ * - Handoff SILENCIOSO (decisión Diego 24 Jul, org con Coexistence): TODO
+ *   handoff (brecha de conocimiento, pedido explícito de humano, caso médico
+ *   delicado, guard bloqueado) es silencioso hacia el paciente — el humano
+ *   ya ve la conversación en su propio WhatsApp vía Coexistence y puede
+ *   intervenir sin que se note que "algo más" (el bot) estaba hablando. La
+ *   notificación INTERNA a doctor/secretaria (con su dedupe de 5 min) sigue
+ *   disparando igual — solo se suprime el mensaje al paciente. Ver
+ *   `silentHandoff()`. Brechas de conocimiento reales (no pedidos de humano
+ *   ni gestión de cita) quedan registradas en `bot_faq_proposals` para
+ *   revisión posterior — ver `registerFaqProposal()`.
  */
 
 import {
@@ -59,6 +69,7 @@ interface SdrBotResponse {
   requiresInput: boolean;
   nextState: string;
   sessionComplete: boolean;
+  skipDefaultSend?: boolean;
 }
 
 /** Funciones internas de index.ts inyectadas para reuso sin import circular. */
@@ -225,16 +236,8 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   }
 
   if (out.needs_handoff) {
-    await updateLeadStage(args, "handoff", out.service_id);
-    const handoff = await deps.handleHandoffToSecretary(
-      args.whatsappLineId, args.patientPhone, organizationId, supabase, args.handoffLabels, session.context, session.id,
-    );
-    // La notificación/dedupe ya corrió; el paciente recibe la respuesta empática del LLM.
-    handoff.message = out.reply;
-    handoff.options = undefined;
-    handoff.showMenuHint = false;
-    pushHistory(session, messageText, out.reply);
-    return handoff;
+    const registerProposal = !["humano", "gestion_cita"].includes(out.intent);
+    return await silentHandoff(args, out, registerProposal);
   }
 
   // Quiere agendar (o ya dio fecha/hora) y hay servicio identificable → booking.
@@ -348,14 +351,8 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
   }
 
   if (out.needs_handoff) {
-    await updateLeadStage(args, "handoff", null);
-    const handoff = await deps.handleHandoffToSecretary(
-      args.whatsappLineId, args.patientPhone, organizationId, supabase, args.handoffLabels, session.context, session.id,
-    );
-    handoff.message = out.reply;
-    handoff.options = undefined;
-    handoff.showMenuHint = false;
-    return handoff;
+    const registerProposal = !["humano", "gestion_cita"].includes(out.intent);
+    return await silentHandoff(args, out, registerProposal);
   }
 
   // (d) ¿Eligió una hora de las ofrecidas?
@@ -673,14 +670,71 @@ export async function markLeadAgendado(
 
 /** Respuesta blindada cuando un guard bloquea la redacción del LLM. */
 async function guardBlockedHandoff(args: SdrArgs, out: SdrLLMOutput, violations: string[]): Promise<SdrBotResponse> {
-  const { session, deps, supabase, organizationId } = args;
   console.error("[sdr] GUARD_BLOCKED — reply retenido:", JSON.stringify({ violations, reply: out.reply.slice(0, 300) }));
-  session.context.lastGuardBlock = { violations, reply: out.reply.slice(0, 500), at: new Date().toISOString() };
-  await updateLeadStage(args, "handoff", null);
-  const handoff = await deps.handleHandoffToSecretary(
+  args.session.context.lastGuardBlock = { violations, reply: out.reply.slice(0, 500), at: new Date().toISOString() };
+  // No es brecha de conocimiento (el LLM SÍ sabía qué decir, solo lo dijo mal/
+  // inventado) — no vale como propuesta de FAQ, es un bug de redacción a revisar
+  // en session.context.lastGuardBlock, no un hueco de contenido.
+  return await silentHandoff(args, out, false);
+}
+
+/**
+ * Handoff SILENCIOSO hacia el paciente (decisión Diego 24 Jul — ver invariantes
+ * arriba). La notificación interna a doctor/secretaria sigue disparando con su
+ * dedupe de 5 min existente; solo se suprime el mensaje al paciente.
+ * sessionComplete=true → updateSession persiste state='completed', así que el
+ * próximo mensaje del paciente vuelve a entrar por isEntryState (greeting-like).
+ */
+async function silentHandoff(args: SdrArgs, out: SdrLLMOutput, registerProposal: boolean): Promise<SdrBotResponse> {
+  const { session, deps, supabase, organizationId } = args;
+  await updateLeadStage(args, "handoff", out.service_id ?? null);
+  await deps.handleHandoffToSecretary(
     args.whatsappLineId, args.patientPhone, organizationId, supabase, args.handoffLabels, session.context, session.id,
   );
-  return handoff;
+  if (registerProposal) await registerFaqProposal(args, args.messageText);
+  return { message: "", requiresInput: false, nextState: "handoff_secretary", sessionComplete: true, skipDefaultSend: true };
+}
+
+function normalizeQuestion(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[¿?¡!.,;:]/g, "").trim();
+}
+
+/**
+ * Registra la brecha de conocimiento en bot_faq_proposals para revisión
+ * humana posterior (Fase 3 pendiente: UI de aprobación — la tabla existe
+ * desde Fase 1 pero nada la poblaba hasta este cambio). Dedup simple por
+ * texto normalizado exacto contra propuestas PENDING de la misma org — si
+ * ya existe, solo suma evidencia; si no, crea una nueva.
+ */
+async function registerFaqProposal(args: SdrArgs, question: string): Promise<void> {
+  const trimmed = question.trim();
+  if (trimmed.length < 5) return; // no cumple el CHECK de longitud de bot_faq_proposals
+  const { supabase, organizationId, whatsappLineId } = args;
+  const normalized = normalizeQuestion(trimmed);
+  try {
+    const { data: pending } = await supabase
+      .from("bot_faq_proposals")
+      .select("id, question, evidence_count")
+      .eq("organization_id", organizationId)
+      .eq("status", "pending");
+    const dup = (pending ?? []).find((p: Any) => normalizeQuestion(p.question) === normalized);
+    if (dup) {
+      await supabase.from("bot_faq_proposals")
+        .update({ evidence_count: (dup.evidence_count ?? 1) + 1, last_asked_at: new Date().toISOString() })
+        .eq("id", dup.id);
+      return;
+    }
+    const conversationId = await resolveConversationId(args);
+    await supabase.from("bot_faq_proposals").insert({
+      organization_id: organizationId,
+      whatsapp_line_id: whatsappLineId,
+      question: trimmed.slice(0, 500),
+      sample_conversation_id: conversationId,
+    });
+  } catch (e) {
+    console.error("[sdr] registerFaqProposal failed (non-fatal):", e);
+  }
 }
 
 function sdrReply(session: Any, userMsg: string, message: string, nextState: string): SdrBotResponse {
