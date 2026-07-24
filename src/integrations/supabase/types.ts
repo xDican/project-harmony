@@ -1333,6 +1333,7 @@ export type Database = {
           email: string | null
           id: string
           is_active: boolean | null
+          llm_monthly_budget_usd: number
           max_calendars: number
           messaging_enabled: boolean | null
           monthly_message_cap: number | null
@@ -1354,6 +1355,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean | null
+          llm_monthly_budget_usd?: number
           max_calendars?: number
           messaging_enabled?: boolean | null
           monthly_message_cap?: number | null
@@ -1375,6 +1377,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean | null
+          llm_monthly_budget_usd?: number
           max_calendars?: number
           messaging_enabled?: boolean | null
           monthly_message_cap?: number | null

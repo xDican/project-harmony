@@ -49,6 +49,17 @@ export interface SdrLLMOutput {
   handoff_reason: string | null;
   /** Respuesta redactada para el paciente (máx 3-4 líneas). */
   reply: string;
+  /**
+   * Preferencia de agendamiento extraída (Fase 2b). El LLM NUNCA calcula
+   * fechas: `date_text` es la expresión del paciente tal cual ("mañana",
+   * "el viernes", "3 de agosto") — el backend la resuelve con parseDateHint.
+   * `chosen_time` solo cuando el paciente elige una hora YA ofrecida.
+   */
+  booking?: {
+    date_text: string | null;
+    period: "morning" | "afternoon" | null;
+    chosen_time: string | null;
+  } | null;
 }
 
 export interface SdrService {
@@ -137,8 +148,29 @@ function faqBlock(faqs: { question: string; answer: string }[]): string {
   return faqs.map((f) => `P: ${f.question}\nR: ${f.answer}`).join("\n\n");
 }
 
-export function buildSdrSystemPrompt(ctx: SdrContext): string {
-  return `Sos la asistente virtual de ${ctx.organizationName}, una clínica en Honduras. Atendés WhatsApp: leads que llegan de publicidad y pacientes. Tu objetivo es que cada lead termine con una cita agendada.
+export interface SdrPromptOptions {
+  /** Slots REALES ofrecidos este turno ("h:mm AM/PM"). El LLM solo puede mencionar estos. */
+  offeredSlots?: string[];
+  /** Etiqueta del día de los slots ofrecidos (ej. "viernes 25 de julio"). */
+  offeredDayLabel?: string;
+}
+
+export function buildSdrSystemPrompt(ctx: SdrContext, opts?: SdrPromptOptions): string {
+  const now = new Date();
+  // Fecha actual Honduras (UTC-6 fijo, sin DST) — para que el LLM etiquete bien
+  // "mañana"/"el viernes". La RESOLUCIÓN de fechas sigue siendo del backend.
+  const hn = new Date(now.getTime() - 6 * 3600 * 1000);
+  const dias = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+  const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const hoyLabel = `${dias[hn.getUTCDay()]} ${hn.getUTCDate()} de ${meses[hn.getUTCMonth()]} de ${hn.getUTCFullYear()}`;
+
+  const slotsBlock = opts?.offeredSlots?.length
+    ? `\n## Horarios disponibles OFRECIDOS en este turno (${opts.offeredDayLabel ?? "día elegido"})
+${opts.offeredSlots.join(", ")}
+Estos son los ÚNICOS horarios que podés mencionar. Si el paciente pide otro, ofrecé el más cercano DE ESTA LISTA o decile que consultás otro día. Si elige uno, ponelo en booking.chosen_time (formato del listado).`
+    : "";
+
+  return `Sos la asistente virtual de ${ctx.organizationName}, una clínica en Honduras. Atendés WhatsApp: leads que llegan de publicidad y pacientes. Tu objetivo es que cada lead termine con una cita agendada. Hoy es ${hoyLabel} (hora de Honduras).
 
 ## Cómo hablás
 - Español hondureño natural, trato de "usted", cálido y profesional. Nada robótico.
@@ -168,6 +200,13 @@ export function buildSdrSystemPrompt(ctx: SdrContext): string {
 - "handoff": lo estás pasando a un humano (needs_handoff=true).
 - "perdido": rechazo explícito.
 
+## Agendamiento (cómo manejar fechas y horarios)
+- Vos NUNCA inventás ni calculás horarios — la plataforma te da los horarios reales cuando toca ofrecerlos.
+- Cuando el paciente exprese CUÁNDO quiere su cita, copiá su expresión textual en booking.date_text ("mañana", "el viernes", "3 de agosto") y la franja en booking.period ("morning"/"afternoon") si la dijo. No la conviertas a fecha.
+- Cuando el paciente elija una hora de las ofrecidas, ponela en booking.chosen_time.
+- Ofrecé máximo 2-3 horarios por mensaje, como lo haría una persona.
+${slotsBlock}
+
 ## Catálogo de servicios (única fuente de precios)
 ${catalogBlock(ctx.services)}
 
@@ -182,7 +221,8 @@ Respondé ÚNICAMENTE un objeto JSON válido, sin texto antes ni después, sin m
   "lead_stage": "nuevo|calificando|cotizado|agendado|seguimiento|handoff|perdido",
   "needs_handoff": true|false,
   "handoff_reason": "<motivo corto si needs_handoff, si no null>",
-  "reply": "<tu mensaje para el paciente>"
+  "reply": "<tu mensaje para el paciente>",
+  "booking": { "date_text": "<expresión textual del paciente o null>", "period": "morning|afternoon|null", "chosen_time": "<hora elegida de las ofrecidas o null>" }
 }`;
 }
 
@@ -209,6 +249,17 @@ export function parseSdrOutput(text: string | null): SdrLLMOutput | null {
   const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
   if (!intent || !leadStage || !reply) return null;
 
+  let booking: SdrLLMOutput["booking"] = null;
+  if (parsed.booking && typeof parsed.booking === "object") {
+    const b = parsed.booking;
+    booking = {
+      date_text: typeof b.date_text === "string" && b.date_text ? b.date_text : null,
+      period: b.period === "morning" || b.period === "afternoon" ? b.period : null,
+      chosen_time: typeof b.chosen_time === "string" && b.chosen_time ? b.chosen_time : null,
+    };
+    if (!booking.date_text && !booking.period && !booking.chosen_time) booking = null;
+  }
+
   return {
     intent,
     service_id: typeof parsed.service_id === "string" && parsed.service_id ? parsed.service_id : null,
@@ -219,5 +270,6 @@ export function parseSdrOutput(text: string | null): SdrLLMOutput | null {
         ? parsed.handoff_reason
         : null,
     reply,
+    booking,
   };
 }

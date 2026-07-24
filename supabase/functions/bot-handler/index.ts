@@ -19,6 +19,7 @@ import { normalizeToE164 } from '../_shared/phone.ts';
 import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
 import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
 import { getAvailableSlotsForDate as computeAvailableSlots } from '../_shared/availability.ts';
+import { maybeHandleSdr, markLeadAgendado } from './sdr.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +62,8 @@ type BotState =
   | 'reschedule_list'      // Shows patient's upcoming appointments for reschedule/cancel
   | 'cancel_confirm'       // Two-phase: action selection → delete confirmation (uses context.cancelConfirmPhase)
   | 'handoff_secretary'
+  | 'sdr_chat'             // Fase 2b: conversación libre con capa LLM (líneas con sdr_mode_enabled)
+  | 'sdr_booking'          // Fase 2b: agendamiento conversacional (slots reales + LLM con guard)
   | 'completed'
   | 'expired';
 
@@ -127,11 +130,18 @@ serve(async (req) => {
     });
   }
 
-  // Validate x-internal-secret header
+  // Validate x-internal-secret header. Tambien acepta BENCH_TRIGGER_TOKEN
+  // (mismo nivel de confianza: secret de Supabase) para QA directo del bot sin
+  // pasar por WhatsApp — bot-handler no envia mensajes, eso lo hace el caller.
   const internalSecretHeader = req.headers.get('x-internal-secret') || req.headers.get('X-Internal-Secret') || '';
   const internalSecretEnv = Deno.env.get('INTERNAL_FUNCTION_SECRET') || '';
+  const benchTriggerEnv = Deno.env.get('BENCH_TRIGGER_TOKEN') || '';
+  const secretOk = !!internalSecretHeader && (
+    (!!internalSecretEnv && internalSecretHeader === internalSecretEnv) ||
+    (!!benchTriggerEnv && internalSecretHeader === benchTriggerEnv)
+  );
 
-  if (!internalSecretHeader || !internalSecretEnv || internalSecretHeader !== internalSecretEnv) {
+  if (!secretOk) {
     console.error('[bot-handler] Unauthorized: invalid or missing x-internal-secret');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
@@ -205,10 +215,12 @@ async function handleBotMessage(
   if (!session.context.handoffLabels) {
     const { data: lineConfig } = await supabase
       .from('whatsapp_lines')
-      .select('bot_handoff_type')
+      .select('bot_handoff_type, sdr_mode_enabled')
       .eq('id', whatsappLineId)
       .single();
     session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
+    // Fase 2b: flag del modo SDR (capa LLM). Cacheado por sesion como el resto.
+    session.context.sdrModeEnabled = lineConfig?.sdr_mode_enabled === true;
 
     // Fase 1 motor: los tipos de servicio son la tabla service_types (fuente unica),
     // ya no el JSONB whatsapp_lines.bot_service_types. display_name = lo que ve el
@@ -379,6 +391,32 @@ async function handleBotMessage(
     return response;
   }
 
+  // Fase 2b — capa SDR (LLM) para lineas con sdr_mode_enabled: intercepta texto
+  // libre ANTES del state machine. Devuelve null para continuar con el flujo
+  // clasico (numeros de menu, SDR apagado, presupuesto excedido o LLM caido —
+  // el fallback determinista esta garantizado).
+  const sdrResponse = await maybeHandleSdr({
+    session, messageText, whatsappLineId, patientPhone, organizationId, supabase, handoffLabels,
+    deps: {
+      parseDateHint, parseTimeHint, fuzzyMatchOption, resolveServiceAndContinue,
+      getCombinedSlotsForDate, getAvailableSlotsForDate, getDoctorLoadForDate,
+      pickLeastLoaded, lineCalendarForDoctor, firstActiveCalendarId,
+      handleHandoffToSecretary, handleGreeting,
+    },
+  });
+  if (sdrResponse) {
+    response = sdrResponse as BotResponse;
+    await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
+    const sdrMs = Date.now() - startTime;
+    const sdrIntent = detectSessionIntent(stateBefore, response.nextState, messageText);
+    logConversation(
+      session.id, whatsappLineId, organizationId, patientPhone,
+      stateBefore, response.nextState, messageText, response.message,
+      response.options || [], sdrIntent, sdrMs, supabase
+    ).catch((err) => console.error('[bot-handler] Log error (non-fatal):', err));
+    return response;
+  }
+
   // Route to state handler based on current state
   switch (session.state) {
     case 'greeting':
@@ -435,6 +473,13 @@ async function handleBotMessage(
 
     case 'handoff_secretary':
       response = await handleHandoffToSecretary(whatsappLineId, patientPhone, organizationId, supabase, handoffLabels, session.context, session.id);
+      break;
+
+    case 'sdr_chat':
+    case 'sdr_booking':
+      // La capa SDR no tomo el turno (presupuesto excedido / LLM caido / flag
+      // apagado a mitad de sesion) — degradar con gracia al flujo clasico.
+      response = await handleGreeting(session, organizationId, supabase, handoffLabels, messageText);
       break;
 
     default:
@@ -3156,6 +3201,13 @@ async function createAppointmentWithPatient(
 
   // Sprint 5.1 — Idea 3: cierre con promo destacada (si hay)
   const featuredCloser = await getFeaturedPromoCloser(organizationId, supabase);
+
+  // Fase 2b: si la sesion paso por la capa SDR, marcar el lead como agendado
+  // en el embudo de conversations (fire-and-forget).
+  if (session.context.sdrActive) {
+    markLeadAgendado(supabase, session.whatsapp_line_id, session.patient_phone)
+      .catch((e) => console.error('[createAppointment] markLeadAgendado error (non-fatal):', e));
+  }
 
   return {
     message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.${featuredCloser}`,
