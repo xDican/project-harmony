@@ -42,6 +42,7 @@ import {
 } from "../_shared/sdr-prompt.ts";
 import { checkPriceGuard, checkTimeGuard } from "../_shared/sdr-guards.ts";
 import { formatTimeForTemplate } from "../_shared/datetime.ts";
+import { isConditionalSi, normalizeTypos } from "../_shared/honduras-intents.ts";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
 const SDR_PRIMARY: { provider: LLMProvider; model: string } = {
@@ -130,8 +131,13 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
   // booking_confirm en sesión SDR: entender texto libre sin romper el clásico.
   if (isSdrConfirm) {
     const lower = trimmed.toLowerCase();
+    const normalized = normalizeTypos(trimmed);
+    // "si"/"sí" (WhatsApp casi nunca tilda, quedan indistinguibles) solo cuenta
+    // como confirmación cuando NO es el "si" condicional de una frase como "si
+    // tiene espacio el jueves" — sin esto, esa frase se leía como "confirmo".
+    const bareSi = /\bs[ií]\b/.test(lower) && !isConditionalSi(normalized);
     const classicMatch = /^[123]$/.test(trimmed) ||
-      /\bs[ií]\b|confirm|cambiar|cancelar|canselar/.test(lower);
+      bareSi || /confirm|cambiar|cancelar|canselar/.test(lower);
     if (classicMatch) return null; // el handler clásico ya lo entiende
     const di = args.deps.detectIntent(messageText);
     if (di.intent === "confirm") {
@@ -139,6 +145,19 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
     }
     if (di.intent === "cancel") {
       return await args.deps.handleBookingConfirm("cancelar", session, organizationId, supabase, args.handoffLabels);
+    }
+    // Rechaza la cita pendiente y da (o cambia a) otro día/hora — ej. "mejor
+    // no, para el proximo lunes tiene espacio?". Sin esto, el LLM no tiene los
+    // horarios reales de ese día y si inventa uno el guard lo bloquea, cayendo
+    // al clásico con "Opción no válida" sin salida real (bug real 27 Jul).
+    const dateHint = args.deps.parseDateHint(messageText);
+    if (dateHint) {
+      const ctx = await getSdrCtx(args);
+      if (ctx) {
+        clearBookingContext(session);
+        const preferredTime = args.deps.parseTimeHint(messageText);
+        return await offerSlotsForDate(args, ctx, dateHint.toISODate(), null, preferredTime);
+      }
     }
     // Pregunta/otro a mitad de confirmación → responder y re-preguntar (LLM).
     if (!(await underLlmBudget(session, organizationId, supabase))) return null;
@@ -204,7 +223,7 @@ async function handleSdrConfirmQuestion(args: SdrArgs): Promise<SdrBotResponse |
   const out = await callSdrLLM(args, system, messages);
   if (!out) return null;
 
-  const price = checkPriceGuard(out.reply, publicPrices(ctx));
+  const price = checkPriceGuard(out.reply, allowedPricesFor(ctx, session.context.selectedServiceTypeId));
   const time = checkTimeGuard(out.reply, [session.context.selectedTime].filter(Boolean));
   if (!price.ok || !time.ok) return null; // clásico re-pregunta (feo pero seguro)
 
@@ -233,7 +252,11 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
 
   // Guard de precios: siempre. (El de horarios solo aplica en booking — las FAQs
   // pueden mencionar horas legítimas, ej. "atendemos desde las 9:00 AM".)
-  const price = checkPriceGuard(out.reply, publicPrices(ctx));
+  // Acotado al servicio en foco este turno (identificado por el LLM, o el de
+  // la cita existente si es gestión de cita) — sin servicio claro, catálogo
+  // completo (preguntas tipo "qué servicios ofrecen" mencionan varios precios).
+  const focusServiceId = out.service_id ?? apt?.service_type_id ?? session.context.sdrInterestServiceId ?? null;
+  const price = checkPriceGuard(out.reply, allowedPricesFor(ctx, focusServiceId));
   if (!price.ok) return await guardBlockedHandoff(args, out, price.violations);
 
   // Gestión de cita existente (confirmar/reagendar/cancelar) — conversacional
@@ -243,6 +266,16 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   if (out.intent === "gestion_cita") {
     const gestionResp = await handleGestionCita(args, apt, out);
     if (gestionResp) return gestionResp;
+    // Con cita existente pero sin acción clara (ej. "para cuándo es mi
+    // cita?") el LLM ya respondió informado por existingApptBlock — usar ESE
+    // reply en vez de caer al clásico: detectMenuIntent (honduras-intents no
+    // relacionado) bucketea la frase literal "cuando es mi cita" junto con
+    // "reagendar"/"cancelar", y handleGreeting abría el menú de reagendar
+    // aunque el paciente solo pedía información (bug real 27 Jul).
+    if (apt) {
+      await updateLeadStage(args, out.lead_stage, null);
+      return sdrReply(session, messageText, out.reply, "sdr_chat");
+    }
     return await deps.handleGreeting(session, organizationId, supabase, args.handoffLabels, messageText);
   }
 
@@ -376,7 +409,7 @@ async function cancelAppointmentConversational(
     // llamada previa (detectIntent decide directo desde el texto del botón),
     // así que acá sí se redacta con una llamada propia, como antes.
     if (chatOut) {
-      const price = checkPriceGuard(chatOut.reply, publicPrices(ctx));
+      const price = checkPriceGuard(chatOut.reply, allowedPricesFor(ctx, apt.service_type_id));
       if (price.ok) reply = chatOut.reply;
     } else {
       const system = buildSdrSystemPrompt(ctx);
@@ -384,7 +417,7 @@ async function cancelAppointmentConversational(
       const messages = [...historyOf(session), { role: "user" as const, content: `${messageText}\n\n${hint}` }];
       const out = await callSdrLLM(args, system, messages);
       if (out) {
-        const price = checkPriceGuard(out.reply, publicPrices(ctx));
+        const price = checkPriceGuard(out.reply, allowedPricesFor(ctx, apt.service_type_id));
         if (price.ok) reply = out.reply;
       }
     }
@@ -451,7 +484,7 @@ async function startConversationalReschedule(
     // Texto libre: reusar el reply de la llamada de clasificación (ver
     // cancelAppointmentConversational). Botón: llamada propia como antes.
     if (chatOut) {
-      const price = checkPriceGuard(chatOut.reply, publicPrices(ctx));
+      const price = checkPriceGuard(chatOut.reply, allowedPricesFor(ctx, apt.service_type_id));
       if (price.ok) reply = chatOut.reply;
     } else {
       const system = buildSdrSystemPrompt(ctx);
@@ -459,7 +492,7 @@ async function startConversationalReschedule(
       const messages = [...historyOf(session), { role: "user" as const, content: `${messageText}\n\n${hint}` }];
       const out = await callSdrLLM(args, system, messages);
       if (out) {
-        const price = checkPriceGuard(out.reply, publicPrices(ctx));
+        const price = checkPriceGuard(out.reply, allowedPricesFor(ctx, apt.service_type_id));
         if (price.ok) reply = out.reply;
       }
     }
@@ -600,7 +633,7 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
 
   // (f) Negociación dentro del set ofrecido (el LLM ya tiene los slots en el prompt).
   const time = checkTimeGuard(out.reply, offered);
-  const price = checkPriceGuard(out.reply, publicPrices(ctx));
+  const price = checkPriceGuard(out.reply, allowedPricesFor(ctx, session.context.selectedServiceTypeId));
   if (!time.ok || !price.ok) {
     return await guardBlockedHandoff(args, out, [...time.violations, ...price.violations]);
   }
@@ -637,16 +670,24 @@ async function offerSlotsForDate(
   }
 
   const dayMoved = date !== isoDate;
+  const dayLabel = DateTime.fromISO(date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
+  session.context.selectedDate = date;
+  session.context.sdrOfferedDayLabel = dayLabel;
+
+  // Pidió día Y hora exactos y esa hora está libre → confirmar directo, sin
+  // mostrar un menú redundante que ya incluye lo que pidió (bug real 27 Jul:
+  // "para el sábado a las 10?" devolvía 9:30/10:00/10:30 en vez de confirmar
+  // el 10:00 pedido tal cual).
+  if (preferredTime && !dayMoved && slots.includes(preferredTime)) {
+    return await acceptSlot(args, ctx, preferredTime);
+  }
+
   // Con hora preferida, pickSlots ignora period y prioriza los 3 slots reales
   // MÁS CERCANOS a esa hora (mismo criterio que ya usa la sección (b2) cuando
   // pide una hora fuera de lo ofrecido) — así "a las 3" cae en 3:00 si está
   // libre, o en la alternativa real más próxima, nunca en algo genérico.
   const picked = preferredTime ? pickSlots(slots, period, preferredTime) : pickSlots(slots, period);
-  const dayLabel = DateTime.fromISO(date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
-
-  session.context.selectedDate = date;
   session.context.sdrOfferedSlots = picked;
-  session.context.sdrOfferedDayLabel = dayLabel;
 
   // Determinista, sin LLM (ahorro de costo — decisión Diego 27 Jul: esta oferta
   // es texto de plantilla con datos reales inyectados, el fallback ya sonaba bien
@@ -706,6 +747,22 @@ async function getSdrCtx(args: SdrArgs): Promise<SdrContext | null> {
 
 function publicPrices(ctx: SdrContext): number[] {
   return ctx.services.filter((s) => !s.requiresPriorConsult && s.price != null).map((s) => Number(s.price));
+}
+
+/**
+ * Precio(s) permitido(s) para el guard. Con un servicio puntual identificado
+ * (booking en curso, cita existente), acota al precio de ESE servicio — sin
+ * esto, checkPriceGuard solo valida "¿es un precio real de ALGÚN servicio del
+ * catálogo?", y un precio real pero del servicio EQUIVOCADO (ej. confundir el
+ * de Evaluación con el de Blanqueamiento) pasaría el guard igual. Sin
+ * servicio identificado (chat general, "qué servicios ofrecen") se mantiene
+ * el catálogo completo — ahí sí es legítimo mencionar varios precios.
+ */
+function allowedPricesFor(ctx: SdrContext, serviceId?: string | null): number[] {
+  if (!serviceId) return publicPrices(ctx);
+  const svc = ctx.services.find((s) => s.id === serviceId);
+  if (svc && !svc.requiresPriorConsult && svc.price != null) return [Number(svc.price)];
+  return []; // servicio identificado pero sin precio público → cualquier cifra es violación
 }
 
 /** Devuelve el service_type COMPLETO (lineServiceTypes) para el booking clásico. */

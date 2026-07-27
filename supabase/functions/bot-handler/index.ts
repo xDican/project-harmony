@@ -276,9 +276,13 @@ async function handleBotMessage(
       };
     }
 
+    // Sin respuesta: pedido explicito de Diego 27 Jul (el aviso "solo veo un
+    // audio/imagen/sticker" se sentia robotico) — el bot espera en silencio a
+    // que llegue texto real, sin avanzar el estado. routeToBotHandler ya
+    // omite el envio cuando message es ''.
     const emptyResp: BotResponse = {
-      message: '🤔 Solo veo un audio/imagen/sticker. Por favor escriba su mensaje en texto para poder ayudarle.',
-      requiresInput: true,
+      message: '',
+      requiresInput: false,
       nextState: session.state, // mantener estado actual sin avanzar
       sessionComplete: false,
     };
@@ -2593,6 +2597,15 @@ function parseDateHint(input: string): typeof DateTime.prototype | null {
   // "esta semana" / "proxima semana" / "siguiente semana"
   if (/\besta\s+semana\b/.test(n)) return now.startOf('week');
   if (/\b(proxima|siguiente)\s+semana\b/.test(n)) return now.plus({ weeks: 1 }).startOf('week');
+
+  // "fin de semana" / "el finde" — clinicas hondurenas suelen trabajar sabado,
+  // no domingo; se resuelve al sabado mas proximo (si no hay cupo ese dia,
+  // offerSlotsForDate ya escanea hacia adelante — encontraria el domingo/lunes).
+  if (/\bfin\s+de\s+semana\b|\bel\s+finde\b/.test(n)) {
+    let target = now.startOf('day');
+    while (target.weekday !== 6) target = target.plus({ days: 1 });
+    return target;
+  }
 
   // Day of week → next occurrence
   const dayNames: Record<string, number> = {
