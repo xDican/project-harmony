@@ -19,6 +19,7 @@ import { RescheduleModal } from '@/components/RescheduleModal';
 import type { Patient } from '@/types/patient';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatPhoneForDisplay } from '@/lib/utils';
+import { formatTimeTo12Hour } from '@/lib/dateUtils';
 import { AppointmentStatus } from '@/types/appointment';
 
 /**
@@ -126,7 +127,7 @@ export default function PatientDetail() {
   };
 
   const formatTime = (timeStr: string) => {
-    return timeStr.substring(0, 5); // "HH:mm"
+    return formatTimeTo12Hour(timeStr);
   };
 
   const canCancelAppointment = (date: string, time: string, status: string) => {

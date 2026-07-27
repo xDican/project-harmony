@@ -317,6 +317,93 @@ export type Database = {
           },
         ]
       }
+      bot_faq_proposals: {
+        Row: {
+          created_at: string
+          created_faq_id: string | null
+          evidence_count: number
+          id: string
+          last_asked_at: string
+          organization_id: string
+          question: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sample_conversation_id: string | null
+          status: string
+          suggested_answer: string | null
+          updated_at: string
+          whatsapp_line_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_faq_id?: string | null
+          evidence_count?: number
+          id?: string
+          last_asked_at?: string
+          organization_id: string
+          question: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sample_conversation_id?: string | null
+          status?: string
+          suggested_answer?: string | null
+          updated_at?: string
+          whatsapp_line_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_faq_id?: string | null
+          evidence_count?: number
+          id?: string
+          last_asked_at?: string
+          organization_id?: string
+          question?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sample_conversation_id?: string | null
+          status?: string
+          suggested_answer?: string | null
+          updated_at?: string
+          whatsapp_line_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_faq_proposals_created_faq_id_fkey"
+            columns: ["created_faq_id"]
+            isOneToOne: false
+            referencedRelation: "bot_faqs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_faq_proposals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_faq_proposals_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_faq_proposals_sample_conversation_id_fkey"
+            columns: ["sample_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_faq_proposals_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bot_faqs: {
         Row: {
           answer: string
@@ -636,10 +723,14 @@ export type Database = {
       conversations: {
         Row: {
           assigned_to: string | null
+          bot_silenced_until: string | null
           created_at: string
           id: string
+          interest_service_type_id: string | null
           last_inbound_at: string | null
           last_message_at: string
+          lead_stage: string | null
+          lead_stage_updated_at: string | null
           notes: string | null
           organization_id: string
           patient_id: string | null
@@ -654,10 +745,14 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          bot_silenced_until?: string | null
           created_at?: string
           id?: string
+          interest_service_type_id?: string | null
           last_inbound_at?: string | null
           last_message_at?: string
+          lead_stage?: string | null
+          lead_stage_updated_at?: string | null
           notes?: string | null
           organization_id: string
           patient_id?: string | null
@@ -672,10 +767,14 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          bot_silenced_until?: string | null
           created_at?: string
           id?: string
+          interest_service_type_id?: string | null
           last_inbound_at?: string | null
           last_message_at?: string
+          lead_stage?: string | null
+          lead_stage_updated_at?: string | null
           notes?: string | null
           organization_id?: string
           patient_id?: string | null
@@ -694,6 +793,13 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_interest_service_type_id_fkey"
+            columns: ["interest_service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
             referencedColumns: ["id"]
           },
           {
@@ -892,6 +998,66 @@ export type Database = {
             columns: ["specialty_id"]
             isOneToOne: false
             referencedRelation: "specialties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      llm_call_logs: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          latency_ms: number | null
+          model: string
+          organization_id: string | null
+          provider: string
+          purpose: string
+          success: boolean
+          tokens_in: number | null
+          tokens_out: number | null
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          model: string
+          organization_id?: string | null
+          provider: string
+          purpose: string
+          success?: boolean
+          tokens_in?: number | null
+          tokens_out?: number | null
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          model?: string
+          organization_id?: string | null
+          provider?: string
+          purpose?: string
+          success?: boolean
+          tokens_in?: number | null
+          tokens_out?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_call_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "llm_call_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1170,6 +1336,7 @@ export type Database = {
           email: string | null
           id: string
           is_active: boolean | null
+          llm_monthly_budget_usd: number
           max_calendars: number
           messaging_enabled: boolean | null
           monthly_message_cap: number | null
@@ -1191,6 +1358,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean | null
+          llm_monthly_budget_usd?: number
           max_calendars?: number
           messaging_enabled?: boolean | null
           monthly_message_cap?: number | null
@@ -1212,6 +1380,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean | null
+          llm_monthly_budget_usd?: number
           max_calendars?: number
           messaging_enabled?: boolean | null
           monthly_message_cap?: number | null
@@ -1661,6 +1830,7 @@ export type Database = {
           name: string
           organization_id: string
           price: number | null
+          price_is_public: boolean
           requires_prior_consult: boolean
           updated_at: string
           whatsapp_line_id: string | null
@@ -1678,6 +1848,7 @@ export type Database = {
           name: string
           organization_id: string
           price?: number | null
+          price_is_public?: boolean
           requires_prior_consult?: boolean
           updated_at?: string
           whatsapp_line_id?: string | null
@@ -1695,6 +1866,7 @@ export type Database = {
           name?: string
           organization_id?: string
           price?: number | null
+          price_is_public?: boolean
           requires_prior_consult?: boolean
           updated_at?: string
           whatsapp_line_id?: string | null
@@ -1936,6 +2108,7 @@ export type Database = {
           organization_id: string
           phone_number: string
           provider: string | null
+          sdr_mode_enabled: boolean
           sync_in_progress: boolean
           twilio_account_sid: string | null
           twilio_auth_token: string | null
@@ -1965,6 +2138,7 @@ export type Database = {
           organization_id: string
           phone_number: string
           provider?: string | null
+          sdr_mode_enabled?: boolean
           sync_in_progress?: boolean
           twilio_account_sid?: string | null
           twilio_auth_token?: string | null
@@ -1994,6 +2168,7 @@ export type Database = {
           organization_id?: string
           phone_number?: string
           provider?: string | null
+          sdr_mode_enabled?: boolean
           sync_in_progress?: boolean
           twilio_account_sid?: string | null
           twilio_auth_token?: string | null
@@ -2079,6 +2254,10 @@ export type Database = {
       }
     }
     Functions: {
+      approve_faq_proposal: {
+        Args: { p_final_answer?: string; p_proposal_id: string }
+        Returns: string
+      }
       create_visit_appointments: {
         Args: { p_procedures: Json; p_visit_id?: string }
         Returns: {

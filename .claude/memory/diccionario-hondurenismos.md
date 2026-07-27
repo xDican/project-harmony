@@ -605,6 +605,20 @@ komunicarme             (typo)
 | q / k / ke | que / qué |
 | pq | porque |
 | xq | por qué |
+| clnsulta | consulta |
+| ebaluasion / ebaluasión | evaluación |
+| protecis / ptotesis | prótesis |
+| puezas / piesas | piezas |
+| nohjes | noches |
+| asen / Aser | hacen / hacer |
+| yamo | llamo |
+| nose | no se |
+| quw | qué |
+| mus | muy |
+
+> Nota 27 Jul 2026: estos últimos son vocabulario de CONTENIDO (prótesis, consulta, evaluación), no palabras-gatillo de acción — no afectan `honduras-intents.ts`/`detectIntent` (que solo clasifica confirm/reschedule/cancel/faq/handoff). Se agregaron directo al prompt del SDR (`_shared/sdr-prompt.ts`, sección "Cómo hablás") porque ahí sí importan: es donde el LLM necesita calibración de vocabulario real para no malinterpretar. Fuente: 250 mensajes reales de pacientes de Hanoy Medina (22-24 Jul 2026).
+
+**Registro/tono (no son typos):** MAYÚSCULAS = énfasis, no enojo. Fragmentos de una palabra ("Precio", "Flexible", "Activa") son respuestas completas en contexto — no exigir oración completa.
 
 ---
 

@@ -22,6 +22,8 @@ import {
   getOrCreateConversation,
   updateConversationOnInbound,
   updateConversationOnOutbound,
+  silenceForPhysicalReply,
+  checkAndExpireBotSilence,
 } from "../_shared/conversations.ts";
 import {
   persistInboundMessage,
@@ -29,6 +31,7 @@ import {
   extractMediaFromMetaMessage,
 } from "../_shared/inbox-messages.ts";
 import { processCallEvent, type MetaCallEvent } from "../_shared/calls.ts";
+import { routeToBotHandler } from "../_shared/bot-routing.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -404,14 +407,17 @@ async function handleMessageEcho(
     .maybeSingle();
   patientId = p?.id;
 
-  // Conversacion nueva (la asistente inicio desde el celular) → human_active.
-  // Si ya existe, conserva su status.
+  // Sin initialStatus explicito (default bot_active) — el silencio real (hasta
+  // medianoche de HOY, o preservar un takeover manual si ya existia) lo decide
+  // silenceForPhysicalReply() mas abajo, con el MISMO criterio sin importar si
+  // la conversacion es nueva o ya existia (24 Jul 2026: antes, una conversacion
+  // EXISTENTE simplemente "conservaba su status" y el bot seguia respondiendo
+  // encima del humano que ya contesto desde el celular fisico).
   const conversation = await getOrCreateConversation(supabase, {
     whatsappLineId: lineId,
     organizationId: lineOrgId,
     patientPhone,
     patientId: patientId ?? null,
-    initialStatus: "human_active",
   });
   if (!conversation) {
     console.error("[meta-webhook] Echo: getOrCreateConversation null, skip:", echo.id);
@@ -441,7 +447,11 @@ async function handleMessageEcho(
   }
 
   await updateConversationOnOutbound(supabase, conversation.id);
-  console.log("[meta-webhook] Echo (asistente desde celular) persisted. conv:", conversation.id, "msg:", echo.id);
+  const silenced = await silenceForPhysicalReply(supabase, conversation);
+  console.log(
+    "[meta-webhook] Echo (asistente desde celular) persisted. conv:", conversation.id, "msg:", echo.id,
+    silenced ? "— bot silenciado hasta medianoche HN" : "— takeover manual preservado (sin cambio)",
+  );
 }
 
 /**
@@ -580,6 +590,58 @@ async function handleHistorySync(
   console.log(`[meta-webhook] HISTORY sync: persisted=${persisted} skipped=${skipped} line=${lineId}`);
 }
 
+/**
+ * Agrupar mensajes fragmentados (debounce) — Fase con Diego 27 Jul: pacientes
+ * escriben en ráfagas de mensajes cortos en vez de uno solo (23% de los reales
+ * de Hanoy llegan a <12s del anterior). En vez de invocar bot-handler por cada
+ * fragmento, se acumulan en `bot_message_debounce` y `bot-debounce-processor`
+ * (fire-and-forget, mismo patrón que dispatchProcessMediaAsync) espera silencio
+ * antes de procesar todo junto. Piloto: solo líneas con sdr_mode_enabled=true.
+ */
+async function enqueueDebounceMessage(
+  supabase: ReturnType<typeof createClient>,
+  args: {
+    whatsappLineId: string;
+    organizationId: string;
+    patientPhone: string;
+    patientId: string | null;
+    conversationId: string | null;
+    messageText: string;
+  },
+): Promise<void> {
+  const trimmed = args.messageText.trim();
+  if (!trimmed) return;
+
+  // deno-lint-ignore no-explicit-any
+  const untypedSupabase = supabase as any;
+  const { data, error } = await untypedSupabase.rpc("enqueue_bot_debounce_message", {
+    p_whatsapp_line_id: args.whatsappLineId,
+    p_organization_id: args.organizationId,
+    p_patient_phone: args.patientPhone,
+    p_patient_id: args.patientId,
+    p_conversation_id: args.conversationId,
+    p_message: trimmed,
+  }) as { data: { debounce_id: string; is_new_claim: boolean }[] | null; error: { message: string } | null };
+
+  if (error) {
+    console.error("[meta-webhook] enqueue_bot_debounce_message failed:", error.message);
+    return;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.is_new_claim) return; // ya hay un processor esperando esta ráfaga
+
+  // Fire-and-forget: NO await, mismo patrón que dispatchProcessMediaAsync.
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+  fetch(`https://${projectRef}.supabase.co/functions/v1/bot-debounce-processor`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-internal-secret": internalSecret },
+    body: JSON.stringify({ debounceId: row.debounce_id }),
+  }).catch((e) => console.error("[meta-webhook] bot-debounce-processor dispatch failed:", e));
+}
+
 async function handleIncomingMessage(
   supabase: ReturnType<typeof createClient>,
   metadata: MetaChangeValue["metadata"],
@@ -589,6 +651,7 @@ async function handleIncomingMessage(
   lineOrgId?: string,
   botEnabled?: boolean,
   syncInProgress?: boolean,
+  sdrEnabled?: boolean,
 ): Promise<void> {
   const fromPhone = normalizeToE164(message.from);
   const toPhone = metadata?.display_phone_number
@@ -740,8 +803,12 @@ async function handleIncomingMessage(
         }).catch((e) => console.error("[meta-webhook] dispatchProcessMediaAsync failed:", e));
       }
 
-      // Bot dual mode: si la asistente tomo la conversacion, el bot calla
-      if (conversation.status === "human_active") {
+      // Bot dual mode: si la asistente tomo la conversacion, el bot calla.
+      // Si el silencio fue AUTOMATICO (Coexistence: respondio desde el celular
+      // fisico) y ya paso medianoche del dia en que se disparo, se reactiva aqui
+      // mismo antes de decidir — sin cron, sin esperar un ciclo extra.
+      const effectiveStatus = await checkAndExpireBotSilence(supabase, conversation);
+      if (effectiveStatus === "human_active") {
         console.log("[meta-webhook] Bot silenced — human_active. conv:", conversation.id, "phone:", fromPhone);
         return;
       }
@@ -760,6 +827,21 @@ async function handleIncomingMessage(
       // text se procesa siempre.
       if (media.messageType === "audio") {
         console.log("[meta-webhook] Audio inbound — bot reply deferred to process-media-async. conv:", conversation.id);
+        return;
+      }
+
+      // Agrupar mensajes fragmentados (solo líneas con SDR, solo texto libre sin
+      // botón de plantilla — un click de botón es una acción atómica, no un
+      // fragmento de pensamiento; debounced lo volvería más lento sin beneficio).
+      if (sdrEnabled && media.messageType === "text" && !appointmentIdFromPayload) {
+        await enqueueDebounceMessage(supabase, {
+          whatsappLineId: lineId,
+          organizationId: lineOrgId,
+          patientPhone: fromPhone,
+          patientId: patientIdForLog ?? null,
+          conversationId: conversation.id,
+          messageText: effectiveBody || "",
+        });
         return;
       }
 
@@ -1133,90 +1215,6 @@ async function sendIntentNotification(
  * Calls bot-handler and sends its response back to the patient via messaging-gateway.
  * Both calls are fire-and-forget from the webhook perspective — errors are logged only.
  */
-async function routeToBotHandler(
-  fromPhone: string,
-  messageText: string,
-  lineId: string,
-  orgId: string,
-  patientId?: string,
-  appointmentId?: string,
-  conversationId?: string,
-): Promise<void> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-  const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
-  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-  const botHandlerUrl = `https://${projectRef}.supabase.co/functions/v1/bot-handler`;
-  const gatewayUrl = `https://${projectRef}.supabase.co/functions/v1/messaging-gateway`;
-
-  try {
-    // 1) Call bot-handler
-    const botRes = await fetch(botHandlerUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-secret": internalSecret,
-      },
-      body: JSON.stringify({
-        whatsappLineId: lineId,
-        patientPhone: fromPhone,
-        messageText: messageText || "",
-        organizationId: orgId,
-        ...(appointmentId ? { appointmentId } : {}),
-      }),
-    });
-
-    if (!botRes.ok) {
-      const errText = await botRes.text();
-      console.error("[meta-webhook] bot-handler error:", botRes.status, errText);
-      return;
-    }
-
-    const botData = await botRes.json();
-    console.log("[meta-webhook] bot-handler response:", { nextState: botData.nextState, hasMessage: !!botData.message });
-
-    if (!botData.message) return;
-
-    // 2) Format message — append numbered options if present
-    let fullMessage: string = botData.message;
-    if (Array.isArray(botData.options) && botData.options.length > 0) {
-      const optLines = (botData.options as string[])
-        .map((opt, i) => `${i + 1}. ${opt}`)
-        .join("\n");
-      fullMessage = `${fullMessage}\n\n${optLines}`;
-    }
-
-    // 3) Send via messaging-gateway
-    const gwRes = await fetch(gatewayUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${serviceKey}`,
-        "x-internal-secret": internalSecret,
-      },
-      body: JSON.stringify({
-        to: fromPhone,
-        body: fullMessage,
-        type: "generic",
-        organizationId: orgId,
-        ...(patientId ? { patientId } : {}),
-        // Sprint 1 Fase 2: vincular respuesta del bot a la conversation
-        ...(conversationId ? { conversationId, source: "bot" } : {}),
-      }),
-    });
-
-    if (!gwRes.ok) {
-      const errText = await gwRes.text();
-      console.error("[meta-webhook] messaging-gateway error:", gwRes.status, errText);
-    } else {
-      console.log("[meta-webhook] Bot response sent to:", fromPhone, "conv:", conversationId ?? "(none)");
-    }
-  } catch (err) {
-    console.error("[meta-webhook] routeToBotHandler unexpected error:", err);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Status update handling
 // ---------------------------------------------------------------------------
@@ -1418,11 +1416,12 @@ Deno.serve(async (req) => {
     let activeLineOrgId: string | undefined;
     let activeLineBotEnabled = false;
     let activeLineSyncInProgress = false;
+    let activeLineSdrEnabled = false;
     const phoneNumberId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     if (phoneNumberId) {
       const { data: wline } = await supabase
         .from("whatsapp_lines")
-        .select("id, organization_id, bot_enabled, sync_in_progress")
+        .select("id, organization_id, bot_enabled, sync_in_progress, sdr_mode_enabled")
         .eq("meta_phone_number_id", phoneNumberId)
         .eq("is_active", true)
         .order("created_at", { ascending: true })
@@ -1432,7 +1431,8 @@ Deno.serve(async (req) => {
       activeLineOrgId = wline?.organization_id ?? undefined;
       activeLineBotEnabled = wline?.bot_enabled ?? false;
       activeLineSyncInProgress = wline?.sync_in_progress ?? false;
-      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled, "syncInProgress:", activeLineSyncInProgress);
+      activeLineSdrEnabled = wline?.sdr_mode_enabled ?? false;
+      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled, "syncInProgress:", activeLineSyncInProgress, "sdrEnabled:", activeLineSdrEnabled);
     }
 
     // 4) Process all entries — messages, statuses, and calls run in parallel per change
@@ -1443,7 +1443,7 @@ Deno.serve(async (req) => {
 
         if (value.messages) {
           for (const message of value.messages) {
-            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled, activeLineSyncInProgress));
+            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled, activeLineSyncInProgress, activeLineSdrEnabled));
           }
         }
 
