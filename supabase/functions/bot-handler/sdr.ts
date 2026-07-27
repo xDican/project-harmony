@@ -88,6 +88,9 @@ export interface SdrDeps {
   handleGreeting: (session: Any, organizationId: string, supabase: Any, handoffLabels: Any, messageText: string) => Promise<Any>;
   handleBookingConfirm: (input: string, session: Any, organizationId: string, supabase: Any, handoffLabels: Any) => Promise<Any>;
   detectIntent: (text: string) => { intent: string; confidence: string };
+  findPatientByPhone: (phone: string, organizationId: string, supabase: Any) => Promise<Any | null>;
+  getPatientUpcomingAppointments: (patientId: string, organizationId: string, supabase: Any) => Promise<Any[]>;
+  confirmAppointmentFromText: (appointment: Any, supabase: Any) => Promise<Any>;
 }
 
 interface SdrArgs {
@@ -216,10 +219,14 @@ async function handleSdrConfirmQuestion(args: SdrArgs): Promise<SdrBotResponse |
 async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   const { session, messageText, organizationId, supabase, deps } = args;
 
-  const ctx = await getSdrCtx(args);
+  // ctx y la cita existente (si tiene) se resuelven en paralelo — la cita se
+  // le pasa a la PRIMERA llamada para que, si el intent resulta gestion_cita,
+  // el `out.reply` de ESTA MISMA llamada ya sirva sin gastar una 2da llamada
+  // solo para redactar el reconocimiento (ahorro de costo, Diego 27 Jul).
+  const [ctx, apt] = await Promise.all([getSdrCtx(args), getUpcomingAppointmentForSession(args)]);
   if (!ctx) return null;
 
-  const system = buildSdrSystemPrompt(ctx);
+  const system = buildSdrSystemPrompt(ctx, apt ? { existingAppointment: existingApptPromptData(apt) } : undefined);
   const messages = [...historyOf(session), { role: "user" as const, content: messageText }];
   const out = await callSdrLLM(args, system, messages);
   if (!out) return null;
@@ -229,9 +236,13 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   const price = checkPriceGuard(out.reply, publicPrices(ctx));
   if (!price.ok) return await guardBlockedHandoff(args, out, price.violations);
 
-  // Gestión de cita existente → caminos clásicos ya probados (confirmar /
-  // reagendar / cancelar cita inminente viven en handleGreeting+detectIntent).
+  // Gestión de cita existente (confirmar/reagendar/cancelar) — conversacional
+  // (Fase 3): handleGestionCita resuelve lo que puede y devuelve null para los
+  // casos que aún deben caer al clásico (sin paciente, sin cita, u "aviso"
+  // ambiguo que no es confirm/reschedule/cancel claro).
   if (out.intent === "gestion_cita") {
+    const gestionResp = await handleGestionCita(args, apt, out);
+    if (gestionResp) return gestionResp;
     return await deps.handleGreeting(session, organizationId, supabase, args.handoffLabels, messageText);
   }
 
@@ -261,8 +272,8 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
     // tratamiento). Preguntar explícito en vez de confiar en el reply del LLM.
     const list = ctx.services.map((s) => `• ${s.name}`).join("\n");
     const msg = ctx.services.length > 1
-      ? `¡Con gusto! ¿Para qué tratamiento le gustaría agendar su cita?\n\n${list}`
-      : "¡Con gusto! ¿Para qué tratamiento le gustaría agendar su cita?";
+      ? `¡Con gusto! Para qué tratamiento le gustaría agendar su cita?\n\n${list}`
+      : "¡Con gusto! Para qué tratamiento le gustaría agendar su cita?";
     await updateLeadStage(args, out.lead_stage, null);
     pushHistory(session, messageText, msg);
     return { message: msg, requiresInput: true, nextState: "sdr_chat", sessionComplete: false, showMenuHint: false };
@@ -282,6 +293,214 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
 }
 
 // ============================================================================
+// GESTIÓN DE CITA EXISTENTE (confirmar / cancelar / reagendar conversacional)
+// ============================================================================
+
+/**
+ * Paciente ya tiene cita — sub-clasifica con el mismo detector determinista que
+ * usa el flujo clásico (`detectIntent`, honduras-intents.ts) porque el LLM del
+ * SDR no sub-clasifica `gestion_cita` (su prompt ni lo menciona). `apt` y
+ * `chatOut` ya vienen resueltos por `handleSdrChat` (la cita se buscó ANTES de
+ * llamar al LLM y se le pasó en el prompt — ahorro de costo, Diego 27 Jul).
+ * Devuelve null para que el caller haga fallback al clásico (sin cita previa,
+ * o intent ambiguo tipo "aviso" que no es confirm/reschedule/cancel claro).
+ */
+async function handleGestionCita(
+  args: SdrArgs,
+  apt: Any | null,
+  chatOut: SdrLLMOutput,
+): Promise<SdrBotResponse | null> {
+  const { messageText, supabase, deps } = args;
+  if (!apt) return null; // una sola cita activa a la vez — no hay caso real de varias (Diego, 27 Jul)
+
+  const hnIntent = deps.detectIntent(messageText);
+
+  if (hnIntent.intent === "confirm") {
+    return await deps.confirmAppointmentFromText(apt, supabase);
+  }
+  if (hnIntent.intent === "cancel") {
+    return await cancelAppointmentConversational(args, apt, chatOut);
+  }
+  if (hnIntent.intent === "reschedule") {
+    return await startConversationalReschedule(args, apt, chatOut);
+  }
+  return null;
+}
+
+/** Cita → contexto compacto para inyectar en el prompt (sección "Cita existente"). */
+function existingApptPromptData(apt: Any): { dateLabel: string; time: string; doctorName: string; serviceType: string | null } {
+  const dateLabel = DateTime.fromISO(apt.date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
+  const doctorName = apt.doctors?.prefix ? `${apt.doctors.prefix} ${apt.doctors.name}` : (apt.doctors?.name ?? "su profesional");
+  return { dateLabel, time: formatTimeForTemplate(apt.time), doctorName, serviceType: apt.service_type ?? null };
+}
+
+/** Busca (sin cachear — el estado puede cambiar entre turnos) la próxima cita del paciente, o null. */
+async function getUpcomingAppointmentForSession(args: SdrArgs): Promise<Any | null> {
+  const { session, organizationId, supabase, deps } = args;
+  const patient = await deps.findPatientByPhone(session.patient_phone, organizationId, supabase);
+  if (!patient) return null;
+  const upcoming = await deps.getPatientUpcomingAppointments(patient.id, organizationId, supabase);
+  return upcoming[0] ?? null;
+}
+
+/**
+ * Cancela DE INMEDIATO, sin gate de "¿está seguro?" (decisión Diego 27 Jul: un
+ * paciente que no responde a la confirmación deja la cita "agendada" cuando en
+ * realidad ya no va — peor que cancelar directo). Después ofrece reagendar
+ * como cortesía, no bloqueante — si dice que sí, el siguiente turno entra como
+ * chat normal con el servicio ya conocido (sdrInterestServiceId).
+ */
+async function cancelAppointmentConversational(
+  args: SdrArgs,
+  apt: Any,
+  chatOut?: SdrLLMOutput | null,
+): Promise<SdrBotResponse> {
+  const { session, messageText, supabase } = args;
+
+  await supabase
+    .from("appointments")
+    .update({ status: "cancelada", notes: "Cancelada por paciente via WhatsApp Bot (SDR)" })
+    .eq("id", apt.id);
+
+  if (apt.service_type_id) session.context.sdrInterestServiceId = apt.service_type_id;
+  clearBookingContext(session);
+
+  const ctx = await getSdrCtx(args);
+  const dateLabel = DateTime.fromISO(apt.date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
+  const fallbackMsg = `Listo, cancelé su cita del ${dateLabel} a las ${formatTimeForTemplate(apt.time)}. Le ayudo a agendarla para otro día?`;
+
+  let reply = fallbackMsg;
+  if (ctx) {
+    // Texto libre: reusar el reply de la llamada de clasificación (ya venía
+    // informada de la cita vía prompt) — cero llamadas extra. Botón: no hubo
+    // llamada previa (detectIntent decide directo desde el texto del botón),
+    // así que acá sí se redacta con una llamada propia, como antes.
+    if (chatOut) {
+      const price = checkPriceGuard(chatOut.reply, publicPrices(ctx));
+      if (price.ok) reply = chatOut.reply;
+    } else {
+      const system = buildSdrSystemPrompt(ctx);
+      const hint = `[PLATAFORMA] Acabás de cancelar la cita del paciente (${dateLabel} a las ${formatTimeForTemplate(apt.time)}). Confirmaselo con calidez y preguntale si quiere que le ayudes a agendar una nueva fecha.`;
+      const messages = [...historyOf(session), { role: "user" as const, content: `${messageText}\n\n${hint}` }];
+      const out = await callSdrLLM(args, system, messages);
+      if (out) {
+        const price = checkPriceGuard(out.reply, publicPrices(ctx));
+        if (price.ok) reply = out.reply;
+      }
+    }
+  }
+
+  pushHistory(session, messageText, reply);
+  return { message: reply, requiresInput: true, nextState: "sdr_chat", sessionComplete: false, showMenuHint: false };
+}
+
+/**
+ * Reagendar directo (el paciente NO pidió cancelar, quiere mover la hora):
+ * preserva el MISMO doctor de la cita original — a diferencia de una cita
+ * nueva, acá NO se debe pasar por `resolveServiceAndContinue` porque esa
+ * función re-califica doctores desde el servicio y podría auto-asignar a
+ * alguien distinto (modo combinado). `sdrBookingSetup=true` hace que
+ * `handleSdrBooking` salte ese setup y use el doctor/calendario ya fijados
+ * acá, entrando directo a elegir día/hora conversacional (slots reales).
+ */
+async function startConversationalReschedule(
+  args: SdrArgs,
+  apt: Any,
+  chatOut?: SdrLLMOutput | null,
+): Promise<SdrBotResponse | null> {
+  const { session, messageText, supabase, deps } = args;
+  const doctorId = apt.doctors?.id;
+  if (!doctorId) return null;
+
+  const doctorName = apt.doctors?.prefix ? `${apt.doctors.prefix} ${apt.doctors.name}` : apt.doctors?.name;
+
+  session.context.isReschedule = true;
+  session.context.rescheduleAppointmentId = apt.id;
+  session.context.rescheduleAppointmentDate = apt.date;
+  session.context.rescheduleAppointmentTime = apt.time;
+  session.context.rescheduleAppointmentDoctorName = doctorName;
+
+  session.context.doctorId = doctorId;
+  session.context.doctorName = doctorName;
+  session.context.calendarId =
+    (await deps.lineCalendarForDoctor(supabase, session.whatsapp_line_id, doctorId)) ??
+    (await deps.firstActiveCalendarId(supabase, doctorId)) ?? undefined;
+  session.context.combinedMode = false;
+  session.context.selectedServiceType = apt.service_type || undefined;
+  session.context.selectedServiceTypeId = apt.service_type_id || undefined;
+  session.context.durationMinutes = apt.duration_minutes || session.context.durationMinutes || 60;
+  session.context.slotGranularity = Math.min(session.context.durationMinutes, 30);
+
+  delete session.context.availableDoctors;
+  delete session.context.availableServiceTypes;
+  delete session.context.qualifiedDoctors;
+  delete session.context.combinedSlotDoctors;
+  delete session.context.selectedServicePrice;
+
+  session.context.sdrBookingSetup = true; // evita que handleSdrBooking vuelva a calificar doctores
+
+  // Apertura cálida ANTES de entrar a sdr_booking — sin esto, el primer turno caía
+  // directo en el "¿Para qué día...?" genérico de handleSdrBooking (sección (e)),
+  // que ignora que el paciente acaba de avisar que no puede asistir / pidió
+  // reagendar una cita puntual. Mismo patrón que cancelAppointmentConversational.
+  const ctx = await getSdrCtx(args);
+  const dateLabel = DateTime.fromISO(apt.date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
+  const fallbackMsg = `Gracias por avisarme que no podrá asistir el ${dateLabel} a las ${formatTimeForTemplate(apt.time)}. Desea que agendemos la cita para otro día?`;
+  let reply = fallbackMsg;
+  if (ctx) {
+    // Texto libre: reusar el reply de la llamada de clasificación (ver
+    // cancelAppointmentConversational). Botón: llamada propia como antes.
+    if (chatOut) {
+      const price = checkPriceGuard(chatOut.reply, publicPrices(ctx));
+      if (price.ok) reply = chatOut.reply;
+    } else {
+      const system = buildSdrSystemPrompt(ctx);
+      const hint = `[PLATAFORMA] El paciente avisó que no puede asistir o pidió reagendar su cita (${dateLabel} a las ${formatTimeForTemplate(apt.time)}). Agradecele el aviso con calidez y preguntale para qué día le gustaría reagendarla — todavía NO ofrezcas horarios.`;
+      const messages = [...historyOf(session), { role: "user" as const, content: `${messageText}\n\n${hint}` }];
+      const out = await callSdrLLM(args, system, messages);
+      if (out) {
+        const price = checkPriceGuard(out.reply, publicPrices(ctx));
+        if (price.ok) reply = out.reply;
+      }
+    }
+  }
+  pushHistory(session, messageText, reply);
+  return { message: reply, requiresInput: true, nextState: "sdr_booking", sessionComplete: false, showMenuHint: false };
+}
+
+/**
+ * Entrada desde CLICK DE BOTÓN de plantilla ("Reagendar" en confirmación,
+ * "No puedo asistir"/"Confirmo" en recordatorios) — meta-webhook manda
+ * `appointmentId` directo (ya sabemos CUÁL cita, sin buscar "upcoming").
+ * index.ts la llama ANTES de su fallback clásico `handleDirectReschedule`
+ * cuando la línea tiene sdrModeEnabled. Retorna null para que index.ts caiga
+ * al flujo clásico (cita no encontrada/cancelada, presupuesto excedido, o
+ * intent que no es confirm/reschedule/cancel claro).
+ */
+export async function maybeHandleSdrButtonAction(
+  appointmentId: string,
+  args: SdrArgs,
+): Promise<SdrBotResponse | null> {
+  const { session, messageText, organizationId, supabase, deps } = args;
+  if (!session.context.sdrModeEnabled) return null;
+  if (!(await underLlmBudget(session, organizationId, supabase))) return null;
+
+  const { data: apt } = await supabase
+    .from("appointments")
+    .select("id, date, time, duration_minutes, status, service_type, service_type_id, doctors:doctor_id (id, name, prefix)")
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (!apt || apt.status === "cancelada" || apt.status === "cancelled") return null;
+
+  session.context.sdrActive = true;
+  const hnIntent = deps.detectIntent(messageText);
+  if (hnIntent.intent === "confirm") return await deps.confirmAppointmentFromText(apt, supabase);
+  if (hnIntent.intent === "cancel") return await cancelAppointmentConversational(args, apt);
+  if (hnIntent.intent === "reschedule") return await startConversationalReschedule(args, apt);
+  return null;
+}
+
+// ============================================================================
 // BOOKING (estado sdr_booking)
 // ============================================================================
 
@@ -295,7 +514,7 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
   if (!session.context.sdrBookingSetup) {
     const svc = resolveServiceForBooking(session, ctx, fromChat?.service_id ?? session.context.sdrInterestServiceId);
     if (!svc) {
-      return sdrReply(session, messageText, "¿Para qué tratamiento le gustaría su cita? 😊", "sdr_chat");
+      return sdrReply(session, messageText, "Para qué tratamiento le gustaría su cita? 😊", "sdr_chat");
     }
     const setupResp = await deps.resolveServiceAndContinue(svc, session, organizationId, supabase);
     if (setupResp.nextState === "handoff_secretary" || setupResp.nextState === "booking_select_service") {
@@ -332,7 +551,7 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
         const picked = pickSlots(fullDaySlots, null, requestedTime);
         session.context.sdrOfferedSlots = picked;
         const formatted = picked.map(formatTimeForTemplate);
-        const msg = `A las ${formatTimeForTemplate(requestedTime)} no tengo espacio ese día, pero sí tengo ${formatted.join(" o ")}. ¿Le sirve alguna?`;
+        const msg = `A las ${formatTimeForTemplate(requestedTime)} no tengo espacio ese día, pero sí tengo ${formatted.join(" o ")}. Le sirve alguna?`;
         pushHistory(session, messageText, msg);
         return { message: msg, requiresInput: true, nextState: "sdr_booking", sessionComplete: false, showMenuHint: false };
       }
@@ -367,10 +586,16 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
     const hint = dateText ? deps.parseDateHint(dateText) ?? deps.parseDateHint(messageText) : deps.parseDateHint(messageText);
     if (!hint) {
       return sdrReply(session, messageText,
-        "¿Para qué día le gustaría su cita? Puede decirme por ejemplo *mañana*, *el viernes* o una fecha 😊",
+        "Para qué día le gustaría su cita — mañana, el viernes, o dígame la fecha 😊",
         "sdr_booking");
     }
-    return await offerSlotsForDate(args, ctx, hint.toISODate(), out.booking?.period ?? null);
+    // Hora exacta que el paciente pidió por su cuenta (antes de que se le
+    // ofreciera nada) — sin esto, la primera oferta repartía genérico
+    // inicio/medio/fin del día e ignoraba que pidió, por ejemplo, "las 3"
+    // (bug real reportado por Diego 27 Jul: pidió 3pm, se le ofreció 3:15pm
+    // sin haber intentado acercarse a la hora real pedida).
+    const preferredTime = out.booking?.time_text ? deps.parseTimeHint(out.booking.time_text) : null;
+    return await offerSlotsForDate(args, ctx, hint.toISODate(), out.booking?.period ?? null, preferredTime);
   }
 
   // (f) Negociación dentro del set ofrecido (el LLM ya tiene los slots en el prompt).
@@ -389,6 +614,7 @@ async function offerSlotsForDate(
   ctx: SdrContext,
   isoDate: string,
   period: "morning" | "afternoon" | null,
+  preferredTime?: string | null,
 ): Promise<SdrBotResponse> {
   const { session, messageText } = args;
 
@@ -411,31 +637,22 @@ async function offerSlotsForDate(
   }
 
   const dayMoved = date !== isoDate;
-  const picked = pickSlots(slots, period);
+  // Con hora preferida, pickSlots ignora period y prioriza los 3 slots reales
+  // MÁS CERCANOS a esa hora (mismo criterio que ya usa la sección (b2) cuando
+  // pide una hora fuera de lo ofrecido) — así "a las 3" cae en 3:00 si está
+  // libre, o en la alternativa real más próxima, nunca en algo genérico.
+  const picked = preferredTime ? pickSlots(slots, period, preferredTime) : pickSlots(slots, period);
   const dayLabel = DateTime.fromISO(date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
 
   session.context.selectedDate = date;
   session.context.sdrOfferedSlots = picked;
   session.context.sdrOfferedDayLabel = dayLabel;
 
-  // Redacción por LLM con los slots REALES inyectados; fallback determinista si falla.
+  // Determinista, sin LLM (ahorro de costo — decisión Diego 27 Jul: esta oferta
+  // es texto de plantilla con datos reales inyectados, el fallback ya sonaba bien
+  // y evita gastar una 2da llamada LLM por turno solo para redactar horarios).
   const formatted = picked.map(formatTimeForTemplate);
-  const fallbackMsg = `${dayMoved ? `Fíjese que para el día que me pidió no tengo espacio, pero para *${dayLabel}* sí 😊 ` : `Para *${dayLabel}* tengo disponible: `}${formatted.join(" y ")}. ¿Cuál le queda mejor?`;
-
-  const system = buildSdrSystemPrompt(ctx, { offeredSlots: formatted, offeredDayLabel: dayLabel });
-  const renderHint = dayMoved
-    ? `[PLATAFORMA] El día pedido no tenía espacio. Ofrecé estos horarios de ${dayLabel}: ${formatted.join(", ")}.`
-    : `[PLATAFORMA] Ofrecé estos horarios de ${dayLabel}: ${formatted.join(", ")}.`;
-  const messages = [...historyOf(session), { role: "user" as const, content: `${messageText}\n\n${renderHint}` }];
-  const out = await callSdrLLM(args, system, messages);
-
-  let reply = fallbackMsg;
-  if (out) {
-    const time = checkTimeGuard(out.reply, picked);
-    const price = checkPriceGuard(out.reply, publicPrices(ctx));
-    if (time.ok && price.ok) reply = out.reply;
-    else console.warn("[sdr] Offer render blocked by guard, using deterministic fallback:", time.violations, price.violations);
-  }
+  const reply = `${dayMoved ? `Fíjese que para el día que me pidió no tengo espacio, pero para *${dayLabel}* sí 😊 ` : `Para *${dayLabel}* tengo disponible: `}${formatted.join(" y ")}. Cuál le queda mejor?`;
 
   pushHistory(session, messageText, reply);
   return { message: reply, requiresInput: true, nextState: "sdr_booking", sessionComplete: false, showMenuHint: false };
@@ -470,7 +687,7 @@ async function acceptSlot(args: SdrArgs, ctx: SdrContext, selectedTime: string):
 
   // Confirmación natural SIN LLM (determinista); el "sí"/"cambiar"/"cancelar"
   // del siguiente turno lo procesa el handler clásico de booking_confirm.
-  const msg = `Perfecto 😊 Le confirmo su cita: ${svcLine}*${dayLabel}* a las *${formatTimeForTemplate(selectedTime)}* con ${session.context.doctorName}. ¿Se la confirmo?`;
+  const msg = `Perfecto 😊 Le confirmo su cita: ${svcLine}*${dayLabel}* a las *${formatTimeForTemplate(selectedTime)}* con ${session.context.doctorName}. Se la confirmo?`;
   pushHistory(session, messageText, msg);
   return { message: msg, requiresInput: true, nextState: "booking_confirm", sessionComplete: false, showMenuHint: false };
 }

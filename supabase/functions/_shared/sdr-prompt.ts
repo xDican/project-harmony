@@ -62,6 +62,14 @@ export interface SdrLLMOutput {
     date_text: string | null;
     period: "morning" | "afternoon" | null;
     chosen_time: string | null;
+    /**
+     * Hora ESPECÍFICA que el paciente mencionó por su cuenta ("a las 3",
+     * "tiene espacio a las 10am?"), ANTES de que se le ofreciera nada — nunca
+     * confundir con `chosen_time` (esa es solo al elegir de horarios YA
+     * ofrecidos). El backend la resuelve con parseTimeHint y prioriza slots
+     * reales cercanos a esa hora en la primera oferta.
+     */
+    time_text: string | null;
   } | null;
 }
 
@@ -341,11 +349,27 @@ function scheduleBlock(doctors: SdrDoctorInfo[]): string {
   }).join("\n\n");
 }
 
+export interface SdrExistingAppointment {
+  /** Etiqueta ya formateada, ej. "jueves 30 de julio". */
+  dateLabel: string;
+  /** Hora ya formateada 12h, ej. "3:00 PM". */
+  time: string;
+  doctorName: string;
+  serviceType?: string | null;
+}
+
 export interface SdrPromptOptions {
   /** Slots REALES ofrecidos este turno ("h:mm AM/PM"). El LLM solo puede mencionar estos. */
   offeredSlots?: string[];
   /** Etiqueta del día de los slots ofrecidos (ej. "viernes 25 de julio"). */
   offeredDayLabel?: string;
+  /**
+   * Cita que el paciente YA tiene agendada (si tiene) — se le pasa a la PRIMERA
+   * llamada (clasificación) para que, si el intent resulta "gestion_cita", el
+   * `reply` de esa misma llamada ya sirva sin necesitar una 2da llamada solo
+   * para redactar el reconocimiento (ahorro de costo, decisión Diego 27 Jul).
+   */
+  existingAppointment?: SdrExistingAppointment | null;
 }
 
 export function buildSdrSystemPrompt(ctx: SdrContext, opts?: SdrPromptOptions): string {
@@ -363,12 +387,23 @@ ${opts.offeredSlots.join(", ")}
 Estos son los ÚNICOS horarios que podés mencionar. Si el paciente pide otro, ofrecé el más cercano DE ESTA LISTA o decile que consultás otro día. Si elige uno, ponelo en booking.chosen_time (formato del listado).`
     : "";
 
+  const apt = opts?.existingAppointment;
+  const existingApptBlock = apt
+    ? `\n## Cita existente del paciente (ya la tiene agendada)
+${apt.serviceType ? `${apt.serviceType} — ` : ""}${apt.dateLabel} a las ${apt.time} con ${apt.doctorName}.
+Si el paciente avisa que no puede asistir, pide cancelar, reagendar o confirmar ESTA cita (intent="gestion_cita"): reconocé la fecha/hora exacta de arriba en tu respuesta (no genérico), agradecé el aviso con calidez y de forma directa, y preguntá el siguiente paso. Ejemplo de tono: "Gracias por avisarme que no podrá asistir el {día} a las {hora}. Desea que agendemos la cita para otro día?" — NO ofrezcas horarios nuevos todavía, eso lo hace la plataforma en el siguiente turno con disponibilidad real.`
+    : "";
+
   return `Sos la asistente virtual de ${ctx.organizationName}, una clínica en Honduras. Atendés WhatsApp: leads que llegan de publicidad y pacientes. Tu objetivo es que cada lead termine con una cita agendada. Hoy es ${hoyLabel} (hora de Honduras).
 
 ## Cómo hablás
 - Español hondureño natural, trato de "usted", cálido y profesional. Nada robótico.
 - Máximo 3-4 líneas por mensaje. Sin párrafos largos, sin listas salvo que ayuden.
-- Entendé typos y lenguaje coloquial ("clnsulta"=consulta, "ebaluasion"=evaluación, "fíjese que...", "ahí estaré").
+- NUNCA uses el signo de apertura ¿ — solo el de cierre (?), como escribe la gente real por WhatsApp.
+- Directo, sin explicaciones de más ("puede decirme por ejemplo...", "esto significa que..."). Hablás con adultos, no con niños.
+- Entendé typos y lenguaje coloquial hondureño: "clnsulta"/"konsulta"=consulta, "ebaluasion"/"ebaluasión"=evaluación, "protecis"/"ptotesis"=prótesis, "puezas"/"piesas"=piezas, "nohjes"=noches, "asen"/"aser"=hacen/hacer, "yamo"=llamo, "presio"=precio, "quw"=qué, "mus"=muy, "d"="de", "fíjese que...", "ahí estaré".
+- Los pacientes suelen escribir en fragmentos sueltos ("Precio", "Consulta", "Flexible", "Activa") esperando que entiendas por el hilo de la conversación — no le pidas que "dé más detalles" si la respuesta corta ya contesta lo que preguntaste.
+- MAYÚSCULAS no indican enojo — es énfasis o que el teclado quedó en bloqueo. Nunca respondas como si el paciente estuviera molesto solo por eso.
 
 ## Tu guión (en este orden, sin saltarte pasos)
 1. Si solo saludan o piden "más información": saludá y preguntá en qué tratamiento está interesado/a.
@@ -399,9 +434,11 @@ Estos son los ÚNICOS horarios que podés mencionar. Si el paciente pide otro, o
   - Pregunta GENERAL de horario ("¿qué días atienden?", "¿cuál es su horario?") → respondé con el bloque "Horario real de atención" de abajo. intent="logistica".
   - Pregunta de disponibilidad de un DÍA CONCRETO ("¿tiene cupo el jueves?", "¿hay espacio el sábado?", "¿puedo ir mañana?") → NUNCA la respondas vos con prosa, aunque te parezca obvia por el horario general. Tratala SIEMPRE como intent="agendar" con booking.date_text = esa expresión — la plataforma consulta la agenda real (incluye bloqueos/excepciones que vos no ves) y te da el resultado exacto para que lo redactes el próximo turno.
 - Cuando el paciente exprese CUÁNDO quiere su cita, copiá su expresión textual en booking.date_text ("mañana", "el viernes", "3 de agosto") y la franja en booking.period ("morning"/"afternoon") si la dijo. No la conviertas a fecha.
+- Si además menciona una HORA específica por su cuenta ("a las 3", "tiene espacio a las 10am?"), copiala tal cual en booking.time_text — incluso si todavía no le has ofrecido nada. Esto es distinto de booking.chosen_time (esa es SOLO para cuando elige una hora de las que YA le ofreciste este turno).
 - Cuando el paciente elija una hora de las ofrecidas, ponela en booking.chosen_time.
 - Ofrecé máximo 2-3 horarios por mensaje, como lo haría una persona.
 ${slotsBlock}
+${existingApptBlock}
 
 ## Horario real de atención (fuente: agenda del sistema — SIEMPRE gana sobre cualquier FAQ o suposición)
 ${scheduleBlock(ctx.doctors)}
@@ -421,7 +458,7 @@ Respondé ÚNICAMENTE un objeto JSON válido, sin texto antes ni después, sin m
   "needs_handoff": true|false,
   "handoff_reason": "<motivo corto si needs_handoff, si no null>",
   "reply": "<tu mensaje para el paciente>",
-  "booking": { "date_text": "<expresión textual del paciente o null>", "period": "morning|afternoon|null", "chosen_time": "<hora elegida de las ofrecidas o null>" }
+  "booking": { "date_text": "<expresión textual del paciente o null>", "period": "morning|afternoon|null", "chosen_time": "<hora elegida de las ofrecidas o null>", "time_text": "<hora específica que pidió por su cuenta, antes de ofrecerle nada, o null>" }
 }`;
 }
 
@@ -455,8 +492,9 @@ export function parseSdrOutput(text: string | null): SdrLLMOutput | null {
       date_text: typeof b.date_text === "string" && b.date_text ? b.date_text : null,
       period: b.period === "morning" || b.period === "afternoon" ? b.period : null,
       chosen_time: typeof b.chosen_time === "string" && b.chosen_time ? b.chosen_time : null,
+      time_text: typeof b.time_text === "string" && b.time_text ? b.time_text : null,
     };
-    if (!booking.date_text && !booking.period && !booking.chosen_time) booking = null;
+    if (!booking.date_text && !booking.period && !booking.chosen_time && !booking.time_text) booking = null;
   }
 
   return {

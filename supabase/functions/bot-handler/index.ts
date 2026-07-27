@@ -19,7 +19,7 @@ import { normalizeToE164 } from '../_shared/phone.ts';
 import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
 import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
 import { getAvailableSlotsForDate as computeAvailableSlots } from '../_shared/availability.ts';
-import { maybeHandleSdr, markLeadAgendado } from './sdr.ts';
+import { maybeHandleSdr, maybeHandleSdrButtonAction, markLeadAgendado } from './sdr.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -375,6 +375,38 @@ async function handleBotMessage(
   let response: BotResponse;
 
   if (input.appointmentId) {
+    // Fase 3: click de botón (Reagendar / No puedo asistir / Confirmo) en una línea
+    // con SDR — resolver conversacional en vez del menú clásico de semanas. Sin esto,
+    // el SDR de gestion_cita solo cubría texto libre; la mayoría de pacientes usa el
+    // botón del recordatorio, no escribe (hallazgo Diego 27 Jul).
+    if (session.context.sdrModeEnabled) {
+      const sdrDeps = {
+        parseDateHint, parseTimeHint, fuzzyMatchOption, resolveServiceAndContinue,
+        getCombinedSlotsForDate, getAvailableSlotsForDate, getDoctorLoadForDate,
+        pickLeastLoaded, lineCalendarForDoctor, firstActiveCalendarId,
+        handleHandoffToSecretary, handleGreeting, handleBookingConfirm, detectIntent,
+        findPatientByPhone, getPatientUpcomingAppointments, confirmAppointmentFromText,
+      };
+      const btnResp = await maybeHandleSdrButtonAction(input.appointmentId, {
+        session, messageText, whatsappLineId, patientPhone, organizationId, supabase, handoffLabels,
+        deps: sdrDeps,
+      });
+      if (btnResp) {
+        response = btnResp as BotResponse;
+        await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
+        const btnMs = Date.now() - startTime;
+        const btnIntent = detectSessionIntent(stateBefore, response.nextState, messageText);
+        logConversation(
+          session.id, whatsappLineId, organizationId, patientPhone,
+          stateBefore, response.nextState, messageText, response.message,
+          response.options || [], btnIntent, btnMs, supabase
+        ).catch((err) => console.error('[bot-handler] Log error (non-fatal):', err));
+        return response;
+      }
+      // null → cita no encontrada/cancelada, presupuesto excedido, o intent
+      // ambiguo: cae al flujo clásico de abajo, sin cambios.
+    }
+
     response = await handleDirectReschedule(input.appointmentId, session, organizationId, supabase, handoffLabels);
 
     // Update session and log, then return early
@@ -402,6 +434,7 @@ async function handleBotMessage(
       getCombinedSlotsForDate, getAvailableSlotsForDate, getDoctorLoadForDate,
       pickLeastLoaded, lineCalendarForDoctor, firstActiveCalendarId,
       handleHandoffToSecretary, handleGreeting, handleBookingConfirm, detectIntent,
+      findPatientByPhone, getPatientUpcomingAppointments, confirmAppointmentFromText,
     },
   });
   if (sdrResponse) {
