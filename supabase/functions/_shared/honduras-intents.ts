@@ -332,6 +332,18 @@ function hasCulturalConfirmOverride(norm: string): boolean {
   return false;
 }
 
+/**
+ * "si" condicional ("si tuviera cupo", "si hay espacio el jueves") no es lo
+ * mismo que "si"/"sí" afirmativo — pero en WhatsApp casi nadie tilda, y
+ * normalizeTypos ya quita el acento de "sí", así que ambas formas quedan
+ * indistinguibles como texto. Sin este filtro, CONFIRM_PHRASES (que incluye
+ * "si" solo) clasificaba como confirmacion cualquier frase condicional que
+ * empezara con "si" seguido de un verbo hipotetico.
+ */
+export function isConditionalSi(norm: string): boolean {
+  return /\bsi\s+(tuviera|hubiera|hay|tiene|puede|pudiera|fuera|quiere|es|acaso|llegara|alcanza|me|le)\b/.test(norm);
+}
+
 // =====================================================================
 // detectIntent — punto de entrada principal
 // =====================================================================
@@ -373,7 +385,9 @@ export function detectIntent(text: string): DetectedIntent {
 
   // Confirmacion — antes que cancel/reschedule
   const cf = matchAny(norm, CONFIRM_PHRASES);
-  if (cf) return { intent: 'confirm', confidence: 'high', matched: cf, payload: preamble ? norm : undefined };
+  if (cf && !(cf === 'si' && isConditionalSi(norm))) {
+    return { intent: 'confirm', confidence: 'high', matched: cf, payload: preamble ? norm : undefined };
+  }
 
   // Reschedule (incluye soft cancel "no puedo asistir")
   const rs = matchAny(norm, RESCHEDULE_PHRASES);
