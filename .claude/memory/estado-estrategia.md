@@ -1922,3 +1922,47 @@ Diego corrigio la ventana del test pre-registrado con los 3 inquilinos de Hanoy:
 **Primera:** ¿como salio la planificacion tecnica de modo-dev? **Segunda:** ¿algun avance en calibracion del bot? **Tercera:** ¿Hanoy o el novio volvieron a mencionar el piloto de bienes raices?
 
 ---
+
+## Sesion 4 Ago 2026 (MARTES) — Hackathon CALL-E, pricing por consumo, Alicia/Manuel descartado, hallazgo Coexistence en Consultorio Familiar
+
+**Contexto entrante:** Diego aplicando al hackathon "CALL-E: Your Code Is Calling" (Devpost) — agente de voz autonomo. Sesion cubrio 4 temas grandes, sin tocar codigo (solo investigacion + decisiones + memoria).
+
+### 1. CALL-E — Honduras no soportada, reframe estrategico
+
+Email enviado a CALL-E pidiendo habilitar Honduras (+504) para pruebas del hackathon; ellos respondieron pidiendo confirmar idioma antes de evaluar. Investigacion (docs/GitHub de CALL-E): Honduras **no esta en su lista de regiones soportadas** — LatAm limitado a Mexico (espanol) y Brasil (portugues). No hay control explicito de dialecto/tono documentado (todo pasa por instruccion en lenguaje natural, sin campo de "voz"/"acento"). Reply enviado confirmando espanol-solo + notando que ya se sabia que Honduras no esta habilitada, a la espera de su respuesta.
+
+**Hallazgo mas valioso de la sesion:** Diego identifico que el segmento que paga son medicos que YA pagan/van a pagar ads para atraer leads — el bot de WhatsApp cubre el lado WhatsApp de ese embudo (ver Hanoy, 102 conversaciones/2.5 dias, ~4% conversion sin bot); CALL-E podria cubrir el lado de LLAMADA del MISMO embudo (leads que llaman en vez de escribir), no llamadas de confirmacion de cita como se penso originalmente. Angulo mas fuerte para el pitch del hackathon (criterio "Real World Impact"). Sin validar aun (falta dato de llamadas perdidas de leads de ads). Bloqueado hasta que CALL-E habilite Honduras. Detalle en memoria `call-e-lead-funnel-reframe`.
+
+### 2. Pricing por consumo del bot — $15/600 mensajes confirmado, sin riesgo inmediato
+
+Instalacion de manana (5 Ago) NO es Hanoy — es **Dr. Johan**, referido por Manuel. Diego ya le ofrecio $15/mes por hasta 600 mensajes del bot. Analisis de costo real (Gemini 3.5 Flash-Lite, $0.30/$2.50 por MTok): cada mensaje cuesta ~$0.0008-0.0015; 600 mensajes ≈ $0.50-0.90 de costo real contra $15 de ingreso — margen sano, consistente con el proyectado real de Hanoy ($2.61/mes).
+
+**Gap tecnico identificado (no bloqueante):** el freno existente (`organizations.llm_monthly_budget_usd`, default $10/org) mide en DOLARES, no en mensajes — a este costo por mensaje, $10 cubre 6,000-12,000 mensajes antes de activarse, mucho mas que los "600" prometidos de palabra. No hay contador real de mensajes que haga cumplir el tope comercial. No urgente (el margen aguanta igual), pero **"$15 = 600 mensajes" es probablemente el mismo tier Pro $15 del test de inquilinos de Hanoy** ([[tesis-unidad-venta-instalacion]]) — pendiente confirmar si es el mismo test o uno aparte, y si conviene formalizar el tope como feature real en vez de promesa verbal.
+
+### 3. Alicia/Manuel — integracion "sombrilla" DESCARTADA (conflicto de interes)
+
+Manuel es referido (trajo a Dr. Johan), no socio formal. Su producto "Alicia" (IA que toma brief de consulta y sugiere medicamentos/tratamiento via estudios recientes) **instala independiente de OrionCare** manana — sin integracion, sin liability para OC (no aplica Fase 0, no es feature de OC).
+
+Manuel propuso una integracion mas grande ("sombrilla de servicios"): Alicia recomienda medicamento/dosis (aunque sea generico, ej. "amoxicilina cada 8h") y el luego le ofrece al medico comprarle esos medicamentos, guardando las cantidades prescritas para armar la oferta. **Descartado explicitamente, no como watch-item.** Razon investigada y confirmada: **Art. 44 del Codigo de Etica del Colegio Medico de Honduras** prohibe comisiones/beneficios economicos derivados de la prescripcion de medicamentos — no distingue marca vs. generico, el gatillo es el vinculo economico con el hecho de prescribir. Enforcement: Tribunal de Honor del Colegio Medico (colegiacion obligatoria para ejercer en Honduras). Ademas, usar datos clinicos para armar una oferta comercial choca con el Codigo de Salud (sistemas de informatica medica no pueden comprometer privacidad sin consentimiento del paciente). Regla general guardada en memoria (`conflicto-interes-recomendacion-venta`) para aplicar a cualquier idea futura similar, incluida la "sombrilla de servicios medicos".
+
+**Idea aparte, especulativa, anotada sin construir:** expediente medico portatil (paciente dueno de su historial via app gratuita, medico paga por acceso autorizado) — senal real detras: Dr. Johan busca "actualizar" su clinica, a veces hacen expediente nuevo en papel en vez de buscar el existente. No cruza el umbral de 3+ clientes pidiendolo; watch-item.
+
+### 4. Revision de uso real — Wilmer y Consultorio Familiar
+
+**Wilmer:** vista mensual (`/calendario`, resultado de la vista mensual pausada 23 Jul) adoptada fuerte — activo 12 de los ultimos 14 dias, reemplazo total de `/agenda-semanal`. Bloqueador de horario usado **una sola vez** (23 Jul, el dia que se entrego) y nunca mas — senal a vigilar, no urgente. Bot corriendo casi 100% automatico (39 `bot_response` automaticos en 14 dias vs. 1 solo mensaje manual de la asistente en TODO su historial, de junio) — explica por que su linea nunca choca con la ventana de 24h de WhatsApp.
+
+**Consultorio Familiar (Yeni):** hallazgo real de la sesion — **10 mensajes fallidos en 14 dias, error 131047 (ventana de servicio de 24h de WhatsApp vencida)**, verificados uno por uno: 1-3 dias de gap entre el mensaje del paciente y el intento de respuesta. Confirmado que son mensajes **manuales de la asistente** (`source='assistant'`, no del bot) enviados tarde desde el inbox — su linea no tiene Coexistence (`last_historical_webhook_at` vacio, a diferencia de Hanoy). Plan: vincular Coexistence en su linea (mismo playbook que Hanoy) — resuelve de raiz porque los mensajes enviados desde WhatsApp fisico no pasan por la API de Meta y no chocan con la regla de 24h sin importar que tan tarde conteste la asistente. **Gap de producto aparte, confirmado en codigo (`useConversationMessages.ts`):** no hay reintento automatico cuando un envio falla — solo un badge pasivo "⚠ Fallido" en la burbuja, sin alerta activa. Aplica a cualquier tipo de falla de envio, no solo 131047.
+
+### Tareas activas (post-4 Ago)
+
+- [ ] Esperar respuesta de CALL-E sobre habilitar Honduras
+- [ ] Instalacion Dr. Johan 5 Ago — confirmar que Alicia quedo independiente, $15/600 mensajes se mantiene
+- [ ] Vincular Coexistence en la linea de Consultorio Familiar
+- [ ] `/modo-dev`: investigar por que el bot/inbox de Consultorio Familiar deja acumular mensajes sin contestar (comparar contra Wilmer); evaluar sistema de alerta/reintento para envios fallidos en general; considerar contador real de mensajes/mes si se formaliza el tier $15/600
+- [ ] Confirmar si el tier $15/600 mensajes es el mismo test Pro $15 de los inquilinos de Hanoy o uno aparte
+
+### Para retomar proxima sesion
+
+**Primera:** ¿que dijo CALL-E sobre Honduras? **Segunda:** ¿como salio la instalacion de Dr. Johan (Alicia independiente, pricing, uso real primeros dias)? **Tercera:** ¿se vinculo Coexistence en Consultorio Familiar?
+
+---
