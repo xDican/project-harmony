@@ -41,7 +41,7 @@ type MessageRowDb = {
   conversation_id: string | null;
   direction: "inbound" | "outbound";
   source: "patient" | "bot" | "assistant" | "template" | "system" | null;
-  message_type: "text" | "audio" | "image" | "document" | "voice_call" | "system";
+  message_type: "text" | "audio" | "image" | "document" | "video" | "sticker" | "voice_call" | "system";
   body: string | null;
   transcription: string | null;
   media_url: string | null;

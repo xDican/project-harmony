@@ -30,7 +30,7 @@ import { transcribeAudio } from "../_shared/whisper.ts";
 interface ProcessMediaBody {
   messageLogId?: string;
   mediaIdRaw?: string; // 'meta-media:1234567890'
-  messageType?: "audio" | "image" | "document" | "voice_call";
+  messageType?: "audio" | "image" | "document" | "video" | "sticker" | "voice_call";
   organizationId?: string;
   conversationId?: string;
   whatsappLineId?: string;

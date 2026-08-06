@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Inbox as InboxIcon, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import {
   filterConversations,
+  useConversationsSearch,
   type ConversationListRow,
   type InboxFilter,
 } from "@/hooks/useConversations";
@@ -78,10 +79,23 @@ export function InboxList({
     ? lines.some((l) => l.id === selectedLineId && l.syncInProgress)
     : lines.some((l) => l.syncInProgress);
 
-  const { filtered, counts } = useMemo(
-    () => filterConversations(conversations, filter, searchQuery, selectedLineId),
-    [conversations, filter, searchQuery, selectedLineId],
+  // Busqueda contra TODA la org (bug real 6 Ago: el buscador solo veia las
+  // 50 conversaciones mas recientes ya cargadas — invisible para cualquier
+  // paciente fuera de esa ventana en orgs con muchas conversaciones).
+  const { results: searchResults, isSearching } = useConversationsSearch(
+    user?.organizationId ?? undefined,
+    searchQuery,
   );
+  const isSearchActive = searchQuery.trim().length >= 2;
+
+  const { filtered, counts } = useMemo(() => {
+    // searchQuery="" en la llamada de busqueda: los resultados ya vienen
+    // filtrados por texto desde el servidor, solo falta tab + linea + counts.
+    if (isSearchActive) {
+      return filterConversations(searchResults, filter, "", selectedLineId);
+    }
+    return filterConversations(conversations, filter, searchQuery, selectedLineId);
+  }, [conversations, searchResults, isSearchActive, filter, searchQuery, selectedLineId]);
 
   const detection = useMemo(
     () => detectInputType(searchQuery),
@@ -161,8 +175,8 @@ export function InboxList({
           </ul>
         )}
 
-        {/* Indicador refresh on top si esta cargando con datos previos */}
-        {isLoading && conversations.length > 0 && (
+        {/* Indicador refresh on top si esta cargando con datos previos, o buscando */}
+        {((isLoading && conversations.length > 0) || (isSearchActive && isSearching)) && (
           <div className="absolute top-2 right-2 z-10">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>

@@ -513,11 +513,20 @@ async function handleBotMessage(
       break;
 
     case 'sdr_chat':
-    case 'sdr_booking':
+    case 'sdr_booking': {
       // La capa SDR no tomo el turno (presupuesto excedido / LLM caido / flag
       // apagado a mitad de sesion) — degradar con gracia al flujo clasico.
+      const sdrFallbackState = session.state;
       response = await handleGreeting(session, organizationId, supabase, handoffLabels, messageText);
+      // Bug real 5 Ago: si el clasico aterriza en faq_search, ese estado no es
+      // reconocido por maybeHandleSdr (sdr.ts inSdrState/isEntryState/isSdrConfirm)
+      // y la sesion queda bloqueada FUERA del SDR para siempre. Se preserva el
+      // estado SDR original para que el proximo mensaje reintente el LLM.
+      if (response.nextState === 'faq_search') {
+        response = { ...response, nextState: sdrFallbackState };
+      }
       break;
+    }
 
     default:
       // Unknown state, reset to greeting
@@ -3821,6 +3830,14 @@ async function notifyHandoffTarget(
 // HELPER FUNCTIONS
 // ============================================================================
 
+// Conectores genericos que no aportan señal de matching en el fallback de
+// searchFAQ() para FAQs sin keywords configuradas (bug real 5 Ago).
+const FAQ_STOPWORDS = new Set([
+  'el', 'la', 'los', 'las', 'de', 'del', 'que', 'con', 'por', 'para', 'un',
+  'una', 'unos', 'unas', 'es', 'esta', 'está', 'son', 'como', 'se', 'su',
+  'sus', 'al', 'en', 'y', 'o', 'a', 'cual', 'cuál', 'cuando', 'cuándo',
+]);
+
 async function searchFAQ(
   query: string,
   doctorId: string | undefined,
@@ -3863,6 +3880,19 @@ async function searchFAQ(
   let bestMatch: BotFAQ | null = null;
   let bestScore = 0;
 
+  // Peso por especificidad (hallazgo 6 Ago, post-bug de "cita"): una keyword
+  // compartida por muchas FAQs de la misma org/scope es una señal debil y no
+  // deberia poder ganar un match ella sola. Se calcula sobre el mismo `faqs`
+  // ya filtrado por scope — sin query adicional, se autorregula por cliente
+  // sin que nadie tenga que curar keywords manualmente.
+  const keywordFrequency = new Map<string, number>();
+  for (const faq of faqs) {
+    for (const kw of (faq.keywords || [])) {
+      const k = kw.toLowerCase();
+      keywordFrequency.set(k, (keywordFrequency.get(k) || 0) + 1);
+    }
+  }
+
   for (const faq of faqs) {
     const keywords = faq.keywords || [];
     let score = 0;
@@ -3870,25 +3900,32 @@ async function searchFAQ(
     // Check if query contains any keyword (or keyword contains query for short queries)
     for (const keyword of keywords) {
       const kw = keyword.toLowerCase();
+      const freq = keywordFrequency.get(kw) || 1;
       if (normalizedQuery.includes(kw)) {
-        score += 1;
+        score += 1 / freq;
       } else if (normalizedQuery.length >= 3 && kw.includes(normalizedQuery)) {
-        score += 0.75;
+        score += 0.75 / freq;
       }
     }
 
-    // Also check if question contains query words (with prefix matching)
-    const queryWords = normalizedQuery.split(/\s+/);
-    const questionLower = faq.question.toLowerCase();
-    const questionWords = questionLower.split(/\s+/);
-    for (const word of queryWords) {
-      if (word.length >= 3 && questionLower.includes(word)) {
-        score += 0.5;
-      } else if (word.length >= 4) {
-        for (const qw of questionWords) {
-          if (qw.startsWith(word)) {
-            score += 0.25;
-            break;
+    // Fallback SOLO para FAQs sin keywords configuradas: si ya hay keywords
+    // reales, son la unica fuente de verdad del match — este overlap contra
+    // el texto crudo de la pregunta es demasiado ruidoso (bug real 5 Ago:
+    // "cual es el precio de la cita" matcheo una FAQ de politica de citas
+    // solo por compartir "cita"/"por", sin relacion semantica real).
+    if (keywords.length === 0) {
+      const queryWords = normalizedQuery.split(/\s+/).filter((w) => !FAQ_STOPWORDS.has(w));
+      const questionLower = faq.question.toLowerCase();
+      const questionWords = questionLower.split(/\s+/);
+      for (const word of queryWords) {
+        if (word.length >= 3 && questionLower.includes(word)) {
+          score += 0.5;
+        } else if (word.length >= 4) {
+          for (const qw of questionWords) {
+            if (qw.startsWith(word)) {
+              score += 0.25;
+              break;
+            }
           }
         }
       }

@@ -12,15 +12,16 @@
  * Por message_type:
  *   - text: body en parrafo
  *   - audio: AudioMessagePlayer con transcripcion
- *   - image: thumbnail clickable (Dialog modal con full + descargar)
+ *   - image/sticker: thumbnail clickable (Dialog modal con full + descargar)
  *   - document: card con icono + descargar
+ *   - video: reproductor inline
  *   - voice_call: placeholder con duracion (Sprint 6 amplia)
  *
  * Footer: hora + palomitas para outbound.
  */
 
 import { useEffect, useState } from "react";
-import { Bot, FileText, PhoneIncoming, PhoneOutgoing, PhoneMissed, Check, CheckCheck, ImageIcon } from "lucide-react";
+import { Bot, FileText, PhoneIncoming, PhoneOutgoing, PhoneMissed, Check, CheckCheck, ImageIcon, VideoIcon, CircleSlash, Megaphone } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,7 @@ import {
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import type { MessageRow } from "@/hooks/useConversationMessages";
+import { getAdReferral, type MessageRow } from "@/hooks/useConversationMessages";
 import { AudioMessagePlayer } from "./AudioMessagePlayer";
 
 interface MessageBubbleProps {
@@ -40,10 +41,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isPatient = message.source === "patient";
   const isBot = message.source === "bot";
   const isAssistant = message.source === "assistant";
+  const adReferral = isPatient ? getAdReferral(message) : null;
 
   return (
     <div className={cn("flex w-full mb-3", isPatient ? "justify-start" : "justify-end")}>
       <div className={cn("flex flex-col max-w-[78%] sm:max-w-[70%]", !isPatient && "items-end")}>
+        {adReferral && <AdReferralCard referral={adReferral} />}
+
         {/* Etiqueta arriba (solo bot/assistant) */}
         {isBot && (
           <div className="flex items-center gap-1.5 text-xs font-medium text-primary mb-1 px-3">
@@ -87,6 +91,44 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   );
 }
 
+/**
+ * Preview del anuncio de origen cuando la conversacion arranco desde un
+ * Click-to-WhatsApp Ad de Meta (referral en el payload del primer mensaje).
+ * WhatsApp nativo muestra esto como una tarjeta; nuestro inbox no lo hacia.
+ */
+function AdReferralCard({ referral }: { referral: NonNullable<ReturnType<typeof getAdReferral>> }) {
+  const card = (
+    <div className="mb-1 w-56 rounded-lg overflow-hidden border bg-muted/40 hover:bg-muted/60 transition-colors">
+      {referral.thumbnail_url && (
+        // eslint-disable-next-line jsx-a11y/img-redundant-alt
+        <img
+          src={referral.thumbnail_url}
+          alt="Miniatura del anuncio"
+          className="w-full h-20 object-cover"
+          loading="lazy"
+        />
+      )}
+      <div className="p-2 space-y-0.5">
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Megaphone className="h-3 w-3" />
+          <span>Anuncio</span>
+        </div>
+        {referral.headline && (
+          <p className="text-xs font-medium leading-snug line-clamp-2">{referral.headline}</p>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!referral.source_url) return card;
+
+  return (
+    <a href={referral.source_url} target="_blank" rel="noopener noreferrer" className="block">
+      {card}
+    </a>
+  );
+}
+
 function MessageContent({
   message,
   isOutbound,
@@ -110,12 +152,16 @@ function MessageContent({
     );
   }
 
-  if (message_type === "image") {
+  if (message_type === "image" || message_type === "sticker") {
     return <ImageBubbleContent storagePath={media_url} caption={body} isOutbound={isOutbound} />;
   }
 
   if (message_type === "document") {
     return <DocumentBubbleContent storagePath={media_url} caption={body} isOutbound={isOutbound} />;
+  }
+
+  if (message_type === "video") {
+    return <VideoBubbleContent storagePath={media_url} caption={body} isOutbound={isOutbound} />;
   }
 
   if (message_type === "voice_call") {
@@ -142,8 +188,10 @@ function ImageBubbleContent({
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  const isUnavailable = storagePath?.startsWith("unavailable:") ?? false;
+
   useEffect(() => {
-    if (!storagePath || storagePath.startsWith("meta-media:")) return;
+    if (!storagePath || storagePath.startsWith("meta-media:") || isUnavailable) return;
     let cancelled = false;
     supabase.storage
       .from("conversation-media")
@@ -155,7 +203,18 @@ function ImageBubbleContent({
     return () => {
       cancelled = true;
     };
-  }, [storagePath]);
+  }, [storagePath, isUnavailable]);
+
+  if (isUnavailable) {
+    return (
+      <div className="flex items-center gap-2 text-sm py-2">
+        <CircleSlash className="h-4 w-4" />
+        <span className={cn(isOutbound && "text-primary-foreground/80")}>
+          Contenido ya no disponible
+        </span>
+      </div>
+    );
+  }
 
   const isProcessing = !storagePath || storagePath.startsWith("meta-media:");
 
@@ -230,8 +289,10 @@ function DocumentBubbleContent({
 }) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
+  const isUnavailable = storagePath?.startsWith("unavailable:") ?? false;
+
   useEffect(() => {
-    if (!storagePath || storagePath.startsWith("meta-media:")) return;
+    if (!storagePath || storagePath.startsWith("meta-media:") || isUnavailable) return;
     let cancelled = false;
     supabase.storage
       .from("conversation-media")
@@ -243,7 +304,18 @@ function DocumentBubbleContent({
     return () => {
       cancelled = true;
     };
-  }, [storagePath]);
+  }, [storagePath, isUnavailable]);
+
+  if (isUnavailable) {
+    return (
+      <div className="flex items-center gap-2 text-sm py-2">
+        <CircleSlash className="h-4 w-4" />
+        <span className={cn(isOutbound && "text-primary-foreground/80")}>
+          Contenido ya no disponible
+        </span>
+      </div>
+    );
+  }
 
   const isProcessing = !storagePath || storagePath.startsWith("meta-media:");
   const filename = caption || extractFilename(storagePath) || "Documento";
@@ -272,6 +344,81 @@ function DocumentBubbleContent({
       <FileText className="h-4 w-4 flex-shrink-0" />
       <span className="text-sm truncate">{filename}</span>
     </a>
+  );
+}
+
+function VideoBubbleContent({
+  storagePath,
+  caption,
+  isOutbound,
+}: {
+  storagePath: string | null;
+  caption: string | null;
+  isOutbound: boolean;
+}) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const isUnavailable = storagePath?.startsWith("unavailable:") ?? false;
+
+  useEffect(() => {
+    if (!storagePath || storagePath.startsWith("meta-media:") || isUnavailable) return;
+    let cancelled = false;
+    supabase.storage
+      .from("conversation-media")
+      .createSignedUrl(storagePath, 3600)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setSignedUrl(data.signedUrl);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storagePath, isUnavailable]);
+
+  if (isUnavailable) {
+    return (
+      <div className="flex items-center gap-2 text-sm py-2">
+        <CircleSlash className="h-4 w-4" />
+        <span className={cn(isOutbound && "text-primary-foreground/80")}>
+          Contenido ya no disponible
+        </span>
+      </div>
+    );
+  }
+
+  const isProcessing = !storagePath || storagePath.startsWith("meta-media:");
+
+  if (isProcessing) {
+    return (
+      <div className="flex items-center gap-2 text-sm py-2">
+        <VideoIcon className="h-4 w-4" />
+        <span className={cn(isOutbound && "text-primary-foreground/80")}>
+          Procesando video...
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {signedUrl ? (
+        <video
+          src={signedUrl}
+          controls
+          className="max-w-full max-h-64 rounded-lg"
+        />
+      ) : (
+        <div className="flex items-center gap-2 text-sm py-2">
+          <VideoIcon className="h-4 w-4" />
+          <span>Cargando video...</span>
+        </div>
+      )}
+
+      {caption && (
+        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+          {caption}
+        </p>
+      )}
+    </div>
   );
 }
 

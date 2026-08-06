@@ -19,7 +19,7 @@
 
 import { formatDistanceToNow, isToday, isYesterday, parseISO, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { Mic, Image as ImageIcon, FileText, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react";
+import { Mic, Image as ImageIcon, FileText, Video, Sticker, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { ConversationListRow } from "@/hooks/useConversations";
@@ -173,6 +173,24 @@ function MessagePreview({
       <span className={cn("text-xs text-muted-foreground truncate flex items-center gap-1", className)}>
         <FileText className="h-3 w-3 flex-shrink-0" />
         <span className="truncate">{message.body || "documento"}</span>
+      </span>
+    );
+  }
+
+  if (type === "video") {
+    return (
+      <span className={cn("text-xs text-muted-foreground truncate flex items-center gap-1", className)}>
+        <Video className="h-3 w-3 flex-shrink-0" />
+        <span className="truncate">{message.body || "video"}</span>
+      </span>
+    );
+  }
+
+  if (type === "sticker") {
+    return (
+      <span className={cn("text-xs text-muted-foreground truncate flex items-center gap-1", className)}>
+        <Sticker className="h-3 w-3 flex-shrink-0" />
+        <span className="truncate">sticker</span>
       </span>
     );
   }
