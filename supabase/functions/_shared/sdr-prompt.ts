@@ -99,6 +99,8 @@ export interface SdrDoctorInfo {
 export interface SdrContext {
   organizationId: string;
   organizationName: string;
+  /** Nombre configurado de la clínica (clinics.name), o el de la org si no hay clínica activa. */
+  clinicDisplayName: string;
   whatsappLineId: string;
   greeting: string | null;
   services: SdrService[];
@@ -255,7 +257,7 @@ export async function buildSdrContext(
     return null;
   }
 
-  const [{ data: org }, { data: services }, { data: faqs }, { data: doctors }, { data: allServiceNames }] = await Promise.all([
+  const [{ data: org }, { data: services }, { data: faqs }, { data: doctors }, { data: allServiceNames }, { data: clinics }] = await Promise.all([
     supabase.from("organizations").select("name").eq("id", line.organization_id).single(),
     supabase
       .from("service_types")
@@ -276,6 +278,13 @@ export async function buildSdrContext(
     // Vocabulario de tratamientos de TODA la plataforma (no solo esta org) —
     // necesario para el filtro de FAQs huérfanas de abajo.
     supabase.from("service_types").select("display_name").eq("is_active", true),
+    supabase
+      .from("clinics")
+      .select("name")
+      .eq("organization_id", line.organization_id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1),
   ]);
 
   const rawFaqs = (faqs ?? []).map((f: any) => ({ question: f.question, answer: f.answer }));
@@ -307,6 +316,7 @@ export async function buildSdrContext(
   return {
     organizationId: line.organization_id,
     organizationName: org?.name ?? "la clínica",
+    clinicDisplayName: clinics?.[0]?.name || org?.name || "la clínica",
     whatsappLineId: line.id,
     greeting: line.bot_greeting ?? null,
     services: (services ?? []).map((s: any) => ({
@@ -372,6 +382,21 @@ export interface SdrPromptOptions {
   existingAppointment?: SdrExistingAppointment | null;
 }
 
+/**
+ * "Dra Hanoy Medina" → "de la Dra. Hanoy Medina" / "Dr Juan Pérez" → "del Dr. Juan Pérez".
+ * Si el nombre configurado NO arranca con Dr/Dra (marca propia, ej. "OrionCare"),
+ * se usa tal cual — no hay identificador de género que aplicar (pedido Diego 27 Jul:
+ * "sustituir X por del/de la dr/dra X según sea el caso, usando el identificador
+ * de la plataforma, y que se use el nombre de la clínica que se configuró").
+ */
+function clinicIdentityPhrase(rawName: string): string {
+  const name = rawName.trim();
+  const m = name.match(/^dra?\.?\s+(.+)$/i);
+  if (!m) return name;
+  const isFem = /^dra/i.test(name);
+  return isFem ? `de la Dra. ${m[1]}` : `del Dr. ${m[1]}`;
+}
+
 export function buildSdrSystemPrompt(ctx: SdrContext, opts?: SdrPromptOptions): string {
   const now = new Date();
   // Fecha actual Honduras (UTC-6 fijo, sin DST) — para que el LLM etiquete bien
@@ -380,6 +405,7 @@ export function buildSdrSystemPrompt(ctx: SdrContext, opts?: SdrPromptOptions): 
   const dias = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
   const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
   const hoyLabel = `${dias[hn.getUTCDay()]} ${hn.getUTCDate()} de ${meses[hn.getUTCMonth()]} de ${hn.getUTCFullYear()}`;
+  const clinicPhrase = clinicIdentityPhrase(ctx.clinicDisplayName);
 
   const slotsBlock = opts?.offeredSlots?.length
     ? `\n## Horarios disponibles OFRECIDOS en este turno (${opts.offeredDayLabel ?? "día elegido"})
@@ -394,7 +420,7 @@ ${apt.serviceType ? `${apt.serviceType} — ` : ""}${apt.dateLabel} a las ${apt.
 Si el paciente avisa que no puede asistir, pide cancelar, reagendar o confirmar ESTA cita (intent="gestion_cita"): reconocé la fecha/hora exacta de arriba en tu respuesta (no genérico), agradecé el aviso con calidez y de forma directa, y preguntá el siguiente paso. Ejemplo de tono: "Gracias por avisarme que no podrá asistir el {día} a las {hora}. Desea que agendemos la cita para otro día?" — NO ofrezcas horarios nuevos todavía, eso lo hace la plataforma en el siguiente turno con disponibilidad real.`
     : "";
 
-  return `Sos la asistente virtual de ${ctx.organizationName}, una clínica en Honduras. Atendés WhatsApp: leads que llegan de publicidad y pacientes. Tu objetivo es que cada lead termine con una cita agendada. Hoy es ${hoyLabel} (hora de Honduras).
+  return `Sos la asistente virtual de la clínica ${clinicPhrase}, en Honduras. Atendés WhatsApp: leads que llegan de publicidad y pacientes. Tu objetivo es que cada lead termine con una cita agendada. Hoy es ${hoyLabel} (hora de Honduras).
 
 ## Cómo hablás
 - Español hondureño natural, trato de "usted", cálido y profesional. Nada robótico.
@@ -406,7 +432,7 @@ Si el paciente avisa que no puede asistir, pide cancelar, reagendar o confirmar 
 - MAYÚSCULAS no indican enojo — es énfasis o que el teclado quedó en bloqueo. Nunca respondas como si el paciente estuviera molesto solo por eso.
 
 ## Tu guión (en este orden, sin saltarte pasos)
-1. Si solo saludan o piden "más información": saludá y preguntá en qué tratamiento está interesado/a.
+1. Si solo saludan ("hola", "buenas") o piden "más información" sin decir nada más: saludá agradeciendo que escriban y preguntá en qué le puede ayudar. NUNCA preguntes directamente "¿en qué tratamiento está interesado?" de entrada — dejá que el paciente lo diga cuando quiera. Ejemplo de tono: "Hola, gracias por escribir a la clínica ${clinicPhrase}, en qué le puedo ayudar?"
 2. Si preguntan precio: respondé SOLO según el catálogo de abajo. Si el servicio dice "se determina en la cita de evaluación", explicá eso con naturalidad (cada caso es distinto, la doctora lo evalúa y le da plan y presupuesto exacto).
 3. SIEMPRE cerrá tu mensaje ofreciendo el siguiente paso, normalmente agendar: "¿Le gustaría que le agende su cita?". Nunca dejés un precio o respuesta sin cierre.
 4. Si describen su caso clínico (piezas que faltan, dolor, condiciones): NO des opinión clínica. Respondé que justamente eso se determina en la evaluación, y ofrecé agendar.
