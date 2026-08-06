@@ -36,6 +36,8 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
   "application/pdf": "pdf",
+  "video/mp4": "mp4",
+  "video/3gpp": "3gp",
 };
 
 export function extFromMime(mime: string | null | undefined): string {

@@ -107,6 +107,7 @@ interface MetaMessage {
   audio?: { id: string; mime_type?: string; voice?: boolean };
   document?: { id: string; mime_type?: string; filename?: string; caption?: string };
   video?: { id: string; mime_type?: string; caption?: string };
+  sticker?: { id: string; mime_type?: string; animated?: boolean };
 }
 
 interface MetaStatus {
@@ -631,15 +632,20 @@ async function enqueueDebounceMessage(
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.is_new_claim) return; // ya hay un processor esperando esta ráfaga
 
-  // Fire-and-forget: NO await, mismo patrón que dispatchProcessMediaAsync.
+  // Fire-and-forget: NO await del resultado, pero envuelto en waitUntil para
+  // que el runtime no mate el fetch en pleno vuelo apenas el handler devuelve
+  // la respuesta 200 a Meta (bug real 27 Jul: el mensaje de Hanoy se perdió sin
+  // dejar rastro — ni el log de bot-debounce-processor se llegó a crear).
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
   const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-  fetch(`https://${projectRef}.supabase.co/functions/v1/bot-debounce-processor`, {
+  const dispatchPromise = fetch(`https://${projectRef}.supabase.co/functions/v1/bot-debounce-processor`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-internal-secret": internalSecret },
     body: JSON.stringify({ debounceId: row.debounce_id }),
   }).catch((e) => console.error("[meta-webhook] bot-debounce-processor dispatch failed:", e));
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime?.waitUntil(dispatchPromise);
 }
 
 async function handleIncomingMessage(
@@ -1243,7 +1249,7 @@ async function dispatchProcessMediaAsync(
   args: {
     providerMessageId: string;
     mediaIdRaw: string;
-    messageType: "audio" | "image" | "document" | "voice_call";
+    messageType: "audio" | "image" | "document" | "video" | "sticker" | "voice_call";
     organizationId: string;
     conversationId: string;
     whatsappLineId: string;
@@ -1266,8 +1272,11 @@ async function dispatchProcessMediaAsync(
   const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
   const targetUrl = `https://${projectRef}.supabase.co/functions/v1/process-media-async`;
 
-  // Fire-and-forget: NO await. Si la edge function no responde, ni modo.
-  fetch(targetUrl, {
+  // Fire-and-forget, pero envuelto en waitUntil para que el runtime no mate el
+  // fetch en pleno vuelo apenas el handler devuelve la respuesta 200 a Meta
+  // (mismo bug real 27 Jul diagnosticado en enqueueDebounceMessage — sin esto,
+  // el placeholder meta-media:{id} podia quedar pegado para siempre).
+  const dispatchPromise = fetch(targetUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1284,6 +1293,8 @@ async function dispatchProcessMediaAsync(
   }).catch((e) => {
     console.error("[meta-webhook] dispatchProcessMediaAsync fetch error:", e);
   });
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime?.waitUntil(dispatchPromise);
 
   console.log("[meta-webhook] dispatched process-media-async", { messageLogId: (msg as { id: string }).id, messageType: args.messageType });
 }

@@ -23,7 +23,7 @@ export interface MessageRow {
   conversation_id: string | null;
   direction: "inbound" | "outbound";
   source: "patient" | "bot" | "assistant" | "template" | "system" | null;
-  message_type: "text" | "audio" | "image" | "document" | "voice_call" | "system";
+  message_type: "text" | "audio" | "image" | "document" | "video" | "sticker" | "voice_call" | "system";
   body: string | null;
   transcription: string | null;
   media_url: string | null;
@@ -37,6 +37,21 @@ export interface MessageRow {
   call_status: string | null;
   call_id_meta: string | null;
   created_at: string;
+  /** JSON crudo de Meta. Usado hoy solo para leer .referral (Click-to-WhatsApp Ads). */
+  raw_payload: Record<string, unknown> | null;
+}
+
+export interface AdReferral {
+  headline?: string;
+  body?: string;
+  source_url?: string;
+  thumbnail_url?: string;
+  media_type?: string;
+}
+
+export function getAdReferral(message: Pick<MessageRow, "raw_payload">): AdReferral | null {
+  const referral = message.raw_payload?.referral as AdReferral | undefined;
+  return referral ?? null;
 }
 
 export function useConversationMessages(conversationId: string | null) {
@@ -63,7 +78,7 @@ export function useConversationMessages(conversationId: string | null) {
           `id, conversation_id, direction, source, message_type, body,
            transcription, media_url, media_mime, status, sent_by,
            to_phone, from_phone, call_duration_seconds, call_direction,
-           call_status, call_id_meta, created_at`,
+           call_status, call_id_meta, created_at, raw_payload`,
         )
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })

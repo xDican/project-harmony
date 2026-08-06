@@ -14,7 +14,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { logMessage, LogMessageParams } from "./message-logger.ts";
 
 export type MessageSource = "patient" | "bot" | "assistant" | "template" | "system";
-export type MessageType = "text" | "audio" | "image" | "document" | "voice_call" | "system";
+export type MessageType = "text" | "audio" | "image" | "document" | "video" | "sticker" | "voice_call" | "system";
 export type CallDirection = "inbound" | "outbound";
 
 export interface InboundMessageParams {
@@ -183,6 +183,7 @@ export function extractMediaFromMetaMessage(msg: {
   audio?: { id: string; mime_type?: string; voice?: boolean };
   document?: { id: string; mime_type?: string; filename?: string; caption?: string };
   video?: { id: string; mime_type?: string; caption?: string };
+  sticker?: { id: string; mime_type?: string; animated?: boolean };
 }): { messageType: MessageType; mediaUrl: string | null; mediaMime: string | null; caption: string | null } {
   switch (msg.type) {
     case "image":
@@ -207,12 +208,18 @@ export function extractMediaFromMetaMessage(msg: {
         caption: msg.document?.caption ?? msg.document?.filename ?? null,
       };
     case "video":
-      // Tratamos video como document por ahora (Sprint 1 no usa video).
       return {
-        messageType: "document",
+        messageType: "video",
         mediaUrl: msg.video?.id ? `meta-media:${msg.video.id}` : null,
         mediaMime: msg.video?.mime_type ?? null,
         caption: msg.video?.caption ?? null,
+      };
+    case "sticker":
+      return {
+        messageType: "sticker",
+        mediaUrl: msg.sticker?.id ? `meta-media:${msg.sticker.id}` : null,
+        mediaMime: msg.sticker?.mime_type ?? null,
+        caption: null,
       };
     default:
       return { messageType: "text", mediaUrl: null, mediaMime: null, caption: null };
