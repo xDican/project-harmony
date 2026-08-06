@@ -18,6 +18,48 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+// Mismo select en fetchConversations() y searchConversationsInOrg() — una
+// trae las 50 mas recientes, la otra busca contra toda la org (ver ambas
+// abajo). Se comparte el string y el flatten de filas para no duplicar.
+const CONVERSATION_SELECT = `
+  id,
+  organization_id,
+  whatsapp_line_id,
+  patient_phone,
+  patient_id,
+  patient_name,
+  status,
+  assigned_to,
+  last_message_at,
+  last_inbound_at,
+  unread_count,
+  whatsapp_lines!inner(bot_enabled),
+  last_message:message_logs (
+    body,
+    transcription,
+    message_type,
+    source,
+    created_at,
+    call_status,
+    call_direction
+  )
+`;
+
+// last_message viene como array [obj] o []. Aplanar a obj o null.
+// whatsapp_lines viene como { bot_enabled: boolean }. Extraer a campo plano.
+function normalizeConversationRow(row: Record<string, unknown>): ConversationListRow {
+  const rawMessages = row.last_message;
+  const lastMsgArray = Array.isArray(rawMessages) ? rawMessages : [];
+  const lastMsg = lastMsgArray[0] ?? null;
+  const rawLine = row.whatsapp_lines as { bot_enabled?: boolean } | null;
+  const botEnabled = rawLine?.bot_enabled ?? true;
+  return {
+    ...(row as Omit<ConversationListRow, "last_message" | "bot_enabled" | "whatsapp_lines">),
+    last_message: lastMsg as ConversationListRow["last_message"],
+    bot_enabled: botEnabled,
+  };
+}
+
 export type InboxFilter = "all" | "unread" | "bot" | "human";
 
 export interface ConversationListRow {
@@ -69,31 +111,7 @@ export function useConversations(organizationId: string | undefined) {
       // Embed con limit + order para traer solo el ultimo mensaje de cada conv.
       const { data, error } = await supabase
         .from("conversations")
-        .select(
-          `
-          id,
-          organization_id,
-          whatsapp_line_id,
-          patient_phone,
-          patient_id,
-          patient_name,
-          status,
-          assigned_to,
-          last_message_at,
-          last_inbound_at,
-          unread_count,
-          whatsapp_lines!inner(bot_enabled),
-          last_message:message_logs (
-            body,
-            transcription,
-            message_type,
-            source,
-            created_at,
-            call_status,
-            call_direction
-          )
-          `,
-        )
+        .select(CONVERSATION_SELECT)
         .eq("organization_id", organizationId)
         .order("last_message_at", { ascending: false })
         .limit(50)
@@ -106,20 +124,9 @@ export function useConversations(organizationId: string | undefined) {
         return;
       }
 
-      // last_message viene como array [obj] o []. Aplanar a obj o null.
-      // whatsapp_lines viene como { bot_enabled: boolean }. Extraer a campo plano.
-      const normalized: ConversationListRow[] = (data || []).map((row) => {
-        const rawMessages = (row as Record<string, unknown>).last_message;
-        const lastMsgArray = Array.isArray(rawMessages) ? rawMessages : [];
-        const lastMsg = lastMsgArray[0] ?? null;
-        const rawLine = (row as Record<string, unknown>).whatsapp_lines as { bot_enabled?: boolean } | null;
-        const botEnabled = rawLine?.bot_enabled ?? true;
-        return {
-          ...(row as Omit<ConversationListRow, "last_message" | "bot_enabled" | "whatsapp_lines">),
-          last_message: lastMsg,
-          bot_enabled: botEnabled,
-        };
-      });
+      const normalized = (data || []).map((row) =>
+        normalizeConversationRow(row as Record<string, unknown>),
+      );
 
       setConversations(normalized);
     } catch (e) {
@@ -253,6 +260,82 @@ export function useConversations(organizationId: string | undefined) {
     upsertConversation,
     applyMessageToConversation,
   };
+}
+
+/**
+ * Busca conversaciones contra TODA la organizacion (no solo las 50 recientes
+ * que trae useConversations). Bug real 6 Ago: el buscador del inbox filtraba
+ * client-side sobre esas 50, invisible para cualquier paciente fuera de esa
+ * ventana de actividad reciente (una org con 188 conversaciones lo sufria).
+ * Mismo patron que searchPatients() en src/lib/api.supabase.ts — ILIKE simple
+ * sobre nombre/telefono, sin normalizar digitos (el telefono no trae espacios
+ * intermedios, ya funciona bien asi en produccion para pacientes).
+ */
+export async function searchConversationsInOrg(
+  organizationId: string,
+  query: string,
+  limit = 100,
+): Promise<ConversationListRow[]> {
+  const { data, error } = await supabase
+    .from("conversations")
+    .select(CONVERSATION_SELECT)
+    .eq("organization_id", organizationId)
+    .or(`patient_name.ilike.%${query}%,patient_phone.ilike.%${query}%`)
+    .order("last_message_at", { ascending: false })
+    .limit(limit)
+    .order("created_at", { ascending: false, foreignTable: "message_logs" })
+    .limit(1, { foreignTable: "message_logs" });
+
+  if (error) {
+    console.error("[searchConversationsInOrg] error:", error.message);
+    throw error;
+  }
+
+  return (data || []).map((row) => normalizeConversationRow(row as Record<string, unknown>));
+}
+
+/**
+ * Hook de busqueda con debounce (300ms) — mismo esqueleto que
+ * usePatientsSearch.ts. Solo dispara la query con 2+ caracteres, para no
+ * traer la organizacion completa por una sola tecla.
+ */
+export function useConversationsSearch(organizationId: string | undefined, query: string) {
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  const [results, setResults] = useState<ConversationListRow[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!organizationId || trimmed.length < 2) {
+      setResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+    searchConversationsInOrg(organizationId, trimmed)
+      .then((rows) => {
+        if (!cancelled) setResults(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId, debouncedQuery]);
+
+  return { results, isSearching };
 }
 
 /**
