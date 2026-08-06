@@ -5,6 +5,8 @@
  * funciones terminan en el mismo lugar: bot-handler decide, esto la manda.
  */
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+
 export async function routeToBotHandler(
   fromPhone: string,
   messageText: string,
@@ -48,6 +50,24 @@ export async function routeToBotHandler(
     console.log("[bot-routing] bot-handler response:", { nextState: botData.nextState, hasMessage: !!botData.message });
 
     if (!botData.message) return;
+
+    // Re-chequeo de Coexistence justo antes de enviar: el gate original solo
+    // corre UNA vez, en la puerta de entrada del webhook, antes del debounce
+    // de 10-30s (agrupar mensajes fragmentados) — tiempo de sobra para que un
+    // humano conteste desde el celular fisico sin que este envio se entere
+    // (bug real 5 Ago: bot y humana respondiendo casi al mismo segundo).
+    if (conversationId) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { data: conv } = await supabase
+        .from("conversations")
+        .select("status")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (conv?.status === "human_active") {
+        console.log("[bot-routing] Skipping bot reply — human took over mid-flight. conv:", conversationId);
+        return;
+      }
+    }
 
     // 2) Format message — append numbered options if present
     let fullMessage: string = botData.message;
