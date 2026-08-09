@@ -172,6 +172,7 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
     clearBookingContext(session);
     delete session.context.sdrHistory;
     delete session.context.sdrInterestServiceId;
+    delete session.context.sdrAskedInterestQuestion;
     if (justBooked) {
       // Nota sintética (no se envía): el LLM sabe que la cita quedó, sin
       // arrastrar fechas/horas que puedan re-disparar un agendamiento.
@@ -245,7 +246,10 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   const [ctx, apt] = await Promise.all([getSdrCtx(args), getUpcomingAppointmentForSession(args)]);
   if (!ctx) return null;
 
-  const system = buildSdrSystemPrompt(ctx, apt ? { existingAppointment: existingApptPromptData(apt) } : undefined);
+  const system = buildSdrSystemPrompt(ctx, {
+    ...(apt ? { existingAppointment: existingApptPromptData(apt) } : {}),
+    alreadyAskedInterestQuestion: !!session.context.sdrAskedInterestQuestion,
+  });
   const messages = [...historyOf(session), { role: "user" as const, content: messageText }];
   const out = await callSdrLLM(args, system, messages);
   if (!out) return null;
@@ -258,6 +262,12 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
   const focusServiceId = out.service_id ?? apt?.service_type_id ?? session.context.sdrInterestServiceId ?? null;
   const price = checkPriceGuard(out.reply, allowedPricesFor(ctx, focusServiceId));
   if (!price.ok) return await guardBlockedHandoff(args, out, price.violations);
+
+  // Pregunta de interés (9 Ago): se usa UNA sola vez por conversación — el LLM
+  // la marca cuando la usa, acá se recuerda para que el próximo turno del
+  // prompt sepa que ya no debe ofrecerla de nuevo (ver interestBlock en
+  // buildSdrSystemPrompt).
+  if (out.interest_question_asked) session.context.sdrAskedInterestQuestion = true;
 
   // Gestión de cita existente (confirmar/reagendar/cancelar) — conversacional
   // (Fase 3): handleGestionCita resuelve lo que puede y devuelve null para los
