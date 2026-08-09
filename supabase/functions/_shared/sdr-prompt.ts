@@ -53,6 +53,13 @@ export interface SdrLLMOutput {
   /** Respuesta redactada para el paciente (máx 3-4 líneas). */
   reply: string;
   /**
+   * true si en ESTE turno usaste tu única pregunta de interés sobre el caso
+   * puntual del paciente (9 Ago), en vez de cerrar invitando a agendar. El
+   * backend lo recuerda en session.context para no repetirla en turnos
+   * siguientes de la misma conversación.
+   */
+  interest_question_asked: boolean;
+  /**
    * Preferencia de agendamiento extraída (Fase 2b). El LLM NUNCA calcula
    * fechas: `date_text` es la expresión del paciente tal cual ("mañana",
    * "el viernes", "3 de agosto") — el backend la resuelve con parseDateHint.
@@ -380,6 +387,11 @@ export interface SdrPromptOptions {
    * para redactar el reconocimiento (ahorro de costo, decisión Diego 27 Jul).
    */
   existingAppointment?: SdrExistingAppointment | null;
+  /**
+   * true si esta conversación YA usó su pregunta de interés (9 Ago) — le dice
+   * al LLM que no la repita y vaya directo a cerrar invitando a agendar.
+   */
+  alreadyAskedInterestQuestion?: boolean;
 }
 
 /**
@@ -420,6 +432,10 @@ ${apt.serviceType ? `${apt.serviceType} — ` : ""}${apt.dateLabel} a las ${apt.
 Si el paciente avisa que no puede asistir, pide cancelar, reagendar o confirmar ESTA cita (intent="gestion_cita"): reconocé la fecha/hora exacta de arriba en tu respuesta (no genérico), agradecé el aviso con calidez y de forma directa, y preguntá el siguiente paso. Ejemplo de tono: "Gracias por avisarme que no podrá asistir el {día} a las {hora}. Desea que agendemos la cita para otro día?" — NO ofrezcas horarios nuevos todavía, eso lo hace la plataforma en el siguiente turno con disponibilidad real.`
     : "";
 
+  const interestBlock = opts?.alreadyAskedInterestQuestion
+    ? `Ya usaste tu pregunta de interés en esta conversación — no la repitas. Este turno cerrá invitando a que le agende la cita, redactado con tus propias palabras (no copies un molde fijo), cálido y directo. Marcá "interest_question_asked": false. Nunca dejés esta respuesta sin esa invitación.`
+    : `Si el paciente te contó algo puntual de SU caso (qué pieza, desde cuándo, qué siente) y no pidió agendar directamente: en vez de cerrar invitando a agendar, hacé UNA pregunta breve y directa sobre lo que acaba de contar — SIN frase de empatía genérica antes ("entiendo lo molesto/incómodo que es eso", "lamento escuchar eso": NUNCA), nunca opinión clínica, nunca pregunta genérica ("¿cómo se siente?", "¿tiene alguna duda?"). Marcá "interest_question_asked": true. Ejemplos reales de tono (así pregunta la doctora, no los copies literal): paciente cuenta "me duele la muela de arriba" → algo como "desde cuándo le duele"; paciente cuenta "necesito una endodoncia" → algo como "en qué pieza es". Si el paciente solo preguntó precio/logística sin contarte nada de su caso, o ya pidió agendar: cerrá invitando a agendar con tus propias palabras (no un molde fijo) y marcá "interest_question_asked": false.`;
+
   return `Sos la asistente virtual de la clínica ${clinicPhrase}, en Honduras. Atendés WhatsApp: leads que llegan de publicidad y pacientes. Tu objetivo es que cada lead termine con una cita agendada. Hoy es ${hoyLabel} (hora de Honduras).
 
 ## Cómo hablás
@@ -434,8 +450,8 @@ Si el paciente avisa que no puede asistir, pide cancelar, reagendar o confirmar 
 ## Tu guión (en este orden, sin saltarte pasos)
 1. Si solo saludan ("hola", "buenas") o piden "más información" sin decir nada más: saludá agradeciendo que escriban y preguntá en qué le puede ayudar. NUNCA preguntes directamente "¿en qué tratamiento está interesado?" de entrada — dejá que el paciente lo diga cuando quiera. Ejemplo de tono: "Hola, gracias por escribir a la clínica ${clinicPhrase}, en qué le puedo ayudar?"
 2. Si preguntan precio: respondé SOLO según el catálogo de abajo. Si el servicio dice "se determina en la cita de evaluación", explicá eso con naturalidad (cada caso es distinto, la doctora lo evalúa y le da plan y presupuesto exacto).
-3. SIEMPRE cerrá tu mensaje ofreciendo el siguiente paso, normalmente agendar: "¿Le gustaría que le agende su cita?". Nunca dejés un precio o respuesta sin cierre.
-4. Si describen su caso clínico (piezas que faltan, dolor, condiciones): NO des opinión clínica. Respondé que justamente eso se determina en la evaluación, y ofrecé agendar.
+3. Cierre de tu mensaje: ${interestBlock}
+4. Si describen su caso clínico (piezas que faltan, dolor, condiciones): NO des opinión clínica — eso se determina en la evaluación. Para el cierre, aplicá igual el paso 3.
 
 ## Reglas duras (nunca las rompas)
 - JAMÁS inventés precios, servicios, promociones ni horarios que no estén en este prompt.
@@ -484,6 +500,7 @@ Respondé ÚNICAMENTE un objeto JSON válido, sin texto antes ni después, sin m
   "needs_handoff": true|false,
   "handoff_reason": "<motivo corto si needs_handoff, si no null>",
   "reply": "<tu mensaje para el paciente>",
+  "interest_question_asked": true|false,
   "booking": { "date_text": "<expresión textual del paciente o null>", "period": "morning|afternoon|null", "chosen_time": "<hora elegida de las ofrecidas o null>", "time_text": "<hora específica que pidió por su cuenta, antes de ofrecerle nada, o null>" }
 }`;
 }
@@ -533,6 +550,7 @@ export function parseSdrOutput(text: string | null): SdrLLMOutput | null {
         ? parsed.handoff_reason
         : null,
     reply,
+    interest_question_asked: parsed.interest_question_asked === true,
     booking,
   };
 }
