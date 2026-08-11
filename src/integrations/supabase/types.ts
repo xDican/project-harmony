@@ -94,6 +94,7 @@ export type Database = {
           notes: string | null
           organization_id: string
           patient_id: string
+          property_id: string | null
           reminder_24h_sent: boolean
           reminder_24h_sent_at: string | null
           reminder_3d_enabled: boolean
@@ -124,6 +125,7 @@ export type Database = {
           notes?: string | null
           organization_id: string
           patient_id: string
+          property_id?: string | null
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
           reminder_3d_enabled?: boolean
@@ -154,6 +156,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           patient_id?: string
+          property_id?: string | null
           reminder_24h_sent?: boolean
           reminder_24h_sent_at?: string | null
           reminder_3d_enabled?: boolean
@@ -197,6 +200,13 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
           {
@@ -470,6 +480,71 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bot_message_debounce: {
+        Row: {
+          claimed_at: string
+          conversation_id: string | null
+          id: string
+          last_message_at: string
+          messages: string[]
+          organization_id: string
+          patient_id: string | null
+          patient_phone: string
+          whatsapp_line_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          conversation_id?: string | null
+          id?: string
+          last_message_at?: string
+          messages?: string[]
+          organization_id: string
+          patient_id?: string | null
+          patient_phone: string
+          whatsapp_line_id: string
+        }
+        Update: {
+          claimed_at?: string
+          conversation_id?: string | null
+          id?: string
+          last_message_at?: string
+          messages?: string[]
+          organization_id?: string
+          patient_id?: string | null
+          patient_phone?: string
+          whatsapp_line_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_message_debounce_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_message_debounce_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_message_debounce_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_message_debounce_whatsapp_line_id_fkey"
+            columns: ["whatsapp_line_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_lines"
             referencedColumns: ["id"]
           },
         ]
@@ -1347,6 +1422,7 @@ export type Database = {
           slug: string
           timezone: string | null
           trial_ends_at: string | null
+          vertical: string
         }
         Insert: {
           auto_cancel_enabled?: boolean
@@ -1369,6 +1445,7 @@ export type Database = {
           slug: string
           timezone?: string | null
           trial_ends_at?: string | null
+          vertical?: string
         }
         Update: {
           auto_cancel_enabled?: boolean
@@ -1391,6 +1468,7 @@ export type Database = {
           slug?: string
           timezone?: string | null
           trial_ends_at?: string | null
+          vertical?: string
         }
         Relationships: []
       }
@@ -1620,6 +1698,80 @@ export type Database = {
             columns: ["service_type_id"]
             isOneToOne: false
             referencedRelation: "service_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      properties: {
+        Row: {
+          back_yard: boolean
+          bathrooms: number | null
+          bedrooms: number | null
+          code: string
+          construction_size_m2: number | null
+          created_at: string
+          currency: string
+          front_yard: boolean
+          id: string
+          organization_id: string
+          parking_spots: number | null
+          photos: string[]
+          price: number | null
+          property_type: string
+          size_varas: number | null
+          status: string
+          title: string
+          updated_at: string
+          zone: string | null
+        }
+        Insert: {
+          back_yard?: boolean
+          bathrooms?: number | null
+          bedrooms?: number | null
+          code: string
+          construction_size_m2?: number | null
+          created_at?: string
+          currency?: string
+          front_yard?: boolean
+          id?: string
+          organization_id: string
+          parking_spots?: number | null
+          photos?: string[]
+          price?: number | null
+          property_type: string
+          size_varas?: number | null
+          status?: string
+          title: string
+          updated_at?: string
+          zone?: string | null
+        }
+        Update: {
+          back_yard?: boolean
+          bathrooms?: number | null
+          bedrooms?: number | null
+          code?: string
+          construction_size_m2?: number | null
+          created_at?: string
+          currency?: string
+          front_yard?: boolean
+          id?: string
+          organization_id?: string
+          parking_spots?: number | null
+          photos?: string[]
+          price?: number | null
+          property_type?: string
+          size_varas?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+          zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "properties_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2258,6 +2410,26 @@ export type Database = {
         Args: { p_final_answer?: string; p_proposal_id: string }
         Returns: string
       }
+      claim_bot_debounce_row: {
+        Args: { p_expected_last_message_at: string; p_id: string }
+        Returns: {
+          claimed_at: string
+          conversation_id: string | null
+          id: string
+          last_message_at: string
+          messages: string[]
+          organization_id: string
+          patient_id: string | null
+          patient_phone: string
+          whatsapp_line_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bot_message_debounce"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       create_visit_appointments: {
         Args: { p_procedures: Json; p_visit_id?: string }
         Returns: {
@@ -2288,6 +2460,20 @@ export type Database = {
       }
       current_doctor_id: { Args: never; Returns: string }
       current_per_message_price: { Args: never; Returns: number }
+      enqueue_bot_debounce_message: {
+        Args: {
+          p_conversation_id: string
+          p_message: string
+          p_organization_id: string
+          p_patient_id: string
+          p_patient_phone: string
+          p_whatsapp_line_id: string
+        }
+        Returns: {
+          debounce_id: string
+          is_new_claim: boolean
+        }[]
+      }
       find_or_create_patient: {
         Args: {
           p_doctor_id?: string

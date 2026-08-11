@@ -1057,7 +1057,7 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
   // 3. Consultar org_members con organizations para obtener membresías
   const { data: memberships, error: membershipsError } = await supabase
     .from("org_members")
-    .select("organization_id, role, doctor_id, organizations(name, onboarding_status)")
+    .select("organization_id, role, doctor_id, organizations(name, onboarding_status, vertical)")
     .eq("user_id", user.id)
     .eq("is_active", true);
 
@@ -1112,6 +1112,8 @@ export async function getCurrentUserWithRole(): Promise<CurrentUser | null> {
     organizations,
     // Extra field for onboarding — accessed via (currentUser as any).onboardingStatus in UserContext
     onboardingStatus: activeOrgRow.organizations?.onboarding_status ?? 'active',
+    // Extra field — accessed via (currentUser as any).organizationVertical in UserContext
+    organizationVertical: activeOrgRow.organizations?.vertical ?? 'clinica',
   } as CurrentUser;
 }
 
