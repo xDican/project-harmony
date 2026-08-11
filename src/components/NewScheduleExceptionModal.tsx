@@ -1,15 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, addDays, differenceInCalendarDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowRight, Calendar, Clock, Loader2, X } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter } from '@/components/ui/drawer';
+import { ArrowRight, Calendar, Clock, Loader2 } from 'lucide-react';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -526,7 +519,7 @@ export default function NewScheduleExceptionModal({
   // Cuerpo compartido entre el Dialog (desktop) y el Drawer (mobile) — evita
   // duplicar el picker + campo motivo entre los dos cascarones.
   const body = (
-    <>
+    <div className="flex flex-col gap-4">
       <ToggleGroup
         type="single"
         value={fullDayMode ? 'full-day' : 'hours'}
@@ -592,57 +585,39 @@ export default function NewScheduleExceptionModal({
           placeholder="Ej. vacaciones, compromiso personal"
         />
       </div>
+    </div>
+  );
+
+  const confirmDisabled =
+    !startDate || !endDate || (!fullDayMode && (!startTime || !endTime)) || isSubmitting;
+
+  // Footer distinto por plataforma (preservado del shell original): mobile
+  // solo el boton de accion (la X ya cierra); desktop suma "Cancelar" explicito.
+  const footer = isMobile ? (
+    <Button className="w-full" disabled={confirmDisabled} onClick={handleConfirm}>
+      {isSubmitting ? 'Creando...' : 'Crear bloqueo'}
+    </Button>
+  ) : (
+    <>
+      <Button variant="outline" onClick={() => onOpenChange(false)}>
+        Cancelar
+      </Button>
+      <Button disabled={confirmDisabled} onClick={handleConfirm}>
+        {isSubmitting ? 'Creando...' : 'Crear bloqueo'}
+      </Button>
     </>
   );
 
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="h-[100dvh] max-h-[100dvh] rounded-none">
-          <DrawerHeader className="flex flex-row items-center justify-between border-b pb-3">
-            <DrawerTitle>Nuevo bloqueo</DrawerTitle>
-            <Button variant="ghost" size="icon" className="shrink-0" onClick={() => onOpenChange(false)}>
-              <X className="h-5 w-5" />
-            </Button>
-          </DrawerHeader>
-
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 flex flex-col gap-4">{body}</div>
-
-          <DrawerFooter className="border-t pt-3">
-            <Button
-              className="w-full"
-              disabled={!startDate || !endDate || (!fullDayMode && (!startTime || !endTime)) || isSubmitting}
-              onClick={handleConfirm}
-            >
-              {isSubmitting ? 'Creando...' : 'Crear bloqueo'}
-            </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-6 border-b border-border">
-          <DialogTitle>Nuevo bloqueo</DialogTitle>
-        </DialogHeader>
-
-        <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">{body}</div>
-
-        <DialogFooter className="p-6 border-t border-border">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!startDate || !endDate || (!fullDayMode && (!startTime || !endTime)) || isSubmitting}
-            onClick={handleConfirm}
-          >
-            {isSubmitting ? 'Creando...' : 'Crear bloqueo'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Nuevo bloqueo"
+      footer={footer}
+      mobileFullScreen
+      desktopMaxWidth="max-w-4xl"
+    >
+      {body}
+    </ResponsiveModal>
   );
 }
