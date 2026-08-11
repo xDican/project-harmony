@@ -20,6 +20,7 @@ import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
 import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
 import { getAvailableSlotsForDate as computeAvailableSlots } from '../_shared/availability.ts';
 import { maybeHandleSdr, maybeHandleSdrButtonAction, markLeadAgendado } from './sdr.ts';
+import { maybeHandleRealEstate } from './realestate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +65,8 @@ type BotState =
   | 'handoff_secretary'
   | 'sdr_chat'             // Fase 2b: conversación libre con capa LLM (líneas con sdr_mode_enabled)
   | 'sdr_booking'          // Fase 2b: agendamiento conversacional (slots reales + LLM con guard)
+  | 'realestate_chat'      // Piloto Bruno (10 Ago): paralelo a sdr_chat, orgs con vertical='bienes_raices'
+  | 'realestate_booking'   // Piloto Bruno (10 Ago): paralelo a sdr_booking
   | 'completed'
   | 'expired';
 
@@ -215,12 +218,16 @@ async function handleBotMessage(
   if (!session.context.handoffLabels) {
     const { data: lineConfig } = await supabase
       .from('whatsapp_lines')
-      .select('bot_handoff_type, sdr_mode_enabled')
+      .select('bot_handoff_type, sdr_mode_enabled, organizations(vertical)')
       .eq('id', whatsappLineId)
       .single();
     session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
     // Fase 2b: flag del modo SDR (capa LLM). Cacheado por sesion como el resto.
     session.context.sdrModeEnabled = lineConfig?.sdr_mode_enabled === true;
+    // Piloto Bruno (10 Ago): rubro de la org — decide SDR medico vs flujo de
+    // bienes raices en el branch de abajo. Default 'clinica' para cualquier
+    // org sin vertical seteado explicito (todas las existentes).
+    session.context.orgVertical = (lineConfig?.organizations as any)?.vertical ?? 'clinica';
 
     // Fase 1 motor: los tipos de servicio son la tabla service_types (fuente unica),
     // ya no el JSONB whatsapp_lines.bot_service_types. display_name = lo que ve el
@@ -327,7 +334,7 @@ async function handleBotMessage(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
     session.context.cancelConfirmPhase = 'confirm_delete';
     const cancelResp: BotResponse = {
-      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
+      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
       options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -431,7 +438,9 @@ async function handleBotMessage(
   // libre ANTES del state machine. Devuelve null para continuar con el flujo
   // clasico (numeros de menu, SDR apagado, presupuesto excedido o LLM caido —
   // el fallback determinista esta garantizado).
-  const sdrResponse = await maybeHandleSdr({
+  // Piloto Bruno (10 Ago): orgs con vertical='bienes_raices' usan el flujo de
+  // bienes raices en vez del SDR medico — mismo deps, nunca ambos a la vez.
+  const sdrArgs = {
     session, messageText, whatsappLineId, patientPhone, organizationId, supabase, handoffLabels,
     deps: {
       parseDateHint, parseTimeHint, fuzzyMatchOption, resolveServiceAndContinue,
@@ -440,7 +449,10 @@ async function handleBotMessage(
       handleHandoffToSecretary, handleGreeting, handleBookingConfirm, detectIntent,
       findPatientByPhone, getPatientUpcomingAppointments, confirmAppointmentFromText,
     },
-  });
+  };
+  const sdrResponse = session.context.orgVertical === 'bienes_raices'
+    ? await maybeHandleRealEstate(sdrArgs)
+    : await maybeHandleSdr(sdrArgs);
   if (sdrResponse) {
     response = sdrResponse as BotResponse;
     await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
@@ -765,7 +777,7 @@ async function handleDirectReschedule(
   const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
 
   return {
-    message: `Entendido, le ayudo a reagendar.\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n${stepTitle}\n\nSeleccione la nueva semana:\n👉 Escriba el numero\n\n_Si prefiere cancelar definitivamente, escriba *cancelar*._`,
+    message: `Entendido, le ayudo a reagendar.\n\n${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n${stepTitle}\n\nSeleccione la nueva semana:\n👉 Escriba el numero\n\n_Si prefiere cancelar definitivamente, escriba *cancelar*._`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
@@ -2904,7 +2916,7 @@ async function handleBookingSelectHour(
         : '';
 
       return {
-        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}${serviceTypeLine}${priceLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
+        message: `${confirmTitle}\n\n${session.context.doctorName}${serviceTypeLine}${priceLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
         options: [`${OPT_EMOJI.confirmar} Si, confirmar`, `${OPT_EMOJI.cambiar} Cambiar horario`, `${OPT_EMOJI.cancelar} Cancelar`],
         requiresInput: true,
         nextState: 'booking_confirm',
@@ -3231,6 +3243,9 @@ async function createAppointmentWithPatient(
       service_type: session.context.selectedServiceType || null,
       service_type_id: session.context.selectedServiceTypeId || null,
       calendar_id: session.context.calendarId || null,
+      // Piloto Bruno (10 Ago): null para cualquier sesion que no haya pasado
+      // por el flujo de bienes raices (todas las orgs medicas existentes).
+      property_id: session.context.reSelectedPropertyId || null,
     })
     .select()
     .single();
@@ -3265,7 +3280,7 @@ async function createAppointmentWithPatient(
   }
 
   return {
-    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.${featuredCloser}`,
+    message: `${successEmoji} *${successTitle}*\n\n${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.${featuredCloser}`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -3378,7 +3393,7 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `${OPT_EMOJI.reagendar} *Cita seleccionada*\n\n🩺 ${selectedApt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedApt.time)}\n\n¿Que desea hacer?`,
+      message: `${OPT_EMOJI.reagendar} *Cita seleccionada*\n\n${selectedApt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedApt.time)}\n\n¿Que desea hacer?`,
       options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -3438,7 +3453,7 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `${OPT_EMOJI.reagendar} *Su cita proxima:*\n\n🩺 ${apt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(apt.time)}\n\n¿Que desea hacer?`,
+      message: `${OPT_EMOJI.reagendar} *Su cita proxima:*\n\n${apt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(apt.time)}\n\n¿Que desea hacer?`,
       options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -3509,7 +3524,7 @@ async function handleCancelConfirm(
           .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
         return {
-          message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
+          message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
           options: [
             `${OPT_EMOJI.agendar} Agendar cita`,
             `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
@@ -3614,7 +3629,7 @@ async function handleCancelConfirm(
     session.context.cancelConfirmPhase = 'confirm_delete';
 
     return {
-      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
+      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
       options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -4121,7 +4136,7 @@ async function confirmAppointmentFromText(
   const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
     .toFormat("EEEE dd 'de' MMMM", { locale: 'es' });
   return {
-    message: `✅ *Cita confirmada*\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n¡Le esperamos!`,
+    message: `✅ *Cita confirmada*\n\n${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n¡Le esperamos!`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -4150,7 +4165,7 @@ async function startDestructiveCancelFromText(
   session.context.cancelConfirmPhase = 'confirm_delete';
   session.context.isReschedule = true;
   return {
-    message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n_Esta accion no se puede deshacer._`,
+    message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n_Esta accion no se puede deshacer._`,
     options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
     requiresInput: true,
     nextState: 'cancel_confirm',

@@ -801,6 +801,7 @@ export type Database = {
           bot_silenced_until: string | null
           created_at: string
           id: string
+          interest_property_id: string | null
           interest_service_type_id: string | null
           last_inbound_at: string | null
           last_message_at: string
@@ -823,6 +824,7 @@ export type Database = {
           bot_silenced_until?: string | null
           created_at?: string
           id?: string
+          interest_property_id?: string | null
           interest_service_type_id?: string | null
           last_inbound_at?: string | null
           last_message_at?: string
@@ -845,6 +847,7 @@ export type Database = {
           bot_silenced_until?: string | null
           created_at?: string
           id?: string
+          interest_property_id?: string | null
           interest_service_type_id?: string | null
           last_inbound_at?: string | null
           last_message_at?: string
@@ -868,6 +871,13 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_interest_property_id_fkey"
+            columns: ["interest_property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
           {

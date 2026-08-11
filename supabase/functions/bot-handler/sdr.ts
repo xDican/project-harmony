@@ -63,7 +63,7 @@ const TIMEZONE = "America/Tegucigalpa";
 type Any = any;
 
 /** Subconjunto de BotResponse que produce esta capa (compatible con index.ts). */
-interface SdrBotResponse {
+export interface SdrBotResponse {
   message: string;
   options?: string[];
   showMenuHint?: boolean;
@@ -94,7 +94,7 @@ export interface SdrDeps {
   confirmAppointmentFromText: (appointment: Any, supabase: Any) => Promise<Any>;
 }
 
-interface SdrArgs {
+export interface SdrArgs {
   session: Any;
   messageText: string;
   whatsappLineId: string;
@@ -786,7 +786,7 @@ function resolveServiceForBooking(session: Any, ctx: SdrContext, serviceId: stri
   return null;
 }
 
-function matchOfferedSlot(input: string, offered: string[], deps: SdrDeps): number | null {
+export function matchOfferedSlot(input: string, offered: string[], deps: SdrDeps): number | null {
   const hint = deps.parseTimeHint(input);
   if (hint) {
     const idx = offered.indexOf(hint);
@@ -807,7 +807,7 @@ function timeToMinutes(hhmm: string): number {
  * cronológico. Sin preferencia: filtrados por franja si la hay, si no
  * inicio/medio/fin del día.
  */
-function pickSlots(slots: string[], period: "morning" | "afternoon" | null, preferredTime?: string): string[] {
+export function pickSlots(slots: string[], period: "morning" | "afternoon" | null, preferredTime?: string): string[] {
   if (preferredTime) {
     const target = timeToMinutes(preferredTime);
     return [...slots]
@@ -825,7 +825,7 @@ function pickSlots(slots: string[], period: "morning" | "afternoon" | null, pref
 }
 
 /** Slots completos del día (sin paginar), mismas fuentes que showHourSlots. */
-async function fetchSlotsForDate(args: SdrArgs, date: string): Promise<string[]> {
+export async function fetchSlotsForDate(args: SdrArgs, date: string): Promise<string[]> {
   const { session, supabase, deps } = args;
   const durationMinutes = session.context.durationMinutes || 60;
   const granularity = session.context.slotGranularity || Math.min(durationMinutes, 30);
@@ -870,7 +870,7 @@ async function callSdrLLM(
   return null;
 }
 
-async function resolveConversationId(args: SdrArgs): Promise<string | null> {
+export async function resolveConversationId(args: SdrArgs): Promise<string | null> {
   const { session, whatsappLineId, patientPhone, supabase } = args;
   if (session.context.sdrConversationId !== undefined) return session.context.sdrConversationId;
   const { data } = await supabase
@@ -884,7 +884,7 @@ async function resolveConversationId(args: SdrArgs): Promise<string | null> {
 }
 
 /** Presupuesto mensual LLM del org (cache 10 min en la sesión). */
-async function underLlmBudget(session: Any, organizationId: string, supabase: Any): Promise<boolean> {
+export async function underLlmBudget(session: Any, organizationId: string, supabase: Any): Promise<boolean> {
   const cached = session.context.sdrBudgetCheck;
   if (cached && Date.now() - cached.at < BUDGET_RECHECK_MS) return cached.ok;
 
@@ -912,7 +912,7 @@ async function underLlmBudget(session: Any, organizationId: string, supabase: An
 }
 
 /** Embudo en conversations. 'agendado' solo lo escribe markLeadAgendado. */
-async function updateLeadStage(args: SdrArgs, stage: string, serviceId: string | null): Promise<void> {
+export async function updateLeadStage(args: SdrArgs, stage: string, serviceId: string | null): Promise<void> {
   if (stage === "agendado") return;
   const conversationId = await resolveConversationId(args);
   if (!conversationId) return;
