@@ -55,6 +55,7 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<"pagado" | "cancelado" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   // Reset solo al abrir / al cambiar de pedido (los refetch por polling no pisan lo escrito)
   const orderId = order?.id;
@@ -64,6 +65,7 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
     setAddress(order.delivery_address ?? "");
     setNotes(order.notes ?? "");
     setError(null);
+    setSaveState("idle");
     setConfirming(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderId]);
@@ -80,10 +82,41 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
   const allowed = ORDER_TRANSITIONS[status];
   const editable = status === "reservado" || status === "en_revision" || status === "pagado";
 
-  const detailsDirty =
-    (order.delivery_method ?? NO_METHOD) !== method ||
-    (order.delivery_address ?? "") !== address ||
-    (order.notes ?? "") !== notes;
+  type Details = { method: string; address: string; notes: string };
+
+  // Guarda lo que difiera del pedido. Devuelve false si falló (el llamador no debe seguir).
+  const persistDetails = async (d: Details): Promise<boolean> => {
+    if (!editable) return true;
+    const patch: OrderDetailsPatch = {};
+    const nextMethod = d.method === NO_METHOD ? null : (d.method as DeliveryMethod);
+    if ((order.delivery_method ?? null) !== nextMethod) patch.delivery_method = nextMethod;
+    if ((order.delivery_address ?? "") !== d.address.trim()) patch.delivery_address = d.address.trim() || null;
+    if ((order.notes ?? "") !== d.notes.trim()) patch.notes = d.notes.trim() || null;
+    if (Object.keys(patch).length === 0) return true;
+
+    setSaveState("saving");
+    try {
+      await onUpdateDetails(order.id, patch);
+      setSaveState("saved");
+      return true;
+    } catch (err) {
+      setSaveState("error");
+      setError(err instanceof Error ? err.message : "No se pudieron guardar los datos de entrega.");
+      return false;
+    }
+  };
+
+  const flushDetails = () => persistDetails({ method, address, notes });
+
+  // Cerrar con cambios escritos pero sin salir del campo (sin blur) también los guarda.
+  // Si el guardado ya falló una vez, se deja cerrar para no atrapar a la persona en el drawer.
+  const handleOpenChange = async (next: boolean) => {
+    if (!next && saveState !== "error") {
+      const ok = await flushDetails();
+      if (!ok) return;
+    }
+    onOpenChange(next);
+  };
 
   const run = async (fn: () => Promise<unknown>, okTitle: string) => {
     setBusy(true);
@@ -100,19 +133,12 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
     }
   };
 
+  // Antes de cambiar de estado se guardan los datos de entrega pendientes
   const changeStatus = (next: OrderStatus, okTitle: string) =>
-    run(() => onChangeStatus(order.id, next), okTitle);
-
-  const saveDetails = () =>
-    run(
-      () =>
-        onUpdateDetails(order.id, {
-          delivery_method: method === NO_METHOD ? null : (method as DeliveryMethod),
-          delivery_address: address.trim() || null,
-          notes: notes.trim() || null,
-        }),
-      "Datos de entrega guardados",
-    );
+    run(async () => {
+      if (!(await flushDetails())) throw new Error("No se pudieron guardar los datos de entrega; el estado no cambió.");
+      await onChangeStatus(order.id, next);
+    }, okTitle);
 
   const waPhone = order.customer_phone.replace(/\D/g, "");
 
@@ -161,7 +187,7 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
     <>
       <ResponsiveModal
         open={open}
-        onOpenChange={onOpenChange}
+        onOpenChange={(next) => void handleOpenChange(next)}
         title={order.customer_name || order.customer_phone}
         subtitle={<OrderStatusBadge status={status} />}
         footer={allowed.length > 0 ? footer : undefined}
@@ -221,8 +247,25 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Entrega</Label>
-              <Select value={method} onValueChange={setMethod} disabled={!editable}>
+              <div className="flex items-center justify-between">
+                <Label>Entrega</Label>
+                {saveState !== "idle" && (
+                  <span
+                    className={`text-xs ${saveState === "error" ? "text-destructive" : "text-muted-foreground"}`}
+                    aria-live="polite"
+                  >
+                    {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado" : "No se guardó"}
+                  </span>
+                )}
+              </div>
+              <Select
+                value={method}
+                onValueChange={(v) => {
+                  setMethod(v);
+                  void persistDetails({ method: v, address, notes });
+                }}
+                disabled={!editable}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -236,18 +279,25 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
             {method === "envio" && (
               <div className="space-y-1.5">
                 <Label>Dirección de envío</Label>
-                <Textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} disabled={!editable} />
+                <Textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  onBlur={() => void flushDetails()}
+                  rows={2}
+                  disabled={!editable}
+                />
               </div>
             )}
             <div className="space-y-1.5">
               <Label>Notas</Label>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} disabled={!editable} />
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={() => void flushDetails()}
+                rows={2}
+                disabled={!editable}
+              />
             </div>
-            {editable && detailsDirty && (
-              <Button variant="secondary" size="sm" onClick={saveDetails} disabled={busy}>
-                Guardar datos de entrega
-              </Button>
-            )}
           </div>
 
           {error && (
