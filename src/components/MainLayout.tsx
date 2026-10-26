@@ -406,7 +406,7 @@ export default function MainLayout({
       <aside className="hidden md:flex md:flex-col md:w-64 border-r bg-card">
         <div className="sticky top-0 flex flex-col h-screen">
           <div className="flex items-center justify-between h-16 px-6 border-b">
-            <h1 className="text-xl font-bold text-foreground">Agenda Médica</h1>
+            <h1 className="text-xl font-bold text-foreground">{isVentas ? 'PatPat Live' : 'Agenda Médica'}</h1>
             <Button variant="ghost" size="icon" onClick={handleLogout} title="Cerrar sesión">
               <LogOut className="h-5 w-5" />
               <span className="sr-only">Cerrar sesión</span>
