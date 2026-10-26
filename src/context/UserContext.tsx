@@ -120,9 +120,11 @@ export function UserProvider({ children }: UserProviderProps) {
     await switchActiveOrganization(newOrgId);
 
     // Re-fetch user with updated org context
+    // handleUserFetch (no setUser a secas): también refresca vertical y onboardingStatus,
+    // si no el menú queda con el de la org anterior (ej. clínica en vez de ventas).
     const updatedUser = await getCurrentUserWithRole();
-    setUser(updatedUser);
-  }, []);
+    handleUserFetch(updatedUser);
+  }, [handleUserFetch]);
 
   // Calculate role flags based on user.role
   const isAdmin = user?.role === 'admin';
