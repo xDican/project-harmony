@@ -33,6 +33,7 @@ const CONVERSATION_SELECT = `
   last_message_at,
   last_inbound_at,
   unread_count,
+  interest_product_id,
   whatsapp_lines!inner(bot_enabled),
   last_message:message_logs (
     body,
@@ -74,6 +75,8 @@ export interface ConversationListRow {
   last_message_at: string;
   last_inbound_at: string | null;
   unread_count: number;
+  /** Producto de interes (vertical ventas); null en clinicas */
+  interest_product_id?: string | null;
   bot_enabled: boolean;
   // Ultimo mensaje (puede ser null si la conversacion no tiene mensajes)
   last_message: {
