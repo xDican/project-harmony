@@ -60,6 +60,13 @@ export interface SdrLLMOutput {
    */
   interest_question_asked: boolean;
   /**
+   * Idioma en el que redactaste `reply` este turno ("es" por defecto). El
+   * backend lo cachea en session.context.sdrLanguage para que los mensajes
+   * deterministas (fuera del LLM: ofrecer horarios, confirmar cita) usen el
+   * mismo idioma en vez de quedar fijos en español (17 Ago, video demo).
+   */
+  detected_language: "es" | "en";
+  /**
    * Preferencia de agendamiento extraída (Fase 2b). El LLM NUNCA calcula
    * fechas: `date_text` es la expresión del paciente tal cual ("mañana",
    * "el viernes", "3 de agosto") — el backend la resuelve con parseDateHint.
@@ -440,8 +447,9 @@ Si el paciente avisa que no puede asistir, pide cancelar, reagendar o confirmar 
 
 ## Cómo hablás
 - Español hondureño natural, trato de "usted", cálido y profesional. Nada robótico.
+- EXCEPCIÓN de idioma: si el paciente te escribe en inglés, respondé TODO el mensaje en inglés natural (mismo tono cálido y directo, sin la jerga hondureña que no aplica en ese idioma) y mantené ese idioma el resto de la conversación salvo que el paciente cambie de vuelta a español. Si escribe en español (o mezcla clara de español), seguí en español. Ante duda, español. Marcá "detected_language" con el idioma que usaste en "reply" — la plataforma lo usa para que sus propios mensajes (ofrecer horarios, confirmar la cita) también salgan en ese idioma.
 - Máximo 3-4 líneas por mensaje. Sin párrafos largos, sin listas salvo que ayuden.
-- NUNCA uses el signo de apertura ¿ — solo el de cierre (?), como escribe la gente real por WhatsApp.
+- NUNCA uses el signo de apertura ¿ — solo el de cierre (?), como escribe la gente real por WhatsApp. (Esta regla es solo para español; en inglés no aplica.)
 - Directo, sin explicaciones de más ("puede decirme por ejemplo...", "esto significa que..."). Hablás con adultos, no con niños.
 - Entendé typos y lenguaje coloquial hondureño: "clnsulta"/"konsulta"=consulta, "ebaluasion"/"ebaluasión"=evaluación, "protecis"/"ptotesis"=prótesis, "puezas"/"piesas"=piezas, "nohjes"=noches, "asen"/"aser"=hacen/hacer, "yamo"=llamo, "presio"=precio, "quw"=qué, "mus"=muy, "d"="de", "fíjese que...", "ahí estaré".
 - Los pacientes suelen escribir en fragmentos sueltos ("Precio", "Consulta", "Flexible", "Activa") esperando que entiendas por el hilo de la conversación — no le pidas que "dé más detalles" si la respuesta corta ya contesta lo que preguntaste.
@@ -501,6 +509,7 @@ Respondé ÚNICAMENTE un objeto JSON válido, sin texto antes ni después, sin m
   "handoff_reason": "<motivo corto si needs_handoff, si no null>",
   "reply": "<tu mensaje para el paciente>",
   "interest_question_asked": true|false,
+  "detected_language": "es"|"en",
   "booking": { "date_text": "<expresión textual del paciente o null>", "period": "morning|afternoon|null", "chosen_time": "<hora elegida de las ofrecidas o null>", "time_text": "<hora específica que pidió por su cuenta, antes de ofrecerle nada, o null>" }
 }`;
 }
@@ -551,6 +560,7 @@ export function parseSdrOutput(text: string | null): SdrLLMOutput | null {
         : null,
     reply,
     interest_question_asked: parsed.interest_question_asked === true,
+    detected_language: parsed.detected_language === "en" ? "en" : "es",
     booking,
   };
 }
