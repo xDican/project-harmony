@@ -135,9 +135,13 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
     // "si"/"sí" (WhatsApp casi nunca tilda, quedan indistinguibles) solo cuenta
     // como confirmación cuando NO es el "si" condicional de una frase como "si
     // tiene espacio el jueves" — sin esto, esa frase se leía como "confirmo".
-    const bareSi = /\bs[ií]\b/.test(lower) && !isConditionalSi(normalized);
+    // Afirmaciones en inglés (17 Ago, video demo) — mismo criterio que "si"
+    // suelto: solo cuentan si no van pegadas a una pregunta condicional propia
+    // ("yes, but do you have Thursday?" no debería confirmar a ciegas).
+    const bareYes = /\b(yes|yeah|yep|yup|sure|ok|okay)\b/.test(lower) && !lower.includes("?");
+    const bareSi = (/\bs[ií]\b/.test(lower) && !isConditionalSi(normalized)) || bareYes;
     const classicMatch = /^[123]$/.test(trimmed) ||
-      bareSi || /confirm|cambiar|cancelar|canselar/.test(lower);
+      bareSi || /confirm|cambiar|cancelar|canselar|\bchange\b|\bcancel\b/.test(lower);
     if (classicMatch) return null; // el handler clásico ya lo entiende
     const di = args.deps.detectIntent(messageText);
     if (di.intent === "confirm") {
@@ -196,6 +200,13 @@ export async function maybeHandleSdr(args: SdrArgs): Promise<SdrBotResponse | nu
     console.error("[sdr] Unexpected error, falling back to classic flow:", e);
     return null;
   }
+}
+
+/** Idioma detectado por el LLM este turno (cacheado en callSdrLLM) — para los
+ * mensajes deterministas de abajo (y en index.ts, tras booking_confirm) que
+ * no pasan por el LLM. */
+export function isEnglish(session: Any): boolean {
+  return session.context.sdrLanguage === "en";
 }
 
 /** Limpia todo rastro de un agendamiento previo (anti cita duplicada). */
@@ -314,9 +325,13 @@ async function handleSdrChat(args: SdrArgs): Promise<SdrBotResponse | null> {
     // real cazado en QA 24 Jul: "¿tiene espacio el sábado?" antes de decir el
     // tratamiento). Preguntar explícito en vez de confiar en el reply del LLM.
     const list = ctx.services.map((s) => `• ${s.name}`).join("\n");
-    const msg = ctx.services.length > 1
-      ? `¡Con gusto! Para qué tratamiento le gustaría agendar su cita?\n\n${list}`
-      : "¡Con gusto! Para qué tratamiento le gustaría agendar su cita?";
+    const msg = isEnglish(session)
+      ? (ctx.services.length > 1
+        ? `Happy to help! Which treatment would you like to book?\n\n${list}`
+        : "Happy to help! Which treatment would you like to book?")
+      : (ctx.services.length > 1
+        ? `¡Con gusto! Para qué tratamiento le gustaría agendar su cita?\n\n${list}`
+        : "¡Con gusto! Para qué tratamiento le gustaría agendar su cita?");
     await updateLeadStage(args, out.lead_stage, null);
     pushHistory(session, messageText, msg);
     return { message: msg, requiresInput: true, nextState: "sdr_chat", sessionComplete: false, showMenuHint: false };
@@ -557,7 +572,9 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
   if (!session.context.sdrBookingSetup) {
     const svc = resolveServiceForBooking(session, ctx, fromChat?.service_id ?? session.context.sdrInterestServiceId);
     if (!svc) {
-      return sdrReply(session, messageText, "Para qué tratamiento le gustaría su cita? 😊", "sdr_chat");
+      return sdrReply(session, messageText, isEnglish(session)
+        ? "Which treatment would you like your appointment for? 😊"
+        : "Para qué tratamiento le gustaría su cita? 😊", "sdr_chat");
     }
     const setupResp = await deps.resolveServiceAndContinue(svc, session, organizationId, supabase);
     if (setupResp.nextState === "handoff_secretary" || setupResp.nextState === "booking_select_service") {
@@ -594,7 +611,9 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
         const picked = pickSlots(fullDaySlots, null, requestedTime);
         session.context.sdrOfferedSlots = picked;
         const formatted = picked.map(formatTimeForTemplate);
-        const msg = `A las ${formatTimeForTemplate(requestedTime)} no tengo espacio ese día, pero sí tengo ${formatted.join(" o ")}. Le sirve alguna?`;
+        const msg = isEnglish(session)
+          ? `I don't have space at ${formatTimeForTemplate(requestedTime)} that day, but I do have ${formatted.join(" or ")}. Would either work for you?`
+          : `A las ${formatTimeForTemplate(requestedTime)} no tengo espacio ese día, pero sí tengo ${formatted.join(" o ")}. Le sirve alguna?`;
         pushHistory(session, messageText, msg);
         return { message: msg, requiresInput: true, nextState: "sdr_booking", sessionComplete: false, showMenuHint: false };
       }
@@ -628,8 +647,9 @@ async function handleSdrBooking(args: SdrArgs, fromChat: SdrLLMOutput | null): P
   if (dateText || !session.context.sdrOfferedSlots) {
     const hint = dateText ? deps.parseDateHint(dateText) ?? deps.parseDateHint(messageText) : deps.parseDateHint(messageText);
     if (!hint) {
-      return sdrReply(session, messageText,
-        "Para qué día le gustaría su cita — mañana, el viernes, o dígame la fecha 😊",
+      return sdrReply(session, messageText, isEnglish(session)
+        ? "What day would you like your appointment — tomorrow, Friday, or just tell me the date 😊"
+        : "Para qué día le gustaría su cita — mañana, el viernes, o dígame la fecha 😊",
         "sdr_booking");
     }
     // Hora exacta que el paciente pidió por su cuenta (antes de que se le
@@ -672,7 +692,9 @@ async function offerSlotsForDate(
   if (slots.length === 0) {
     const connecting = session.context.handoffLabels?.connecting || "la secretaria";
     return {
-      message: `⚠️ No encontramos disponibilidad en los próximos días.\n\nConectando con ${connecting}...`,
+      message: isEnglish(session)
+        ? `⚠️ We couldn't find availability in the coming days.\n\nConnecting you with ${connecting}...`
+        : `⚠️ No encontramos disponibilidad en los próximos días.\n\nConectando con ${connecting}...`,
       requiresInput: false,
       nextState: "handoff_secretary",
       sessionComplete: true,
@@ -680,7 +702,9 @@ async function offerSlotsForDate(
   }
 
   const dayMoved = date !== isoDate;
-  const dayLabel = DateTime.fromISO(date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
+  const dayLabel = isEnglish(session)
+    ? DateTime.fromISO(date, { zone: TIMEZONE }).setLocale("en").toFormat("EEEE, MMMM d")
+    : DateTime.fromISO(date, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
   session.context.selectedDate = date;
   session.context.sdrOfferedDayLabel = dayLabel;
 
@@ -703,7 +727,9 @@ async function offerSlotsForDate(
   // es texto de plantilla con datos reales inyectados, el fallback ya sonaba bien
   // y evita gastar una 2da llamada LLM por turno solo para redactar horarios).
   const formatted = picked.map(formatTimeForTemplate);
-  const reply = `${dayMoved ? `Fíjese que para el día que me pidió no tengo espacio, pero para *${dayLabel}* sí 😊 ` : `Para *${dayLabel}* tengo disponible: `}${formatted.join(" y ")}. Cuál le queda mejor?`;
+  const reply = isEnglish(session)
+    ? `${dayMoved ? `I don't have space on the day you asked, but I do for *${dayLabel}* 😊 ` : `For *${dayLabel}* I have available: `}${formatted.join(" and ")}. Which works better for you?`
+    : `${dayMoved ? `Fíjese que para el día que me pidió no tengo espacio, pero para *${dayLabel}* sí 😊 ` : `Para *${dayLabel}* tengo disponible: `}${formatted.join(" y ")}. Cuál le queda mejor?`;
 
   pushHistory(session, messageText, reply);
   return { message: reply, requiresInput: true, nextState: "sdr_booking", sessionComplete: false, showMenuHint: false };
@@ -732,13 +758,18 @@ async function acceptSlot(args: SdrArgs, ctx: SdrContext, selectedTime: string):
       (await deps.firstActiveCalendarId(supabase, assignedId)) ?? undefined;
   }
 
+  const english = isEnglish(session);
   const dayLabel = session.context.sdrOfferedDayLabel ||
-    DateTime.fromISO(session.context.selectedDate, { zone: TIMEZONE }).setLocale("es").toFormat("EEEE d 'de' MMMM");
+    DateTime.fromISO(session.context.selectedDate, { zone: TIMEZONE })
+      .setLocale(english ? "en" : "es")
+      .toFormat(english ? "EEEE, MMMM d" : "EEEE d 'de' MMMM");
   const svcLine = session.context.selectedServiceType ? `${session.context.selectedServiceType} — ` : "";
 
   // Confirmación natural SIN LLM (determinista); el "sí"/"cambiar"/"cancelar"
   // del siguiente turno lo procesa el handler clásico de booking_confirm.
-  const msg = `Perfecto 😊 Le confirmo su cita: ${svcLine}*${dayLabel}* a las *${formatTimeForTemplate(selectedTime)}* con ${session.context.doctorName}. Se la confirmo?`;
+  const msg = english
+    ? `Perfect 😊 Let me confirm your appointment: ${svcLine}*${dayLabel}* at *${formatTimeForTemplate(selectedTime)}* with ${session.context.doctorName}. Shall I confirm it?`
+    : `Perfecto 😊 Le confirmo su cita: ${svcLine}*${dayLabel}* a las *${formatTimeForTemplate(selectedTime)}* con ${session.context.doctorName}. Se la confirmo?`;
   pushHistory(session, messageText, msg);
   return { message: msg, requiresInput: true, nextState: "booking_confirm", sessionComplete: false, showMenuHint: false };
 }
@@ -861,7 +892,13 @@ async function callSdrLLM(
       .catch(() => {});
     if (result.ok) {
       const out = parseSdrOutput(result.text);
-      if (out) return out;
+      if (out) {
+        // Cachea el idioma detectado — los mensajes deterministas de abajo
+        // (ofrecer horarios, confirmar cita) lo leen para no quedar fijos en
+        // español cuando el paciente escribe en inglés (17 Ago, video demo).
+        session.context.sdrLanguage = out.detected_language;
+        return out;
+      }
       console.warn(`[sdr] ${model} returned unparseable output, trying next`);
     } else {
       console.warn(`[sdr] ${model} call failed:`, result.error);
