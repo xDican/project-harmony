@@ -136,10 +136,10 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
             variant="outline"
             className="flex-1"
             disabled={busy}
-            onClick={() => changeStatus("reservado", "Devuelto a reservado")}
+            onClick={() => changeStatus("reservado", "Comprobante rechazado: el pedido volvió a reservado")}
           >
             <Undo2 className="h-4 w-4 mr-1.5" />
-            No es comprobante
+            Rechazar comprobante
           </Button>
         )}
         {allowed.includes("cancelado") && (
@@ -173,7 +173,8 @@ export function OrderDrawer({ open, onOpenChange, order, onChangeStatus, onUpdat
             <Alert>
               <AlertDescription>
                 El cliente envió una imagen. Verificá en tu banco que el pago llegó y confirmá. Mientras tanto
-                las piezas siguen apartadas y el pedido no vence.
+                las piezas siguen apartadas y el pedido no vence. Si la imagen no es un comprobante, usá
+                “Rechazar comprobante”: el pedido vuelve a Reservado y el cliente puede enviar el bueno.
               </AlertDescription>
             </Alert>
           )}
