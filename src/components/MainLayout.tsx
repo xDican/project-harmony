@@ -12,6 +12,7 @@ import OrgSwitcher from '@/components/OrgSwitcher';
 import { useInbox } from '@/context/InboxContext';
 import { usePromotionsExpiringSoon } from '@/hooks/usePromotionsExpiringSoon';
 import { useOrders } from '@/hooks/useOrders';
+import { isRouteBlockedForVertical } from '@/lib/homePath';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -305,7 +306,7 @@ export default function MainLayout({
       to: '/admin/reports/appointments',
       label: 'Reporte de Citas',
       icon: FileText
-    }];
+    }].filter(item => !isRouteBlockedForVertical(organizationVertical, item.to));
     return <nav className="flex flex-col gap-2">
         {navigationItems.map(item => <NavLink key={item.to} to={item.to} className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" activeClassName="bg-primary/10 text-primary font-medium" onClick={onClick}>
             <item.icon className="h-5 w-5" />

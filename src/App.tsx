@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Lazy-load Radix Toaster — login uses Sonner, not Radix toasts
 const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ default: m.Toaster })));
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
-import { getHomePath } from "./lib/homePath";
+import { getHomePath, isRouteBlockedForVertical } from "./lib/homePath";
 import { InboxProvider } from "./context/InboxContext";
 import { CallProvider } from "./context/CallContext";
 import { IncomingCallOverlay } from "./components/calls/IncomingCallOverlay";
@@ -85,6 +85,7 @@ const App = () => {
     allowedRoles: UserRole[];
   }) {
     const { user, loading, organizationVertical } = useCurrentUser();
+    const { pathname } = useLocation();
 
     if (loading) {
       return (
@@ -96,6 +97,12 @@ const App = () => {
 
     if (!user) {
       return <Navigate to="/login" replace />;
+    }
+
+    // La ruta no corresponde a la vertical de la org (ej. /calendario en ventas,
+    // /productos en una clínica): al home de su vertical, no a una pantalla vacía.
+    if (isRouteBlockedForVertical(organizationVertical, pathname)) {
+      return <Navigate to={getHomePath(organizationVertical)} replace />;
     }
 
     // Check if user's role is in the allowed roles
