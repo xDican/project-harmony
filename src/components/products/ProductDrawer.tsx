@@ -22,6 +22,7 @@ import type { Product, ProductInsert, ProductUpdate } from "@/lib/productsApi";
 import { uploadProductPhoto, deleteProductPhoto } from "@/lib/productPhotoUpload";
 import { formatMoney } from "@/lib/formatMoney";
 import { ProductPhoto } from "@/components/products/ProductPhoto";
+import { StockBar } from "@/components/products/StockBar";
 
 interface ProductDrawerProps {
   open: boolean;
@@ -172,7 +173,13 @@ export function ProductDrawer({
     setTogglingActive(true);
     try {
       await onUpdate(product.id, { active: !product.active });
-      toast({ title: product.active ? "Producto desactivado" : "Producto reactivado" });
+      toast({
+        title: product.active ? "Producto desactivado" : "Producto reactivado",
+        description:
+          product.active && reserved > 0
+            ? `Las ${reserved} ${reserved === 1 ? "reservada" : "reservadas"} en pedidos abiertos se mantienen.`
+            : undefined,
+      });
     } catch (err) {
       toast({
         title: "Error",
@@ -213,21 +220,18 @@ export function ProductDrawer({
         <p className="text-xl font-bold text-primary mt-2">{formatMoney(product.price, product.currency)}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="bg-muted rounded-lg px-3 py-2 flex items-center justify-between">
-          <span className="text-muted-foreground">Disponible</span>
-          <span className="font-semibold">{product.stock}</span>
-        </div>
-        <div className="bg-muted rounded-lg px-3 py-2 flex items-center justify-between">
-          <span className="text-muted-foreground">Reservado</span>
-          <span className="font-semibold">{reserved}</span>
-        </div>
-      </div>
+      {product.stock + reserved > 0 ? (
+        <StockBar stock={product.stock} reserved={reserved} large />
+      ) : (
+        <p className="text-sm text-red-700 dark:text-red-300">Agotado</p>
+      )}
 
       {!product.active && (
         <Alert>
           <AlertDescription>
             Producto inactivo: el bot no lo ofrece ni lo reserva. Se conserva para el historial de pedidos.
+            {reserved > 0 &&
+              ` Las ${reserved} ${reserved === 1 ? "reservada" : "reservadas"} en pedidos abiertos se mantienen.`}
           </AlertDescription>
         </Alert>
       )}
@@ -268,8 +272,7 @@ export function ProductDrawer({
       </div>
       {product && reserved > 0 && (
         <p className="text-xs text-amber-700 dark:text-amber-300 -mt-2">
-          Hay {reserved} {reserved === 1 ? "reservada" : "reservadas"} en pedidos abiertos; las unidades
-          disponibles ya las descuentan.
+          Además hay {reserved} {reserved === 1 ? "reservada" : "reservadas"} en pedidos abiertos; no se cuentan acá.
         </p>
       )}
 

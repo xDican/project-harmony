@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { Product } from "@/lib/productsApi";
 import { getProductPhotoSignedUrl } from "@/lib/productPhotoUpload";
 import { formatMoney } from "@/lib/formatMoney";
+import { StockBar } from "@/components/products/StockBar";
 
 interface ProductCardProps {
   product: Product;
@@ -73,11 +74,7 @@ export function ProductCard({ product, reserved, onClick }: ProductCardProps) {
       <CardContent className="pt-3 space-y-1">
         <h3 className="font-semibold leading-tight line-clamp-1">{product.name}</h3>
         <p className="font-semibold text-primary">{formatMoney(product.price, product.currency)}</p>
-        {reserved > 0 && (
-          <p className="text-xs text-amber-700 dark:text-amber-300">
-            {reserved} {reserved === 1 ? "reservado" : "reservados"} en pedidos abiertos
-          </p>
-        )}
+        {reserved > 0 && <StockBar stock={product.stock} reserved={reserved} />}
       </CardContent>
     </Card>
   );
