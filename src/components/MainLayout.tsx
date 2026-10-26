@@ -4,13 +4,14 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles, Cog, Home } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles, Cog, Home, ShoppingBag, Package } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
 import OrgSwitcher from '@/components/OrgSwitcher';
 import { useInbox } from '@/context/InboxContext';
 import { usePromotionsExpiringSoon } from '@/hooks/usePromotionsExpiringSoon';
+import { useOrders } from '@/hooks/useOrders';
 
 // Route to title mapping for dynamic header
 const routeTitles: Record<string, string> = {
@@ -20,6 +21,8 @@ const routeTitles: Record<string, string> = {
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
   '/propiedades': 'Propiedades',
+  '/pedidos': 'Pedidos',
+  '/productos': 'Productos',
   '/configuracion': 'Configuración',
   '/configuracion/whatsapp': 'WhatsApp Business',
   '/admin/users': 'Usuarios',
@@ -89,6 +92,14 @@ export default function MainLayout({
     { withinDays: 3, enabled: isAdminOrSecretary },
   );
 
+  // Badge de Pedidos: comprobantes esperando verificación (solo org ventas;
+  // sin organizationId el hook no consulta nada)
+  const isVentas = organizationVertical === 'ventas';
+  const { reviewCount: ordersInReview } = useOrders(
+    isVentas ? organizationId ?? undefined : undefined,
+    { statuses: ['en_revision'] },
+  );
+
   // Keep admin menu open if current route is an admin route
   const isAdminRoute = location.pathname.startsWith('/admin');
   const [adminMenuOpen, setAdminMenuOpen] = useState(isAdminRoute);
@@ -120,6 +131,25 @@ export default function MainLayout({
   // Define navigation items based on user role
   const getNavigationItems = () => {
     const items = [];
+
+    // Ventas (PatPat Live): sin calendario/citas/pacientes — solo bandeja, pedidos y catálogo
+    if (isVentas && isAdminOrSecretary) {
+      return [{
+        to: '/inbox',
+        label: 'Bandeja',
+        icon: InboxIcon,
+        badge: inboxUnread
+      }, {
+        to: '/pedidos',
+        label: 'Pedidos',
+        icon: ShoppingBag,
+        badge: ordersInReview
+      }, {
+        to: '/productos',
+        label: 'Productos',
+        icon: Package
+      }];
+    }
 
     // Secretary
     if (isSecretary) {
