@@ -91,6 +91,21 @@ export async function listOrders(
   return (data ?? []) as unknown as OrderWithItems[];
 }
 
+/** Último pedido de una conversación (el más reciente, cualquier estado) o null. */
+export async function getLatestOrderForConversation(
+  conversationId: string,
+): Promise<OrderWithItems | null> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDER_SELECT)
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw friendlyStoreError("No se pudo cargar el pedido de la conversación", error);
+  return data as unknown as OrderWithItems | null;
+}
+
 export async function updateOrderStatus(
   id: string,
   status: OrderStatus,

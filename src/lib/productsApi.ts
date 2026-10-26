@@ -41,6 +41,16 @@ export async function listProducts(
   return data ?? [];
 }
 
+export async function getProduct(id: string): Promise<Product | null> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw friendlyStoreError("No se pudo cargar el producto", error);
+  return data;
+}
+
 export async function createProduct(
   input: Omit<ProductInsert, "code">,
 ): Promise<Product> {
