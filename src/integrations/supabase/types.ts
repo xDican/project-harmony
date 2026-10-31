@@ -801,6 +801,7 @@ export type Database = {
           bot_silenced_until: string | null
           created_at: string
           id: string
+          interest_product_id: string | null
           interest_property_id: string | null
           interest_service_type_id: string | null
           last_inbound_at: string | null
@@ -824,6 +825,7 @@ export type Database = {
           bot_silenced_until?: string | null
           created_at?: string
           id?: string
+          interest_product_id?: string | null
           interest_property_id?: string | null
           interest_service_type_id?: string | null
           last_inbound_at?: string | null
@@ -847,6 +849,7 @@ export type Database = {
           bot_silenced_until?: string | null
           created_at?: string
           id?: string
+          interest_product_id?: string | null
           interest_property_id?: string | null
           interest_service_type_id?: string | null
           last_inbound_at?: string | null
@@ -871,6 +874,13 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_interest_product_id_fkey"
+            columns: ["interest_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -1355,6 +1365,123 @@ export type Database = {
           },
         ]
       }
+      order_items: {
+        Row: {
+          id: string
+          order_id: string
+          product_id: string
+          quantity: number
+          subtotal: number
+          unit_price: number
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          product_id: string
+          quantity: number
+          subtotal: number
+          unit_price: number
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          product_id?: string
+          quantity?: number
+          subtotal?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          currency: string
+          customer_name: string | null
+          customer_phone: string
+          delivery_address: string | null
+          delivery_method: string | null
+          expires_at: string
+          id: string
+          notes: string | null
+          organization_id: string
+          paid_at: string | null
+          paid_by: string | null
+          review_started_at: string | null
+          status: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          currency?: string
+          customer_name?: string | null
+          customer_phone: string
+          delivery_address?: string | null
+          delivery_method?: string | null
+          expires_at: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          paid_at?: string | null
+          paid_by?: string | null
+          review_started_at?: string | null
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          currency?: string
+          customer_name?: string | null
+          customer_phone?: string
+          delivery_address?: string | null
+          delivery_method?: string | null
+          expires_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          review_started_at?: string | null
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string | null
@@ -1564,6 +1691,59 @@ export type Database = {
           },
           {
             foreignKeyName: "patients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          photos: string[]
+          price: number
+          stock: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          photos?: string[]
+          price: number
+          stock?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          photos?: string[]
+          price?: number
+          stock?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -2078,6 +2258,50 @@ export type Database = {
         }
         Relationships: []
       }
+      store_settings: {
+        Row: {
+          code_prefix: string
+          created_at: string
+          delivery_notes: string | null
+          max_reservation_minutes: number
+          organization_id: string
+          payment_instructions: string | null
+          pickup_address: string | null
+          reservation_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          code_prefix?: string
+          created_at?: string
+          delivery_notes?: string | null
+          max_reservation_minutes?: number
+          organization_id: string
+          payment_instructions?: string | null
+          pickup_address?: string | null
+          reservation_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          code_prefix?: string
+          created_at?: string
+          delivery_notes?: string | null
+          max_reservation_minutes?: number
+          organization_id?: string
+          payment_instructions?: string | null
+          pickup_address?: string | null
+          reservation_minutes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       superadmin_whitelist: {
         Row: {
           created_at: string | null
@@ -2484,6 +2708,7 @@ export type Database = {
           is_new_claim: boolean
         }[]
       }
+      expire_reservations: { Args: never; Returns: number }
       find_or_create_patient: {
         Args: {
           p_doctor_id?: string
@@ -2574,7 +2799,23 @@ export type Database = {
         }
         Returns: Json
       }
+      is_org_admin: { Args: { _org: string }; Returns: boolean }
       is_superadmin: { Args: { _user_id: string }; Returns: boolean }
+      mark_order_in_review: {
+        Args: { p_conversation: string; p_org: string }
+        Returns: string
+      }
+      reserve_product: {
+        Args: {
+          p_conversation: string
+          p_name: string
+          p_org: string
+          p_phone: string
+          p_product: string
+          p_qty?: number
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "secretary" | "doctor"
@@ -2593,12 +2834,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2622,11 +2863,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2647,11 +2888,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2672,11 +2913,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2689,11 +2930,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

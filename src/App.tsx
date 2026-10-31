@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Lazy-load Radix Toaster — login uses Sonner, not Radix toasts
 const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ default: m.Toaster })));
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { UserProvider, useCurrentUser } from "./context/UserContext";
+import { getHomePath, isRouteBlockedForVertical } from "./lib/homePath";
 import { InboxProvider } from "./context/InboxContext";
 import { CallProvider } from "./context/CallContext";
 import { IncomingCallOverlay } from "./components/calls/IncomingCallOverlay";
@@ -52,6 +53,8 @@ const QuickRepliesPage = lazy(() => import("./pages/QuickRepliesPage"));
 const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const PromotionFormPage = lazy(() => import("./pages/PromotionFormPage"));
 const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
+const ProductsPage = lazy(() => import("./pages/ProductsPage"));
+const OrdersPage = lazy(() => import("./pages/OrdersPage"));
 const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
 const MotorConfigPanel = lazy(() => import("./pages/MotorConfigPanel"));
 const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
@@ -81,7 +84,8 @@ const App = () => {
     children: React.ReactNode;
     allowedRoles: UserRole[];
   }) {
-    const { user, loading } = useCurrentUser();
+    const { user, loading, organizationVertical } = useCurrentUser();
+    const { pathname } = useLocation();
 
     if (loading) {
       return (
@@ -95,10 +99,16 @@ const App = () => {
       return <Navigate to="/login" replace />;
     }
 
+    // La ruta no corresponde a la vertical de la org (ej. /calendario en ventas,
+    // /productos en una clínica): al home de su vertical, no a una pantalla vacía.
+    if (isRouteBlockedForVertical(organizationVertical, pathname)) {
+      return <Navigate to={getHomePath(organizationVertical)} replace />;
+    }
+
     // Check if user's role is in the allowed roles
     if (!allowedRoles.includes(user.role)) {
-      // Redirect all users to calendario
-      return <Navigate to="/calendario" replace />;
+      // Redirect all users to their vertical's home (calendario, pedidos en ventas)
+      return <Navigate to={getHomePath(organizationVertical)} replace />;
     }
 
     return <>{children}</>;
@@ -109,7 +119,7 @@ const App = () => {
    * Redirects to /login if unauthenticated, to /calendario if org is already active.
    */
   function OnboardingRoute({ children }: { children: React.ReactNode }) {
-    const { user, loading, isNewUser, onboardingStatus } = useCurrentUser();
+    const { user, loading, isNewUser, onboardingStatus, organizationVertical } = useCurrentUser();
 
     if (loading) {
       return (
@@ -126,7 +136,7 @@ const App = () => {
 
     // Already fully active — send to the app
     if (onboardingStatus === 'active') {
-      return <Navigate to="/calendario" replace />;
+      return <Navigate to={getHomePath(organizationVertical)} replace />;
     }
 
     return <>{children}</>;
@@ -136,7 +146,7 @@ const App = () => {
    * HomeRedirect - Redirects to appropriate page based on user role and onboarding state
    */
   function HomeRedirect() {
-    const { user, loading, isNewUser, onboardingStatus } = useCurrentUser();
+    const { user, loading, isNewUser, onboardingStatus, organizationVertical } = useCurrentUser();
 
     if (loading) {
       return (
@@ -161,7 +171,7 @@ const App = () => {
       return <Navigate to="/onboarding/clinic" replace />;
     }
 
-    return <Navigate to="/calendario" replace />;
+    return <Navigate to={getHomePath(organizationVertical)} replace />;
   }
 
   return (
@@ -256,6 +266,16 @@ const App = () => {
             <Route path="/propiedades" element={
               <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
                 <PropertiesPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/productos" element={
+              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+                <ProductsPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/pedidos" element={
+              <RoleBasedRoute allowedRoles={['admin', 'secretary']}>
+                <OrdersPage />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/promociones/nueva" element={

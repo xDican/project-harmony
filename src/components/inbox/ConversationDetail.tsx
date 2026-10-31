@@ -38,6 +38,7 @@ import { takeConversation, returnToBot } from "@/lib/inboxActions";
 import { useCurrentUser } from "@/context/UserContext";
 import { MessageBubble } from "./MessageBubble";
 import { MessageComposer } from "./MessageComposer";
+import { ConversationSalesBanner } from "./ConversationSalesBanner";
 import type { ConversationListRow } from "@/hooks/useConversations";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +61,7 @@ export function ConversationDetail({
     refetch,
     sendOptimisticText,
   } = useConversationMessages(conversation.id);
-  const { organizationId } = useCurrentUser();
+  const { organizationId, organizationVertical } = useCurrentUser();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll al ultimo mensaje al cargar / cuando llega nuevo
@@ -127,6 +128,8 @@ export function ConversationDetail({
           }}
         />
       </div>
+
+      {organizationVertical === "ventas" && <ConversationSalesBanner conversation={conversation} />}
 
       {/* Timeline */}
       <div

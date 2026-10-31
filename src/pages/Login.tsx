@@ -45,7 +45,8 @@ export default function Login() {
         description: `Usuario: ${user.email}`,
         duration: 4000,
       });
-      navigate('/calendario', { replace: true });
+      // '/' = HomeRedirect, que decide el aterrizaje según la vertical de la org
+      navigate('/', { replace: true });
     }
   }, [user, userLoading, isNewUser, onboardingStatus, navigate]);
 
