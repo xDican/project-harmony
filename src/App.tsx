@@ -51,6 +51,7 @@ const Inbox = lazy(() => import("./pages/Inbox"));
 const QuickRepliesPage = lazy(() => import("./pages/QuickRepliesPage"));
 const PromotionsPage = lazy(() => import("./pages/PromotionsPage"));
 const PromotionFormPage = lazy(() => import("./pages/PromotionFormPage"));
+const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 const ActivationPanel = lazy(() => import("./pages/ActivationPanel"));
 const MotorConfigPanel = lazy(() => import("./pages/MotorConfigPanel"));
 const StepClinic = lazy(() => import("./pages/onboarding/StepClinic"));
@@ -250,6 +251,11 @@ const App = () => {
             <Route path="/configuracion/promociones" element={
               <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
                 <PromotionsPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/propiedades" element={
+              <RoleBasedRoute allowedRoles={['admin', 'doctor', 'secretary']}>
+                <PropertiesPage />
               </RoleBasedRoute>
             } />
             <Route path="/configuracion/promociones/nueva" element={

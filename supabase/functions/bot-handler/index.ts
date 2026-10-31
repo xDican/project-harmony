@@ -19,7 +19,8 @@ import { normalizeToE164 } from '../_shared/phone.ts';
 import { detectIntent, isAcknowledgment } from '../_shared/honduras-intents.ts';
 import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
 import { getAvailableSlotsForDate as computeAvailableSlots } from '../_shared/availability.ts';
-import { maybeHandleSdr, maybeHandleSdrButtonAction, markLeadAgendado } from './sdr.ts';
+import { maybeHandleSdr, maybeHandleSdrButtonAction, markLeadAgendado, isEnglish } from './sdr.ts';
+import { maybeHandleRealEstate } from './realestate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +65,8 @@ type BotState =
   | 'handoff_secretary'
   | 'sdr_chat'             // Fase 2b: conversación libre con capa LLM (líneas con sdr_mode_enabled)
   | 'sdr_booking'          // Fase 2b: agendamiento conversacional (slots reales + LLM con guard)
+  | 'realestate_chat'      // Piloto Bruno (10 Ago): paralelo a sdr_chat, orgs con vertical='bienes_raices'
+  | 'realestate_booking'   // Piloto Bruno (10 Ago): paralelo a sdr_booking
   | 'completed'
   | 'expired';
 
@@ -215,12 +218,16 @@ async function handleBotMessage(
   if (!session.context.handoffLabels) {
     const { data: lineConfig } = await supabase
       .from('whatsapp_lines')
-      .select('bot_handoff_type, sdr_mode_enabled')
+      .select('bot_handoff_type, sdr_mode_enabled, organizations(vertical)')
       .eq('id', whatsappLineId)
       .single();
     session.context.handoffLabels = HANDOFF_LABELS[lineConfig?.bot_handoff_type || 'secretary'];
     // Fase 2b: flag del modo SDR (capa LLM). Cacheado por sesion como el resto.
     session.context.sdrModeEnabled = lineConfig?.sdr_mode_enabled === true;
+    // Piloto Bruno (10 Ago): rubro de la org — decide SDR medico vs flujo de
+    // bienes raices en el branch de abajo. Default 'clinica' para cualquier
+    // org sin vertical seteado explicito (todas las existentes).
+    session.context.orgVertical = (lineConfig?.organizations as any)?.vertical ?? 'clinica';
 
     // Fase 1 motor: los tipos de servicio son la tabla service_types (fuente unica),
     // ya no el JSONB whatsapp_lines.bot_service_types. display_name = lo que ve el
@@ -327,7 +334,7 @@ async function handleBotMessage(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
     session.context.cancelConfirmPhase = 'confirm_delete';
     const cancelResp: BotResponse = {
-      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
+      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
       options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -431,7 +438,9 @@ async function handleBotMessage(
   // libre ANTES del state machine. Devuelve null para continuar con el flujo
   // clasico (numeros de menu, SDR apagado, presupuesto excedido o LLM caido —
   // el fallback determinista esta garantizado).
-  const sdrResponse = await maybeHandleSdr({
+  // Piloto Bruno (10 Ago): orgs con vertical='bienes_raices' usan el flujo de
+  // bienes raices en vez del SDR medico — mismo deps, nunca ambos a la vez.
+  const sdrArgs = {
     session, messageText, whatsappLineId, patientPhone, organizationId, supabase, handoffLabels,
     deps: {
       parseDateHint, parseTimeHint, fuzzyMatchOption, resolveServiceAndContinue,
@@ -440,7 +449,10 @@ async function handleBotMessage(
       handleHandoffToSecretary, handleGreeting, handleBookingConfirm, detectIntent,
       findPatientByPhone, getPatientUpcomingAppointments, confirmAppointmentFromText,
     },
-  });
+  };
+  const sdrResponse = session.context.orgVertical === 'bienes_raices'
+    ? await maybeHandleRealEstate(sdrArgs)
+    : await maybeHandleSdr(sdrArgs);
   if (sdrResponse) {
     response = sdrResponse as BotResponse;
     await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
@@ -765,7 +777,7 @@ async function handleDirectReschedule(
   const stepTitle = buildStepTitle(OPT_EMOJI.reagendar, 'Reagendar cita', 1, 4);
 
   return {
-    message: `Entendido, le ayudo a reagendar.\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n${stepTitle}\n\nSeleccione la nueva semana:\n👉 Escriba el numero\n\n_Si prefiere cancelar definitivamente, escriba *cancelar*._`,
+    message: `Entendido, le ayudo a reagendar.\n\n${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n${stepTitle}\n\nSeleccione la nueva semana:\n👉 Escriba el numero\n\n_Si prefiere cancelar definitivamente, escriba *cancelar*._`,
     options: weeks.map((w) => w.weekLabel),
     requiresInput: true,
     nextState: 'booking_select_day',
@@ -2599,27 +2611,30 @@ function parseDateHint(input: string): typeof DateTime.prototype | null {
   const tz = 'America/Tegucigalpa';
   const now = DateTime.now().setZone(tz);
 
-  if (/\bhoy\b/.test(n)) return now.startOf('day');
-  if (/\bpasado\s*manana\b/.test(n)) return now.plus({ days: 2 }).startOf('day');
-  if (/\bmanana\b/.test(n)) return now.plus({ days: 1 }).startOf('day');
+  if (/\bhoy\b|\btoday\b/.test(n)) return now.startOf('day');
+  if (/\bpasado\s*manana\b|\bday\s+after\s+tomorrow\b/.test(n)) return now.plus({ days: 2 }).startOf('day');
+  if (/\bmanana\b|\btomorrow\b/.test(n)) return now.plus({ days: 1 }).startOf('day');
 
-  // "esta semana" / "proxima semana" / "siguiente semana"
-  if (/\besta\s+semana\b/.test(n)) return now.startOf('week');
-  if (/\b(proxima|siguiente)\s+semana\b/.test(n)) return now.plus({ weeks: 1 }).startOf('week');
+  // "esta semana" / "proxima semana" / "siguiente semana" (+ inglés)
+  if (/\besta\s+semana\b|\bthis\s+week\b/.test(n)) return now.startOf('week');
+  if (/\b(proxima|siguiente)\s+semana\b|\bnext\s+week\b/.test(n)) return now.plus({ weeks: 1 }).startOf('week');
 
-  // "fin de semana" / "el finde" — clinicas hondurenas suelen trabajar sabado,
-  // no domingo; se resuelve al sabado mas proximo (si no hay cupo ese dia,
-  // offerSlotsForDate ya escanea hacia adelante — encontraria el domingo/lunes).
-  if (/\bfin\s+de\s+semana\b|\bel\s+finde\b/.test(n)) {
+  // "fin de semana" / "el finde" / "weekend" — clinicas hondurenas suelen
+  // trabajar sabado, no domingo; se resuelve al sabado mas proximo (si no hay
+  // cupo ese dia, offerSlotsForDate ya escanea hacia adelante — encontraria
+  // el domingo/lunes).
+  if (/\bfin\s+de\s+semana\b|\bel\s+finde\b|\bweekend\b/.test(n)) {
     let target = now.startOf('day');
     while (target.weekday !== 6) target = target.plus({ days: 1 });
     return target;
   }
 
-  // Day of week → next occurrence
+  // Day of week → next occurrence (español + inglés)
   const dayNames: Record<string, number> = {
     lunes: 1, martes: 2, miercoles: 3, jueves: 4,
     viernes: 5, sabado: 6, domingo: 7,
+    monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+    friday: 5, saturday: 6, sunday: 7,
   };
   for (const [name, iso] of Object.entries(dayNames)) {
     if (n.includes(name)) {
@@ -2629,13 +2644,28 @@ function parseDateHint(input: string): typeof DateTime.prototype | null {
     }
   }
 
-  // "DD de MES"
+  // "DD de MES" (español) + nombres de mes en inglés (resueltos abajo con "MES DD"/"MES DDth").
+  // Abreviaturas de 3 letras coinciden entre idiomas salvo ene/jan, abr/apr, ago/aug, dic/dec.
   const monthNames: Record<string, number> = {
     enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
     julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
     ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6,
     jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12,
+    january: 1, february: 2, march: 3, april: 4, june: 6,
+    july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+    jan: 1, apr: 4, aug: 8, dec: 12,
   };
+  // "MONTH DDth" / "MONTH DD" (ej. "august 18", "August 18th")
+  const enDateMatch = n.match(/\b(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  if (enDateMatch && monthNames[enDateMatch[1]]) {
+    const month = monthNames[enDateMatch[1]];
+    const day = parseInt(enDateMatch[2]);
+    if (day >= 1 && day <= 31) {
+      let dt = DateTime.fromObject({ year: now.year, month, day }, { zone: tz });
+      if (dt < now.startOf('day')) dt = DateTime.fromObject({ year: now.year + 1, month, day }, { zone: tz });
+      if (dt.isValid) return dt;
+    }
+  }
   const dateMatch = n.match(/(\d{1,2})\s+de\s+(\w+)/);
   if (dateMatch) {
     const day = parseInt(dateMatch[1]);
@@ -2904,7 +2934,7 @@ async function handleBookingSelectHour(
         : '';
 
       return {
-        message: `${confirmTitle}\n\n🩺 ${session.context.doctorName}${serviceTypeLine}${priceLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
+        message: `${confirmTitle}\n\n${session.context.doctorName}${serviceTypeLine}${priceLine}\n${OPT_EMOJI.agendar} ${dayLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedTime)}\n⏱️ ${session.context.durationMinutes} min`,
         options: [`${OPT_EMOJI.confirmar} Si, confirmar`, `${OPT_EMOJI.cambiar} Cambiar horario`, `${OPT_EMOJI.cancelar} Cancelar`],
         requiresInput: true,
         nextState: 'booking_confirm',
@@ -3051,14 +3081,16 @@ async function handleBookingConfirm(
   const selection = parseInt(input.trim());
 
   // Option 1: Confirm
-  if (selection === 1 || normalizedInput.includes('si') || normalizedInput.includes('sí') || normalizedInput.includes('confirmar') || normalizedInput.includes('konfirmar') || normalizedInput.includes('confirmo')) {
+  if (selection === 1 || normalizedInput.includes('si') || normalizedInput.includes('sí') || normalizedInput.includes('confirmar') || normalizedInput.includes('konfirmar') || normalizedInput.includes('confirmo') || /\b(yes|yeah|yep|yup|sure|ok|okay|confirm)\b/.test(normalizedInput)) {
     // Find patient by phone
     let patient = await findPatientByPhone(session.patient_phone, organizationId, supabase);
 
     if (!patient) {
       // Patient not registered — ask for their name first
       return {
-        message: 'Para completar su cita, necesitamos su nombre completo.\n\n¿Cual es su nombre?',
+        message: isEnglish(session)
+          ? 'To complete your appointment, we need your full name.\n\nWhat is your name?'
+          : 'Para completar su cita, necesitamos su nombre completo.\n\n¿Cual es su nombre?',
         requiresInput: true,
         nextState: 'booking_ask_name',
         sessionComplete: false,
@@ -3079,16 +3111,18 @@ async function handleBookingConfirm(
   }
 
   // Option 2: Change time
-  if (selection === 2 || normalizedInput.includes('cambiar')) {
+  if (selection === 2 || normalizedInput.includes('cambiar') || /\bchange\b/.test(normalizedInput)) {
     session.context.slotPage = 1;
     session.context.availableSlots = null;
     return await showHourSlots(session, supabase);
   }
 
   // Option 3: Cancel
-  if (selection === 3 || normalizedInput.includes('cancelar') || normalizedInput.includes('canselar')) {
+  if (selection === 3 || normalizedInput.includes('cancelar') || normalizedInput.includes('canselar') || /\bcancel\b/.test(normalizedInput)) {
     return {
-      message: `${OPT_EMOJI.cancelar} Proceso cancelado.\n\n¿En que puedo ayudarle?`,
+      message: isEnglish(session)
+        ? `${OPT_EMOJI.cancelar} Process cancelled.\n\nHow can I help you?`
+        : `${OPT_EMOJI.cancelar} Proceso cancelado.\n\n¿En que puedo ayudarle?`,
       options: [
         `${OPT_EMOJI.agendar} Agendar cita`,
         `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
@@ -3124,7 +3158,9 @@ async function handleBookingAskName(
   // Validate: name must be at least 3 characters and not a number
   if (trimmedName.length < 3 || /^\d+$/.test(trimmedName)) {
     return {
-      message: '⚠️ Por favor ingrese su nombre completo (ej: Juan Perez):',
+      message: isEnglish(session)
+        ? '⚠️ Please enter your full name (e.g. John Smith):'
+        : '⚠️ Por favor ingrese su nombre completo (ej: Juan Perez):',
       requiresInput: true,
       nextState: 'booking_ask_name',
       sessionComplete: false,
@@ -3183,7 +3219,9 @@ async function createAppointmentWithPatient(
     session.context.slotPage = 1;
     session.context.availableSlots = null;
     return {
-      message: '⚠️ Ese horario acaba de ser reservado.\n\nHorarios actualizados:',
+      message: isEnglish(session)
+        ? '⚠️ That time slot was just booked.\n\nUpdated availability:'
+        : '⚠️ Ese horario acaba de ser reservado.\n\nHorarios actualizados:',
       requiresInput: true,
       nextState: 'booking_select_hour',
       sessionComplete: false,
@@ -3231,6 +3269,9 @@ async function createAppointmentWithPatient(
       service_type: session.context.selectedServiceType || null,
       service_type_id: session.context.selectedServiceTypeId || null,
       calendar_id: session.context.calendarId || null,
+      // Piloto Bruno (10 Ago): null para cualquier sesion que no haya pasado
+      // por el flujo de bienes raices (todas las orgs medicas existentes).
+      property_id: session.context.reSelectedPropertyId || null,
     })
     .select()
     .single();
@@ -3246,11 +3287,14 @@ async function createAppointmentWithPatient(
   }
 
   const timezone = 'America/Tegucigalpa';
+  const english = isEnglish(session);
   const dateLabel = DateTime.fromISO(session.context.selectedDate, { zone: timezone })
-    .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
+    .toFormat(english ? 'EEEE MMMM d, yyyy' : 'EEEE dd MMMM yyyy', { locale: english ? 'en' : 'es' });
 
   const successEmoji = session.context.isReschedule ? OPT_EMOJI.reagendar : OPT_EMOJI.confirmar;
-  const successTitle = session.context.isReschedule ? '¡Cita reagendada exitosamente!' : '¡Cita agendada exitosamente!';
+  const successTitle = english
+    ? (session.context.isReschedule ? 'Appointment rescheduled successfully!' : 'Appointment booked successfully!')
+    : (session.context.isReschedule ? '¡Cita reagendada exitosamente!' : '¡Cita agendada exitosamente!');
 
   const serviceTypeLine = session.context.selectedServiceType ? `\n📋 ${session.context.selectedServiceType}` : '';
 
@@ -3264,8 +3308,9 @@ async function createAppointmentWithPatient(
       .catch((e) => console.error('[createAppointment] markLeadAgendado error (non-fatal):', e));
   }
 
+  const reminderLine = english ? "You'll receive a reminder before your appointment." : 'Recibira un recordatorio antes de su cita.';
   return {
-    message: `${successEmoji} *${successTitle}*\n\n🩺 ${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\nRecibira un recordatorio antes de su cita.${featuredCloser}`,
+    message: `${successEmoji} *${successTitle}*\n\n${session.context.doctorName}${serviceTypeLine}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.selectedTime)}\n⏱️ ${session.context.durationMinutes} min\n\n${reminderLine}${featuredCloser}`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -3378,7 +3423,7 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `${OPT_EMOJI.reagendar} *Cita seleccionada*\n\n🩺 ${selectedApt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedApt.time)}\n\n¿Que desea hacer?`,
+      message: `${OPT_EMOJI.reagendar} *Cita seleccionada*\n\n${selectedApt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(selectedApt.time)}\n\n¿Que desea hacer?`,
       options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -3438,7 +3483,7 @@ async function handleRescheduleList(
       .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
     return {
-      message: `${OPT_EMOJI.reagendar} *Su cita proxima:*\n\n🩺 ${apt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(apt.time)}\n\n¿Que desea hacer?`,
+      message: `${OPT_EMOJI.reagendar} *Su cita proxima:*\n\n${apt.doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(apt.time)}\n\n¿Que desea hacer?`,
       options: [`${OPT_EMOJI.reagendar} Reagendar cita`, `${OPT_EMOJI.cancelar} Cancelar cita`, `${OPT_EMOJI.volver} Volver al menu`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -3509,7 +3554,7 @@ async function handleCancelConfirm(
           .toFormat('EEEE dd MMMM yyyy', { locale: 'es' });
 
         return {
-          message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
+          message: `${OPT_EMOJI.cancelar} *Cita cancelada*\n\n${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\nLa cita ha sido cancelada exitosamente.\n\n¿En que puedo ayudarle?`,
           options: [
             `${OPT_EMOJI.agendar} Agendar cita`,
             `${OPT_EMOJI.reagendar} Reagendar o cancelar cita`,
@@ -3614,7 +3659,7 @@ async function handleCancelConfirm(
     session.context.cancelConfirmPhase = 'confirm_delete';
 
     return {
-      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
+      message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n${session.context.rescheduleAppointmentDoctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(session.context.rescheduleAppointmentTime)}\n\n_Esta accion no se puede deshacer._`,
       options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
       requiresInput: true,
       nextState: 'cancel_confirm',
@@ -4121,7 +4166,7 @@ async function confirmAppointmentFromText(
   const dateLabel = DateTime.fromISO(appointment.date, { zone: 'America/Tegucigalpa' })
     .toFormat("EEEE dd 'de' MMMM", { locale: 'es' });
   return {
-    message: `✅ *Cita confirmada*\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n¡Le esperamos!`,
+    message: `✅ *Cita confirmada*\n\n${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n¡Le esperamos!`,
     requiresInput: false,
     nextState: 'completed',
     sessionComplete: true,
@@ -4150,7 +4195,7 @@ async function startDestructiveCancelFromText(
   session.context.cancelConfirmPhase = 'confirm_delete';
   session.context.isReschedule = true;
   return {
-    message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n🩺 ${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n_Esta accion no se puede deshacer._`,
+    message: `⚠️ ¿Esta seguro que desea *cancelar* su cita?\n\n${doctorName}\n${OPT_EMOJI.agendar} ${dateLabel}\n${OPT_EMOJI.horarios} ${formatTimeForTemplate(appointment.time)}\n\n_Esta accion no se puede deshacer._`,
     options: [`${OPT_EMOJI.cancelar} Si, cancelar cita`, `${OPT_EMOJI.volver} No, volver`],
     requiresInput: true,
     nextState: 'cancel_confirm',

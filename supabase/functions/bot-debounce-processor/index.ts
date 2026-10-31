@@ -30,6 +30,14 @@ const SILENCE_SECONDS = 11; // punto medio del rango 10-12s acordado con Diego (
 const MAX_WAIT_SECONDS = 30;
 const SWEEP_STALE_SECONDS = 35; // claimed_at más viejo que esto = abandonada
 
+// Orgs de pruebas/demo (Demo Bot OrionCare + Orthos, línea 9787-0752) — sin
+// espera de debounce para grabar videos/demos en vivo sin el silencio de 11s.
+// NO afecta clientes reales.
+const NO_WAIT_ORG_IDS = new Set([
+  "c8b1c83b-6982-4d08-bd80-e22388a699ab", // OrionCare (Demo Bot)
+  "db3e0244-c35b-40f0-a7e8-782dd64f403d", // Orthos
+]);
+
 interface DebounceRow {
   id: string;
   whatsapp_line_id: string;
@@ -122,11 +130,12 @@ async function processOne(db: any, debounceId: string): Promise<void> {
     const elapsedSinceStart = (now - claimedAtMs) / 1000;
     const quietFor = (now - lastMsgAtMs) / 1000;
 
+    const silenceSeconds = NO_WAIT_ORG_IDS.has(row.organization_id) ? 0 : SILENCE_SECONDS;
     const readyByMaxWait = elapsedSinceStart >= MAX_WAIT_SECONDS;
-    const readyBySilence = quietFor >= SILENCE_SECONDS;
+    const readyBySilence = quietFor >= silenceSeconds;
 
     if (!readyByMaxWait && !readyBySilence) {
-      const sleepSilence = SILENCE_SECONDS - quietFor;
+      const sleepSilence = silenceSeconds - quietFor;
       const sleepCap = MAX_WAIT_SECONDS - elapsedSinceStart;
       const sleepSeconds = Math.max(0.5, Math.min(sleepSilence, sleepCap));
       await new Promise((resolve) => setTimeout(resolve, sleepSeconds * 1000));

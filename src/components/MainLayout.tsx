@@ -4,7 +4,7 @@ import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles, Cog } from 'lucide-react';
+import { Menu, Calendar, PlusCircle, Users, Stethoscope, Settings, LogOut, UserPlus, ChevronDown, BarChart3, FileText, Folder, Shield, ChevronLeft, CalendarDays, Building2, Hospital, MessageSquare, MessageCircleQuestion, Inbox as InboxIcon, Sparkles, Cog, Home } from 'lucide-react';
 import { useCurrentUser } from '@/context/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ const routeTitles: Record<string, string> = {
   '/calendario': 'Calendario',
   '/citas/nueva': 'Nueva Cita',
   '/pacientes': 'Pacientes',
+  '/propiedades': 'Propiedades',
   '/configuracion': 'Configuración',
   '/configuracion/whatsapp': 'WhatsApp Business',
   '/admin/users': 'Usuarios',
@@ -75,6 +76,7 @@ export default function MainLayout({
     adminView,
     setAdminView,
     organizationId,
+    organizationVertical,
   } = useCurrentUser();
 
   // Badge global de Bandeja: derivado del InboxContext (misma fuente de
@@ -194,7 +196,13 @@ export default function MainLayout({
         to: '/pacientes',
         label: 'Pacientes',
         icon: Users
-      }, {
+      },
+      ...(organizationVertical === 'bienes_raices' ? [{
+        to: '/propiedades',
+        label: 'Propiedades',
+        icon: Home
+      }] : []),
+      {
         to: '/configuracion/promociones',
         label: 'Promociones',
         icon: Sparkles,

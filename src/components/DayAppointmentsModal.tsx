@@ -1,15 +1,13 @@
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ResponsiveModal } from '@/components/ui/responsive-modal';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { Calendar, Stethoscope, User, CalendarClock, X } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { Calendar, Stethoscope, User, CalendarClock } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import type { AppointmentWithDetails } from '@/lib/api';
 import type { Doctor } from '@/types/doctor';
@@ -58,8 +56,6 @@ export default function DayAppointmentsModal({
   itemsPerPage,
   onPageChange,
 }: DayAppointmentsModalProps) {
-  const isMobile = useIsMobile();
-
   const totalPages = Math.ceil(appointments.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedAppointments = appointments.slice(startIndex, startIndex + itemsPerPage);
@@ -194,42 +190,19 @@ export default function DayAppointmentsModal({
     </>
   );
 
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[90dvh] rounded-t-lg">
-          <DrawerHeader className="flex flex-row items-center justify-between border-b pb-3">
-            <div>
-              <DrawerTitle className="capitalize">{titleText}</DrawerTitle>
-              {!isLoading && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
-                </p>
-              )}
-            </div>
-            <Button variant="ghost" size="icon" className="shrink-0" onClick={() => onOpenChange(false)}>
-              <X className="h-5 w-5" />
-            </Button>
-          </DrawerHeader>
-          <div className="min-h-0 overflow-y-auto p-4">{body}</div>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-6 border-b border-border">
-          <DialogTitle className="capitalize">{titleText}</DialogTitle>
-          {!isLoading && (
-            <p className="text-sm text-muted-foreground">
-              {appointments.length} {appointments.length === 1 ? 'cita' : 'citas'}
-            </p>
-          )}
-        </DialogHeader>
-        <div className="p-6 flex-1 overflow-y-auto">{body}</div>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={<span className="capitalize">{titleText}</span>}
+      subtitle={
+        !isLoading
+          ? `${appointments.length} ${appointments.length === 1 ? 'cita' : 'citas'}`
+          : undefined
+      }
+      desktopMaxWidth="max-w-lg"
+    >
+      {body}
+    </ResponsiveModal>
   );
 }

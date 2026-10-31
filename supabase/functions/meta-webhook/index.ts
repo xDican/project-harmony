@@ -32,6 +32,7 @@ import {
 } from "../_shared/inbox-messages.ts";
 import { processCallEvent, type MetaCallEvent } from "../_shared/calls.ts";
 import { routeToBotHandler } from "../_shared/bot-routing.ts";
+import { matchPropertyCode, getPropertyByCode } from "../_shared/properties.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -108,6 +109,17 @@ interface MetaMessage {
   document?: { id: string; mime_type?: string; filename?: string; caption?: string };
   video?: { id: string; mime_type?: string; caption?: string };
   sticker?: { id: string; mime_type?: string; animated?: boolean };
+  // Piloto bienes raices Bruno (10 Ago 2026): presente cuando el primer mensaje
+  // de la conversacion viene de un anuncio/post de Meta con CTA a WhatsApp.
+  referral?: {
+    source_id?: string;
+    source_type?: string;
+    source_url?: string;
+    headline?: string;
+    body?: string;
+    image_url?: string;
+    ctwa_clid?: string;
+  };
 }
 
 interface MetaStatus {
@@ -658,6 +670,7 @@ async function handleIncomingMessage(
   botEnabled?: boolean,
   syncInProgress?: boolean,
   sdrEnabled?: boolean,
+  vertical?: string,
 ): Promise<void> {
   const fromPhone = normalizeToE164(message.from);
   const toPhone = metadata?.display_phone_number
@@ -790,6 +803,32 @@ async function handleIncomingMessage(
         await touchHistoricalSync(supabase, lineId);
         console.log("[meta-webhook] Historical message (coexistence sync) — persisted, activity/bot/media/intent skipped. conv:", conversation.id, "msg:", message.id);
         return;
+      }
+
+      // Piloto bienes raices Bruno (10 Ago 2026): matchear codigo de propiedad
+      // (referral de Meta Ads/Posts, o texto plano tipo wa.me?text=COD-104) y
+      // persistirlo UNA vez en conversations.interest_property_id — ni el
+      // debounce (bot_message_debounce) ni routeToBotHandler tienen forma de
+      // transportar el referral, por eso se resuelve aca. bot-handler lo lee
+      // de ahi (Fase 3), mismo patron que sdr.ts usa para interest_service_type_id.
+      // Gateado por vertical: ninguna org medica ejecuta este bloque.
+      if (vertical === "bienes_raices") {
+        const referralText = [message.referral?.headline, message.referral?.body]
+          .filter(Boolean)
+          .join(" ");
+        const code = matchPropertyCode(referralText) ?? matchPropertyCode(effectiveBody ?? "");
+        if (code) {
+          const property = await getPropertyByCode(supabase, lineOrgId, code);
+          if (property) {
+            await supabase
+              .from("conversations")
+              .update({ interest_property_id: property.id })
+              .eq("id", conversation.id);
+            console.log("[meta-webhook] Property code matched:", code, "-> property:", property.id, "conv:", conversation.id);
+          } else {
+            console.log("[meta-webhook] Property code matched but not found in catalog:", code, "org:", lineOrgId);
+          }
+        }
       }
 
       // Refresh activity (last_inbound_at, unread_count)
@@ -1428,11 +1467,12 @@ Deno.serve(async (req) => {
     let activeLineBotEnabled = false;
     let activeLineSyncInProgress = false;
     let activeLineSdrEnabled = false;
+    let activeLineVertical: string | undefined;
     const phoneNumberId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     if (phoneNumberId) {
       const { data: wline } = await supabase
         .from("whatsapp_lines")
-        .select("id, organization_id, bot_enabled, sync_in_progress, sdr_mode_enabled")
+        .select("id, organization_id, bot_enabled, sync_in_progress, sdr_mode_enabled, organizations(vertical)")
         .eq("meta_phone_number_id", phoneNumberId)
         .eq("is_active", true)
         .order("created_at", { ascending: true })
@@ -1443,7 +1483,8 @@ Deno.serve(async (req) => {
       activeLineBotEnabled = wline?.bot_enabled ?? false;
       activeLineSyncInProgress = wline?.sync_in_progress ?? false;
       activeLineSdrEnabled = wline?.sdr_mode_enabled ?? false;
-      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled, "syncInProgress:", activeLineSyncInProgress, "sdrEnabled:", activeLineSdrEnabled);
+      activeLineVertical = (wline?.organizations as any)?.vertical ?? undefined;
+      console.log("[meta-webhook] Resolved line:", activeLineId, "org:", activeLineOrgId, "botEnabled:", activeLineBotEnabled, "syncInProgress:", activeLineSyncInProgress, "sdrEnabled:", activeLineSdrEnabled, "vertical:", activeLineVertical);
     }
 
     // 4) Process all entries — messages, statuses, and calls run in parallel per change
@@ -1454,7 +1495,7 @@ Deno.serve(async (req) => {
 
         if (value.messages) {
           for (const message of value.messages) {
-            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled, activeLineSyncInProgress, activeLineSdrEnabled));
+            tasks.push(handleIncomingMessage(supabase, value.metadata, message, value.contacts, activeLineId, activeLineOrgId, activeLineBotEnabled, activeLineSyncInProgress, activeLineSdrEnabled, activeLineVertical));
           }
         }
 

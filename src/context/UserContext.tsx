@@ -25,6 +25,8 @@ export interface UserContextValue {
   isNewUser: boolean;
   /** Onboarding status of the active org: 'setup_in_progress' | 'ready_to_activate' | 'active' | null */
   onboardingStatus: string | null;
+  /** Rubro de la org activa: 'clinica' | 'bienes_raices' | null (sin org aun) */
+  organizationVertical: string | null;
 }
 
 /**
@@ -49,16 +51,19 @@ export function UserProvider({ children }: UserProviderProps) {
   const [loading, setLoading] = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<string | null>(null);
+  const [organizationVertical, setOrganizationVertical] = useState<string | null>(null);
 
   const handleUserFetch = useCallback((currentUser: CurrentUser | null) => {
     if (currentUser) {
       setUser(currentUser);
       setIsNewUser(false);
       setOnboardingStatus((currentUser as any).onboardingStatus ?? 'active');
+      setOrganizationVertical((currentUser as any).organizationVertical ?? 'clinica');
     } else {
       setUser(null);
       setIsNewUser(true);
       setOnboardingStatus(null);
+      setOrganizationVertical(null);
     }
   }, []);
 
@@ -87,6 +92,7 @@ export function UserProvider({ children }: UserProviderProps) {
               setUser(null);
               setIsNewUser(false);
               setOnboardingStatus(null);
+              setOrganizationVertical(null);
             })
             .finally(() => {
               clearTimeout(timeoutId);
@@ -96,6 +102,7 @@ export function UserProvider({ children }: UserProviderProps) {
           setUser(null);
           setIsNewUser(false);
           setOnboardingStatus(null);
+          setOrganizationVertical(null);
           setLoading(false);
         }
       }
@@ -154,6 +161,7 @@ export function UserProvider({ children }: UserProviderProps) {
     switchOrganization: user ? switchOrganization : null,
     isNewUser,
     onboardingStatus,
+    organizationVertical,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
