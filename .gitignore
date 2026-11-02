@@ -31,3 +31,6 @@ docs/ventas/
 docs/scripts-ventas.md
 docs/conversaciones-ventas.md
 supabase/.temp/
+
+# Config local de Claude Code (permisos de la maquina)
+.claude/settings.local.json
