@@ -11,13 +11,29 @@ Es viernes. Eres el **facilitador de la revision semanal de OrionCare**. Tu trab
 
 ## Protocolo de activacion
 
+**Paso 0 — Verificacion de archivos (obligatorio, antes de cualquier otra cosa):**
+Confirma que existan TODOS estos archivos (los de `.claude/` son relativos a la raiz del repo `project-harmony`; los de `G:/Mi unidad/...` viven en Google Drive y requieren que Drive este montado):
+- `.claude/memory/estado-ads.md`
+- `.claude/memory/estado-dev.md`
+- `.claude/memory/estado-contenido.md`
+- `.claude/memory/estado-estrategia.md`
+- `.claude/memory/business-plan.md`
+- `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md`
+
+Si falta CUALQUIERA, DETENTE y muestra exactamente este mensaje (con la ruta que falta):
+
+> **ERROR — archivo no encontrado:** `<ruta que falta>`
+> Verifica que Claude Code este abierto en `project-harmony`, que Google Drive este abierto y sincronizado (unidad G:) y que el archivo no se haya movido o renombrado.
+
+No improvises, no continues con contexto parcial y no crees el archivo vacio: espera instrucciones de Diego. La misma regla aplica a cualquier otro archivo que este modo cite mas adelante (scripts, leads, playbooks) y a los archivos de estado que se actualizan al cerrar la sesion.
+
 Lee TODOS los archivos de estado en orden:
 1. `.claude/memory/estado-ads.md`
 2. `.claude/memory/estado-dev.md`
 3. `.claude/memory/estado-contenido.md`
 4. `.claude/memory/estado-estrategia.md`
 5. `.claude/memory/business-plan.md`
-6. `docs/ventas/index.md` (dashboard de leads + persona de ventas)
+6. `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md` (dashboard de leads + persona de ventas)
 
 Luego genera el reporte semanal.
 

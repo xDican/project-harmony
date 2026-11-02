@@ -2,6 +2,10 @@
 
 SaaS de gestion de clinicas con WhatsApp (agenda, recordatorios, bot de autoagenda).
 
+## Archivos privados (Google Drive)
+
+El material comercial y privado NO vive en el repo: esta en `G:\Mi unidad\Proyecto OrionCare\` (`OrionCare/{ventas,clientes,estrategia,finanzas,marca,videos,referencias,accesos}` y `PatPat/Live/`). `docs/ventas/` esta en `.gitignore`; los modos `/modo-seguimiento` y `/modo-revision` leen de `OrionCare/ventas/` y su Paso 0 avisa si Drive no esta montado. No guardar ahi nada que deba versionarse con el codigo.
+
 ## Fase actual
 
 Feature freeze de Mar-May 2026 cerrado. Ahora: features nuevos SI resuelven dolor real y verificado de un cliente activo (no especulativo) — seguir el flujo de desarrollo de abajo para cualquiera. Features de nicho/vertical requieren 3+ clientes pidiéndolo aparte del caso que lo originó. Bugs y seguridad siguen siendo prioridad sobre features.

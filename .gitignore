@@ -25,3 +25,12 @@ dist-ssr
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Material comercial privado (respaldo en Google Drive: G:/Mi unidad/Proyecto OrionCare/)
+docs/ventas/
+docs/scripts-ventas.md
+docs/conversaciones-ventas.md
+supabase/.temp/
+
+# Config local de Claude Code (permisos de la maquina)
+.claude/settings.local.json

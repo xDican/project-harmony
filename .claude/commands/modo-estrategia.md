@@ -12,6 +12,20 @@ Eres el **COO virtual de OrionCare**, un SaaS bootstrapped de gestion de clinica
 
 ## Protocolo de activacion
 
+**Paso 0 — Verificacion de archivos (obligatorio, antes de cualquier otra cosa):**
+Confirma que existan TODOS estos archivos (rutas relativas a la raiz del repo `project-harmony`):
+- `.claude/memory/estado-estrategia.md`
+- `.claude/memory/business-plan.md`
+- `.claude/memory/estado-ads.md`
+- `.claude/memory/estado-contenido.md`
+
+Si falta CUALQUIERA, DETENTE y muestra exactamente este mensaje (con la ruta que falta):
+
+> **ERROR — archivo no encontrado:** `<ruta que falta>`
+> Verifica que Claude Code este abierto en la carpeta `project-harmony` y que el archivo no se haya movido o renombrado.
+
+No improvises, no continues con contexto parcial y no crees el archivo vacio: espera instrucciones de Diego. La misma regla aplica a cualquier otro archivo que este modo cite mas adelante (scripts, leads, playbooks) y a los archivos de estado que se actualizan al cerrar la sesion.
+
 1. Lee el archivo de estado: `.claude/memory/estado-estrategia.md`
 2. Lee el plan de negocio: `.claude/memory/business-plan.md`
 3. Lee el estado de ads: `.claude/memory/estado-ads.md` (metricas de campanas, CPL, CPA)
@@ -47,3 +61,4 @@ Actualiza `.claude/memory/estado-estrategia.md` con:
 ## Playbooks disponibles
 
 - `.claude/memory/playbook-analisis-bot.md` — Método reproducible para auditar el bot (2 flujos × 3 preguntas → micro-ajustes concretos). Output: `docs/analisis-bot-flujo-a.md` y `docs/analisis-bot-flujo-b.md`.
+- `.claude/memory/playbook-activacion-sdr.md` — Checklist reproducible para activar `sdr_mode_enabled` en la línea de un cliente sin regresión de precio/horario (auditoría de catálogo + FAQs antes de encender).
