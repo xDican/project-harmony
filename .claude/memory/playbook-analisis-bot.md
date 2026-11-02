@@ -25,7 +25,7 @@ Tablas relacionadas:
 
 ## Gotchas conocidos
 
-1. **`intent='confirm'` NO existe en bot_conversation_logs** — las confirmaciones por botón se procesan en `meta-webhook` (líneas 335–360) y NO se loggean. Para medir confirmaciones hay que cruzar con `message_logs.type='patient_confirmed'` o `appointments.status='confirmada'`. Hay un ajuste propuesto para corregir esto (ver reporte Flujo A #1).
+1. **`intent='confirm'` SÍ existe en bot_conversation_logs (corregido 6 Jul 2026)** — aparece con `state_before='legacy_button'` y `state_after='completed'`. La nota original (14 Abr) decía que las confirmaciones por botón NO se loggeaban y había que cruzar con `message_logs.type='patient_confirmed'` — eso cambió en algún punto entre abril y julio. Verificar directo con `intent_detected='confirm'` primero; solo recurrir al cruce con `message_logs` si aparece vacío para una organización/ventana específica.
 2. **`intent='cancel'` prácticamente no aparece post-notificación** — el botón "Cancelar" se mezcla con reagendamiento, va al state `cancel_confirm` pero a veces registra intent='reschedule'. Diseñar queries para contemplar ambos.
 3. **Teléfonos**: `message_logs.to_phone` y `bot_conversation_logs.patient_phone` están normalizados igual. Cruzar directo por `to_phone = patient_phone`.
 4. **Ventana sugerida:** Flujo A → 15 días (volumen alto). Flujo B → 30 días (volumen bajo, necesita más tiempo).
@@ -74,6 +74,26 @@ Clusterizar mensajes manualmente en: precios, ubicación, servicios específicos
 - Identificar: (a) FAQs sin keywords (nunca matchean), (b) duplicadas, (c) clínicas sin FAQs configuradas
 - Cruzar gap vs mensajes de Q2: ¿qué temas pregunta la gente que no están cubiertos?
 
+## Fase 3 — Casos límite / dead-ends de fallback (agregado 7 Ago 2026)
+
+Busca el patrón "el paciente hizo una pregunta legítima en el momento equivocado y el bot no supo recuperarse" — distinto de Q2 (FAQ sin match) porque acá el paciente ni siquiera estaba en modo FAQ, estaba a mitad de otro flujo (agendar, cancelar, reagendar).
+
+```sql
+SELECT o.name AS org_name, bcl.state_before, bcl.user_message, COUNT(*) AS veces
+FROM bot_conversation_logs bcl
+JOIN organizations o ON o.id = bcl.organization_id
+WHERE bcl.state_before = bcl.state_after
+  AND bcl.bot_response ILIKE '%no valida%'
+  AND (bcl.state_before LIKE 'booking%' OR bcl.state_before LIKE 'reschedule%' OR bcl.state_before = 'cancel_confirm')
+  -- AND bcl.organization_id = '{ORG_ID}'  -- descomentar para análisis LOCAL de un cliente; comentado = GLOBAL (todas las orgs)
+GROUP BY o.name, bcl.state_before, bcl.user_message
+ORDER BY veces DESC;
+```
+
+**Cómo leer el resultado:** la mayoría son ruido esperable (números fuera de rango, "X", confirmaciones ambiguas) — lo que importa es filtrar a mano los mensajes que SÍ son una pregunta real con forma de FAQ (ubicación, horario, "atienden tal día") cayendo en "opción no válida" en vez de contestarse. Hallazgo real 7 Ago (corrida global): Medilaser ("Una pregunta atiende los domingos?" a mitad de elegir doctor) y Wilmer ("Hola ubicación" a mitad de elegir servicio) — ambos clientes pagando, ambos en el bot CLÁSICO (sin SDR). Señal de que el matcher de FAQ debería poder interceptar este momento también, no solo el menú dedicado de FAQ.
+
+**Mismo query sirve local o global** — con el filtro de `organization_id` es la versión "¿cómo le está yendo a ESTE cliente esta semana?"; sin el filtro es la versión "¿hay un patrón que se repite entre clientes?" (ej. si 3+ orgs fallan en el mismo tipo de pregunta, es señal de un gap de producto, no de configuración de un cliente puntual).
+
 ## Estructura del reporte (ambas fases)
 
 1. **Datos duros** — tablas con números absolutos y porcentajes
@@ -103,3 +123,4 @@ Cada ejecución debería dejar aprendizajes aquí mismo. Ejemplos de cosas a evo
 - Si aparece un nuevo tipo de notificación → agregar a Q1
 - Si aparece un nuevo estado del bot → revisar si impacta el funnel
 - Si se implementa el ajuste de logging de confirmaciones → rehacer Q1 usando intent='confirm' directamente (más preciso que el workaround con patient_confirmed)
+- **7 Ago 2026:** agregada Fase 3 (casos límite/dead-ends de fallback) — surgió de validar con datos reales el diseño del proyecto "fast-path FAQ" del SDR (ver `playbook-activacion-sdr.md` y memoria `manual-instalacion-entrenamiento`). Confirmó con evidencia que la intención mixta en un solo mensaje es casi inexistente (1/3040 mensajes históricos) y descubrió un problema real aparte: preguntas de FAQ legítimas cayendo en "opción no válida" a mitad de flujos de agendamiento/cancelación, en el bot CLÁSICO, en clientes reales (Medilaser, Wilmer). Corrida a nivel global (todas las orgs) además de local — ejecutarla así cuando se sospeche un patrón de producto, no solo de un cliente puntual.
