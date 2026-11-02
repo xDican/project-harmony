@@ -33,6 +33,7 @@ import {
 import { processCallEvent, type MetaCallEvent } from "../_shared/calls.ts";
 import { routeToBotHandler } from "../_shared/bot-routing.ts";
 import { matchPropertyCode, getPropertyByCode } from "../_shared/properties.ts";
+import { matchProductCode, getCodePrefix, getProductByCode } from "../_shared/products.ts";
 
 // ---------------------------------------------------------------------------
 // Types for Meta webhook payloads
@@ -827,6 +828,30 @@ async function handleIncomingMessage(
             console.log("[meta-webhook] Property code matched:", code, "-> property:", property.id, "conv:", conversation.id);
           } else {
             console.log("[meta-webhook] Property code matched but not found in catalog:", code, "org:", lineOrgId);
+          }
+        }
+      }
+
+      // PatPat Live (2 Nov 2026): mismo patron para la vertical `ventas`. Si el
+      // texto/caption trae un codigo de producto (A101) que existe en el
+      // catalogo de la org, se guarda UNA vez en conversations.interest_product_id
+      // para que el bot lo lea de ahi. Un codigo que no existe NO toca la
+      // conversacion (el bot decide que preguntar). Gateado por vertical: ninguna
+      // org clinica ni de bienes raices ejecuta este bloque. El codigo que viene
+      // dentro de una IMAGEN lo resuelve la vision (process-media-async), no aqui.
+      if (vertical === "ventas") {
+        const prefix = await getCodePrefix(supabase, lineOrgId);
+        const code = matchProductCode(effectiveBody ?? "", prefix);
+        if (code) {
+          const product = await getProductByCode(supabase, lineOrgId, code);
+          if (product) {
+            await supabase
+              .from("conversations")
+              .update({ interest_product_id: product.id })
+              .eq("id", conversation.id);
+            console.log("[meta-webhook] Product code matched:", code, "-> product:", product.id, "conv:", conversation.id);
+          } else {
+            console.log("[meta-webhook] Product code matched but not found in catalog:", code, "org:", lineOrgId);
           }
         }
       }

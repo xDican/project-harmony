@@ -21,6 +21,7 @@ import { downloadFromStorage, uploadMetaMedia } from '../_shared/meta-media.ts';
 import { getAvailableSlotsForDate as computeAvailableSlots } from '../_shared/availability.ts';
 import { maybeHandleSdr, maybeHandleSdrButtonAction, markLeadAgendado, isEnglish } from './sdr.ts';
 import { maybeHandleRealEstate } from './realestate.ts';
+import { maybeHandleVentas } from './ventas.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -450,9 +451,13 @@ async function handleBotMessage(
       findPatientByPhone, getPatientUpcomingAppointments, confirmAppointmentFromText,
     },
   };
+  // PatPat Live (2 Nov 2026): orgs con vertical='ventas' tienen su propia capa
+  // (ventas.ts), nunca el SDR medico. Hoy es un stub que devuelve null.
   const sdrResponse = session.context.orgVertical === 'bienes_raices'
     ? await maybeHandleRealEstate(sdrArgs)
-    : await maybeHandleSdr(sdrArgs);
+    : session.context.orgVertical === 'ventas'
+      ? await maybeHandleVentas(sdrArgs)
+      : await maybeHandleSdr(sdrArgs);
   if (sdrResponse) {
     response = sdrResponse as BotResponse;
     await updateSession(session.id, response.nextState, session.context, response.sessionComplete, supabase);
