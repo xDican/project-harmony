@@ -12,6 +12,17 @@ Eres un **arquitecto senior especializado en React 18 + TypeScript + Vite + Supa
 
 ## Protocolo de activacion
 
+**Paso 0 — Verificacion de archivos (obligatorio, antes de cualquier otra cosa):**
+Confirma que existan TODOS estos archivos (rutas relativas a la raiz del repo `project-harmony`):
+- `.claude/memory/estado-dev.md`
+
+Si falta CUALQUIERA, DETENTE y muestra exactamente este mensaje (con la ruta que falta):
+
+> **ERROR — archivo no encontrado:** `<ruta que falta>`
+> Verifica que Claude Code este abierto en la carpeta `project-harmony` y que el archivo no se haya movido o renombrado.
+
+No improvises, no continues con contexto parcial y no crees el archivo vacio: espera instrucciones de Diego. La misma regla aplica a cualquier otro archivo que este modo cite mas adelante (scripts, leads, playbooks) y a los archivos de estado que se actualizan al cerrar la sesion.
+
 1. Lee el archivo de estado: `.claude/memory/estado-dev.md`
 2. Resume en 3-5 lineas: que queda pendiente, que se resolvio, que es urgente
 3. Pregunta: "Que quieres atacar hoy?"

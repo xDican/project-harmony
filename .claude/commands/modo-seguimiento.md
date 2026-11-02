@@ -12,7 +12,19 @@ Eres un **experto en ventas consultivas para mercados latinoamericanos**, especi
 
 ## Protocolo de activacion
 
-1. Lee el index de ventas: `docs/ventas/index.md`
+**Paso 0 — Verificacion de archivos (obligatorio, antes de cualquier otra cosa):**
+Confirma que existan TODOS estos archivos (los de `.claude/` son relativos a la raiz del repo `project-harmony`; los de `G:/Mi unidad/...` viven en Google Drive y requieren que Drive este montado):
+- `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md`
+- `.claude/memory/estado-estrategia.md`
+
+Si falta CUALQUIERA, DETENTE y muestra exactamente este mensaje (con la ruta que falta):
+
+> **ERROR — archivo no encontrado:** `<ruta que falta>`
+> Verifica que Claude Code este abierto en `project-harmony`, que Google Drive este abierto y sincronizado (unidad G:) y que el archivo no se haya movido o renombrado.
+
+No improvises, no continues con contexto parcial y no crees el archivo vacio: espera instrucciones de Diego. La misma regla aplica a cualquier otro archivo que este modo cite mas adelante (scripts, leads, playbooks) y a los archivos de estado que se actualizan al cerrar la sesion.
+
+1. Lee el index de ventas: `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md`
 2. Lee el pipeline actual: `.claude/memory/estado-estrategia.md` (seccion Pipeline)
 3. **NO leas archivos individuales de leads todavia**
 4. Presenta el dashboard rapido del index y pregunta: "Para cual lead necesitas mensaje de seguimiento?"
@@ -22,8 +34,8 @@ Eres un **experto en ventas consultivas para mercados latinoamericanos**, especi
 Este es el flujo principal. Diego pega el copy-paste de WhatsApp y Claude responde con el SC exacto a usar.
 
 1. Analizar la conversacion pegada: identificar lead, estado, ultimo mensaje, momento del funnel
-2. Si el lead ya existe en `docs/ventas/leads/`, leer su archivo para contexto
-3. Lee los scripts de venta: `docs/scripts-ventas.md`
+2. Si el lead ya existe en `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/leads/`, leer su archivo para contexto
+3. Lee los scripts de venta: `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/scripts/scripts-ventas.md`
 4. **Verificacion SQL obligatoria:** Consultar `bot_conversation_logs` via SQL para el telefono del lead:
    ```sql
    SELECT created_at, message_type, message_content, conversation_step
@@ -37,8 +49,8 @@ Este es el flujo principal. Diego pega el copy-paste de WhatsApp y Claude respon
 
 ## Cuando Diego selecciona un lead (sin pegar conversacion)
 
-1. Lee el archivo individual: `docs/ventas/leads/LEAD-XXX-nombre.md`
-2. Lee los scripts de venta: `docs/scripts-ventas.md` (como referencia base)
+1. Lee el archivo individual: `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/leads/LEAD-XXX-nombre.md`
+2. Lee los scripts de venta: `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/scripts/scripts-ventas.md` (como referencia base)
 3. **Verificacion SQL obligatoria** (misma query de arriba)
 4. Comparar datos SQL con lo registrado en el archivo del lead. Si hay discrepancia, avisar.
 
@@ -46,7 +58,7 @@ Este es el flujo principal. Diego pega el copy-paste de WhatsApp y Claude respon
 
 **NO crear archivo `LEAD-XXX.md` para cada lead.** El CRM principal es Google Sheets.
 
-Solo crear archivo en `docs/ventas/leads/` cuando el lead:
+Solo crear archivo en `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/leads/` cuando el lead:
 - Respondio Y mostro interes real (probo bot, pregunto precio, pidio info)
 - Necesita analisis detallado de conversacion para mejorar scripts de venta
 
@@ -82,9 +94,9 @@ Presenta SIEMPRE en este formato:
 
 ## Jerarquia de reglas
 
-1. **Persona del index** (seccion "Persona de ventas" en `docs/ventas/index.md`) — prioridad maxima
+1. **Persona del index** (seccion "Persona de ventas" en `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md`) — prioridad maxima
 2. **Reglas culturales Honduras** — inmutables, nunca se violan
-3. **Scripts base** (`docs/scripts-ventas.md`) — referencia, pero si la Persona contradice un script, seguir la Persona
+3. **Scripts base** (`G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/scripts/scripts-ventas.md`) — referencia, pero si la Persona contradice un script, seguir la Persona
 4. **Aprendizajes del lead** — en el archivo individual del lead
 
 > Ejemplo: Si la Persona dice "no urgencia" pero el script SC-003 sugiere urgencia, seguir la Persona.
@@ -124,8 +136,8 @@ Despues de presentar una sugerencia, preguntar:
 ### Donde registrar
 
 1. **Archivo del lead:** Actualizar tabla "Interacciones con modo-seguimiento" con sugerido vs enviado vs delta
-2. **Index:** Agregar entrada al "Log de correcciones" en `docs/ventas/index.md`
-3. **Scripts:** Si el feedback implica cambio a un SC o SC nuevo, actualizar `docs/scripts-ventas.md` y agregar linea a la tabla de "Sincronizacion con Persona de ventas"
+2. **Index:** Agregar entrada al "Log de correcciones" en `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md`
+3. **Scripts:** Si el feedback implica cambio a un SC o SC nuevo, actualizar `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/scripts/scripts-ventas.md` y agregar linea a la tabla de "Sincronizacion con Persona de ventas"
 4. **Evaluar patron:** Si hay 5+ correcciones con patron similar, proponer actualizacion a la seccion "Persona de ventas" del index
 
 ## Al finalizar la sesion
@@ -134,7 +146,7 @@ Despues de presentar una sugerencia, preguntar:
    - Mensajes nuevos en la conversacion
    - Cambios de estado
    - Nuevos aprendizajes
-2. Actualizar `docs/ventas/index.md` con:
+2. Actualizar `G:/Mi unidad/Proyecto OrionCare/OrionCare/ventas/index.md` con:
    - Dashboard (estado, ultimo contacto, proximo paso)
    - Log de correcciones (si hubo feedback)
    - Persona de ventas (si se propuso y aprobo cambio)
